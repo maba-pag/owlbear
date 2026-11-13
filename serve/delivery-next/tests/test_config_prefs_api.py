@@ -1,4 +1,3 @@
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -10,7 +9,7 @@ from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.state_store.store import Store
 
 from .test_config_api import client
-from .test_prefs_recovery import refuse_config_once
+from .test_prefs_recovery import clone_profile, refuse_config_once
 
 AUTH = {"authorization": "Bearer " + "t"}
 
@@ -49,12 +48,6 @@ def test_the_five_preferences_save_resolve_and_clear_to_unset_through_the_api(st
     assert "prefs.ci_poll_seconds" in again["settings"]["missing"]
     assert store.read_config().prefs.ci_poll_seconds is None
     assert store.read_profile().prefs_import == "done"
-
-
-def _fresh_store(tmp_path: Path, remote: Path) -> Store:
-    second = tmp_path / "fresh"
-    subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
-    return Store(tmp_path / "fresh-store", data_repo.DataRepo(second), "shop-site")
 
 
 def test_a_width_only_save_leaves_a_pending_import_pending_with_the_review_diagnostic(store, tmp_path, monkeypatch):
@@ -107,6 +100,6 @@ def test_a_refused_publication_of_an_edited_preference_stays_pending_until_publi
     assert retry.status_code == 200
     assert not retry.json()["notice"]
     assert store.read_profile().prefs_import == "done"
-    fresh = _fresh_store(tmp_path, remote)
+    fresh, _ = clone_profile(remote, tmp_path)
     assert fresh.read_config().prefs.ci_poll_seconds == poll
     assert fresh.read_profile().prefs_import == "done"

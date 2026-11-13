@@ -15,18 +15,11 @@ from owlbear_delivery_next.state_store import prefs_import, profile_share
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import SharedError, Store
 
-from .test_prefs_recovery import remote_config_bytes
+from .test_prefs_recovery import clone_profile, remote_config_bytes
 
 
 def confirmed(value: str) -> ProfileEntry:
     return ProfileEntry(state="known", value=value, evidence=f"{profile.CONFIRMED}; owner")
-
-
-def clone_profile(remote: Path, tmp_path: Path) -> tuple[Store, Profile]:
-    second = tmp_path / "fresh"
-    subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
-    fresh = Store(tmp_path / "fresh-store", DataRepo(second), "shop-site")
-    return fresh, fresh.read_profile()
 
 
 def published_profile(remote: Path) -> Profile:
