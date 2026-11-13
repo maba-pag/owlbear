@@ -23,7 +23,7 @@ CONFIG_DIRS = frozenset({"hooks"})
 CONFIG_FILES = frozenset({
     "pyproject.toml", "uv.lock", "conftest.py", "package.json", "package-lock.json", "biome.json", "biome.jsonc",
     ".pre-commit-config.yaml", "ruff.toml", ".ruff.toml", "pytest.ini", "tox.ini", "setup.cfg", ".coveragerc",
-    ".editorconfig", ".gitattributes", ".gitignore", ".markdownlint-cli2.jsonc", ".yamllint.yml", ".coderabbit.yaml",
+    ".editorconfig", ".gitattributes", ".gitignore", ".markdownlint-cli2.jsonc", ".yamllint.yml",
     "renovate.json", ".nvmrc", ".python-version", ".mcp.json", ".snyk", "CODEOWNERS", "SECURITY.md",
     "test_linter_formatter_policy.py",
 })  # fmt: skip

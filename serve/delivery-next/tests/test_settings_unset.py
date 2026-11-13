@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.inbox import Recovery
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Criterion, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
@@ -79,20 +79,26 @@ def change(kind: StepKind) -> Change:
 
 
 @pytest.mark.parametrize(("kind", "mode"), [(StepKind.REVIEW, None), (StepKind.SHAPE, "challenge")])
-def test_a_step_that_needs_an_unset_setting_asks_the_owner_then_runs_the_same_step_again(kind, mode):
+def test_a_step_that_needs_an_unset_setting_stops_for_the_owner_then_runs_the_same_step_again(kind, mode):
     asked = change(kind)
     asked.step.mode = mode
     written: list[Change] = []
-    store = SimpleNamespace(read=lambda _slug: written[-1] if written else asked, write=lambda _l, c: written.append(c))
+    logged: list[dict] = []
+    store = SimpleNamespace(read=lambda _slug: written[-1] if written else asked, write=lambda _l, c: written.append(c),
+                            log=lambda _l, _s, e: logged.append(e))  # fmt: skip
     unset_settings.asked(store, SimpleNamespace(slug="c1"), SettingsUnset(["agents.reviewer.model"]))
-    (question,) = written[-1].questions
-    assert question.cause == f"state:{kind}:settings-unset"
-    assert "agents.reviewer.model" in question.text
-    assert [o.id for o in question.options] == ["done", "pause"]
+    stopped = written[-1]
+    assert not stopped.questions  # Delivery's own problem is never a question (#1168)
+    assert stopped.outcome.cause == f"state:{kind}:settings-unset"
+    assert stopped.stop.action == "Run the step again"
+    assert "Settings page" in stopped.stop.reason
+    assert "agents.reviewer.model" not in stopped.stop.reason  # the page names settings by their rows, never by key
+    assert [e["reason"] for e in logged] == ["agents.reviewer.model"]
 
-    done, _ = loop.schedule(written[-1], [AnswerItem(at=datetime.now(UTC), question=question.id, option="done")],
-                            datetime.now(UTC))  # fmt: skip
-    assert (done.step.kind, done.step.task, done.step.mode) == (kind, asked.step.task, mode)
+    again = Recovery(at=datetime.now(UTC), action=stopped.stop.action)
+    done, step = loop.schedule(stopped, [again], datetime.now(UTC))
+    assert done.stop is None
+    assert (step.kind, step.task, step.mode) == (kind, asked.step.task, mode)
 
 
 def _git(root, *args: str) -> str:
@@ -376,17 +382,10 @@ PREF_KEYS = ("merge_method", "delete_remote_branch", "ci_poll_seconds", "ci_star
 
 
 @pytest.mark.parametrize("key", PREF_KEYS)
-def test_an_unset_preference_refuses_the_step_and_asks_the_owner_never_a_code_default(key, monkeypatch):
+def test_an_unset_preference_refuses_the_step_never_a_code_default(key, monkeypatch):
     monkeypatch.setattr(config, "BASE", None)  # the test-only base layer would fill it in
     empty = resolve(None, Layer())
     assert f"prefs.{key}" in empty.missing
     with pytest.raises(SettingsUnset) as refused:
         config.pref(empty, key)
-    assert refused.value.keys == [f"prefs.{key}"]
-
-    asked = change(StepKind.REVIEW)
-    written: list[Change] = []
-    store = SimpleNamespace(read=lambda _slug: written[-1] if written else asked, write=lambda _l, c: written.append(c))
-    unset_settings.asked(store, SimpleNamespace(slug="c1"), refused.value)
-    (question,) = written[-1].questions
-    assert f"prefs.{key}" in question.text
+    assert refused.value.keys == [f"prefs.{key}"]  # the stop it leads to: the unset-setting test above

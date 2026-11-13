@@ -109,7 +109,8 @@ def test_only_a_held_result_offers_accept() -> None:
     offered = session_result.usage_gate(run, K.REVIEW, accept=True).question
     assert [(o.id, o.next) for o in plain.options] == [("retry", "retry")]
     assert [(o.id, o.next) for o in offered.options] == [("accept", "accept"), ("retry", "retry")]
-    assert "it is held" in offered.text
+    assert (plain.subject, offered.subject) == (None, "reserved")  # a held result is his yes or no (#1168)
+    assert offered.text.endswith("so it did not accept the result. Accept the result anyway?")
 
 
 def test_an_unread_build_result_is_held_and_accepting_it_processes_it_without_a_session(gated, clone, monkeypatch):
@@ -139,7 +140,7 @@ def test_an_accepted_hold_waits_untaken_while_its_role_s_settings_are_unset(gate
     monkeypatch.setattr(runner.sdk_adapter, "run", lambda _cfg: pytest.fail("no session while a setting is unset"))
     runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
     asked = store.read("c1")
-    assert loop.open_question(asked).cause == "state:build:settings-unset"
+    assert (loop.open_question(asked), asked.outcome.cause) == (None, "state:build:settings-unset")  # a stop
     assert (store.root / "changes" / "c1" / "held.json").exists()  # the result is kept for after the owner fills it
     assert asked.plan.tasks[0].spans == spans  # no build span was opened
 

@@ -45,14 +45,15 @@ def stop(c: Change, why: str, now: datetime) -> Stop:
 def question(c: Change, why: str) -> Question:
     """Offer supported abandonment or a pause, never acceptance as the intended delivery."""
     text = (
-        f"{why}. Delivery has not fulfilled the stored target {c.names.target}. "
-        "Abandon ends this Change without delivery credit, preserving work the target does not contain; "
-        "the already-merged PR is not undone. Pause keeps this Change and its work."
+        f"{why}. Delivery cannot confirm that this Change was delivered to {c.names.target} through its recorded "
+        "pull request. Abandon ends this Change here: the merge that happened is not undone, and work "
+        f"{c.names.target} lacks is kept. Pause keeps this Change and its work as they are."
     )
     return Question(
         step=c.step.kind,
         text=text,
         cause=f"{PREFIX}{c.names.pr}:{c.names.target}:{c.names.branch}",
+        subject="reserved",
         options=[
             Option(id="abandon", label="Abandon without delivery credit", next="abandon"),
             Option(id="pause", label="Pause and keep the Change", next="pause"),

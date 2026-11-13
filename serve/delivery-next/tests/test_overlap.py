@@ -181,8 +181,9 @@ def test_a_resolved_conflict_on_another_changes_scope_asks_naming_both_outcomes(
     asked = overlap.collision(integrating(), paths, near)
     q = asked.question
     assert (asked.exit, q.step, [o.id for o in q.options]) == (Exit.ASK, K.INTEGRATE, ["keep", "adopt", "pause"])
-    assert "c3 on src/app.ts." in q.text  # the lockfile is incidental
-    assert ("pages load in 1 s" in q.text, "c3 (merged) wants: cache pages" in q.text) == (True, True)
+    assert q.text.endswith("Details: c3 on src/app.ts")  # the lockfile is incidental
+    assert ("This Change: pages load in 1 s." in q.text, "c3 (merged): cache pages." in q.text) == (True, True)
+    assert q.subject == "product"
     assert overlap.collision(integrating(), paths, [overlap.Neighbour("c4", ["lib"], "x", merged=False)]) is None
 
 
@@ -195,7 +196,7 @@ def test_an_unfinished_update_on_another_changes_scope_asks_once_and_the_answer_
     said = StepResult(exit=Exit.ASK, question=Question(step=K.INTEGRATE, text="checks fail after the update"))
     c = integrating()
     asked = overlap.integrated(store, C1, c, repo, (start, "ask"), said)
-    assert "The Builder said: checks fail after the update" in asked.question.text
+    assert "The builder who combined them says: checks fail after the update." in asked.question.text
     assert overlap.integrated(store, C1, c, repo, (start, "timeout"), said) is said
     c = loop.apply(c, asked, NOW)
     q = loop.open_question(c)
@@ -217,7 +218,7 @@ def test_an_integration_build_whose_update_collides_asks_on_its_own_step(conflic
     q = asked.question
     assert (asked.exit, q.step) == (Exit.ASK, K.BUILD)
     assert [(o.id, o.next) for o in q.options] == [("keep", K.BUILD), ("adopt", K.BUILD), ("pause", "pause")]
-    assert "c3 on src/app.ts." in q.text
+    assert q.text.endswith("Details: c3 on src/app.ts")
 
 
 def test_a_plain_overlap_that_merges_cleanly_is_recorded_not_asked(merged_cleanly, tmp_path):

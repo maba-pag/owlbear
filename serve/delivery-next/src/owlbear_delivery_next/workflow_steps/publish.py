@@ -114,9 +114,8 @@ def relisted(c: Change, body: str) -> str:
     A marker counts only as a whole line: a finding or the owner's text that quotes one is on a longer line.
     """
     now = section(c)
-    if SECTION.search(body):
-        return SECTION.sub(lambda _: now, body, count=1)
-    return f"{body.rstrip()}\n\n{now}" if now else body
+    spliced, found = SECTION.subn(lambda _: now, body, count=1)
+    return spliced if found or not now else f"{body.rstrip()}\n\n{now}"
 
 
 def labelled(ctx: Ctx, c: Change, pr: PullRequest, labels: list[str]) -> None:
@@ -202,7 +201,8 @@ def gate(checks: Sequence[Check], now: datetime) -> StepResult | None:
         cause = cause_key(ErrorKind.NETWORK, P, "readiness")
         return StepResult(exit=Exit.RETRY, cause=cause, reason=reason, wake_at=now + timedelta(minutes=1))
     kind = {"github sign-in": ErrorKind.AUTH, "repository": ErrorKind.POLICY}.get(first.name, ErrorKind.TOOLING)
-    return engine.ask(P, reason, cause_key(kind, P, first.name), engine.continue_or_pause(P))
+    said = f"Delivery cannot publish this Change yet ({first.name}). {first.fix}; then run the step again"
+    return engine.blocked(cause_key(kind, P, first.name), said, first.detail, now)
 
 
 def lagging(ctx: Ctx, c: Change, pr: PullRequest, head: str) -> StepResult:
@@ -217,12 +217,13 @@ def lagging(ctx: Ctx, c: Change, pr: PullRequest, head: str) -> StepResult:
     if ctx.now - c.lag.since < LAG:  # GitHub reads lag a push just made: observed again shortly, never budgeted
         reason = f"GitHub still shows the PR at {pr.head_sha[:7]} after publishing {head[:7]}"
         return engine.pending(Waiting.NETWORK, reason, ctx.poll())
-    text = (
-        f"GitHub still shows {pr.url} at {pr.head_sha} although its branch holds {head} after "
-        f"{LAG.seconds // 60} min; check the PR on GitHub, then continue"
+    said = (
+        f"GitHub still shows this Change's pull request in an older state {LAG.seconds // 60} min after Delivery "
+        "published it. Check the pull request on GitHub, then run the step again"
     )
-    c.lag = None  # an answered question starts a new window
-    return engine.ask(P, text, cause_key(ErrorKind.NETWORK, P, "pr-head"), engine.continue_or_pause(P))
+    detail = f"{pr.url} shows {pr.head_sha}; its branch holds {head}"
+    c.lag = None  # the rerun starts a new window
+    return engine.blocked(cause_key(ErrorKind.NETWORK, P, "pr-head"), said, detail, ctx.now)
 
 
 def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - one exit per observation

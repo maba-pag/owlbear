@@ -130,28 +130,32 @@ def ask(head: str, kept: VisualRound) -> StepResult:
     every = [k for v in kept.verdicts for k in v.conflicts]
     taken = [k for k in every if k.departs not in kept.owner]  # an owner's criterion is withdrawn instead
     said += [f"{len(every)} conflicts with the brief"] if every else []
-    text = f"Decide the visual review of {head[:7]} (round {kept.number}): {'; '.join(said)}"
+    text = (
+        "Do these pages look right? Delivery's visual review did not end in a clear pass "
+        f"(round {kept.number}, at {head[:7]}): {'; '.join(said)}"
+    )
     options = [
-        Option(id="pass", label="Pass", next="accept"),
-        Option(id="fail", label="Fail", next="repair"),
+        Option(id="pass", label="Pass: the pages are right", next="accept"),
+        Option(id="fail", label="Fail: send them back to be fixed", next="repair"),
         *([Option(id=AMEND, label="Change the brief to take this", next="amend")] if taken else []),
-        Option(id="pause", label="Pause", next="pause"),
+        Option(id="pause", label="Pause this Change", next="pause"),
     ]
-    return engine.ask(StepKind.CHECK, text, CAUSE, options)
+    return engine.ask(StepKind.CHECK, text, CAUSE, options, subject="product")
 
 
 def unknown(head: str, kept: VisualRound) -> StepResult:
     """A judge's model is unknown: the owner accepts the whole round without the model check, or runs it again."""
     said = [f"{v.lens} {v.verdict}" + (f" ({v.reason[:200]})" if v.reason else "") for v in kept.verdicts]
     text = (
-        f"A judge's model is unknown in the visual review of {head[:7]} (round {kept.number}): {'; '.join(said)}. "
-        "Accepting takes the whole round without the model check; its verdicts still decide."
+        "Delivery could not verify which AI models reviewed these pages "
+        f"(round {kept.number}, at {head[:7]}: {'; '.join(said)}). Use this review anyway? "
+        "Its Pass or Fail results still decide what happens next."
     )
     options = [
-        Option(id="accept", label="Accept the round without the model check", next="accept"),
-        Option(id="retry", label="Run the round again", next="retry"),
+        Option(id="accept", label="Yes: use the review without the model check", next="accept"),
+        Option(id="retry", label="No: run the review again", next="retry"),
     ]
-    return engine.ask(StepKind.CHECK, text, MODEL, options)
+    return engine.ask(StepKind.CHECK, text, MODEL, options, subject="reserved")
 
 
 def matches(c: Change, kept: VisualRound, head: str | None, widths: Sequence[int]) -> bool:

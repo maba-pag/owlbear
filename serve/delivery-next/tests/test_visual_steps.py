@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from owlbear_delivery_next.change_contracts.inbox import BriefApproval
-from owlbear_delivery_next.change_contracts.models import Change, Exit, StepKind, VisualState, VisualStep
+from owlbear_delivery_next.change_contracts.models import Change, Exit, VisualState, VisualStep
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import brief_tools, loop
 from owlbear_delivery_next.state_store import briefs
@@ -102,11 +102,7 @@ def test_steps_run_only_on_a_prepared_test_copy():
     with pytest.raises(prepare.PrepareError) as unprepared:
         prepare.stepped(c, prepared=False)
     asked = unprepared.value.result
-    assert (asked.exit, asked.cause, [o.next for o in asked.question.options]) == (
-        Exit.ASK,
-        "project-env:check:preparation",
-        [StepKind.CHECK, StepKind.SHAPE, "pause"],
-    )
+    assert (asked.exit, asked.cause, asked.question) == (Exit.STOP, "project-env:check:preparation", None)
     prepare.stepped(c, prepared=True)
     prepare.stepped(stepped(), prepared=False)  # static states need no test copy
 

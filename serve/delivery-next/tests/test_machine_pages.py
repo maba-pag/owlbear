@@ -2838,8 +2838,8 @@ def test_a_long_undo_failure_is_asked_whole(tmp_path: Path, monkeypatch, pds, wh
         assert retry.undone(store, lock, c, work)
     why = f"CalledProcessError: Command 'git revert' returned non-zero exit status 1.\n{whole_error}"
     asked = (
-        f"Delivery could not undo attempt 1 of task t1 for its fresh build: {why}. Nothing was undone. Another round "
-        "reviews the last repair of the kept work; a pause lets you fix the branch first."
+        "Delivery could not undo the work you rejected (attempt 1 of task t1), so it cannot build it afresh; nothing "
+        f"was undone. Have the kept work reviewed once more instead?\n\nDetails: {why}"
     )
     assert [e.get("error") for e in store.events("c1") if e["event"] == "undo"] == [why]
     q = store.read("c1").questions[-1]

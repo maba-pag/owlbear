@@ -357,7 +357,7 @@ def test_a_submitted_merge_is_observed_before_the_amendment_goes_on(picking, mon
     assert "merged before its amendment A1 ended" in new.intent.words
 
 
-def test_an_unset_challenger_asks_for_its_settings_and_keeps_the_amendment_where_it_was(picking, monkeypatch):
+def test_an_unset_challenger_stops_for_its_settings_and_keeps_the_amendment_where_it_was(picking, monkeypatch):
     run = Amending(picking, monkeypatch)
     run.premised(AC1)
     picking.verdicts.append(candidate())
@@ -369,9 +369,9 @@ def test_an_unset_challenger_asks_for_its_settings_and_keeps_the_amendment_where
 
     c = run.step()
 
-    q = loop.open_question(c)
     assert (run.roles(told), c.amending.phase, amending.current(c).verdict) == ([], "challenge", "")
-    assert "agents.challenger." in q.text
+    assert (loop.open_question(c), c.outcome.cause.endswith(":settings-unset")) == (None, True)  # a stop
+    assert "Settings page" in c.stop.reason
 
 
 @pytest.mark.parametrize(
