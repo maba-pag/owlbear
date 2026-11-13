@@ -124,7 +124,7 @@ class Step:
         if why := self._model_missing():
             out.end, out.detail = "model-unavailable", why
             return False
-        if why := self._configure(bound.session):
+        if why := self._configure(bound.session, bound.chat):
             out.end, out.detail = "config-refused", why
             return False
         if not self._listed(bound.session):
@@ -246,19 +246,42 @@ class Step:
             return False
         return False
 
-    def _configure(self, session: str) -> str:
-        """Apply the session's settings: '' once the host shows them, else why not."""
+    def _configure(self, session: str, chat: str) -> str:
+        """Apply settings at their effective schema's scope, verifying each channel before starting the prompt."""
         if not self.spec.config:
             return ""
+        session_config = self._chat(session).get("config") or {}
+        chat_config = self._chat(chat).get("config") or {}
+        properties = (chat_config.get("schema", session_config.get("schema")) or {}).get("properties") or {}
+        mutable = {key for key, prop in properties.items() if prop.get("chatMutable")}
+        session_values = {key: value for key, value in self.spec.config.items() if key not in mutable}
+        chat_values = {key: value for key, value in self.spec.config.items() if key in mutable}
+        if chat_config.get("schema") is not None and session_values:
+            return "the chat's own config schema does not allow the settings " + json.dumps(
+                session_values, sort_keys=True
+            )
+        defaults = {key: properties[key]["default"] for key in chat_values if "default" in properties[key]}
+        if why := self._apply_config(session, "session", session_values, {}):
+            return why
+        if why := self._apply_config(chat, "chat", chat_values, defaults):
+            if session_values:
+                why += "; confirmed session settings: " + json.dumps(session_values, sort_keys=True)
+            return why
+        return ""
+
+    def _apply_config(self, channel: str, scope: str, wanted: Json, defaults: Json) -> str:
+        """Apply one scope's settings; omitted chat values take schema defaults, never session values."""
+        if not wanted:
+            return ""
         # subscribe before dispatching: the host sends a rejection only to the channel's subscribers
-        values = (self._chat(session).get("config") or {}).get("values") or {}
-        if all(values.get(k) == v for k, v in self.spec.config.items()):
+        values = defaults | ((self._chat(channel).get("config") or {}).get("values") or {})
+        if all(values.get(k) == v for k, v in wanted.items()):
             return ""  # nothing to change, so no action whose rejection could go unread
-        seq = self.conn.dispatch(session, {"type": "session/configChanged", "config": self.spec.config})
-        deadline, asked = self.clock() + ACK, json.dumps(self.spec.config, sort_keys=True)
+        seq = self.conn.dispatch(channel, {"type": f"{scope}/configChanged", "config": wanted})
+        deadline, asked = self.clock() + ACK, json.dumps(wanted, sort_keys=True)
         while self.clock() < deadline:
-            values = (self._chat(session).get("config") or {}).get("values") or {}
-            if all(values.get(k) == v for k, v in self.spec.config.items()):
+            values = defaults | ((self._chat(channel).get("config") or {}).get("values") or {})
+            if all(values.get(k) == v for k, v in wanted.items()):
                 return ""
             if (why := _rejection(self.conn.next_event(0.2), self.conn.client_id, seq)) is not None:
                 return f"the host refused the settings {asked}: {why}; applied: {json.dumps(values, sort_keys=True)}"

@@ -26,7 +26,7 @@ from websockets.sync.client import unix_connect
 
 from owlbear_delivery_next.git.command_failure import failure
 
-PROTOCOL = "1.0.0"
+PROTOCOL = "1.1.0"
 ROOT = "ahp-root://"
 ENTRIES = Path.home() / "Library/Application Support/Code/agent-host/local-endpoint/entries"
 IO_TIMEOUT = 15.0  # the opening handshake, and each write
