@@ -710,9 +710,8 @@ def test_an_author_chosen_for_an_unborn_clone_is_written_before_its_first_commit
 
 
 def test_rules_only_listed_for_github_keep_the_project_from_being_ready_with_their_link(hub, jobs, tmp_path):
-    hub.add("ada/proj", commits=True)
+    folder = committed_clone(hub, tmp_path, "ada/proj")
     hub.classic["ada/proj"] = {"required_linear_history": {"enabled": True}}
-    folder = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/proj.git", "proj", Access.LOCAL))
     found = jobs.probe({"kind": "folder", "folder": str(folder)})
     assert found["rules"]["links"] == {"classic": "https://github.com/ada/proj/settings/branches"}
     info = run(jobs, plan_for(found, method="squash"))
