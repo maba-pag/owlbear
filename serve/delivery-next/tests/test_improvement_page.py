@@ -380,6 +380,7 @@ def _case_focus_after_poll(page: Page, pds, cid: str) -> Locator:
     cur = cases.current()
     cases.commit(cur["n"], {cid: cases.edited(cid, cur["cases"][cid], stage="test", reviewed_by="sol")}, "t", "r")
     page.evaluate("document.dispatchEvent(new CustomEvent('owlbear-polled'))")
+    expect(page.locator("#cases")).to_contain_text(f"Version {cases.current()['n']}.")
     expect(case.locator("p-select-option")).to_have_count(4)
     return case
 
