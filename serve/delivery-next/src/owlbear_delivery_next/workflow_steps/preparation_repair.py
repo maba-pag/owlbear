@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 from typing import TYPE_CHECKING
 
@@ -56,6 +57,7 @@ def context(change: Change, settings: Settings) -> str:
             "## Missing or unsafe test preparation",
             "Propose fix=preparation, not a code patch or a no-change retry. Do not edit the project settings.",
             "Inspect what this check reads. Use committed fixtures or self-contained commands; leave no source edits.",
+            "The host proves the committed project HEAD, not untracked or unfinished files in this diagnostic copy.",
             "Propose synthetic data only, within the current permissions. Never copy live data or relax permissions.",
             "Declare HOME as a directory relative to the worktree root. Delivery anchors it there for every command.",
             "Describe the source, seeded content, cleanup and isolation. Supply verify: one command that checks the",
@@ -83,12 +85,14 @@ def _permitted(proposal: PreparationProposal, settings: Settings) -> None:
         raise repair_copy.RepairError(msg)
 
 
-def _independent(proposal: PreparationProposal, root: Path) -> None:
+def _independent(proposal: PreparationProposal, root: Path, source: Path) -> None:
     commands = (proposal.option.restore, proposal.option.seed, proposal.verify, proposal.option.cleanup)
     values = [word for command in commands for word in shlex.split(command)] + list(proposal.option.isolation.values())
-    if any(str(at) in value for at in (root, root.resolve()) for value in values):
-        msg = f"the preparation depends on its throwaway Repairer checkout {root}; use baseline project files"
-        raise repair_copy.RepairError(msg)
+    for at, kind in ((root, "throwaway Repairer checkout"), (source, "stuck worktree")):
+        names = [re.compile(rf"(?<![\w./-]){re.escape(str(path))}(?=$|[/:\s'\"),;])") for path in (at, at.resolve())]
+        if any(name.search(value) for name in names for value in values):
+            msg = f"the preparation depends on its {kind} {at}; use baseline project files"
+            raise repair_copy.RepairError(msg)
 
 
 def prove(
@@ -106,10 +110,11 @@ def prove(
     r.witness, r.diff = None, ""
     p = r.preparation
     _permitted(p, store.settings())
-    _independent(p, root)
+    _independent(p, root, source)
+    baseline = repair_copy.git(source, ["rev-parse", "HEAD"])
     clean = root.with_name(f"{root.name}-preparation-proof")
     repair_copy.drop(source, clean)
-    repair_copy.git(source, ["worktree", "add", "--quiet", "--detach", str(clean), r.base])
+    repair_copy.git(source, ["worktree", "add", "--quiet", "--detach", str(clean), baseline])
     repair_copy.drop(source, root)
     rec = None
     try:
@@ -132,7 +137,7 @@ def prove(
         if not cleaned:
             msg = f"the preparation trial cleanup is outstanding in {clean}:\n{r.witness.output}"
             raise CleanupPending(msg)
-        if repair_copy.changed(clean, r.base):
+        if repair_copy.changed(clean, baseline):
             msg = "the preparation trial left source edits; a settings-only proposal must use unchanged project code"
             raise repair_copy.RepairError(msg)
     finally:

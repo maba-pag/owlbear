@@ -101,7 +101,11 @@ def message(change: Change, witness: tuple[str, ...], at: Path) -> str:
         msg = "only a running repair has a session"
         raise ValueError(msg)
     task = f" task {r.task}" if r.task else ""
-    checks = "\n".join(f"- `{c}`" for c in witness) or "- none: the step has no check; say so and fix nothing"
+    checks = "\n".join(f"- `{c}`" for c in witness) or (
+        "- the preparation's restore, seed, verification and cleanup trial described below"
+        if r.cause in preparation_repair.CAUSES
+        else "- none: the step has no check; say so and fix nothing"
+    )
     scope = "\n".join(f"- {s}" for s in change.brief.scope) or "- the whole repository"
     target = f"`git merge-base --is-ancestor {r.target} HEAD` exited {0 if engine.contains(at, r.target) else 1}"
     prior = stuck.diagnostic(change)

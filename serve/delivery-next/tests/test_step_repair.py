@@ -562,6 +562,42 @@ def _reject_remote_preparation(store, asked, repo, remote, other):
     assert "preparations changed after this proposal was shown; nothing was overwritten" in held.stop.reason
 
 
+def _reject_stuck_helper(store, asked, proposal, repo, monkeypatch):
+    helper = Path(asked.names.worktree) / "untracked-verify.py"
+    helper.write_text("print('only the stuck worktree has this helper')\n")
+    dirty = asked.model_copy(deep=True)
+    dirty.questions = []
+    dirty.repairs.current.phase = "running"
+
+    def untracked_model_result(_store, cfg):
+        assert (cfg.worktree / helper.name).is_file()
+        return Run(
+            cfg.session_id,
+            "result",
+            repair_tools.PreparationResult(
+                cause="The diagnostic copy includes an untracked helper from the stuck worktree.",
+                tried=[repair_tools.Try(fix="Use the untracked diagnostic helper", outcome="It exists in this copy")],
+                fix="preparation",
+                preparation=proposal.model_copy(update={"verify": shlex.join([sys.executable, helper.name])}),
+            ),
+            model_check="verified",
+            usage={"credits": 0.0, "models": {}},
+            termination=Termination(confirmed=True),
+        )
+
+    monkeypatch.setattr(sessions, "run", untracked_model_result)
+    try:
+        step_repair.run(store, Lock(dirty.slug), dirty, repo)
+        rejected = store.read(dirty.slug)
+        assert loop.open_question(rejected) is None
+        assert rejected.repairs.done[-1].witness.exit != 0
+        assert helper.name in rejected.stop.reason
+        assert "No such file" in rejected.stop.reason
+        assert store.read_config().preparations is None
+    finally:
+        helper.unlink()
+
+
 def _retain_failed_trial(store, asked, proposal, repo, monkeypatch):
     control = store.root / "cleanup-held"
     control.write_text("simulate a temporarily unavailable cleanup")
@@ -709,6 +745,7 @@ def test_missing_visual_preparation_requires_owner_approval_before_project_setti
     assert store.read_config().preparations == [proposal.option, other]
     assert len(calls) == 1
     _reject_ignored_preparation(store, asked, proposal, repo, monkeypatch)
+    _reject_stuck_helper(store, asked, proposal, repo, monkeypatch)
     _retain_failed_trial(store, asked, proposal, repo, monkeypatch)
     _reject_remote_preparation(store, asked.model_copy(deep=True), repo, shared_repo[1], tmp_path / "other-settings")
     assert (store.shared.global_path.read_bytes() if store.shared.global_path.exists() else None) == global_before
