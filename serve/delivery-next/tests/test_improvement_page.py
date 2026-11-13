@@ -756,11 +756,7 @@ def test_a_failed_cases_run_shows_its_whole_error(tmp_path, monkeypatch, pds, wh
 @pytest.mark.timeout(90)
 def test_a_failed_replay_look_shows_its_whole_note(tmp_path, monkeypatch, pds, whole_error) -> None:
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
-        chosen = _checked()  # two quiet test cases and one that moves into the examples
-        cur = cases.current()
-        edits = {chosen: cases.edited(chosen, cur["cases"][chosen], stage="example", example="a moment")}
-        request = case_replay.regression(edits, "owner", "promote")
-        _quiet, failing = request["frozen"]  # in their order, each before then after; the run ends after a failure
+        failing = "c-failed"
         rid = "replay-failed"
         note = f"RuntimeError: {whole_error}\n{NOTE}"
         with cases.locked():
