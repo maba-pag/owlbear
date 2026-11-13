@@ -92,8 +92,8 @@ def fresh_clone(remote: Path, tmp_path: Path, name: str = "fresh") -> Store:
 
 
 @pytest.mark.usefixtures("no_network")
-def test_a_format_12_project_upgrades_and_carries_each_legacy_value_once(shared_repo, tmp_path):
-    root, _ = shared_repo
+def test_a_format_12_upgrade_carries_once_and_owner_saves_nulls_and_clears_survive_restarts(shared_repo, tmp_path):
+    root, remote = shared_repo
     store = seeded(root, tmp_path)
 
     started(store, root)
@@ -107,13 +107,6 @@ def test_a_format_12_project_upgrades_and_carries_each_legacy_value_once(shared_
     assert (layer.widths, layer.sessions, layer.pr_labels, layer.pr_marker) == ([1600], 3, ["ready"], True)
     started(reopen(root, tmp_path), root)  # a restart fills nothing again
     assert reopen(root, tmp_path).read_config() == layer
-
-
-@pytest.mark.usefixtures("no_network")
-def test_an_owner_save_and_a_restart_keep_the_new_values_and_an_owner_null_or_clear_stays_null(shared_repo, tmp_path):
-    root, remote = shared_repo
-    store = seeded(root, tmp_path)
-    started(store, root)
 
     def edit(project: dict) -> dict:
         return project | {

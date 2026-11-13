@@ -44,10 +44,9 @@ def request(root, payload, action):
 
 
 @pytest.mark.parametrize("action", ["read", "create"])
-@pytest.mark.parametrize("repository", ["O/R"])
-def test_response_repository_matches_case_insensitively_and_allows_a_fork_head(tmp_path, action, repository):
+def test_response_repository_matches_case_insensitively_and_allows_a_fork_head(tmp_path, action):
     payload = response(action)
-    payload["base"]["repo"]["full_name"] = repository
+    payload["base"]["repo"]["full_name"] = "O/R"
     found = request(tmp_path, payload, action)
     assert found.repository.casefold() == "o/r"
     assert found.number == 7
