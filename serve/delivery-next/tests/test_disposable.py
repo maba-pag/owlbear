@@ -110,7 +110,6 @@ def test_review_writes_never_reach_the_change_worktree_and_the_read_only_one_is_
     assert (cfg.policy.root, cfg.policy.write) == (at, False)
     assert (str(at) in cfg.message, str(change_repo) in cfg.message) == (True, False)
     assert (observed.head, observed.base) == (head, base)
-    assert at.is_dir()
     assert f"worktree {at}\nHEAD {head}\ndetached" in git(change_repo, "worktree", "list", "--porcelain")
     assert disposable.live(store.root / "changes" / "c1") is None
     assert (at / "new.txt").exists()  # nothing removes it after the session
