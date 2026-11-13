@@ -33,7 +33,7 @@ from owlbear_delivery_next.workflow_steps import prepare, worker_questions
 TOOL = """import os, pathlib, sys
 act, snap, db = sys.argv[1], os.environ.get("OWLBEAR_SNAPSHOT", ""), os.environ.get("TEST_DB", "")
 with open(os.environ.get("TEST_LOG") or os.environ["PREP_LOG"], "a") as f:
-    f.write(f"{act} {db}\\n")
+    f.write(f"cleanup {os.getcwd()}\\n" if act == "cleanup-where" else f"{act} {db}\\n")
     if os.environ.get("LIVE_SECRET"):
         f.write(f"secret-{act}\\n")
 if act == "export":
@@ -52,9 +52,11 @@ if act == "fail":
     sys.exit("restore refused")
 if act == "fail-whole":
     sys.exit(pathlib.Path(__file__).with_name("whole.txt").read_text())
-if act == "cleanup" and os.environ.get("REQUIRE_SNAPSHOT"):
+if act in {"cleanup", "cleanup-where"} and os.environ.get("REQUIRE_SNAPSHOT"):
     assert snap, "cleanup needs the same frozen snapshot environment"
     assert pathlib.Path(snap, "db.txt").read_text() == "user-1"
+    if pathlib.Path(os.environ["CLEANUP_HOLD"]).exists():
+        sys.exit("cleanup service temporarily unavailable")
 """
 SETUP = """import os, pathlib, sys
 act, log = sys.argv[1], pathlib.Path(os.environ["TEST_LOG"])
@@ -345,10 +347,34 @@ def test_without_a_declared_option_no_check_launches_and_repair_proposes_one(env
     assert prepare.unsafe(resolve(None, Layer(preparations=[none])), LIVE) is None  # a project without data
 
 
+def _shaping_snapshot_cleanup(env, c, events, copy):
+    repo, store, log, tmp = env
+    held = Path(copy.isolation["CLEANUP_HOLD"])
+    target = tmp / "target"
+    git(repo, "worktree", "add", "--detach", str(target), "HEAD")
+    shaping = option(tmp, cleanup=run(tmp, "cleanup-where"))
+    shaping.isolation.update(copy.isolation)
+    kept = settings(shaping, retention="keep")
+    c.brief.preparation = "copy"
+    assert prepare.shaping(store, c, kept, events.append)(target)["TEST_DB"] == str(tmp / "test.db")
+    rec = prepare.read(store, "c1", prepare.SHAPING)
+    assert (rec.home, rec.open, (tmp / "test.db").read_text()) == (str(target), True, "user-1+seeded")
+    held.touch()
+    assert prepare.end(store, c, repo, kept, events.append) is None
+    assert Path(rec.snapshot).is_dir()
+    assert target.is_dir()
+    held.unlink()
+    assert prepare.end(store, c, repo, kept, events.append) is None
+    assert log.read_text().splitlines()[-1] == f"cleanup {target.resolve()}"
+    assert (Path(rec.snapshot).exists(), prepare.left(store, c)) == (False, [])
+
+
 def test_one_frozen_snapshot_is_restored_separately_before_each_capture_and_ended(env):
     repo, store, log, tmp = env
     copy = option(tmp)
     copy.isolation["REQUIRE_SNAPSHOT"] = "1"
+    held = tmp / "cleanup-held"
+    copy.isolation["CLEANUP_HOLD"] = str(held)
     c, s, events = change(repo), settings(copy), []
     prepare._write(store, "c1", prepare.Prepared(check="visual", option=copy))  # noqa: SLF001 - as accepted
     before_root = tmp / "merge-base"
@@ -375,21 +401,17 @@ def test_one_frozen_snapshot_is_restored_separately_before_each_capture_and_ende
 
     assert prepare.left(store, c) == []  # the check's environment still runs
     c.env = None
+    held.touch()
+    assert prepare.end(store, c, repo, s, events.append) is None
+    assert snapshot.is_dir()
+    assert prepare.read(store, "c1", "visual").open
+    assert "cleanup service temporarily unavailable" in events[-1]["cleanup"]
+    held.unlink()
     assert prepare.end(store, c, repo, s, events.append) is None
     assert (lines(log)[-1], snapshot.exists()) == ("cleanup", False)  # retention: deleted after the check
     assert prepare.left(store, c) == []
 
-    target = tmp / "target"  # the shaping capture's own checkout (D-01M6Q56RXK85C5T4AG7R051X6N)
-    git(repo, "worktree", "add", "--detach", str(target), "HEAD")
-    where = f"{sys.executable} -c \"import os; open(os.environ['TEST_LOG'], 'a').write('cleanup ' + os.getcwd())\""
-    kept = settings(option(tmp, cleanup=where), retention="keep")
-    c.brief.preparation = "copy"
-    assert prepare.shaping(store, c, kept, events.append)(target)["TEST_DB"] == str(tmp / "test.db")
-    rec = prepare.read(store, "c1", prepare.SHAPING)
-    assert (rec.home, rec.open, (tmp / "test.db").read_text()) == (str(target), True, "user-1+seeded")
-    assert prepare.end(store, c, repo, kept, events.append) is None
-    assert log.read_text().splitlines()[-1] == f"cleanup {target.resolve()}"  # never the Change worktree
-    assert (Path(rec.snapshot).exists(), prepare.left(store, c)) == (False, [])  # never kept, whatever retention says
+    _shaping_snapshot_cleanup(env, c, events, copy)
 
 
 def test_cleanup_runs_after_a_failed_restore_and_the_snapshot_may_be_kept(env):

@@ -403,11 +403,15 @@ def _reapply(store: Store, c: Change, rec: Prepared, home: Path) -> None:
         _write(store, c.slug, rec)
 
 
-def _cleanup(rec: Prepared, home: Path, log: Log) -> str:
+def _cleanup(store: Store, slug: str, rec: Prepared, home: Path, log: Log) -> str:
+    environment = cleanup_record(store, slug, rec)
     try:
-        note = snapshot_files.command(rec, "cleanup", home, log, isolated(rec, home))
+        note = snapshot_files.command(environment, "cleanup", home, log, isolated(environment, home))
     except PrepareError as exc:
         return exc.result.reason
+    if not note:
+        rec.snapshot_only = True
+        _write(store, slug, rec)
     return note
 
 
@@ -424,10 +428,9 @@ def _dispose_trial(store: Store, slug: str, rec: Prepared, repo: Path) -> bool:
 
 
 def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> loop.StepResult | None:
-    """End every check whose environment is gone: clean up with its patch applied, discard it, delete its snapshot.
+    """Clean ended copies with patches applied; snapshots remain until cleanup succeeds.
 
-    Cleanup and deletion always run. A patch that cannot be discarded stops the Change, so no setup edit can
-    reach a commit (TD-107). A failed cleanup or deletion leaves the run outstanding: the next runner ends it again.
+    An undiscardable patch stops the Change (TD-107); failed cleanup/deletion remains owed.
     """
     for rec in cleanup_records(store, c, datetime.now(UTC)):
         if _dispose_trial(store, c.slug, rec, repo):
@@ -446,8 +449,9 @@ def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> lo
         keep = settings.data.retention == "keep" and bool(rec.digest) and rec.check != SHAPING  # never a shaping copy
         try:
             _reapply(store, c, rec, home)
-            note = "" if rec.snapshot_only else _cleanup(cleanup_record(store, c.slug, rec), home, log)
-            if not (gone := keep or snapshot_files.gone(rec.snapshot)):
+            note = "" if rec.snapshot_only else _cleanup(store, c.slug, rec, home, log)
+            gone = keep or (not note and snapshot_files.gone(rec.snapshot))
+            if not note and not gone:
                 note = "; ".join(filter(None, [note, f"the snapshot {rec.snapshot} could not be deleted"]))
         finally:
             if rec.applied and Path(rec.applied).is_dir():

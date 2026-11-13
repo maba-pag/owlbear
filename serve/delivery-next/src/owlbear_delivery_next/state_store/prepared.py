@@ -33,7 +33,7 @@ class Prepared(BaseModel):
     home: str = ""
     trial: bool = False  # owns a temporary proof or capture checkout until cleanup and disposal finish
     snapshot_from: str = ""  # the check owns the frozen snapshot; a before copy borrows its command environment
-    snapshot_only: bool = False  # environment commands have not started; only snapshot/setup cleanup is owed
+    snapshot_only: bool = False  # no environment cleanup is owed; only snapshot/setup cleanup remains
 
 
 def folder(store: Store, slug: str) -> Path:
