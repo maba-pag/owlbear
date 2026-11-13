@@ -433,7 +433,10 @@ def test_the_reviewer_is_told_each_new_and_existing_error_as_data(flow):
     message = flow.review.calls[0].message
     assert "- new, home at 1280px, page error: boom" in message
     assert "- existing, home at 1280px, console error: old" in message
-    assert existing_errors(flow.store) == ["home at 1280px, console error: old"]
+    client = TestClient(
+        api.create_app(flow.store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
+    )
+    assert client.get("/api/next/changes/c1").json()["visual_existing_errors"] == ["home at 1280px, console error: old"]
 
 
 def test_the_detectors_findings_are_recorded_as_evidence_and_never_fail_the_check(flow):
@@ -1134,13 +1137,6 @@ class Host:
 
     def activity(self, _slug):
         return Activity(host_up=True)
-
-
-def existing_errors(store):
-    client = TestClient(
-        api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
-    )
-    return client.get("/api/next/changes/c1").json()["visual_existing_errors"]
 
 
 def test_the_screenshot_endpoint_serves_only_this_changes_recorded_files(tmp_path):
