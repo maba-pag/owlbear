@@ -122,30 +122,19 @@ def test_design_failures_resolve_project_then_global_then_ask() -> None:
         Layer.model_validate({"design_failures": "reject"})
 
 
-def test_calibration_keeps_decided_rounds_in_the_shared_repository_with_local_screenshots(
-    shared_repo, tmp_path
-) -> None:
+def test_invalid_calibration_records_and_paths_write_nothing(shared_repo, tmp_path) -> None:
     root, repo = shared_repo
     store = Store.open(repo)
-    before, after = tmp_path / "b.png", tmp_path / "a.png"
-    before.write_bytes(b"before")
+    after = tmp_path / "a.png"
     after.write_bytes(b"after")
-    shots = {"before-home-1280.png": before, "after-home-1280.png": after}
-    assert calibration.keep(store.shared, store.name, "c1", decided(1, NOW), shots) == ""
-    kept = root / "shop-site" / "visual" / "c1-1"
-    assert git(root, "log", "--format=%s", "-1") == "visual: c1 round 1 decided"
-    assert git(root, "ls-files", "shop-site/visual") == "shop-site/visual/c1-1/round.json"
-    assert [(kept / n).read_bytes() for n in shots] == [b"before", b"after"]
-    assert store.shared.pending() == ""  # the screenshots are excluded, not unsaved
-    assert git(repo, "status", "--porcelain") == ""
-    [(again, images)] = calibration.cases(store.shared, store.name)
-    assert (again, images) == (decided(1, NOW), [kept / "after-home-1280.png", kept / "before-home-1280.png"])
+    before = git(root, "status", "--porcelain"), git(root, "rev-parse", "HEAD")
     with pytest.raises(ValueError, match="only a round the owner decided"):
         calibration.keep(store.shared, store.name, "c1", decided(2, NOW).model_copy(update={"decision": None}), {})
     for slug, image in (("../x", "a.png"), ("/abs", "a.png"), ("c1", "round.json"), ("c1", "../a.png")):
         with pytest.raises(ValueError, match="plain"):
             calibration.keep(store.shared, store.name, slug, decided(2, NOW), {image: after})
-    assert sorted(p.name for p in kept.parent.iterdir()) == ["c1-1"]  # nothing was written for them
+    assert (git(root, "status", "--porcelain"), git(root, "rev-parse", "HEAD")) == before
+    assert not (root / "shop-site" / "visual").exists()
 
 
 def test_only_the_newest_decided_rounds_keep_their_screenshots(shared_repo, tmp_path, monkeypatch) -> None:
@@ -173,6 +162,12 @@ def test_a_round_the_owner_decided_is_kept_with_its_before_and_after_screenshots
     visual_settled.calibrated(store, Lock("c1"), change, out)
     kept = root / "shop-site" / "visual" / "c1-1"
     assert [(kept / n).read_bytes() for n in ("after-home-1280.png", "before-home-1280.png")] == [b"after", b"before"]
+    assert git(root, "log", "--format=%s", "-1") == "visual: c1 round 1 decided"
+    assert git(root, "ls-files", "shop-site/visual") == "shop-site/visual/c1-1/round.json"
+    assert store.shared.pending() == ""
+    assert git(repo, "status", "--porcelain") == ""
+    [(again, images)] = calibration.cases(store.shared, store.name)
+    assert (again, images) == (decided(1, NOW), [kept / "after-home-1280.png", kept / "before-home-1280.png"])
 
 
 def test_a_change_stored_before_round_decisions_loads_without_its_old_answer(tmp_path) -> None:

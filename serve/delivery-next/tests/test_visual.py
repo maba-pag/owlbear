@@ -59,7 +59,7 @@ from owlbear_delivery_next.workflow_steps import before, check, decision, held, 
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
-MISSING, CRASHED = "Executable doesn't exist", "browser crashed"
+MISSING = "Executable doesn't exist"
 HOME = VisualState(name="home", path="/", expect="The greeting is centred")
 HEAD = "a" * 40  # judged, route, repair and loop.apply take the head as given; none reads a checkout
 
@@ -69,26 +69,16 @@ def git(cwd, *args):
     return done.stdout.strip()
 
 
-@pytest.fixture(autouse=True)
-def git_env(tmp_path, monkeypatch):
-    (tmp_path / "gitconfig").write_text("")
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    for who in ("AUTHOR", "COMMITTER"):
-        monkeypatch.setenv(f"GIT_{who}_NAME", "t")
-        monkeypatch.setenv(f"GIT_{who}_EMAIL", "t@t")
-
-
 @pytest.fixture
-def clone(tmp_path):
-    origin, work = tmp_path / "origin.git", tmp_path / "work"
+def clone(tmp_path, change_repo):
+    return with_origin(change_repo, tmp_path)
+
+
+def with_origin(work, tmp_path):
+    origin = tmp_path / "origin.git"
     git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
-    git(tmp_path, "clone", "-q", str(origin), str(work))
-    (work / "a.txt").write_text("a\n")
-    git(work, "add", "a.txt")
-    git(work, "commit", "-q", "-m", "base")
+    git(work, "remote", "add", "origin", str(origin))
     git(work, "push", "-q", "origin", "HEAD:refs/heads/main")
-    git(work, "switch", "-q", "-c", "owlbear/c1")
     return work
 
 
@@ -175,6 +165,11 @@ def test_a_ui_diff_without_a_visual_check_asks_once_and_not_ui_is_a_decided_deci
     assert result.question.text.endswith("Does this Change alter what a person sees?\n\nDetails: web/app.css")
     assert [o.id for o in result.question.options] == ["brief", visual.NOT_UI, "pause"]
     c = loop.apply(c, result, NOW)
+    reshaped, _ = loop.schedule(
+        c.model_copy(deep=True), [AnswerItem(at=NOW, question=c.outcome.question, option="brief")], NOW
+    )
+    assert reshaped.step.kind == StepKind.SHAPE
+    assert not visual.not_ui(reshaped, ui)
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option=visual.NOT_UI)], NOW)
     c = visual.decide(visual.decide(c, ui, NOW), ui, NOW)
     text = f"Not a UI change (brief v1, UI paths {visual.digest(ui)})"
@@ -186,15 +181,6 @@ def test_a_ui_diff_without_a_visual_check_asks_once_and_not_ui_is_a_decided_deci
     assert visual.held(c, head, more).exit == Exit.ASK
     c.brief.version = 2  # the decision holds for its brief version only
     assert not merge.visual_ok(c, head, ui)
-
-
-def test_revise_the_brief_returns_to_shaping(clone):
-    head = commit(clone, "web/index.html")
-    c = change(clone, states=())
-    c = loop.apply(c, visual.held(c, head, visual.ui_paths(c, head)), NOW)
-    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="brief")], NOW)
-    assert c.step.kind == StepKind.SHAPE
-    assert not visual.not_ui(c, ["web/index.html"])
 
 
 def test_renames_ui_directories_and_template_suffixes_count_as_ui(clone):
@@ -250,21 +236,6 @@ def test_a_passed_visual_check_holds_only_for_its_exact_head_tree_and_state_vers
     assert not merge.visual_ok(c, "c" * 40, [])  # an unreadable head tree is never accepted
 
 
-def test_a_fix_verdict_becomes_a_builder_repair_task():
-    head, tree = HEAD, "b" * 40
-    c = change()
-    verdict = rv("fix", [tools.Finding(place="home 390px", problem="text overflows", fix="wrap it")])
-    shots = [visual.Shot("home", 1280, "home-1280.png"), visual.Shot("home", 390, "home-390.png")]
-    c, result = visual.judged(
-        c, head, tree, shots, verdict=verdict, now=NOW, kept=rounded(c, head, tree, correct="fail")
-    )
-    assert (result.exit, result.back_to, c.visual.passed) == (Exit.BACK, StepKind.BUILD, False)
-    assert c.visual.findings == ["home 390px: text overflows - fix: wrap it"]
-    after = loop.apply(c, result, NOW)
-    assert (after.step.kind, after.step.task) == (StepKind.BUILD, result.fix_task.id)
-    assert any(t.id == result.fix_task.id for t in after.plan.tasks)
-
-
 def err(text, width=1280, kind="console", state="home"):
     return PageError(state=state, version=1, width=width, kind=kind, text=text)
 
@@ -303,8 +274,14 @@ def test_new_errors_fail_with_the_reviewers_findings_and_existing_ones_never_fai
     c = change(before=before)
     c, result = visual.judged(c, head, "t", shots, verdict=rv("pass"), now=NOW, kept=rounded(c, head))
     assert (result.exit, c.visual.passed, c.visual.errors) == (Exit.DONE, True, [err("old")])
-    shots = [visual.Shot("home", 1280, "home-1280.png", errors=(err("old"), err("boom", kind="page")))]
     verdict = rv("fix", [tools.Finding(place="home-1280.png", problem="text overflows", fix="wrap it")])
+    c, result = visual.judged(c, head, "t", shots, verdict=verdict, now=NOW, kept=rounded(c, head, correct="fail"))
+    assert (result.exit, result.back_to, c.visual.passed) == (Exit.BACK, StepKind.BUILD, False)
+    assert c.visual.findings == ["home-1280.png: text overflows - fix: wrap it"]
+    after = loop.apply(c, result, NOW)
+    assert (after.step.kind, after.step.task) == (StepKind.BUILD, result.fix_task.id)
+    assert any(t.id == result.fix_task.id for t in after.plan.tasks)
+    shots = [visual.Shot("home", 1280, "home-1280.png", errors=(err("old"), err("boom", kind="page")))]
     c, result = visual.judged(change(before=before), head, "t", shots, verdict=verdict, now=NOW)
     assert (result.exit, c.visual.passed) == (Exit.BACK, False)
     assert c.visual.findings == [
@@ -456,6 +433,10 @@ def test_the_reviewer_is_told_each_new_and_existing_error_as_data(flow):
     message = flow.review.calls[0].message
     assert "- new, home at 1280px, page error: boom" in message
     assert "- existing, home at 1280px, console error: old" in message
+    client = TestClient(
+        api.create_app(flow.store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
+    )
+    assert client.get("/api/next/changes/c1").json()["visual_existing_errors"] == ["home at 1280px, console error: old"]
 
 
 def test_the_detectors_findings_are_recorded_as_evidence_and_never_fail_the_check(flow):
@@ -871,21 +852,6 @@ def test_a_decision_never_passes_a_capture_of_another_head(flow):
     assert flow.store.read("c1").visual_rounds[-1].number == kept.number + 1
 
 
-def test_the_capture_uses_the_widths_the_settings_name(flow):
-    assert (
-        flow.store.save(
-            flow.store.config_path,
-            config.Layer,
-            lambda cur: cur.model_copy(update={"widths": [1600]}),
-            "setup",
-            owner=True,
-        )
-        == ""
-    )
-    runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
-    assert (flow.widths, flow.store.read("c1").visual.files) == ([[1600]], ["home-1600.png"])
-
-
 def test_a_changes_before_screenshots_fix_its_widths_so_every_after_shot_has_its_pair(flow):
     c = checking(flow.store, flow.clone)
     c.before = VisualResult(head="b", tree="t", files=["home-1280.png"], widths=[1280], at=NOW)
@@ -921,6 +887,26 @@ def test_a_capture_is_judged_from_png_blob_attachments_and_passes(flow):
     head = git(flow.clone, "rev-parse", "HEAD")
     assert (flow.store.visual_dir("c1", head) / "home-2400.png").read_bytes() == PNG
     assert merge.visual_ok(after, head, [])
+    st = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
+    args = {"verdict": "pass", "findings": [], "covered_paths": ["home-1280.png"]}
+    reply = st._handle(st.cfg.submit, SimpleNamespace(arguments=args))  # noqa: SLF001
+    assert "home-1920.png" in str(reply)
+    assert st.run.payload is None
+    assert (
+        flow.store.save(
+            flow.store.config_path,
+            config.Layer,
+            lambda cur: cur.model_copy(update={"widths": [1600]}),
+            "setup",
+            owner=True,
+        )
+        == ""
+    )
+    runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
+    assert (flow.widths, flow.store.read("c1").visual.files) == (
+        [[1280, 1920, 2400], [1600]],
+        ["home-1600.png"],
+    )
 
 
 def test_a_round_whose_judge_model_is_unknown_is_accepted_whole_or_run_again(flow):
@@ -1039,22 +1025,6 @@ def test_a_session_whose_processes_remain_stops_on_them_even_with_its_usage_unre
     assert (after.outcome.exit, after.stop.reason) == (Exit.STOP, "termination unverified: processes 7 still present")
 
 
-def test_the_reviewer_must_cover_every_screenshot(flow):
-    runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
-    st = sdk_adapter._Step(flow.review.calls[0], SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
-    args = {"verdict": "pass", "findings": [], "covered_paths": ["home-1280.png"]}
-    reply = st._handle(st.cfg.submit, SimpleNamespace(arguments=args))  # noqa: SLF001
-    assert "home-1920.png" in str(reply)
-    assert st.run.payload is None
-
-
-def test_an_unconfirmed_termination_wins_over_a_passing_verdict(flow):
-    flow.review.termination = processes.Termination(confirmed=False, survivors=(123,))
-    runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
-    after = flow.store.read("c1")
-    assert (after.outcome.exit, after.visual) == (Exit.STOP, None)
-
-
 def test_only_a_screenshot_larger_than_one_review_takes_is_a_finding_and_keeps_its_errors(tmp_path):
     (tmp_path / "a.png").write_bytes(b"x" * (visual.MAX_BYTES + 1))
     (tmp_path / "b.png").write_bytes(b"x" * (visual.MAX_BYTES - 1))
@@ -1119,18 +1089,6 @@ def test_a_missing_chromium_stops_with_the_install_command(flow):
     assert (after.visual, flow.review.calls) == (None, [])
 
 
-def test_a_capture_error_is_never_a_pass(flow):
-    def crash(*_a, **_k):
-        raise RuntimeError(CRASHED)
-
-    flow.mp.setattr(visual, "CAPTURE", crash)
-    runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
-    after = flow.store.read("c1")
-    assert after.outcome.exit == Exit.RETRY
-    assert CRASHED in after.outcome.reason
-    assert (after.visual, flow.review.calls) == (None, [])
-
-
 def test_a_failed_shot_skips_the_reviewer_and_becomes_a_repair_task(flow):
     flow.mp.setattr(visual, "CAPTURE", lambda *_a, **_k: [visual.Shot("home", 1280, error="/ answered 500")])
     runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
@@ -1179,20 +1137,6 @@ class Host:
 
     def activity(self, _slug):
         return Activity(host_up=True)
-
-
-def test_the_change_detail_reports_the_errors_that_existed_before_the_change(tmp_path):
-    store = Store(tmp_path / "store")
-    c = change()
-    c.before = VisualResult(head="b", tree="t", files=["home-1280.png"], errors=[err("old")], at=NOW)
-    errors = [err("old"), err("boom", kind="page")]
-    c.visual = VisualResult(head="a" * 40, tree="t", files=["home-1280.png"], errors=errors, at=NOW)
-    store.write(Lock("c1"), c)
-    client = TestClient(
-        api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
-    )
-    existing = client.get("/api/next/changes/c1").json()["visual_existing_errors"]
-    assert existing == ["home at 1280px, console error: old"]
 
 
 def test_the_screenshot_endpoint_serves_only_this_changes_recorded_files(tmp_path):
@@ -1358,7 +1302,9 @@ def test_a_capture_error_keeps_its_whole_text(flow, whole_error):
 
     flow.mp.setattr(visual, "CAPTURE", crash)
     runner._visual(flow.store, Lock("c1"), checking(flow.store, flow.clone), flow.clone)  # noqa: SLF001
-    assert flow.store.read("c1").outcome.reason == f"capture failed: RuntimeError: {whole_error}"
+    after = flow.store.read("c1")
+    assert (after.outcome.exit, after.visual, flow.review.calls) == (Exit.RETRY, None, [])
+    assert after.outcome.reason == f"capture failed: RuntimeError: {whole_error}"
     failed = subprocess.CalledProcessError(128, ["git", "rev-parse", "HEAD"], stderr=whole_error)
 
     def git_failed(_path):
