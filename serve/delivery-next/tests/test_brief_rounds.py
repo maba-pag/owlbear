@@ -172,11 +172,15 @@ def test_the_shaper_asks_rejects_and_revises_until_the_owner_may_approve_the_ver
 
 def test_a_save_after_the_loop_ended_needs_one_more_round_on_the_changes(shaping):
     shaping.save()
+    assert not brief_starts.waiting(shaping.change())
     shaping.ask_challenge(1)
+    assert not brief_starts.waiting(shaping.change())
     shaping.verdicts += [verdict(), verdict()]
     assert shaping.step().brief.challenged == 1
+    assert not brief_starts.waiting(shaping.change())
     assert "challenged already" in shaping.ask_challenge(1).json()["detail"]
     assert shaping.save(title="Add a farewell")["version"] == 2
+    assert brief_starts.waiting(shaping.change())
     for intent in ("pause", "resume"):  # a paused Change's round could not run, so its Approve waits for Resume
         if intent == "resume":
             assert shaping.approve(2).json()["detail"] == "this Change is paused: resume it to approve"
@@ -195,20 +199,12 @@ def test_a_save_after_the_loop_ended_needs_one_more_round_on_the_changes(shaping
     shaping.verdicts += [verdict("AC-1")]
     c = shaping.step()
     assert (c.brief.approve_if_clean, brief_starts.approving(c)) == (None, False)  # findings: the shaper revises
-
-
-def test_a_version_saved_after_the_loop_ended_waits_for_the_challenge_delivery_starts(shaping):
-    shaping.save()
-    assert not brief_starts.waiting(shaping.change())  # a first draft: no loop ended yet, the shaper asks
-    shaping.ask_challenge(1)
-    assert not brief_starts.waiting(shaping.change())  # its challenge runs
-    shaping.verdicts += [verdict("AC-1")]
-    shaping.step()
+    assert not brief_starts.waiting(c)
     shaping.save(title="Add a farewell")
     assert not brief_starts.waiting(shaping.change())  # the loop goes on: the shaper revises for F1
-    shaping.ask_challenge(2)
+    shaping.ask_challenge(4)
     shaping.verdicts += [verdict()]
-    assert shaping.step().brief.challenged == 2
+    assert shaping.step().brief.challenged == 4
     assert not brief_starts.waiting(shaping.change())  # the loop ended on this version: approvable
     shaping.save(title="Add a farewell, kindly")
     assert brief_starts.waiting(shaping.change())
@@ -285,24 +281,19 @@ def test_an_upheld_rejection_whose_question_a_stop_replaced_is_asked_again(shapi
     assert (c.outcome.exit, len(shaping.told)) == (Exit.ASK, 2)
 
 
-def test_an_old_approval_without_its_challenge_is_challenged_then_planned(shaping):
+@pytest.mark.parametrize("disputed", [False, True])
+def test_legacy_approval_is_challenged_before_planning(shaping, disputed):
     shaping.save()
     with shaping.store.lock(shaping.slug) as lock:
         c = shaping.store.read(shaping.slug)
         c.brief.approved_version = 1  # the old flow approved before its challenge
         c.outcome = None
         shaping.store.write(lock, c)
-    shaping.verdicts += [verdict()]
-    c = shaping.step()
-    assert (c.step.kind, c.brief.challenged) == (K.PLAN, 1)
-
-
-def test_an_old_approval_whose_disputed_finding_the_owner_drops_goes_on_to_planning(shaping):
-    shaping.save()
-    with shaping.store.lock(shaping.slug) as lock:
-        c = shaping.store.read(shaping.slug)
-        c.brief.approved_version, c.outcome = 1, None
-        shaping.store.write(lock, c)
+    if not disputed:
+        shaping.verdicts += [verdict()]
+        c = shaping.step()
+        assert (c.step.kind, c.brief.challenged) == (K.PLAN, 1)
+        return
     shaping.verdicts += [verdict("AC-1"), verdict(upheld={"F1": True})]
     shaping.step()
     assert shaping.ask_challenge(1, {"F1": "it is checkable"}).status_code == 200
