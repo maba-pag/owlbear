@@ -444,7 +444,6 @@ def test_a_secret_the_cut_of_a_long_note_splits_never_leaves_in_a_review():
     record = _record("w", 3, note=note)
     entry = record_entry(record)
     grade = retro_units.grade(record, "r1", "wrong", "it was fine", should="none")
-    retro_store.add_grades([grade])
     pid = props.file("real|spotter-case|w", [grade["id"]], kind="spotter-case", provenance="real")
     message = retro_judge.render(props.folded()[pid], {grade["id"]: grade_finding(grade)})
     assert "## The proposal" in message
