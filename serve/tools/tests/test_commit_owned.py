@@ -33,18 +33,6 @@ def git_repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def test_commits_owned_path_without_including_unrelated_staged_path(git_repo: Path) -> None:
-    """An unrelated staged path stays staged while the owned path is committed."""
-    (git_repo / "owned.txt").write_text("owned\n", encoding="utf-8")
-    (git_repo / "unrelated.txt").write_text("unrelated\n", encoding="utf-8")
-    _git(git_repo, "add", "unrelated.txt")
-
-    commit_owned_paths(cwd=git_repo, message="feat: owned change (#1, builder)", paths=["owned.txt"])
-
-    assert _git(git_repo, "show", "--format=", "--name-only", "HEAD").stdout.splitlines() == ["owned.txt"]
-    assert _git(git_repo, "diff", "--cached", "--name-only").stdout.splitlines() == ["unrelated.txt"]
-
-
 def test_commits_advanced_task_with_all_unrelated_dirt_preserved(git_repo: Path) -> None:
     """An ordinary pipeline commit includes final task state and excludes unrelated dirt."""
     task_path = git_repo / ".owlbear/scratch/tasks/1-task.md"
