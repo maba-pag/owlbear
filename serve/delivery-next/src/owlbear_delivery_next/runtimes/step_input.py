@@ -16,8 +16,7 @@ from owlbear_delivery_next.change_flow import (
     shaping_capture,
 )
 from owlbear_delivery_next.change_flow import worktree as wt
-from owlbear_delivery_next.change_flow.moves import integration_of
-from owlbear_delivery_next.runtimes import step_answers, step_decisions
+from owlbear_delivery_next.runtimes import integration_input, step_answers, step_decisions
 from owlbear_delivery_next.settings import profile as project_profile
 
 if TYPE_CHECKING:
@@ -497,12 +496,5 @@ def session(
         return Parts(message, write=True, checks=(), submit=tools.RECIPE, task=task)
     checks = wt.build_checks(project_profile.vouched(profile), change, task, path)
     message = build(change, task.model_copy(update={"checks": checks}), path, pairs)
-    root = integration_of(change, task)
-    if root and root is not task:
-        message += (
-            f"\n\n## Integration being repaired\n{_quote(root.title)}\n"
-            f"Original integration base: {root.base}\n"
-            "Report what combining the branches did to behaviour, including this repair, in `merge`."
-        )
-    submit = tools.MERGED if root or s.kind == StepKind.INTEGRATE else tools.SUBMIT
+    message, submit = integration_input.result(change, task, message)
     return Parts(message, write=True, checks=tuple(checks), submit=submit, task=task)
