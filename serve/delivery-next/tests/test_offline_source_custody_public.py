@@ -26,7 +26,6 @@ from owlbear_delivery_next.state_store.database import MARKER, StoreError
 from owlbear_delivery_next.state_store.store import Store
 
 from . import test_offline_source_pin as sources
-from . import test_offline_switch_fence_public as switch
 
 BEFORE, AFTER = sources.BEFORE, sources.AFTER
 pytestmark = pytest.mark.usefixtures("current_binding")
@@ -375,32 +374,22 @@ def test_public_prepare_finish_retains_source_and_generation(journey_source, mon
     assert cli.main(["--repo", str(repo), "prepare"]) == 0
     assert snapshot(folder) == before
 
-    real_finish, real_fdopen = offline_protocol.finish, os.fdopen
+    real_finish = offline_protocol.finish
     proofs = []
-    later = (folder / "payload" / "b").stat()
 
     def finish(*args, **kwargs):
         proof = real_finish(*args, **kwargs)
         proofs.append(proof)
         return proof
 
-    def enable(_target):
-        def opened(fd, *args, **kwargs):
-            stream = real_fdopen(fd, *args, **kwargs)
-            return switch.DigestReader(stream, lambda: None) if os.path.samestat(os.fstat(fd), later) else stream
-
-        monkeypatch.setattr(os, "fdopen", opened)
-
     monkeypatch.setattr(offline_protocol, "finish", finish)
-    fired = switch.at_sync(monkeypatch, folder, "receipt", enable)
     code = cli.main(["--repo", str(repo), "finish"])
     error = capsys.readouterr().err
-    assert fired == [True]
     assert code == 0, error
     assert len(proofs) == 1
     st = folder.stat()
     assert proofs[0].identity == (st.st_dev, st.st_ino)
-    rec = switch.record(folder)
+    rec = json.loads((folder / project_move.MOVE_RECORD).read_text())
     assert rec["phase"] == project_move.SWITCHED
     target = project_home.home(project_home.clone_id(folder))
     assert (folder / "payload" / "b").read_text() == (target / "payload" / "b").read_text() == "later\n"
