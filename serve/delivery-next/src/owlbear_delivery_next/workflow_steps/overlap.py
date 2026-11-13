@@ -105,10 +105,10 @@ def _merges(path: Path, since: str) -> list[tuple[str, str]]:
     if _quiet(path, "merge-base", "--is-ancestor", since, "HEAD", missing=True) is None:
         msg = "The integration start head is not an ancestor of the current work"
         raise ValueError(msg)
-    commits = _quiet(path, "rev-list", "--first-parent", "--merges", "--reverse", f"{since}..HEAD") or ""
+    listed = _quiet(path, "log", "--first-parent", "--merges", "--reverse", "--format=%P", f"{since}..HEAD") or ""
     found = []
-    for commit in commits.splitlines():
-        parents = (_quiet(path, "show", "--no-patch", "--format=%P", commit) or "").split()
+    for line in listed.splitlines():
+        parents = line.split()
         if len(parents) != 2:  # noqa: PLR2004 - one target update has exactly two parents
             msg = "Git did not return exactly two integration parents"
             raise ValueError(msg)
