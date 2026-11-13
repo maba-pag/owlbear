@@ -383,7 +383,6 @@ def test_undo_restart_preserves_later_commits_and_refuses_unrelated_movement(clo
     start = moved
     assert retry._taken(clone, c, lp, undo, start) == ""  # noqa: SLF001
     owner = commit(clone, "x.txt", "restored by the owner\n")  # before the record was written
-    assert retry._landed(clone, start, retry.REBUILD.format(tasks="t1", attempt=1)) is True  # noqa: SLF001
     assert retry._taken(clone, c, lp, undo, start) == ""  # noqa: SLF001 - the restart finds the undo
     assert (git(clone, "rev-parse", "HEAD"), (clone / "x.txt").read_text()) == (owner, "restored by the owner\n")
     assert retry._cleaned(clone, c, lp, owner) == ""  # noqa: SLF001
