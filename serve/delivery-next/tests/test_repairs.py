@@ -157,15 +157,6 @@ def built_run(session: str, head: str) -> Run:
     return Run(session, "result", payload, head=head, termination=Termination(confirmed=True), usage={"models": {}})
 
 
-def gated_run(cfg) -> Run:
-    """The builder's result through Delivery's own gate, which reads the worktree the runner points it at."""
-    run = Run(cfg.session_id, termination=Termination(confirmed=True))
-    text, ok = Gate(cfg, run, lambda **_e: None, lambda: None).call(tools.SUBMIT, {"summary": "Fixed b.", "checks": []})
-    assert ok, text
-    run.usage = {"models": {}}
-    return run
-
-
 def save(work: Path, name: str, text: str) -> None:
     (work / name).write_text(text)
     git(work, "add", "-A")
@@ -197,7 +188,13 @@ def test_the_repair_build_resumes_the_producer_and_records_only_accepted_task_pa
         git(clone, "checkout", "-q", "owlbear/c1")
         git(clone, "merge", "-q", "--no-edit", "main")  # a target merge: its paths are not the task's work
         save(clone, "new.txt", "n\n")
-        return gated_run(cfg)
+        run = Run(cfg.session_id, termination=Termination(confirmed=True))
+        text, ok = Gate(cfg, run, lambda **_e: None, lambda: None).call(
+            tools.SUBMIT, {"summary": "Fixed b.", "checks": []}
+        )
+        assert ok, text
+        run.usage = {"models": {}}
+        return run
 
     monkeypatch.setattr(runner.sdk_adapter, "run", build)
     runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
