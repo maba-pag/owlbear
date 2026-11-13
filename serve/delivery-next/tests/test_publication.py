@@ -694,9 +694,12 @@ def test_a_wrong_premise_on_a_review_request_is_repaired_or_amends_the_brief_and
     assert conversation.disputed(c, task, brief, replan) is replan  # the runner starts the brief's amendment
     mark = "https://x/pull/7#r1 (request v1234567)"
     assert brief.evidence == [mark, "src/math.ts:1"]
-    c.amendments.append(Amendment(id="A1", at=NOW, step="build", base=1, items=[], evidence=[mark], state="declined"))
+    declined = Amendment(id="A1", at=NOW, step="build", base=1, items=[], evidence=[mark], state="declined")
+    c.amendments.append(declined.model_copy(update={"choice": "reshape"}))
+    assert conversation.disputed(c, task, brief, replan) is replan  # he reshaped the brief: a conflict left is new
+    c.amendments.append(declined.model_copy(update={"id": "A2", "choice": "within"}))
     again = conversation.disputed(c, task, brief, replan)  # he said no: the same premise is not his a second time
-    assert (again.setup, "after amendment A1 for it was declined" in again.reason) == (True, True)
+    assert (again.setup, "after amendment A2 for it was declined" in again.reason) == (True, True)
     task.item.version = "v2"  # the reviewer changed the request: a new conflict is a new amendment
     assert conversation.disputed(c, task, brief, replan) is replan
     target = tools.WrongPremise(stage="target", reason="needs main", evidence=["x"])

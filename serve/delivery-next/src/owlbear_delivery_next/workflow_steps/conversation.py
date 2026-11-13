@@ -229,12 +229,12 @@ def disputed(c: Change, task: Task | None, payload: object, result: StepResult) 
     if p.stage == "brief":
         mark = f"{where} (request {task.item.version[:8]})"
         last = next((a for a in reversed(c.amendments) if mark in a.evidence), None)
-        if last is None or last.state not in {"declined", "refused"}:
+        if last is None or last.choice != "within":  # only his "work on within the brief" declines the request
             p.evidence = [mark, *p.evidence][:10]
             return result
         said = (
             f"The builder reports again that the request on {where} contradicts the brief, after amendment "
-            f"{last.id} for it was {last.state}: {reported}. It must be answered within the approved brief"
+            f"{last.id} for it was declined: {reported}. It must be answered within the approved brief"
         )
     cause = cause_key(ErrorKind.SCOPE, StepKind.BUILD, f"request-{task.item.id}")
     return missing.setup(cause, f"{said}. The request: {task.detail}")
