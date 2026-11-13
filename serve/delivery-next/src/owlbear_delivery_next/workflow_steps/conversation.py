@@ -18,7 +18,6 @@ from owlbear_delivery_next.change_contracts.models import (
     Response,
     StepKind,
 )
-from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.runtimes import missing
 
 if TYPE_CHECKING:
@@ -26,6 +25,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from owlbear_delivery_next.change_contracts.models import Change, Task
+    from owlbear_delivery_next.change_flow.loop import StepResult
     from owlbear_delivery_next.github.provider import ConversationItem, ThreadComment
 
 MARKER = "<!-- delivery:"

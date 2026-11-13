@@ -2046,10 +2046,12 @@ def test_an_integration_build_collision_asks_the_owner_once_across_a_restart_the
     tmp_path, integration_collision_setup, monkeypatch, lose_base
 ):
     clone, mine, store, lock, tid = integration_collision_setup
-    built = tools.BuildResult(summary="s", checks=[], response={"how": "fixed", "text": "Merged."})
+    report = {"this": "The page shows an empty chart.", "other": "The page hides the chart."}
+    built = tools.MergedResult(summary="s", checks=[], response={"how": "fixed", "text": "Merged."}, merge=report)
     runs = []
 
     async def build(cfg):
+        assert cfg.submit is tools.MERGED  # a merge task's result carries its report
         if not runs:
             with pytest.raises(subprocess.CalledProcessError):
                 git(clone, "merge", "-q", "--no-edit", "origin/main")
@@ -2095,8 +2097,7 @@ def test_an_integration_build_collision_asks_the_owner_once_across_a_restart_the
         ("pause", "pause"),
     ]
     assert q.subject == "product"
-    assert "This Change and c3 changed the same part of the project" in q.text
-    assert q.text.endswith("Details: c3 on src/app.py")
+    assert "This Change: The page shows an empty chart.\nThe latest work on main: The page hides the chart." in q.text
     answered, step = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="keep")], NOW)
     assert (step.kind, step.task) == (StepKind.BUILD, tid)
     restarted.write(Lock("c1"), answered)
