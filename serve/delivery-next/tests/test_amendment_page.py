@@ -226,8 +226,9 @@ def test_the_question_on_a_tightening_says_what_it_sets_off_and_its_one_primary_
         expect(first).to_contain_text("Object: not now, an amendment runs now; object after it ends.")
         expect(page.locator(".brief .amendment", has_text="A3, proposed")).to_contain_text("in progress")
 
-        form = page.locator("section.act", has_text="Amend the approved brief v4 (A3, from a worker)?")
-        for said in ["criterion AC-2: 'Says Hallo' -> 'Says Hallo in bold'", "Reason: the design asks for bold",
+        form = page.locator("section.act", has_text="Change the approved brief like this?")
+        for said in ["criterion AC-2: 'Says Hallo' -> 'Says Hallo in bold'", "the design asks for bold",
+                     "Details: brief v4, amendment A3, from a worker.",
                      "Challenger: equivalent - AC-3 covers it",
                      "Tightening, its scope and cost: AC-2 now also checks the weight: one more visual state",
                      "Redone after it: the final review."]:  # fmt: skip
