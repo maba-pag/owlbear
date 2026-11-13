@@ -217,28 +217,23 @@ def chosen(  # noqa: PLR0913, PLR0917 - the session's end, its worktree and what
 
 
 def unsafe(settings: Settings, live: Mapping[str, str] | None = None) -> loop.StepResult | None:
-    """No option is declared, or none is permitted, so a check would run on live data: the step stops."""
+    """A missing or refused test copy goes to repair before any check or preparer starts."""
     live = dict(os.environ) if live is None else live
     lead = "Checks cannot run: this project has no safe test copy set up, and Delivery never runs a check on live data"
-    how = (
-        "A test preparation is declared under `preparations` in the project's settings file "
-        "(`<project folder>/config.json` in the shared settings repository), which an agent in a chat can write; "
-        "a project without data can declare a data-only option whose seed and cleanup are `true`"
-    )
     if not settings.preparations:
         cause = cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, "preparation-missing")
-        said = f"{lead}. Have one declared for this project, then run the step again"
-        return engine.blocked(cause, said, f"No test preparation option is declared (TD-96). {how}")
+        said = f"{lead}. No test preparation option is declared (TD-96). Delivery will propose one for your approval"
+        return loop.StepResult(exit=Exit.RETRY, cause=cause, reason=said, setup=True, operational=True)
     if preparation.safe(settings.preparations, settings.data, live):
         return None
     why = "; ".join(f"{o.id}: {', '.join(preparation.refusals(o, settings.data, live))}" for o in settings.preparations)
     cause = cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, "preparation-unsafe")
-    said = f"{lead}. Have a permitted one declared, or its data permissions changed, then run the step again"
-    return engine.blocked(cause, said, f"No declared test preparation is permitted ({why}) (TD-96). {how}")
+    said = f"{lead}. No declared test preparation is permitted ({why}) (TD-96). Delivery will propose a permitted one"
+    return loop.StepResult(exit=Exit.RETRY, cause=cause, reason=said, setup=True, operational=True)
 
 
 def refused(store: Store, lock: Lock, c: Change) -> bool:
-    """A check step with no permitted preparation stops instead of starting a preparer."""
+    """A check with no permitted preparation enters repair instead of starting a preparer."""
     asked = unsafe(store.settings()) if c.step.kind == StepKind.CHECK else None
     if asked:
         store.write(lock, loop.apply(c, asked, datetime.now(UTC)))
@@ -272,16 +267,19 @@ def reusable(store: Store, c: Change, settings: Settings, live: Mapping[str, str
     return now == rec.option and not preparation.refusals(rec.option, settings.data, live)
 
 
-def isolated(rec: Prepared) -> dict[str, str]:
+def isolated(rec: Prepared, root: Path | None = None) -> dict[str, str]:
     """The explicit environment of restore, seed, cleanup and the launch: the essentials, isolation and snapshot."""
     base = {k: v for k in preparation.BASE if (v := os.environ.get(k)) is not None}
-    return base | rec.option.isolation | ({SNAPSHOT: rec.snapshot} if rec.snapshot else {})
+    env = base | rec.option.isolation | ({SNAPSHOT: rec.snapshot} if rec.snapshot else {})
+    if root is not None and (home := rec.option.isolation.get("HOME")) and not Path(home).is_absolute():
+        env["HOME"] = str((root / home).resolve())
+    return env
 
 
 def environ(store: Store, c: Change) -> dict[str, str] | None:
     """The launch environment of the check's test copy; None when it runs without a preparation."""
     rec = read(store, c.slug, c.env.check) if c.env else None
-    return isolated(rec) if rec else None
+    return isolated(rec, Path(c.names.worktree)) if rec else None
 
 
 def due(store: Store, c: Change) -> bool:
@@ -359,7 +357,7 @@ def _into(  # noqa: PLR0913 - the run, its two worktrees and the permissions in 
             _git(root, "apply", "--binary", str(patch))
         except subprocess.CalledProcessError as exc:
             return f"the setup patch did not apply: {exc.stderr.decode(errors='replace').strip()}"
-    env = isolated(rec)
+    env = isolated(rec, root)
     return snapshot_files.command(rec, "restore", root, log, env) or snapshot_files.command(rec, "seed", root, log, env)
 
 
@@ -372,7 +370,7 @@ def merge_base(store: Store, c: Change, settings: Settings, log: Log) -> Callabl
             raise PrepareError(check.failed("the check has no test preparation; nothing launches without one"))
         if note := _into(store, c, rec, root, settings=settings, log=log, keep=False):
             raise PrepareError(check.failed(note))
-        return isolated(rec)
+        return isolated(rec, root)
 
     return go
 
@@ -390,7 +388,7 @@ def shaping(store: Store, c: Change, settings: Settings, log: Log) -> Callable[[
         _write(store, c.slug, rec)  # before the export: the next runner ends even a cut-short copy
         if note := _into(store, c, rec, root, settings=settings, log=log, keep=False, home=root):
             raise PrepareError(check.failed(note))
-        return isolated(rec)
+        return isolated(rec, root)
 
     return go
 
@@ -454,7 +452,7 @@ def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> lo
         keep = settings.data.retention == "keep" and bool(rec.digest) and rec.check != SHAPING  # never a shaping copy
         try:
             _reapply(store, c, rec, home)
-            note = snapshot_files.command(rec, "cleanup", home, log, isolated(rec))
+            note = snapshot_files.command(rec, "cleanup", home, log, isolated(rec, home))
             if not (gone := keep or snapshot_files.gone(rec.snapshot)):
                 note = "; ".join(filter(None, [note, f"the snapshot {rec.snapshot} could not be deleted"]))
         finally:
