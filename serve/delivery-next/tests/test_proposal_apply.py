@@ -168,7 +168,9 @@ def test_a_lesson_is_a_pending_memory_in_its_projects_folder_scoped_to_its_agent
     world.shared, remote = shared_repo
 
     def git(root, *args):
-        return subprocess.check_output(["git", "-C", str(root), *args], text=True).strip()  # noqa: S603, S607
+        out = DataRepo(root).git(*args)
+        out.check_returncode()
+        return out.stdout.strip()
 
     heads = (git(world.shared, "rev-parse", "HEAD"), git(remote, "--git-dir=.", "rev-parse", "refs/heads/main"))
     pid = _waiting("lesson", "agent:owlbear-builder", ["f-1"])
