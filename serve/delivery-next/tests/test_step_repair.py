@@ -476,6 +476,32 @@ def _reject_ignored_preparation(store, asked, proposal, repo, monkeypatch):
     assert store.read_config().preparations is None
 
 
+def _reject_escaping_home(store, c, repo, owner_home):
+    root = Path(c.names.worktree)
+    home = root / ".fixture-home"
+    home.symlink_to(owner_home, target_is_directory=True)
+    c.env = Environment(check="visual", command="true", directory="app", ready_url="http://127.0.0.1:{port}/")
+    events = []
+    try:
+        result = prepare.launch(store, c, store.settings(), events.append)
+        assert result.exit == Exit.RETRY
+        assert "resolves outside" in result.reason
+        with pytest.raises(prepare.PrepareError, match="resolves outside"):
+            prepare.environ(store, c)
+        c.env = None
+        assert prepare.end(store, c, repo, store.settings(), events.append) is None
+        assert prepare.read(store, c.slug, "visual").open
+        assert events[-1]["outstanding"] is True
+        assert "resolves outside" in events[-1]["cleanup"]
+        assert (owner_home / "metrics.json").read_bytes() == b'{"private": "owner ledger must stay unchanged"}\n'
+    finally:
+        home.unlink()
+    home.mkdir()
+    assert prepare.end(store, c, repo, store.settings(), events.append) is None
+    assert not prepare.read(store, c.slug, "visual").open
+    assert not home.exists()
+
+
 def _reject_remote_preparation(store, asked, repo, remote, other):
     worktree.git(repo, "clone", "--quiet", str(remote), str(other))
     path = other / store.config_path.relative_to(store.shared.root)
@@ -548,6 +574,7 @@ def test_missing_visual_preparation_requires_owner_approval_before_project_setti
     )
     assert store.read_config().widths == [1440]
     _exercise_saved_preparation(store, applied, repo, proposal)
+    _reject_escaping_home(store, applied, repo, home)
     other = proposal.option.model_copy(update={"id": "owner-added"})
     assert (
         store.save(

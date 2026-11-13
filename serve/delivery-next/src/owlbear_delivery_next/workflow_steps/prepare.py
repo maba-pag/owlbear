@@ -22,23 +22,36 @@ from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pydantic import Field
-
 from owlbear_delivery_next.change_contracts import preparation, tools
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     ErrorKind,
     Exit,
-    Record,
     StepKind,
     Stop,
     Waiting,
 )
-from owlbear_delivery_next.change_contracts.preparation import LIVE, SNAPSHOT, Preparation, Preparing
+from owlbear_delivery_next.change_contracts.preparation import LIVE, SNAPSHOT, Preparing
 from owlbear_delivery_next.change_flow import loop, worktree
 from owlbear_delivery_next.change_flow.worktree import failure
 from owlbear_delivery_next.local_system.storage_io import atomic_write
+from owlbear_delivery_next.state_store.prepared import (
+    Prepared,
+    read,
+)
+from owlbear_delivery_next.state_store.prepared import (
+    file as _file,
+)
+from owlbear_delivery_next.state_store.prepared import (
+    folder as _dir,
+)
+from owlbear_delivery_next.state_store.prepared import (
+    records as _records,
+)
+from owlbear_delivery_next.state_store.prepared import (
+    write as _write,
+)
 from owlbear_delivery_next.workflow_steps import before, check, engine, preparer, snapshot_files
 
 if TYPE_CHECKING:
@@ -53,21 +66,6 @@ SESSION = "session.open"  # a running preparer session's root and the edits it f
 SHAPING = "shaping"  # the shaping capture's own test copy (D-01M6Q56RXK85C5T4AG7R051X6N)
 
 
-class Prepared(Record):
-    """One check's chosen preparation and the preparer's setup edits, kept with its recipe; and its current run."""
-
-    check: str
-    option: Preparation  # as validated when chosen; it runs as chosen while it is still declared so
-    reason: str = ""
-    paths: list[str] = Field(default_factory=list)  # the setup files the patch changes (TD-107)
-    snapshot: str = ""  # this run's frozen snapshot, outside the repository
-    digest: str = ""  # the snapshot's content once masked; every restore checks it
-    applied: str = ""  # the worktree the patch is applied to now
-    ready: bool = False  # restored into the Change worktree for this launch
-    open: bool = False  # this run may have left what the end of the check removes
-    home: str = ""  # the shaping capture's throwaway checkout: its cleanup runs there, never elsewhere
-
-
 class PrepareError(Exception):
     """The check cannot start on a test copy; its result says why."""
 
@@ -79,35 +77,6 @@ class PrepareError(Exception):
 def snapshots() -> Path:
     """Delivery's snapshot folder, beside its worktrees and outside every repository."""
     return worktree.data_root().parent / "snapshots"
-
-
-def _dir(store: Store, slug: str) -> Path:
-    return store.root / "changes" / slug / "prepare"
-
-
-def _file(store: Store, slug: str, check_id: str, suffix: str) -> Path:
-    return _dir(store, slug) / f"{hashlib.sha256(check_id.encode()).hexdigest()[:16]}{suffix}"
-
-
-def read(store: Store, slug: str, check_id: str) -> Prepared | None:
-    """The preparation the check *check_id* last chose, if any."""
-    path = _file(store, slug, check_id, ".json")
-    return Prepared.model_validate_json(path.read_text()) if path.is_file() else None
-
-
-def _records(store: Store, slug: str) -> list[Prepared]:
-    folder = _dir(store, slug)
-    found = sorted(folder.glob("*.json")) if folder.is_dir() else []
-    return [Prepared.model_validate_json(p.read_text()) for p in found]
-
-
-def _write(store: Store, slug: str, rec: Prepared, patch: bytes | None = None) -> None:
-    _dir(store, slug).mkdir(mode=0o700, parents=True, exist_ok=True)
-    if patch is not None:
-        path = _file(store, slug, rec.check, ".patch")
-        path.with_suffix(".tmp").write_bytes(patch)
-        path.with_suffix(".tmp").replace(path)
-    atomic_write(_file(store, slug, rec.check, ".json"), rec.model_dump_json())
 
 
 def _git(root: Path, *args: str, env: Mapping[str, str] | None = None) -> bytes:
@@ -272,7 +241,10 @@ def isolated(rec: Prepared, root: Path | None = None) -> dict[str, str]:
     base = {k: v for k in preparation.BASE if (v := os.environ.get(k)) is not None}
     env = base | rec.option.isolation | ({SNAPSHOT: rec.snapshot} if rec.snapshot else {})
     if root is not None and (home := rec.option.isolation.get("HOME")) and not Path(home).is_absolute():
-        env["HOME"] = str((root / home).resolve())
+        at = (root / home).resolve()
+        if not at.is_relative_to(root.resolve()):
+            raise PrepareError(check.failed(f"preparation HOME {root / home} resolves outside {root} to {at}"))
+        env["HOME"] = str(at)
     return env
 
 
@@ -452,7 +424,10 @@ def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> lo
         keep = settings.data.retention == "keep" and bool(rec.digest) and rec.check != SHAPING  # never a shaping copy
         try:
             _reapply(store, c, rec, home)
-            note = snapshot_files.command(rec, "cleanup", home, log, isolated(rec, home))
+            try:
+                note = snapshot_files.command(rec, "cleanup", home, log, isolated(rec, home))
+            except PrepareError as exc:
+                note = exc.result.reason
             if not (gone := keep or snapshot_files.gone(rec.snapshot)):
                 note = "; ".join(filter(None, [note, f"the snapshot {rec.snapshot} could not be deleted"]))
         finally:
