@@ -352,9 +352,14 @@ class _Selection:
             if not any(test == node or test.startswith((f"{node}[", f"{node}::")) for test in mapped):
                 self.add(node, f"unobserved block current named consumer: {source}")
         measured = self.measurement and source in self.reasons
+        # A current test module consumes its own blocks: retiring an unmapped test leaves the module to run whole.
+        own = source in self.consumers.tests and (self.root / source).is_file()
+        if own:
+            self.add(source, f"changed test module consumes its own unobserved blocks: {source}")
         if (
             not mapped
             and not direct
+            and not own
             and not (source in self.local and (source not in self.consumers.texts or measured))
         ):
             msg = f"Unobserved task blocks in {self.root}/{source} have no resolved current consumers"
