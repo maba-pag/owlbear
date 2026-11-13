@@ -79,19 +79,24 @@ def built(cfg, head: str, *, unread: bool) -> Run:
     return run
 
 
-@pytest.fixture
-def gated(tmp_path, clone, monkeypatch) -> tuple[Store, Change]:
-    """A Build step whose committed result came back with its usage unread: held and asked about."""
+def building(tmp_path, clone) -> tuple[Store, Change]:
     store = Store(tmp_path / "store")
     names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
     plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
     change = Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=K.BUILD, task="t1"), names=names)
     store.write(Lock("c1"), change)
+    return store, change
 
-    async def unread(cfg):
-        return built(cfg, commit(clone, "b.txt"), unread=True)
 
-    monkeypatch.setattr(runner.sdk_adapter, "run", unread)
+async def unread_build(cfg):
+    return built(cfg, commit(cfg.worktree, "b.txt"), unread=True)
+
+
+@pytest.fixture
+def gated(tmp_path, clone, monkeypatch) -> tuple[Store, Change]:
+    """A Build step whose committed result came back with its usage unread: held and asked about."""
+    store, change = building(tmp_path, clone)
+    monkeypatch.setattr(runner.sdk_adapter, "run", unread_build)
     runner._step(store, Lock("c1"), change, change.step, clone)  # noqa: SLF001
     return store, store.read("c1")
 
@@ -103,21 +108,25 @@ def answer(store: Store, c: Change, option: str) -> Change:
     return c
 
 
-def test_only_a_held_result_offers_accept() -> None:
-    run = Run("s1", ending="result", usage_unread=UNREAD)
-    plain = session_result.usage_gate(run, K.REVIEW).question
-    offered = session_result.usage_gate(run, K.REVIEW, accept=True).question
-    assert [(o.id, o.next) for o in plain.options] == [("retry", "retry")]
-    assert [(o.id, o.next) for o in offered.options] == [("accept", "accept"), ("retry", "retry")]
-    assert (plain.subject, offered.subject) == (None, "reserved")  # a held result is his yes or no (#1168)
-    assert offered.text.endswith("so it did not accept the result. Accept the result anyway?")
-
-
-def test_an_unread_build_result_is_held_and_accepting_it_processes_it_without_a_session(gated, clone, monkeypatch):
+@pytest.mark.parametrize("encoding", ["current", "changed-paths", "window"])
+def test_accepting_a_held_build_reuses_its_result(gated, clone, monkeypatch, encoding):
     store, c = gated
     q = loop.open_question(c)
-    assert (c.outcome.exit, [o.id for o in q.options]) == (Exit.ASK, ["accept", "retry"])
+    assert c.outcome.exit == Exit.ASK
+    assert [(o.id, o.next) for o in q.options] == [("accept", "accept"), ("retry", "retry")]
+    assert q.subject == "reserved"  # the held result is the owner's yes or no (#1168)
+    assert q.text.endswith("so it did not accept the result. Accept the result anyway?")
     assert loop.next_step(c, NOW) is None
+    path = store.root / "changes" / "c1" / "held.json"
+    data = json.loads(path.read_text())
+    if encoding == "changed-paths":
+        del data["run"]["changed"]
+        data["run"]["payload"]["args"]["changed_paths"] = ["b.txt"]
+        with pytest.raises(ValidationError, match="changed_paths"):
+            tools.BuildResult.model_validate(data["run"]["payload"]["args"])  # new calls stay strict
+    elif encoding == "window":
+        data["run"]["runtime"] = "window"
+    path.write_text(json.dumps(data))
     session = c.step.session
     c = answer(store, c, "accept")
     assert (c.step.kind, c.step.task, loop.next_step(c, NOW)) == (K.BUILD, "t1", c.step)
@@ -127,7 +136,10 @@ def test_an_unread_build_result_is_held_and_accepting_it_processes_it_without_a_
     assert (done.step.kind, done.step.task, done.outcome.exit) == (K.REVIEW, "t1", Exit.DONE)
     accepted = [e for e in store.events("c1") if e.get("event") == "held-accepted"]
     assert [e["session"] for e in accepted] == [session]
-    assert not (store.root / "changes" / "c1" / "held.json").exists()
+    if encoding == "changed-paths":
+        assert done.plan.tasks[0].earlier == "Added b. Changed: b.txt"
+    assert [e["event"] for e in store.events("c1") if e.get("event", "").startswith("held-")] == ["held-accepted"]
+    assert not path.exists()
 
 
 def test_an_accepted_hold_waits_untaken_while_its_role_s_settings_are_unset(gated, clone, monkeypatch):
@@ -168,55 +180,20 @@ def test_a_declined_or_stale_hold_runs_the_step_again(gated, clone, monkeypatch,
     assert not (store.root / "changes" / "c1" / "held.json").exists()
 
 
-def test_a_build_held_before_changed_paths_left_the_schema_is_still_accepted(gated, clone, monkeypatch):
+@pytest.mark.parametrize("damage", ["not-a-result-model", "another-question"])
+def test_acceptance_never_takes_an_invalid_or_unoffered_result(gated, damage):
     store, c = gated
     c = answer(store, c, "accept")
     path = store.root / "changes" / "c1" / "held.json"
-    hold = json.loads(path.read_text())
-    del hold["run"]["changed"]  # written by the earlier release: the agent's own paths, none of Delivery's
-    hold["run"]["payload"]["args"]["changed_paths"] = ["b.txt"]
-    path.write_text(json.dumps(hold))
-    with pytest.raises(ValidationError, match="changed_paths"):  # a new call stays strict
-        tools.BuildResult.model_validate(hold["run"]["payload"]["args"])
-    monkeypatch.setattr(runner.sdk_adapter, "run", lambda _cfg: pytest.fail("an accepted hold starts no session"))
-    runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
-    done = store.read("c1")
-    assert (done.step.kind, done.outcome.exit) == (K.REVIEW, Exit.DONE)
-    assert done.plan.tasks[0].earlier == "Added b. Changed: b.txt"
-    assert [e["event"] for e in store.events("c1") if e.get("event", "").startswith("held-")] == ["held-accepted"]
-
-
-def test_a_hold_that_still_names_the_window_runtime_loads_and_is_processed(gated, clone, monkeypatch):
-    store, c = gated
-    c = answer(store, c, "accept")
-    path = store.root / "changes" / "c1" / "held.json"
-    hold = json.loads(path.read_text())
-    hold["run"]["runtime"] = "window"  # written before the window runtime was retired (D-01M5WG8RGCBKADW6XPGP0E2FAP)
-    path.write_text(json.dumps(hold))
-    monkeypatch.setattr(runner.sdk_adapter, "run", lambda _cfg: pytest.fail("an accepted hold starts no session"))
-    runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
-    done = store.read("c1")
-    assert (done.step.kind, done.outcome.exit) == (K.REVIEW, Exit.DONE)
-    assert [e["event"] for e in store.events("c1") if e.get("event", "").startswith("held-")] == ["held-accepted"]
-
-
-def test_a_damaged_hold_is_never_processed(gated):
-    store, c = gated
-    c = answer(store, c, "accept")
-    path = store.root / "changes" / "c1" / "held.json"
-    path.write_text(path.read_text().replace('"BuildResult"', '"PurePosixPath"'))  # a class, but no result model
+    data = json.loads(path.read_text())
+    if damage == "not-a-result-model":
+        data["run"]["payload"]["model"] = "PurePosixPath"  # a class, but not a result model
+    else:
+        data["question"] = "q99"
+    path.write_text(json.dumps(data))
+    assert json.loads(path.read_text()) == data
     assert held.take(store, Lock("c1"), c) is None
     assert not path.exists()
-
-
-def test_an_accept_takes_only_the_hold_its_question_offered(gated):
-    store, c = gated
-    c = answer(store, c, "accept")
-    path = store.root / "changes" / "c1" / "held.json"
-    q = c.questions[-1].id
-    path.write_text(path.read_text().replace(f'"question":"{q}"', '"question":"q99"'))  # a later hold
-    assert '"q99"' in path.read_text()
-    assert held.take(store, Lock("c1"), c) is None
 
 
 def test_accept_is_offered_and_taken_only_while_the_hold_matches(gated, clone, monkeypatch, capsys):
@@ -246,11 +223,7 @@ def test_accept_is_offered_and_taken_only_while_the_hold_matches(gated, clone, m
 
 
 def test_a_result_whose_commit_is_no_longer_head_is_not_held(tmp_path, clone, monkeypatch):
-    store = Store(tmp_path / "store")
-    names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
-    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
-    change = Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=K.BUILD, task="t1"), names=names)
-    store.write(Lock("c1"), change)
+    store, change = building(tmp_path, clone)
 
     async def moved(cfg):
         run = built(cfg, commit(clone, "b.txt"), unread=True)
@@ -263,28 +236,7 @@ def test_a_result_whose_commit_is_no_longer_head_is_not_held(tmp_path, clone, mo
     assert not (store.root / "changes" / "c1" / "held.json").exists()
 
 
-def test_a_reviewer_session_inside_a_step_is_not_held(tmp_path, clone, monkeypatch):
-    store = Store(tmp_path / "store")
-    run = Run("r1", ending="result", usage_unread=UNREAD, termination=Termination(confirmed=True))
-    monkeypatch.setattr(sessions, "run", lambda *_a, **_k: (_ for _ in ()).throw(sessions.UsageUnreadError(run)))
-    change = Change(slug="c1", brief=Brief(version=1), step=Step(kind=K.PLAN))
-    store.write(Lock("c1"), change)
-    cfg = runner.sdk_adapter.Session(
-        kind=K.PLAN,
-        worktree=clone,
-        session_id="",
-        message="review the plan",
-        resume=False,
-        policy=Policy(clone),
-        observe=tools.Worktree,
-        checks=(),
-    )
-    with pytest.raises(sessions.UsageUnreadError) as caught:
-        sessions.review_run(store, Lock("c1"), change, clone, lambda _at: cfg, "plan-challenge")
-    assert caught.value.worktree is None  # so the gate offers only to run the step again
-
-
-def test_an_unread_judge_is_logged_with_its_label_so_its_subagents_count_for_its_role(tmp_path, clone, monkeypatch):
+def test_nested_unread_judge_gates_without_acceptance_and_keeps_its_role(tmp_path, clone, monkeypatch):
     store = Store(tmp_path / "store")
     change = Change(slug="c1", brief=Brief(version=1), step=Step(kind=K.SHAPE))  # a brief challenge runs in shaping
     store.write(Lock("c1"), change)
@@ -301,8 +253,12 @@ def test_an_unread_judge_is_logged_with_its_label_so_its_subagents_count_for_its
     )  # fmt: skip
     with pytest.raises(sessions.UsageUnreadError) as caught:
         sessions.review_run(store, Lock("c1"), change, clone, lambda _at: cfg, "brief-challenge")
+    assert caught.value.worktree is None  # Delivery does not hold a nested judge's inputs
     assert caught.value.label == "brief-challenge"
     held.gate_unread(store, Lock("c1"), caught.value)
+    q = loop.open_question(store.read("c1"))
+    assert [(o.id, o.next) for o in q.options] == [("retry", "retry")]
+    assert q.subject is None
     (step,) = [e for e in store.events("c1") if e.get("event") == "step"]
     assert (step["kind"], step["label"], step["subagents"]) == ("shape", "brief-challenge", ran)
     assert [(u["role"], u["runs"]) for u in pack_routes.subagent_use(store)] == [("challenger", 1)]
@@ -338,77 +294,11 @@ def test_an_accepted_hold_survives_a_failed_final_write_and_is_applied_once_afte
     assert not held_file.exists()
 
 
-@pytest.mark.parametrize("failure", ["unlink", "log"])
-def test_an_accepted_hold_is_not_applied_or_charged_again_when_its_cleanup_fails_after_the_result_is_written(
-    gated, clone, monkeypatch, failure
-):
-    store, c = gated
-    session = c.step.session
-    c = answer(store, c, "accept")
-    held_file = store.root / "changes" / "c1" / "held.json"
-    real_unlink, real_log = Path.unlink, Store.log
-
-    def broken_unlink(self, *args, **kwargs):
-        if self == held_file:
-            msg = "unlink refused"
-            raise OSError(msg)
-        return real_unlink(self, *args, **kwargs)
-
-    def broken_log(self, lock, slug, event):
-        if event.get("event") == "held-accepted":
-            msg = "log refused"
-            raise OSError(msg)
-        return real_log(self, lock, slug, event)
-
-    if failure == "unlink":
-        monkeypatch.setattr(Path, "unlink", broken_unlink)
-    else:
-        monkeypatch.setattr(Store, "log", broken_log)
-    with pytest.raises(OSError, match=f"{failure} refused"):
-        runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
-    monkeypatch.setattr(Path, "unlink", real_unlink)
-    monkeypatch.setattr(Store, "log", real_log)
-
-    recorded = store.read("c1")
-    assert recorded.outcome.exit == Exit.DONE
-    assert len(recorded.accepted_holds) == 1
-    assert held_file.exists()
-
-    monkeypatch.setattr(runner.loop, "apply", lambda *_a: pytest.fail("a recorded hold is never applied again"))
-    monkeypatch.setattr(runner.sdk_adapter, "run", lambda _cfg: pytest.fail("a recorded hold starts no session"))
-    runner._step(store, Lock("c1"), store.read("c1"), store.read("c1").step, clone)  # noqa: SLF001
-
-    accepted = [e for e in store.events("c1") if e.get("event") == "held-accepted"]
-    assert [e["session"] for e in accepted] == [session]
-    assert not held_file.exists()
-    assert store.read("c1").outcome.exit == Exit.DONE
-
-
 def test_a_consumed_fallback_hold_does_not_suppress_the_next_legitimate_step(tmp_path, clone, monkeypatch):
     git(clone, "branch", "main")
-    store = Store(tmp_path / "store")
-    names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
-    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
-    change = Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=K.BUILD, task="t1"), names=names)
-    store.write(Lock("c1"), change)
-
-    async def unread(cfg):
-        return built(cfg, commit(clone, "b.txt"), unread=True)
-
-    real_write = held.atomic_write
-
-    def disk_full(*_args, **_kwargs):
-        msg = "disk full"
-        raise OSError(msg)
-
-    monkeypatch.setattr(held, "atomic_write", disk_full)
-    monkeypatch.setattr(runner.sdk_adapter, "run", unread)
-    runner._step(store, Lock("c1"), change, change.step, clone)  # noqa: SLF001
-    held_fallback = store.read("c1")
-    assert held_fallback.held_fallback is not None
-    monkeypatch.setattr(held, "atomic_write", real_write)
-
-    c = answer(store, store.read("c1"), "accept")
+    store, c = held_without_file(tmp_path, clone, monkeypatch)
+    assert c.held_fallback is not None
+    c = answer(store, c, "accept")
     runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
     recorded = store.read("c1")
     assert recorded.step.kind == K.REVIEW
@@ -416,9 +306,6 @@ def test_a_consumed_fallback_hold_does_not_suppress_the_next_legitimate_step(tmp
     assert len(recorded.accepted_holds) == 1
     accepted = [e for e in store.events("c1") if e.get("event") == "held-accepted"]
     assert len(accepted) == 1
-
-    class BoundaryReachedError(Exception):
-        """The next step's session started: the fake worker boundary was reached."""
 
     starts = []
 
@@ -549,9 +436,14 @@ def test_a_held_review_counts_once_and_applies_once_whichever_write_fails(  # no
         with pytest.raises(OSError, match=f"{stage} refused"):
             runner._step(store, Lock("c1"), accepted, step, clone)  # noqa: SLF001
         restarted = store.read("c1")
+        assert held_file.exists()
         if stage == "final-write":  # the receipt was never written: the result is applied now, once
+            assert restarted.accepted_holds == []
+            assert review_loop(store) == (0, 0)
             runner._step(store, Lock("c1"), restarted, loop.next_step(restarted, NOW), clone)  # noqa: SLF001
         else:  # the receipt is written: cleanup alone remains, and nothing is applied again
+            assert len(restarted.accepted_holds) == 1
+            assert review_loop(store) == (1, 1)
             monkeypatch.setattr(runner.loop, "apply", lambda *_a: pytest.fail("a recorded hold is never applied again"))
             runner._step(store, Lock("c1"), restarted, restarted.step, clone)  # noqa: SLF001
     else:
@@ -642,22 +534,16 @@ def test_a_hold_an_older_build_kept_is_unread_once_and_never_zero_or_recharged(
 
 def held_without_file(tmp_path, clone, monkeypatch) -> tuple[Store, Change]:
     """A held build whose hold file cannot be written: the Change keeps the hold in `held_fallback`."""
-    store = Store(tmp_path / "store")
-    names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
-    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
-    change = Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=K.BUILD, task="t1"), names=names)
-    store.write(Lock("c1"), change)
-
-    async def unread(cfg):
-        return built(cfg, commit(clone, "b.txt"), unread=True)
+    store, change = building(tmp_path, clone)
 
     def disk_full(*_args, **_kwargs):
         msg = "disk full"
         raise OSError(msg)
 
-    monkeypatch.setattr(held, "atomic_write", disk_full)
-    monkeypatch.setattr(runner.sdk_adapter, "run", unread)
-    runner._step(store, Lock("c1"), change, change.step, clone)  # noqa: SLF001
+    monkeypatch.setattr(runner.sdk_adapter, "run", unread_build)
+    with monkeypatch.context() as fault:
+        fault.setattr(held, "atomic_write", disk_full)
+        runner._step(store, Lock("c1"), change, change.step, clone)  # noqa: SLF001
     return store, store.read("c1")
 
 
@@ -716,16 +602,9 @@ def test_a_stale_hold_retires_its_fallback_durably_and_keeps_a_later_one(tmp_pat
 def test_an_owner_intent_queued_during_a_failed_count_survives_the_real_fold_and_the_recovery(
     tmp_path, clone, monkeypatch, intent
 ):
-    store = Store(tmp_path / "store")
+    store, change = building(tmp_path, clone)
     git(tmp_path, "init", "-q", "--bare", "origin.git")  # a local origin: cleanup's fetch needs no GitHub account
     git(clone, "remote", "add", "origin", str(tmp_path / "origin.git"))
-    names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
-    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
-    change = Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=K.BUILD, task="t1"), names=names)
-    store.write(Lock("c1"), change)
-
-    async def unread(cfg):
-        return built(cfg, commit(clone, "b.txt"), unread=True)
 
     real_write = Store.write
 
@@ -736,7 +615,7 @@ def test_an_owner_intent_queued_during_a_failed_count_survives_the_real_fold_and
         return real_write(self, lock, c)
 
     monkeypatch.setattr(Store, "write", count_fails)
-    monkeypatch.setattr(runner.sdk_adapter, "run", unread)
+    monkeypatch.setattr(runner.sdk_adapter, "run", unread_build)
     with pytest.raises(OSError, match="disk full"):
         runner._step(store, Lock("c1"), change, change.step, clone)  # noqa: SLF001
 
@@ -823,14 +702,7 @@ def test_an_accepted_hold_is_checkpointed_with_its_receipt_before_a_paid_session
 
 def unloadable(tmp_path, clone, monkeypatch) -> tuple[Store, held.Held]:
     """A held build whose count write failed, its result then naming no result model: its usage still reads."""
-    store = Store(tmp_path / "store")
-    names = Names(branch="owlbear/c1", target="main", worktree=str(clone))
-    plan = Plan(tasks=[Task(id="t1", title="one", scope=["b.txt"])])
-    change = Change(slug="c1", brief=Brief(version=1), plan=plan, step=Step(kind=K.BUILD, task="t1"), names=names)
-    store.write(Lock("c1"), change)
-
-    async def unread(cfg):
-        return built(cfg, commit(clone, "b.txt"), unread=True)
+    store, change = building(tmp_path, clone)
 
     real_write = Store.write
 
@@ -841,7 +713,7 @@ def unloadable(tmp_path, clone, monkeypatch) -> tuple[Store, held.Held]:
         return real_write(self, lock, c)
 
     monkeypatch.setattr(Store, "write", count_fails)
-    monkeypatch.setattr(runner.sdk_adapter, "run", unread)
+    monkeypatch.setattr(runner.sdk_adapter, "run", unread_build)
     with pytest.raises(OSError, match="disk full"):
         runner._step(store, Lock("c1"), change, change.step, clone)  # noqa: SLF001
     monkeypatch.setattr(Store, "write", real_write)
