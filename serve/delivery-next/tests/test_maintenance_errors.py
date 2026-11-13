@@ -2,15 +2,8 @@
 
 from __future__ import annotations
 
-import socket
-import threading
-import time
-
 import pytest
-import uvicorn
-
-from owlbear_delivery_next.project_host import api
-from owlbear_delivery_next.state_store.store import Store
+from tests.maintenance_page import opened
 
 OFFER = {
     "packages": [{"path": ".", "files": 1, "lines": 1, "shares": 1}],
@@ -26,68 +19,43 @@ pytestmark = pytest.mark.browser
 
 @pytest.fixture
 def maintenance(tmp_path, pds):
-    from playwright.sync_api import sync_playwright  # noqa: PLC0415 - optional browser runtime
-
     state = {"curation": 200, "tests": 200, "post": 409, "detail": "refused by host", "reads": 0}
-    sock = socket.socket()
-    sock.bind(("127.0.0.1", 0))
-    server = uvicorn.Server(uvicorn.Config(api.create_app(Store(tmp_path), "tok", None), log_level="warning"))
-    thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
-    thread.start()
-    try:
-        deadline = time.monotonic() + 10
-        while not server.started and thread.is_alive() and time.monotonic() < deadline:
-            time.sleep(0.01)
-        assert server.started
-        base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-        with sync_playwright() as pw:
-            browser = pw.chromium.launch()
-            try:
-                page = browser.new_page()
-                pds.only(page, base)
-
-                def curation(route):
-                    if route.request.method == "POST":
-                        code = state["post"]
-                        route.fulfill(status=code, json={"detail": state["detail"]} if code != 200 else {})
-                        return
-                    state["reads"] += 1
-                    if state.get("hold_next"):
-                        state["hold_next"], state["held"] = False, route
-                        page.evaluate("window.maintenanceReadHeld = true")
-                        return
-                    code = state["curation"]
-                    data = {
-                        "available": True,
-                        "folders": [
-                            {
-                                "folder": name,
-                                "state": "never",
-                                "entries": [],
-                                "unset": [],
-                                "summary": f"Read generation {state['reads']}",
-                            }
-                            for name in ("shop", "other")
-                        ],
+    with opened(tmp_path, pds, startup=10) as (page, base):
+        def curation(route):
+            if route.request.method == "POST":
+                code = state["post"]
+                route.fulfill(status=code, json={"detail": state["detail"]} if code != 200 else {})
+                return
+            state["reads"] += 1
+            if state.get("hold_next"):
+                state["hold_next"], state["held"] = False, route
+                page.evaluate("window.maintenanceReadHeld = true")
+                return
+            code = state["curation"]
+            data = {
+                "available": True,
+                "folders": [
+                    {
+                        "folder": name,
+                        "state": "never",
+                        "entries": [],
+                        "unset": [],
+                        "summary": f"Read generation {state['reads']}",
                     }
-                    route.fulfill(status=code, json=data if code == 200 else {"detail": "curation read failed"})
+                    for name in ("shop", "other")
+                ],
+            }
+            route.fulfill(status=code, json=data if code == 200 else {"detail": "curation read failed"})
 
-                def tests(route):
-                    code = state["tests"] if route.request.method == "GET" else state["post"]
-                    data = OFFER if route.request.method == "GET" else {"handle": "c9"}
-                    detail = "tests read failed" if route.request.method == "GET" else state["detail"]
-                    route.fulfill(status=code, json=data if code == 200 else {"detail": detail})
+        def tests(route):
+            code = state["tests"] if route.request.method == "GET" else state["post"]
+            data = OFFER if route.request.method == "GET" else {"handle": "c9"}
+            detail = "tests read failed" if route.request.method == "GET" else state["detail"]
+            route.fulfill(status=code, json=data if code == 200 else {"detail": detail})
 
-                page.route("**/api/next/curation", curation)
-                page.route("**/api/next/maintenance/test-review", tests)
-                yield page, base, state
-            finally:
-                browser.close()
-    finally:
-        server.should_exit = True
-        thread.join(5)
-        sock.close()
-        assert not thread.is_alive()
+        page.route("**/api/next/curation", curation)
+        page.route("**/api/next/maintenance/test-review", tests)
+        yield page, base, state
 
 
 def start(page, pds, kind, folder="shop"):
