@@ -29,6 +29,7 @@ class Prepared(BaseModel):
     ready: bool = False
     open: bool = False
     home: str = ""
+    trial: bool = False
 
 
 def folder(store: Store, slug: str) -> Path:

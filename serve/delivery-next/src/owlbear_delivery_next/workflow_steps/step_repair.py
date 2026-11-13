@@ -66,6 +66,12 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
             _apply(store, lock, change, path, prof)
         else:
             _repair(store, lock, change, path, (settings, prof))
+    except preparation_repair.CleanupPending as exc:
+        now = datetime.now(UTC)
+        reason = f"cleaning up the preparation trial: {exc}"
+        _log(store, lock, change, reason)
+        change.outcome = Outcome(exit=Exit.RETRY, cause=r.cause, reason=reason, wake_at=now + budgets.PAUSE, at=now)
+        store.write(lock, change)
     except repair_copy.RepairError as exc:
         if r.fix == "preparation" and r.phase == "approved":
             now, reason = datetime.now(UTC), str(exc)

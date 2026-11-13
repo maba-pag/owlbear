@@ -11,7 +11,7 @@ from owlbear_delivery_next.change_contracts import preparation
 from owlbear_delivery_next.change_contracts.repair_records import Witness
 from owlbear_delivery_next.local_system.publication_hold import Requires
 from owlbear_delivery_next.settings.config import Layer
-from owlbear_delivery_next.state_store import config_save, profile_share
+from owlbear_delivery_next.state_store import config_save, prepared, profile_share
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import check, prepare, repair_copy
 
@@ -25,6 +25,10 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 CAUSES = frozenset({"project-env:check:preparation-missing", "project-env:check:preparation-unsafe"})
+
+
+class CleanupPending(repair_copy.RepairError):
+    """The trial's resources remain owned by its recorded cleanup, retried before any further repair."""
 
 
 def options(r: Repair) -> list[Preparation]:
@@ -90,16 +94,32 @@ def prove(store: Store, lock: Lock, change: Change, root: Path, trial: tuple[flo
     clean = root.with_name(f"{root.name}-preparation-proof")
     repair_copy.drop(root, clean)
     repair_copy.git(root, ["worktree", "add", "--quiet", "--detach", str(clean), r.base])
+    rec = None
     try:
         if not (clean / p.option.isolation["HOME"]).resolve().is_relative_to(clean.resolve()):
             msg = "the preparation HOME resolves outside its execution worktree"
             raise repair_copy.RepairError(msg)
-        r.witness = _trial(store, lock, change, clean, trial)
+        rec = prepared.Prepared(
+            check=f"repair-trial-{len(change.repairs.done) + 1}",
+            option=p.option,
+            home=str(clean),
+            open=True,
+            trial=True,
+        )
+        prepared.write(store, change.slug, rec)
+        r.witness, cleaned = _trial(store, lock, change, clean, trial)
+        rec.open = not cleaned
+        prepared.write(store, change.slug, rec)
+        store.write(lock, change)
+        if not cleaned:
+            msg = f"the preparation trial cleanup is outstanding in {clean}:\n{r.witness.output}"
+            raise CleanupPending(msg)
         if repair_copy.changed(clean, r.base):
             msg = "the preparation trial left source edits; a settings-only proposal must use unchanged project code"
             raise repair_copy.RepairError(msg)
     finally:
-        repair_copy.drop(root, clean)
+        if rec is None or not rec.open:
+            repair_copy.drop(root, clean)
     store.write(lock, change)
     if r.witness.exit != 0:
         msg = f"the preparation trial failed in {clean}:\n{r.witness.output}"
@@ -107,7 +127,9 @@ def prove(store: Store, lock: Lock, change: Change, root: Path, trial: tuple[flo
     r.diff = shown(r)
 
 
-def _trial(store: Store, lock: Lock, change: Change, root: Path, trial: tuple[float, tuple[str, ...]]) -> Witness:
+def _trial(
+    store: Store, lock: Lock, change: Change, root: Path, trial: tuple[float, tuple[str, ...]]
+) -> tuple[Witness, bool]:
     within, installs = trial
     r = change.repairs.current
     if r is None or r.preparation is None:
@@ -118,7 +140,7 @@ def _trial(store: Store, lock: Lock, change: Change, root: Path, trial: tuple[fl
     commands, output, seconds = [], [], 0.0
     exit_code: int | None = 0
 
-    def run(command: str, *, install: bool = False, cleanup: bool = False) -> None:
+    def run(command: str, *, install: bool = False, cleanup: bool = False) -> bool:
         nonlocal seconds, exit_code
         commands.append(command)
         done = check.execute(
@@ -132,6 +154,7 @@ def _trial(store: Store, lock: Lock, change: Change, root: Path, trial: tuple[fl
         output.append(f"$ {command}\n{done.output}{done.why}")
         if done.exit != 0:
             exit_code = done.exit
+        return done.exit == 0
 
     try:
         for command in installs:
@@ -143,8 +166,8 @@ def _trial(store: Store, lock: Lock, change: Change, root: Path, trial: tuple[fl
                 break
             run(command)
     finally:
-        run(p.option.cleanup, cleanup=True)
-    return Witness(commands=commands, exit=exit_code, seconds=seconds, output="\n".join(output))
+        cleaned = run(p.option.cleanup, cleanup=True)
+    return Witness(commands=commands, exit=exit_code, seconds=seconds, output="\n".join(output)), cleaned
 
 
 def question(r: Repair) -> str:

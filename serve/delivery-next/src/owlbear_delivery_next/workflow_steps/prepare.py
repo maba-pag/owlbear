@@ -33,7 +33,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.preparation import LIVE, SNAPSHOT, Preparing
-from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.change_flow import budgets, loop, worktree
 from owlbear_delivery_next.change_flow.worktree import failure
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.state_store.prepared import (
@@ -52,7 +52,7 @@ from owlbear_delivery_next.state_store.prepared import (
 from owlbear_delivery_next.state_store.prepared import (
     write as _write,
 )
-from owlbear_delivery_next.workflow_steps import before, check, engine, preparer, snapshot_files
+from owlbear_delivery_next.workflow_steps import before, check, engine, preparer, repair_copy, snapshot_files
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -403,6 +403,16 @@ def _reapply(store: Store, c: Change, rec: Prepared, home: Path) -> None:
         _write(store, c.slug, rec)
 
 
+def _cleanup(rec: Prepared, home: Path, repo: Path, log: Log) -> str:
+    try:
+        note = snapshot_files.command(rec, "cleanup", home, log, isolated(rec, home))
+    except PrepareError as exc:
+        return exc.result.reason
+    if rec.trial and not note:
+        repair_copy.drop(repo, home)
+    return note
+
+
 def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> loop.StepResult | None:
     """End every check whose environment is gone: clean up with its patch applied, discard it, delete its snapshot.
 
@@ -413,6 +423,10 @@ def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> lo
         stuck = note = ""
         if rec.home and not Path(rec.home).is_dir():  # a shaping copy's checkout is gone: its cleanup cannot run
             note = f"its checkout {rec.home} is gone, so its cleanup did not run"
+            if rec.trial:
+                log({"event": "prepared-end", "at": datetime.now(UTC).isoformat(), "check": rec.check,
+                     "cleanup": note, "outstanding": True})  # fmt: skip
+                continue
             if not (gone := snapshot_files.gone(rec.snapshot)):  # outstanding: the next end deletes it again
                 note += f"; the snapshot {rec.snapshot} could not be deleted"
             log({"event": "prepared-end", "at": datetime.now(UTC).isoformat(), "check": rec.check, "cleanup": note}
@@ -424,10 +438,7 @@ def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> lo
         keep = settings.data.retention == "keep" and bool(rec.digest) and rec.check != SHAPING  # never a shaping copy
         try:
             _reapply(store, c, rec, home)
-            try:
-                note = snapshot_files.command(rec, "cleanup", home, log, isolated(rec, home))
-            except PrepareError as exc:
-                note = exc.result.reason
+            note = _cleanup(rec, home, repo, log)
             if not (gone := keep or snapshot_files.gone(rec.snapshot)):
                 note = "; ".join(filter(None, [note, f"the snapshot {rec.snapshot} could not be deleted"]))
         finally:
@@ -454,6 +465,11 @@ def ran(store: Store, lock: Lock, c: Change, repo: Path, *, runnable: bool) -> b
     stray(store, c.slug, log)
     if left(store, c) and (stop := end(store, c, repo, store.settings(), log)):
         store.write(lock, loop.apply(c, stop, datetime.now(UTC)))
+        return True
+    if any(rec.trial for rec in left(store, c)):
+        if c.outcome is not None:
+            c.outcome.wake_at = datetime.now(UTC) + budgets.PAUSE
+            store.write(lock, c)
         return True
     if not runnable or before.due(c) or not due(store, c):  # the "before" capture exports and restores first
         return False

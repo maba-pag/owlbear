@@ -55,6 +55,8 @@ elif action == "seed":
 elif action in {"verify", "preview"}:
     assert json.loads(ledger.read_text()) == data
 elif action == "cleanup":
+    if os.environ.get("CLEANUP_CONTROL") and Path(os.environ["CLEANUP_CONTROL"]).exists():
+        raise RuntimeError("synthetic cleanup temporarily unavailable")
     shutil.rmtree(home)
 else:
     raise ValueError(action)
@@ -523,6 +525,56 @@ def _reject_remote_preparation(store, asked, repo, remote, other):
     assert "preparations changed after this proposal was shown; nothing was overwritten" in held.stop.reason
 
 
+def _retain_failed_trial(store, asked, proposal, repo, monkeypatch):
+    control = store.root / "cleanup-held"
+    control.write_text("simulate a temporarily unavailable cleanup")
+    option = proposal.option.model_copy(
+        update={"isolation": proposal.option.isolation | {"CLEANUP_CONTROL": str(control)}}
+    )
+    failed = asked.model_copy(deep=True)
+    failed.questions = []
+    failed.repairs.current.phase = "running"
+    calls = []
+
+    def cleanup_model_result(_store, cfg):
+        calls.append(cfg)
+        return Run(
+            cfg.session_id,
+            "result",
+            repair_tools.PreparationResult(
+                cause="The synthetic cleanup is temporarily unavailable.",
+                tried=[repair_tools.Try(fix="Use the committed synthetic fixture", outcome="Cleanup reports failure")],
+                fix="preparation",
+                preparation=proposal.model_copy(update={"option": option}),
+            ),
+            model_check="verified",
+            usage={"credits": 0.0, "models": {}},
+            termination=Termination(confirmed=True),
+        )
+
+    monkeypatch.setattr(sessions, "run", cleanup_model_result)
+    step_repair.run(store, Lock(failed.slug), failed, repo)
+    held = store.read(failed.slug)
+    assert held.outcome.exit == Exit.RETRY
+    assert held.stop is None
+    assert loop.open_question(held) is None
+    owed = prepare.left(store, held)
+    assert len(owed) == 1
+    assert owed[0].trial
+    clean = Path(owed[0].home)
+    assert (clean / "app/fixture.py").is_file()
+    assert "synthetic cleanup temporarily unavailable" in held.outcome.reason
+    assert prepare.ran(store, Lock(held.slug), held, repo, runnable=True)
+    assert prepare.left(store, held)[0].open
+    assert clean.is_dir()
+    assert len(calls) == 1
+    control.unlink()
+    assert not prepare.ran(store, Lock(held.slug), held, repo, runnable=False)
+    assert prepare.left(store, held) == []
+    assert not clean.exists()
+    assert store.read_config().preparations is None
+
+
 def test_missing_visual_preparation_requires_owner_approval_before_project_settings_write(
     repo, tmp_path, shared_repo, monkeypatch
 ) -> None:
@@ -599,6 +651,7 @@ def test_missing_visual_preparation_requires_owner_approval_before_project_setti
     assert store.read_config().preparations == [proposal.option, other]
     assert len(calls) == 1
     _reject_ignored_preparation(store, asked, proposal, repo, monkeypatch)
+    _retain_failed_trial(store, asked, proposal, repo, monkeypatch)
     _reject_remote_preparation(store, asked.model_copy(deep=True), repo, shared_repo[1], tmp_path / "other-settings")
     assert (store.shared.global_path.read_bytes() if store.shared.global_path.exists() else None) == global_before
     assert not store.machine_path.exists()
