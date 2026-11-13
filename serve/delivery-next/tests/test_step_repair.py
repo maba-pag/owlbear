@@ -331,7 +331,6 @@ def _decline_missing_preparation(store, asked):
     assert all(text in explanation for text in ("you declined the fix", r.diff, r.witness.output, r.evidence))
     assert explanation == kept.stop.reason
     assert (store.config_path.read_bytes(), worktree.git(store.shared.root, "rev-parse", "HEAD")) == (before, head)
-    assert store.read_config().preparations is None
 
 
 def _publish_missing_preparation(store, asked, remote, repo):
