@@ -379,11 +379,6 @@ def _job(monkeypatch) -> cases_job.CasesJob:
     return cases_job.CasesJob(slots, paused=lambda: False, looked=looked, asked=asked, shared=lambda: None)
 
 
-def _noted(exc: Exception) -> Exception:
-    exc.add_note("the runtime said more after the error")
-    return exc
-
-
 def test_case_checks_keep_whole_failure_results(monkeypatch, whole_error) -> None:
     cid = cases.freeze({"intent": {"task": "t refused"}}, {"source": "pilot", "family": "f"})
     cases.commit(cases.current()["n"], {cid: {"stage": "candidate", "call": "none", "why": "w", "example": "",
