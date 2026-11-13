@@ -112,6 +112,7 @@ def test_versions_command_reads_annotated_descendant_releases_without_installing
     assert capsys.readouterr().out == (
         f"running: no installed version at {current[:12]}\nnext: v0.2 at {next_commit[:12]}\n"
     )
+    assert versions.target() == Choice("v0.2", next_commit)
     bare = local_home.root() / versions.REPO
     assert (bare / "HEAD").is_file()
     assert set(versions.fetch(bare)) == {"v0.1", "v0.2"}
