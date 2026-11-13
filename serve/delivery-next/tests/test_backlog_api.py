@@ -45,11 +45,10 @@ class Launch:
     """A New Change launch that records its prompt and opens the chat at once."""
 
     def __init__(self) -> None:
-        self.prompts, self.done = [], threading.Event()
+        self.prompts = []
 
     def __call__(self, _repo, _role, prompt):
         self.prompts.append(prompt)
-        self.done.set()
         return {"state": "open"}
 
 
