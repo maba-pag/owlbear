@@ -83,32 +83,14 @@ def commit(repo: Path, name: str, text: str) -> str:
     return git(repo, "rev-parse", "HEAD")
 
 
-def test_a_review_runs_in_the_change_s_read_only_worktree_at_its_head_which_stays(store, change_repo, monkeypatch):
-    head, base, seen = git(change_repo, "rev-parse", "HEAD"), git(change_repo, "rev-parse", "main"), []
-
-    def act(cfg):
-        seen.append((cfg.observe(), git(change_repo, "worktree", "list", "--porcelain")))
-
-    cfg = (reviewer(monkeypatch, act), reviewed(store, change_repo))[0][0]
-    at, (observed, listed) = cfg.worktree, seen[0]
-    assert at == disposable.path(change_repo, "c1")
-    assert (at.parent.parent, at.name) == (worktree.data_root(), "c1.ro")
-    assert f"worktree {at}\nHEAD {head}\ndetached" in listed
-    assert (cfg.policy.root, cfg.policy.write) == (at, False)
-    assert (str(at) in cfg.message, str(change_repo) in cfg.message) == (True, False)
-    assert (observed.head, observed.base) == (head, base)  # the same commits the Change worktree reports
-    assert at.is_dir()  # the worktree stays on disk for the next session
-    assert f"worktree {at}\nHEAD {head}\ndetached" in git(change_repo, "worktree", "list", "--porcelain")
-    assert disposable.live(store.root / "changes" / "c1") is None
-    assert store.read("c1").outcome.exit == Exit.DONE
-
-
 def test_review_writes_never_reach_the_change_worktree_and_the_read_only_one_is_reset_to_the_next_head(
     store, change_repo, monkeypatch
 ):
     commit(change_repo, ".gitignore", "*.log\n")
+    head, base, seen = git(change_repo, "rev-parse", "HEAD"), git(change_repo, "rev-parse", "main"), []
 
     def act(cfg):
+        seen.append((cfg.observe(), git(change_repo, "worktree", "list", "--porcelain")))
         (cfg.worktree / "a.txt").write_text("changed\n")
         (cfg.worktree / "new.txt").write_text("new\n")
         (cfg.worktree / "deep").mkdir()
@@ -120,7 +102,16 @@ def test_review_writes_never_reach_the_change_worktree_and_the_read_only_one_is_
     assert git(change_repo, "status", "--porcelain") == ""
     assert (change_repo / "a.txt").read_text() == "a\n"
     assert c.outcome.exit == Exit.DONE  # the dirty review's result stands
-    at = first[0].worktree
+    cfg, (observed, listed) = first[0], seen[0]
+    at = cfg.worktree
+    assert at == disposable.path(change_repo, "c1")
+    assert (at.parent.parent, at.name) == (worktree.data_root(), "c1.ro")
+    assert f"worktree {at}\nHEAD {head}\ndetached" in listed
+    assert (cfg.policy.root, cfg.policy.write) == (at, False)
+    assert (str(at) in cfg.message, str(change_repo) in cfg.message) == (True, False)
+    assert (observed.head, observed.base) == (head, base)
+    assert f"worktree {at}\nHEAD {head}\ndetached" in git(change_repo, "worktree", "list", "--porcelain")
+    assert disposable.live(store.root / "changes" / "c1") is None
     assert (at / "new.txt").exists()  # nothing removes it after the session
     head = commit(change_repo, "a.txt", "b\n")
     found = []

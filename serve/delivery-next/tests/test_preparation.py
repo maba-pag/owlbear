@@ -22,7 +22,8 @@ from owlbear_delivery_next.change_contracts.models import (
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.preparation import DataPermissions, Preparation, Preparing
-from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow.worktree import git
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -69,10 +70,6 @@ if act == "cleanup" and log.with_name("cleanup-fails").exists():
 """
 LIVE = {"TEST_DB": "postgres://live/app"}
 UNCOVERED = "its isolation does not point the live TEST_DB elsewhere"
-
-
-def git(root: Path, *args: str) -> str:
-    return worktree.git(root, *args)
 
 
 @pytest.fixture
@@ -474,30 +471,6 @@ def test_a_revoked_permission_repairs_and_a_changed_option_prepares_again(env):
     assert prepare.reusable(store, c, settings(option(tmp)), LIVE)
 
 
-def test_setup_edits_become_a_patch_applied_for_the_check_and_discarded_after(env):
-    repo, store, _log, tmp = env
-    data = option(tmp, "data-only", id="fixtures")
-    c, s = change(repo, "pc1"), settings(data)
-    (repo / "src" / "left.py").write_text("found before the session\n")
-    ctx = prepare.context(store, c, s, repo)
-    (repo / "fixtures" / "users.json").write_text('[{"name": "Ada"}]\n')
-    (repo / "fixtures" / "orders.json").write_text("[]\n")
-    accepted = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK)
-
-    assert prepare.chosen(store, Lock("c1"), c, repo, recipe("fixtures"), ctx, accepted) is accepted
-    assert prepare.edits(repo) == ["src/left.py"]  # the preparer's edits are gone; what it found stays
-    assert sorted(prepare.read(store, "c1", "pc1").paths) == ["fixtures/orders.json", "fixtures/users.json"]
-    (repo / "src" / "left.py").unlink()
-
-    assert prepare.launch(store, c, s, lambda _e: None).exit == Exit.PENDING
-    assert (repo / "fixtures" / "users.json").read_text() == '[{"name": "Ada"}]\n'  # applied
-    assert sorted(prepare.edits(repo)) == ["fixtures/orders.json", "fixtures/users.json"]
-    c.env = None
-    assert prepare.end(store, c, repo, s, lambda _e: None) is None
-    assert (prepare.edits(repo), (repo / "fixtures" / "users.json").read_text()) == ([], "[]\n")
-    assert prepare.read(store, "c1", "pc1").paths  # kept with the recipe for its next check
-
-
 OLD, NEW, THIRD = "fixtures/users.json", "fixtures/néw users.json", "fixtures/third.json"
 
 
@@ -808,22 +781,6 @@ def test_cleanup_cannot_replace_an_unverified_preparer_stop(env, monkeypatch):
     assert prepare.edits(repo) == []
 
 
-def test_a_patch_that_cannot_be_discarded_stops_the_change(env, monkeypatch):
-    repo, store, _log, tmp = env
-    c, s = change(repo, "pc1"), settings(option(tmp))
-    rec = prepare.Prepared(check="pc1", option=option(tmp), paths=["fixtures/users.json"], applied=str(repo), open=True)
-    prepare._write(store, "c1", rec)  # noqa: SLF001 - an applied patch
-    c.env = None
-
-    def broken(*_a):
-        raise subprocess.CalledProcessError(128, "git", stderr=b"index.lock exists")
-
-    monkeypatch.setattr(prepare, "discard", broken)
-    stop = prepare.end(store, c, repo, s, lambda _e: None)
-    assert (stop.exit, stop.stop.action) == (Exit.STOP, f"Discard those edits in {repo}")
-    assert prepare.left(store, c)  # it is ended again once the owner resumes
-
-
 def test_an_old_project_layer_with_a_seed_command_loads_without_it(tmp_path):
     store = Store(tmp_path)
     store.config_path.write_text(json.dumps({"format": 1, "seed": "npm run seed", "widths": [1600]}))
@@ -925,35 +882,42 @@ def test_a_failed_masking_is_deleted_even_when_the_owner_keeps_snapshots(env, mo
     assert prepare.read(store, "c1", "visual").snapshot == ""  # an unmasked snapshot is never kept
 
 
-def patched(env) -> tuple[Change, object, Path]:
-    """A data-only check whose seed and cleanup run a setup script only the preparer's accepted patch holds."""
-    repo, store, _log, tmp = env
+def test_seed_and_cleanup_run_with_the_setup_patch_and_a_failed_cleanup_stays_outstanding_until_it_succeeds(env):
+    repo, store, log, tmp = env
     script = f"{sys.executable} fixtures/setup.py"
     data = option(tmp, "data-only", id="fixtures", seed=f"{script} seed", cleanup=f"{script} cleanup")
     c, s = change(repo, "pc1"), settings(data)
+    (repo / "src" / "left.py").write_text("found before the session\n")
     ctx = prepare.context(store, c, s, repo)
+    (repo / "fixtures" / "users.json").write_text('[{"name": "Ada"}]\n')
+    (repo / "fixtures" / "orders.json").write_text("[]\n")
     (repo / "fixtures" / "setup.py").write_text(SETUP)
     accepted = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK)
     assert prepare.chosen(store, Lock("c1"), c, repo, recipe("fixtures"), ctx, accepted) is accepted
+    paths = ["fixtures/orders.json", "fixtures/setup.py", "fixtures/users.json"]
+    kept = prepare.read(store, "c1", "pc1")
+    assert (sorted(kept.paths), kept.reason) == (paths, recipe("fixtures").reason)
+    assert (prepare.edits(repo), (repo / "fixtures" / "users.json").read_text()) == (["src/left.py"], "[]\n")
     assert not (repo / "fixtures" / "setup.py").exists()
-    return c, s, tmp / "test.db"
-
-
-def test_seed_and_cleanup_run_with_the_setup_patch_and_a_failed_cleanup_stays_outstanding_until_it_succeeds(env):
-    repo, store, log, tmp = env
-    c, s, db = patched(env)
     assert prepare.launch(store, c, s, lambda _e: None).exit == Exit.PENDING
-    assert (lines(log), db.read_text()) == (["seed-from-patch"], "seeded by the patch")  # the data-only seed
+    assert (lines(log), (tmp / "test.db").read_text()) == (["seed-from-patch"], "seeded by the patch")
+    assert (repo / "fixtures" / "users.json").read_text() == '[{"name": "Ada"}]\n'
+    assert (repo / "fixtures" / "orders.json").read_text() == "[]\n"
+    assert sorted(prepare.edits(repo)) == [*paths, "src/left.py"]
     (fails := tmp / "cleanup-fails").write_text("")
     c.env, events = None, []
     assert prepare.end(store, c, repo, s, events.append) is None
     assert (lines(log)[-1], events[-1]["outstanding"]) == ("cleanup-from-patch", True)  # the patch's own script ran
-    assert (prepare.edits(repo), [r.check for r in prepare.left(store, c)]) == ([], ["pc1"])  # discarded; still owed
+    assert (prepare.edits(repo), [r.check for r in prepare.left(store, c)]) == (["src/left.py"], ["pc1"])
     fails.unlink()
     assert prepare.end(store, c, repo, s, events.append) is None  # the next runner: the patch is applied again
     assert (lines(log)[-1], events[-1]["cleanup"], prepare.left(store, c), prepare.edits(repo)) == (
-        "cleanup-from-patch", "ok", [], []
+        "cleanup-from-patch", "ok", [], ["src/left.py"]
     )  # fmt: skip
+    assert (repo / "fixtures" / "users.json").read_text() == "[]\n"
+    assert not any((repo / name).exists() for name in paths[:2])
+    assert (repo / "src" / "left.py").read_text() == "found before the session\n"
+    assert sorted(prepare.read(store, "c1", "pc1").paths) == paths
 
 
 def commit(repo: Path, *paths: str) -> None:
@@ -1092,3 +1056,5 @@ def test_setup_edits_that_cannot_be_discarded_stop_and_log_whole(env, whole_erro
     )
     assert stop.reason == expected
     assert [e.get("stuck") for e in said if e["event"] == "prepared-end"] == [expected]
+    assert (stop.exit, stop.stop.action) == (Exit.STOP, f"Discard those edits in {repo}")
+    assert [r.check for r in prepare.left(store, c)] == ["pc1"]
