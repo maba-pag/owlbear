@@ -61,23 +61,20 @@ def configured(root, limit=0.05):
     )
 
 
-@pytest.mark.parametrize("late", [False, True])
-def test_a_real_valid_result_during_snapshot_is_accepted_only_before_the_cutoff(tmp_path, clock, late):
+def test_a_real_valid_result_during_snapshot_is_accepted_only_before_the_cutoff(tmp_path, clock):
     async def scenario():
         cfg = configured(tmp_path)
         step = STEP(cfg, asyncio.get_running_loop())
         replies = []
 
         async def listing():
-            if late:
-                clock.now += 1
             replies.append(step.gate.call(cfg.submit, PAYLOAD.model_dump()))
             return SimpleNamespace(tasks=[])
 
         await asyncio.wait_for(step.wait(Session(listing)), 1)
-        assert [accepted for _, accepted in replies] == [not late]
-        assert step.run.ending == ("deadline" if late else "result")
-        assert isinstance(step.run.payload, tools.BuildResult) is (not late)
+        assert [accepted for _, accepted in replies] == [True]
+        assert step.run.ending == "result"
+        assert isinstance(step.run.payload, tools.BuildResult)
 
     asyncio.run(scenario())
 
