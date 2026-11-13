@@ -34,7 +34,7 @@ from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import reconsider, review
 
 from . import test_round_flow
-from .test_round_flow import git, step
+from .test_round_flow import answer, git, step
 
 clone = test_round_flow.clone
 NOW = datetime(2026, 10, 17, 3, tzinfo=UTC)
@@ -99,14 +99,6 @@ def review_(store: Store, clone: Path, monkeypatch, rechecked: list[dict]) -> sd
     monkeypatch.setattr(runner, "_kept", kept)
     step(store, clone)
     return seen[0]
-
-
-def answer(store: Store, option: str, text: str = "") -> Change:
-    c = store.read("c1")
-    q = loop.open_question(c)
-    c, _ = loop.schedule(c, [AnswerItem(at=NOW, channel="status-view", question=q.id, option=option, text=text)], NOW)
-    store.write(Lock("c1"), c)
-    return c
 
 
 @pytest.mark.parametrize("owner", ["drop", "fix", "approved"])
