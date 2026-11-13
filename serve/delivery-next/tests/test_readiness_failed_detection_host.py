@@ -33,48 +33,6 @@ def reached(monkeypatch) -> list[str]:
     return hosts
 
 
-@pytest.mark.parametrize("raises", [False, True])
-def test_a_failed_detection_checks_the_known_enterprise_host_not_the_public_one(
-    shared_repo, tmp_path, monkeypatch, reached, raises
-):
-    root, _remote = shared_repo
-    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
-    store.write_profile(Profile(entries={profile.HOST: confirmed(ENTERPRISE), profile.POLL: confirmed("45")}))
-    monkeypatch.setattr(
-        profile,
-        "detect",
-        lambda *_a: Profile(entries={profile.HOST: confirmed(ENTERPRISE), profile.POLL: confirmed("60")}),
-    )
-    real, refused = DataRepo.publish, []
-
-    def refuse_detection(self, path, message, until=None):
-        if path == profile_share.path(store) and message.endswith("detected in a clone") and not refused:
-            refused.append(message)
-            if raises:
-                msg = "remote unavailable"
-                raise DataRepoError(msg)
-            return "remote refused"
-        return real(self, path, message, until)
-
-    monkeypatch.setattr(DataRepo, "publish", refuse_detection)
-    checks = readiness.ready(store, root)
-    known = store.read_profile()
-    assert known is not None, "the known profile must survive a failed detection"
-    assert profile.value(known, profile.HOST) == ENTERPRISE
-
-    assert refused
-    assert [c.ok for c in checks if c.name == "profile detection"] == [False]
-    assert reached == [ENTERPRISE]  # the network check names the known host; the public host is never probed
-    network = [c for c in checks if c.name == "network"]
-    assert len(network) == 1
-    assert ENTERPRISE in network[0].detail
-
-    monkeypatch.setattr(DataRepo, "publish", real)
-    monkeypatch.setattr(readiness, "check", lambda *_a, **_k: [])  # the host checks were asserted above
-    again = readiness.ready(store, root, carry=True)
-    assert not [c for c in again if not c.ok]  # the next start publishes the detection and carries
-
-
 def test_an_unreadable_profile_after_a_failed_detection_defers_the_host_checks(tmp_path, monkeypatch, reached):
     store = Store(tmp_path / "store")
 
@@ -90,14 +48,13 @@ def test_an_unreadable_profile_after_a_failed_detection_defers_the_host_checks(t
     assert reached == []  # no host is guessed while the profile cannot say which host it is
 
 
-@pytest.mark.usefixtures("reached")
 @pytest.mark.parametrize("refusal", ["returned", "raised", "config"])
-def test_a_detection_that_cannot_publish_says_the_whole_refusal(
-    shared_repo, tmp_path, monkeypatch, whole_error, refusal
+def test_a_failed_detection_keeps_its_whole_refusal_and_known_host_until_publication_succeeds(
+    shared_repo, monkeypatch, whole_error, refusal, reached
 ):
     """#971: the data repository's whole refusal, its notes too, is the profile detection check's detail."""
     root, _remote = shared_repo
-    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
+    store = Store(root.parent / "store", DataRepo(root), "shop-site")
     store.write_profile(Profile(entries={profile.HOST: confirmed(ENTERPRISE), profile.POLL: confirmed("45")}))
     done = "done" if refusal == "config" else ""
     fresh = Profile(entries={profile.HOST: confirmed(ENTERPRISE), profile.POLL: confirmed("60")}, prefs_import=done)
@@ -128,6 +85,21 @@ def test_a_detection_that_cannot_publish_says_the_whole_refusal(
     }[refusal]
     detail = f"StoreError: the detected profile could not be published: {refused}"
     assert [c.detail for c in checks if c.name == "profile detection"] == [detail]
+    assert [c.ok for c in checks if c.name == "profile detection"] == [False]
+    assert not (store.root / profile_share.DETECTED).exists()
+    known = store.read_profile()
+    assert known is not None, "the known profile must survive a failed detection"
+    assert profile.value(known, profile.HOST) == ENTERPRISE
+    assert reached == [ENTERPRISE]
+    network = [c for c in checks if c.name == "network"]
+    assert len(network) == 1
+    assert ENTERPRISE in network[0].detail
+
+    monkeypatch.setattr(DataRepo, "publish", real)
+    monkeypatch.setattr(readiness, "check", lambda *_a, **_k: [])
+    again = readiness.ready(store, root, carry=True)
+    assert not [c for c in again if not c.ok]
+    assert (store.root / profile_share.DETECTED).exists()
 
 
 @pytest.mark.parametrize("kind", ["provider", "detector"])
