@@ -1,7 +1,6 @@
 """A host start carries the one-time legacy preference import and retries its refused completion (R15, review)."""
 
 import contextlib
-import inspect
 import subprocess
 from pathlib import Path
 
@@ -16,16 +15,11 @@ from owlbear_delivery_next.state_store import prefs_import, profile_share
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import SharedError, Store
 
+from .test_prefs_recovery import clone_profile, remote_config_bytes
+
 
 def confirmed(value: str) -> ProfileEntry:
     return ProfileEntry(state="known", value=value, evidence=f"{profile.CONFIRMED}; owner")
-
-
-def clone_profile(remote: Path, tmp_path: Path) -> tuple[Store, Profile]:
-    second = tmp_path / "fresh"
-    subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
-    fresh = Store(tmp_path / "fresh-store", DataRepo(second), "shop-site")
-    return fresh, fresh.read_profile()
 
 
 def published_profile(remote: Path) -> Profile:
@@ -52,8 +46,29 @@ def test_a_host_start_carries_an_upgraded_projects_legacy_preference_once(shared
 
     assert not [c for c in checks if not c.ok]
     assert store.read_config().prefs.ci_poll_seconds == 45
-    _, got = clone_profile(remote, tmp_path)
+    assert store.read_config().prefs_imported is True
+    assert profile.POLL in store.read_profile().entries
+    fresh, got = clone_profile(remote, tmp_path)
     assert got.prefs_import == "done"
+    assert fresh.read_config().prefs.ci_poll_seconds == 45
+    assert (
+        store.save(
+            store.config_path,
+            config.Layer,
+            lambda cur: cur.model_copy(update={"prefs": config.Prefs(ci_poll_seconds=None)}),
+            "owner",
+            owner=True,
+        )
+        == ""
+    )
+    reopened = Store(store.root, DataRepo(root), store.name)
+    assert not [c for c in readiness.ready(reopened, root, carry=True) if not c.ok]
+    assert reopened.read_config().prefs.ci_poll_seconds is None
+    (tmp_path / "after").mkdir()
+    after, completed = clone_profile(remote, tmp_path / "after")
+    assert completed.prefs_import == "done"
+    assert after.read_config().prefs.ci_poll_seconds is None
+    assert after.config_path.read_bytes() == store.config_path.read_bytes()
 
 
 @pytest.mark.usefixtures("no_network")
@@ -63,18 +78,28 @@ def test_a_carry_whose_shared_lock_cannot_be_taken_is_a_failed_check_and_the_nex
     root, remote = shared_repo
     store = Store(tmp_path / "store", DataRepo(root), "shop-site")
     store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
-    real_locked, blocked = DataRepo.locked, [True]
+    real_locked, real_run, blocked = DataRepo.locked, prefs_import.run, [True]
+    carrying = False
     monkeypatch.setattr(profile, "detect", lambda *_a: Profile(entries={profile.POLL: confirmed("45")}))
 
     @contextlib.contextmanager
     def busy_for_the_carry(self, wait=None):
-        if blocked[0] and any(f.filename.endswith("/state_store/prefs_import.py") for f in inspect.stack()):
+        if blocked[0] and carrying and self == store.shared:
             msg = "the shared lock is held by another clone"
             raise DataRepoError(msg)
         with real_locked(self, wait):
             yield
 
+    def armed_carry(running):
+        nonlocal carrying
+        carrying = True
+        try:
+            return real_run(running)
+        finally:
+            carrying = False
+
     monkeypatch.setattr(DataRepo, "locked", busy_for_the_carry)
+    monkeypatch.setattr(prefs_import, "run", armed_carry)
     failed = [c for c in readiness.ready(store, root, carry=True) if not c.ok]  # no exception escapes the start
     assert [c.name for c in failed] == ["legacy preferences"]
     assert "held by another clone" in failed[0].detail
@@ -133,13 +158,22 @@ def test_a_refused_completion_is_reported_at_start_and_published_by_the_next_sta
     assert refused
     assert [c.ok for c in first if c.detail and "completion was not published" in c.detail] == [False]
     assert store.read_config().prefs.ci_poll_seconds == 45  # the import's values are kept for the retry
+    assert store.read_profile().prefs_import == "done"
+    assert profile_share.unpublished(store)
+    local = store.config_path.read_bytes()
+    before = remote_config_bytes(remote, store)
+    assert before == local
 
     monkeypatch.setattr(DataRepo, "publish", real)
     second = readiness.ready(store, root, carry=True)
 
     assert not [c for c in second if not c.ok]
-    _, got = clone_profile(remote, tmp_path)
+    fresh, got = clone_profile(remote, tmp_path)
     assert got.prefs_import == "done"
+    assert fresh.read_config().prefs.ci_poll_seconds == 45
+    assert fresh.config_path.read_bytes() == local
+    assert store.config_path.read_bytes() == local
+    assert not profile_share.unpublished(store)
 
 
 def remote_subjects(remote: Path) -> list[str]:

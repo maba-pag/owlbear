@@ -53,8 +53,12 @@ def test_a_format_15_global_drops_its_budgets_and_gets_the_limits_keeping_every_
     assert glob.sessions == 2
 
 
-@pytest.mark.parametrize("sections", [{}, {"spotter": None, "machine": None}])
-def test_a_global_without_the_sections_or_with_them_null_gets_them_with_the_limits_alone(tmp_path, sections):
+@pytest.mark.parametrize(
+    "sections",
+    [{}, {"spotter": None, "machine": None}, {"spotter": {}, "machine": {}}],
+    ids=["absent", "null", "empty"],
+)
+def test_format_15_global_fills_limits_only_into_empty_absent_or_null_sections(tmp_path, sections):
     glob = read_layer(_file(tmp_path, {"format": 15, **sections, "curator_threshold": 90}), GlobalLayer)
     assert _limits(glob) == tuple(LIMITS.values())
     assert glob.spotter == Spotter(look_credit_limit=0.75)  # the switch and the rest stay unset
@@ -66,11 +70,6 @@ def test_a_global_without_the_sections_or_with_them_null_gets_them_with_the_limi
 def test_a_section_that_is_neither_a_mapping_nor_null_is_refused_never_replaced(tmp_path, sections):
     with pytest.raises(StoreError, match="cannot be migrated"):
         read_layer(_file(tmp_path, {"format": 15, **sections}), GlobalLayer)
-
-
-def test_an_empty_section_gets_the_limits_in_it(tmp_path):
-    glob = read_layer(_file(tmp_path, {"format": 15, "spotter": {}, "machine": {}}), GlobalLayer)
-    assert _limits(glob) == tuple(LIMITS.values())
 
 
 def test_an_older_global_gets_them_through_the_whole_chain(tmp_path):
