@@ -191,7 +191,6 @@ def test_acceptance_never_takes_an_invalid_or_unoffered_result(gated, damage):
     else:
         data["question"] = "q99"
     path.write_text(json.dumps(data))
-    assert json.loads(path.read_text()) == data
     assert held.take(store, Lock("c1"), c) is None
     assert not path.exists()
 
