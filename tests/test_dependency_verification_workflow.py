@@ -218,12 +218,11 @@ def test_copilot_setup_keeps_task_checkout_and_bounds_installation() -> None:
     assert checkout["with"]["persist-credentials"] is False
     runs = [step["run"] for step in steps if "run" in step]
     install_commands = {
-        "uv python install",
         COPILOT_UV_SYNC,
         "npm ci --engine-strict --no-audit --no-fund",
     }
     for step in steps:
-        if step.get("run") in install_commands:
+        if step.get("run") in install_commands | {"uv python install"}:
             assert 0 < step["timeout-minutes"] <= 8
     assert not re.search(r"\b(pytest|megalint|quality|docker|playwright)\b", "\n".join(runs))
     assert {step["uses"].split("@")[0] for step in steps if "uses" in step} == {
@@ -232,10 +231,6 @@ def test_copilot_setup_keeps_task_checkout_and_bounds_installation() -> None:
         "actions/setup-node",
     }
 
-    install_commands = {
-        COPILOT_UV_SYNC,
-        "npm ci --engine-strict --no-audit --no-fund",
-    }
     install_indices = [index for index, step in enumerate(steps) if step.get("run") in install_commands]
     assert len(install_indices) == 2
     assert {steps[index]["run"] for index in install_indices} == install_commands
