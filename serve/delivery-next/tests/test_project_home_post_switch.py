@@ -7,15 +7,13 @@ into the retained source at its original path, and no retry deletes it. Every mo
 
 import errno
 import os
-import subprocess
 
 import pytest
 
-from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move
+from owlbear_delivery_next.state_store import fd_tree, project_home, project_move
 from owlbear_delivery_next.state_store.database import StoreError
 
 SOURCE_ID = "abc123"
-BEFORE, AFTER = "AAAAAAAA-0000-4000-8000-000000000001", "BBBBBBBB-0000-4000-8000-000000000002"
 REAL_SYNC, REAL_SAVE = fd_tree.sync, project_move._save  # noqa: SLF001
 
 
@@ -23,31 +21,10 @@ class CrashError(OSError):
     """An interruption part-way through a cross-volume move."""
 
 
-@pytest.fixture
-def clone(tmp_path):
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=repo, check=True, capture_output=True)  # noqa: S607
-    folder = repo / ".git" / "owlbear-delivery"
-    (folder / "changes" / "c1").mkdir(parents=True)
-    (folder / "changes" / "c1" / "runner.log").write_text("ran\n")
-    (folder / "clone-id").write_text(f"{SOURCE_ID}\n")
-    return repo, folder
-
-
 def heal(monkeypatch):
     """Restore only the crash seams, as the move tests do."""
     monkeypatch.setattr(fd_tree, "sync", REAL_SYNC)
     monkeypatch.setattr(project_move, "_save", REAL_SAVE)
-
-
-def move(repo, monkeypatch):
-    """The operator's sequence: prepare once, then finish after a different boot session."""
-    if not (project_home.clone_dir(repo) / offline_protocol.PREPARED).exists():
-        monkeypatch.setattr(offline_protocol, "boot_session", lambda: BEFORE)
-        offline_protocol.prepare_clone(repo, gaps=lambda: ())
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: AFTER)
-    return offline_protocol.finish_clone(repo, gaps=lambda: ())
 
 
 def crash_after_switch(monkeypatch):
@@ -62,9 +39,11 @@ def crash_after_switch(monkeypatch):
     monkeypatch.setattr(project_move, "_save", save)
 
 
-def test_a_write_through_a_descriptor_before_the_switch_refuses_and_stays_in_the_source(clone, monkeypatch):
+def test_a_write_through_a_descriptor_before_the_switch_refuses_and_stays_in_the_source(
+    legacy_project_clone, offline_move, monkeypatch
+):
     """The final publication guard refuses a source edited before the SWITCHED record's durable write."""
-    repo, folder = clone
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     runner = folder / "changes" / "c1" / "runner.log"
     writer = os.open(runner, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW)
@@ -77,7 +56,7 @@ def test_a_write_through_a_descriptor_before_the_switch_refuses_and_stays_in_the
     monkeypatch.setattr(project_move, "_save", save)
     try:
         with pytest.raises(StoreError, match="changed after it was copied"):
-            move(repo, monkeypatch)
+            offline_move(repo)
     finally:
         os.close(writer)
     assert runner.read_text() == "ran\nlate owner bytes\n"
@@ -85,20 +64,25 @@ def test_a_write_through_a_descriptor_before_the_switch_refuses_and_stays_in_the
     assert project_move.record(folder)["phase"] == project_move.COPYING
 
 
-def test_a_write_through_a_descriptor_after_the_switch_stays_in_the_source_at_its_path(clone, monkeypatch):
-    repo, folder = clone
+def test_a_write_through_a_descriptor_after_the_switch_stays_in_the_source_at_its_path(
+    legacy_project_clone, offline_move, monkeypatch
+):
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     runner = folder / "changes" / "c1" / "runner.log"
     writer = os.open(runner, os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW)
     crash_after_switch(monkeypatch)
     try:
         with pytest.raises(CrashError):
-            move(repo, monkeypatch)
+            offline_move(repo)
+        assert runner.read_text() == "ran\n"
+        assert (folder / project_move.MOVE_RECORD).exists()
         os.write(writer, b"post-switch owner bytes\n")  # the descriptor outlives the switch
     finally:
         os.close(writer)
     heal(monkeypatch)
-    assert move(repo, monkeypatch) == target
+    assert project_home.current(repo) == target
+    assert offline_move(repo) == target
     assert runner.read_text() == "ran\npost-switch owner bytes\n"
     assert (target / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert project_home.located(repo) == target
@@ -120,23 +104,25 @@ def test_a_leaf_swapped_for_a_foreign_file_before_it_is_kept_keeps_the_foreign_b
     assert (folder / held).read_text() == "foreign\n"
 
 
-def test_a_lock_swapped_for_a_foreign_file_after_the_switch_is_retained_and_never_deleted(clone, monkeypatch):
-    repo, folder = clone
+def test_a_lock_swapped_for_a_foreign_file_after_the_switch_is_retained_and_never_deleted(
+    legacy_project_clone, offline_move, monkeypatch
+):
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     crash_after_switch(monkeypatch)
     with pytest.raises(CrashError):
-        move(repo, monkeypatch)
+        offline_move(repo)
     (folder / "foreign.lock").write_text("foreign lock\n")
     (folder / "foreign.lock").replace(folder / project_move.MOVE_LOCK)  # the lock name now names a foreign file
     heal(monkeypatch)
-    assert move(repo, monkeypatch) == target
+    assert offline_move(repo) == target
     assert (folder / project_move.MOVE_LOCK).read_text() == "foreign lock\n"
 
 
 def test_an_eio_on_the_first_prejournal_write_keeps_the_entry_and_the_retry_refuses_with_the_path_unchanged(
-    clone, monkeypatch
+    legacy_project_clone, offline_move, monkeypatch
 ):
-    repo, folder = clone
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     real_rename = os.rename
 
@@ -147,7 +133,7 @@ def test_an_eio_on_the_first_prejournal_write_keeps_the_entry_and_the_retry_refu
 
     monkeypatch.setattr(fd_tree.os, "rename", failing_rename)
     with pytest.raises(StoreError, match=r"could not be written"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     kept = [p for p in folder.iterdir() if p.name.startswith(fd_tree.QUARANTINE)]
     assert len(kept) == 1
     before = kept[0].read_bytes()
@@ -157,7 +143,7 @@ def test_an_eio_on_the_first_prejournal_write_keeps_the_entry_and_the_retry_refu
 
     monkeypatch.setattr(fd_tree.os, "rename", real_rename)
     with pytest.raises(StoreError, match=r"kept by an earlier failed operation"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert [p.name for p in folder.iterdir() if p.name.startswith(fd_tree.QUARANTINE)] == [kept[0].name]
     assert kept[0].read_bytes() == before
     assert not (folder / project_move.MOVE_RECORD).exists()

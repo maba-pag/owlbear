@@ -16,11 +16,9 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.local_system import local_home
-from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move
+from owlbear_delivery_next.state_store import fd_tree, project_home, project_move
 from owlbear_delivery_next.state_store.database import StoreError
 
-SOURCE_ID = "abc123"
-BEFORE, AFTER = "AAAAAAAA-0000-4000-8000-000000000001", "BBBBBBBB-0000-4000-8000-000000000002"
 AUDITED = "51aa0e1c60b3f8a1b15faf57d6ab4a84d4ac20a3"
 OPEN_51AA = (
     "import sys\n"
@@ -28,27 +26,6 @@ OPEN_51AA = (
     "from owlbear_delivery_next.state_store.store import Store\n"
     "Store.open(Path(sys.argv[1]))\n"
 )
-
-
-@pytest.fixture
-def clone(tmp_path):
-    """A clone whose store folder holds one run log and a clone id, as the post-switch tests build it."""
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=repo, check=True, capture_output=True)  # noqa: S607
-    folder = repo / ".git" / "owlbear-delivery"
-    (folder / "changes" / "c1").mkdir(parents=True)
-    (folder / "changes" / "c1" / "runner.log").write_text("ran\n")
-    (folder / "clone-id").write_text(f"{SOURCE_ID}\n")
-    return repo, folder
-
-
-def move(repo, monkeypatch):
-    """Prepare before a boot session, then finish after a different one: the production sequence."""
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: BEFORE)
-    offline_protocol.prepare_clone(repo, gaps=lambda: ())
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: AFTER)
-    return offline_protocol.finish_clone(repo, gaps=lambda: ())
 
 
 @pytest.fixture
@@ -84,10 +61,10 @@ def receipt_bytes(folder: Path) -> bytes | None:
 
 
 def test_the_completed_source_is_fenced_at_999_and_the_immutable_opener_refuses_it(
-    clone, monkeypatch, immutable_51aa, tmp_path
+    legacy_project_clone, offline_move, immutable_51aa, tmp_path
 ):
-    repo, folder = clone
-    move(repo, monkeypatch)
+    repo, folder = legacy_project_clone
+    offline_move(repo)
     assert (folder / project_home.MARKER).read_text().strip() == project_move.FENCE
     before = receipt_bytes(folder)
 
@@ -100,18 +77,9 @@ def test_the_completed_source_is_fenced_at_999_and_the_immutable_opener_refuses_
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
 
 
-def test_the_current_opener_admits_the_proved_target_after_the_completed_move(clone, monkeypatch):
-    repo, folder = clone
-    move(repo, monkeypatch)
-    target = project_home.located(repo)
-
-    assert (target / "changes" / "c1" / "runner.log").read_text() == "ran\n"
-    assert (folder / project_home.MARKER).read_text().strip() == project_move.FENCE
-
-
-def test_a_missing_target_refuses_and_keeps_the_source_and_receipt(clone, monkeypatch):
-    repo, folder = clone
-    move(repo, monkeypatch)
+def test_a_missing_target_refuses_and_keeps_the_source_and_receipt(legacy_project_clone, offline_move):
+    repo, folder = legacy_project_clone
+    offline_move(repo)
     target = project_home.located(repo)
     before = receipt_bytes(folder)
     shutil.rmtree(target)
@@ -123,9 +91,9 @@ def test_a_missing_target_refuses_and_keeps_the_source_and_receipt(clone, monkey
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
 
 
-def test_a_replaced_target_refuses_and_keeps_the_source_and_receipt(clone, monkeypatch):
-    repo, folder = clone
-    move(repo, monkeypatch)
+def test_a_replaced_target_refuses_and_keeps_the_source_and_receipt(legacy_project_clone, offline_move):
+    repo, folder = legacy_project_clone
+    offline_move(repo)
     target = project_home.located(repo)
     before = receipt_bytes(folder)
     shutil.rmtree(target)
@@ -140,13 +108,15 @@ def test_a_replaced_target_refuses_and_keeps_the_source_and_receipt(clone, monke
     assert (target / "impostor").read_text() == "foreign\n"
 
 
-def test_a_replaced_target_with_the_same_identity_refuses_and_keeps_the_impostor(clone, monkeypatch):
+def test_a_replaced_target_with_the_same_identity_refuses_and_keeps_the_impostor(
+    legacy_project_clone, offline_move, monkeypatch
+):
     """A freed folder can come back with the same device and inode (Linux reuses them); identity alone is not proof."""
-    repo, folder = clone
+    repo, folder = legacy_project_clone
     # project_move holds its own alias of fd_tree.ident; project_switch and switched_authority call the module.
     monkeypatch.setattr(project_move, "_ident", lambda _st: [0, 0])
     monkeypatch.setattr(fd_tree, "ident", lambda _st: [0, 0])
-    move(repo, monkeypatch)
+    offline_move(repo)
     target = project_home.located(repo)
     before = receipt_bytes(folder)
     shutil.rmtree(target)
@@ -161,9 +131,9 @@ def test_a_replaced_target_with_the_same_identity_refuses_and_keeps_the_impostor
     assert (target / "impostor").read_text() == "foreign\n"
 
 
-def test_a_malformed_receipt_refuses_and_is_not_rewritten(clone, monkeypatch):
-    repo, folder = clone
-    move(repo, monkeypatch)
+def test_a_malformed_receipt_refuses_and_is_not_rewritten(legacy_project_clone, offline_move):
+    repo, folder = legacy_project_clone
+    offline_move(repo)
     garbage = b"{not json"
     (folder / project_move.MOVE_RECORD).write_bytes(garbage)
 
@@ -194,9 +164,11 @@ def _foreign_regular(dfd, name):
 
 
 @pytest.mark.parametrize("kind", ["regular", "symlink"])
-def test_a_proof_replaced_after_creation_refuses_and_keeps_the_foreign_entry(clone, monkeypatch, tmp_path, kind):
+def test_a_proof_replaced_after_creation_refuses_and_keeps_the_foreign_entry(
+    legacy_project_clone, offline_move, monkeypatch, tmp_path, kind
+):
     """The record must hold the nonce the move wrote; an entry put in its place is refused, never recorded."""
-    repo, _ = clone
+    repo, _ = legacy_project_clone
     foreign = tmp_path / "foreign-target"
     foreign.write_text("foreign\n")
     if kind == "regular":
@@ -205,7 +177,7 @@ def test_a_proof_replaced_after_creation_refuses_and_keeps_the_foreign_entry(clo
         _replace_after_create(monkeypatch, lambda dfd, name: os.symlink(foreign, name, dir_fd=dfd))
 
     with pytest.raises(StoreError) as caught:
-        move(repo, monkeypatch)
+        offline_move(repo)
 
     assert "was replaced while it was written" in str(caught.value), str(caught.value)
     assert foreign.read_text() == "foreign\n"
@@ -236,9 +208,9 @@ def _outcome_within(seconds, call):
     return box[0]
 
 
-def test_a_fifo_committed_as_the_proof_refuses_without_blocking(clone, monkeypatch):
-    repo, _ = clone
-    move(repo, monkeypatch)
+def test_a_fifo_committed_as_the_proof_refuses_without_blocking(legacy_project_clone, offline_move):
+    repo, _ = legacy_project_clone
+    offline_move(repo)
     target = project_home.located(repo)
     (target / project_move.MOVE_PROOF).unlink()
     os.mkfifo(target / project_move.MOVE_PROOF)

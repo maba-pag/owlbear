@@ -7,38 +7,14 @@ keeps every byte in each case, and a foreign entry is refused, never adopted or 
 import errno
 import json
 import os
-import subprocess
 from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move
+from owlbear_delivery_next.state_store import fd_tree, project_home, project_move
 from owlbear_delivery_next.state_store.database import StoreError
 
 SOURCE_ID = "abc123"
-BEFORE, AFTER = "AAAAAAAA-0000-4000-8000-000000000001", "BBBBBBBB-0000-4000-8000-000000000002"
-
-
-@pytest.fixture
-def clone(tmp_path):
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=repo, check=True, capture_output=True)  # noqa: S607
-    folder = repo / ".git" / "owlbear-delivery"
-    (folder / "changes" / "c1").mkdir(parents=True)
-    (folder / "changes" / "c1" / "runner.log").write_text("ran\n")
-    (folder / "clone-id").write_text(f"{SOURCE_ID}\n")
-    return repo, folder
-
-
-def prepare(repo, monkeypatch):
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: BEFORE)
-    offline_protocol.prepare_clone(repo, gaps=lambda: ())
-
-
-def finish(repo, monkeypatch):
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: AFTER)
-    return offline_protocol.finish_clone(repo, gaps=lambda: ())
 
 
 def record(folder):
@@ -64,9 +40,12 @@ def crash_once(monkeypatch, name, real):
     monkeypatch.setattr(fd_tree, name, helper)
 
 
-def test_a_failed_target_sync_leaves_the_copy_unswitched_and_the_retry_resyncs_it(clone, monkeypatch):
-    repo, folder = clone
-    prepare(repo, monkeypatch)
+def test_a_failed_target_sync_leaves_the_copy_unswitched_and_the_retry_resyncs_it(
+    legacy_project_clone, offline_move_steps, monkeypatch
+):
+    repo, folder = legacy_project_clone
+    prepare, finish = offline_move_steps
+    prepare(repo)
     real_sync_published = project_move._sync_published  # noqa: SLF001
     real_fsync = os.fsync
     runs = []
@@ -92,14 +71,14 @@ def test_a_failed_target_sync_leaves_the_copy_unswitched_and_the_retry_resyncs_i
     monkeypatch.setattr(os, "fsync", fsync)
 
     with pytest.raises(StoreError, match="was not made durable"):
-        finish(repo, monkeypatch)
+        finish(repo)
 
     target = Path(record(folder)["target"])
     assert record(folder)["phase"] == project_move.COPYING
     assert target.is_dir()
     assert_source_whole(folder)
 
-    finish(repo, monkeypatch)
+    finish(repo)
 
     assert len(runs) == 2  # the retry ran the target sync again before it switched
     assert runs[1] > 0
@@ -108,19 +87,22 @@ def test_a_failed_target_sync_leaves_the_copy_unswitched_and_the_retry_resyncs_i
     assert_source_whole(folder)
 
 
-def test_a_crash_after_the_nonce_is_recorded_resumes_with_that_same_nonce(clone, monkeypatch):
-    repo, folder = clone
-    prepare(repo, monkeypatch)
+def test_a_crash_after_the_nonce_is_recorded_resumes_with_that_same_nonce(
+    legacy_project_clone, offline_move_steps, monkeypatch
+):
+    repo, folder = legacy_project_clone
+    prepare, finish = offline_move_steps
+    prepare(repo)
     crash_once(monkeypatch, "create_verified_at", fd_tree.create_verified_at)
 
     with pytest.raises(RuntimeError, match="injected crash"):
-        finish(repo, monkeypatch)
+        finish(repo)
 
     nonce = record(folder)["proof"]
     assert nonce is not None
     assert not (Path(record(folder)["stage"]) / project_move.MOVE_PROOF).exists()
 
-    finish(repo, monkeypatch)
+    finish(repo)
 
     target = Path(record(folder)["target"])
     assert record(folder)["phase"] == project_move.SWITCHED
@@ -128,20 +110,23 @@ def test_a_crash_after_the_nonce_is_recorded_resumes_with_that_same_nonce(clone,
     assert_source_whole(folder)
 
 
-def test_a_crash_mid_copy_keeps_the_partial_stage_and_restarts_with_a_fresh_nonce(clone, monkeypatch):
-    repo, folder = clone
-    prepare(repo, monkeypatch)
+def test_a_crash_mid_copy_keeps_the_partial_stage_and_restarts_with_a_fresh_nonce(
+    legacy_project_clone, offline_move_steps, monkeypatch
+):
+    repo, folder = legacy_project_clone
+    prepare, finish = offline_move_steps
+    prepare(repo)
     crash_once(monkeypatch, "copy", fd_tree.copy)
 
     with pytest.raises(RuntimeError, match="injected crash"):
-        finish(repo, monkeypatch)
+        finish(repo)
 
     old_nonce = record(folder)["proof"]
     stage = Path(record(folder)["stage"])
     assert record(folder)["pending"] is not None
     assert (stage / project_move.MOVE_PROOF).read_text() == f"{old_nonce}\n"
 
-    finish(repo, monkeypatch)
+    finish(repo)
 
     kept = sorted(stage.parent.glob(f"{fd_tree.QUARANTINE}*"))
     assert len(kept) == 1, [p.name for p in kept]
@@ -153,12 +138,15 @@ def test_a_crash_mid_copy_keeps_the_partial_stage_and_restarts_with_a_fresh_nonc
 
 
 @pytest.mark.parametrize("kind", ["regular", "symlink"])
-def test_a_foreign_proof_entry_after_a_crash_before_its_file_is_refused_and_kept(clone, monkeypatch, tmp_path, kind):
-    repo, folder = clone
-    prepare(repo, monkeypatch)
+def test_a_foreign_proof_entry_after_a_crash_before_its_file_is_refused_and_kept(
+    legacy_project_clone, offline_move_steps, monkeypatch, tmp_path, kind
+):
+    repo, folder = legacy_project_clone
+    prepare, finish = offline_move_steps
+    prepare(repo)
     crash_once(monkeypatch, "create_verified_at", fd_tree.create_verified_at)
     with pytest.raises(RuntimeError, match="injected crash"):
-        finish(repo, monkeypatch)
+        finish(repo)
     stage = Path(record(folder)["stage"])
     proof = stage / project_move.MOVE_PROOF
     foreign = tmp_path / "foreign-target"
@@ -169,7 +157,7 @@ def test_a_foreign_proof_entry_after_a_crash_before_its_file_is_refused_and_kept
         proof.symlink_to(foreign)
 
     with pytest.raises(StoreError):
-        finish(repo, monkeypatch)
+        finish(repo)
 
     assert not Path(record(folder)["target"]).exists()
     if kind == "regular":

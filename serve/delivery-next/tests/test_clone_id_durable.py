@@ -11,15 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.state_store import fd_tree, project_home, registry
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.registry import RegistryError
-
-
-@pytest.fixture
-def home():
-    return local_home.root()  # the suite's own, never the machine's
 
 
 class Seam:
@@ -100,9 +94,9 @@ def seam(tmp_path, monkeypatch):
     return state
 
 
-@pytest.mark.usefixtures("home")
-def test_a_file_sync_failure_is_synced_again_before_the_retry_publishes(seam):
-    seam.fail = "file"
+@pytest.mark.parametrize("kind", ["file", "dir"])
+def test_a_file_sync_failure_is_synced_again_before_the_retry_publishes(seam, kind):
+    seam.fail = kind
     with pytest.raises(RegistryError, match="not finished"):
         registry.register(seam.work)
     assert registry.load().projects == []
@@ -118,23 +112,6 @@ def test_a_file_sync_failure_is_synced_again_before_the_retry_publishes(seam):
     assert (seam.store / "clone-id").read_text() == kept
 
 
-@pytest.mark.usefixtures("home")
-def test_a_folder_sync_failure_is_synced_again_before_the_retry_publishes(seam):
-    seam.fail = "dir"
-    with pytest.raises(RegistryError, match="not finished"):
-        registry.register(seam.work)
-    assert registry.load().projects == []
-    kept = (seam.store / "clone-id").read_text()
-
-    seam.events.clear()
-    project = registry.register(seam.work)
-
-    assert project.id == kept.strip()
-    assert seam.events.index("file") < seam.events.index("publish")
-    assert seam.events.index("dir") < seam.events.index("publish")
-
-
-@pytest.mark.usefixtures("home")
 def test_a_folder_swapped_during_the_first_sync_publishes_nothing_and_keeps_both(seam):
     seam.swap = "dir"
     with pytest.raises(RegistryError, match="was replaced"):
