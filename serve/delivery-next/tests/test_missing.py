@@ -88,6 +88,8 @@ def test_an_absent_tool_starts_setup_repair_on_its_first_report(tool, error) -> 
     c = loop.apply(change(), r, NOW)
     assert error in c.repairs.current.evidence
     assert (c.step.kind, c.repairs.current.step, c.questions) == (K.BUILD, K.BUILD, [])
+    stuck.applied(c, "fixed-setup")
+    assert (c.step.kind, c.step.task, loop.next_step(c, NOW)) == (K.BUILD, "t1", c.step)
 
 
 @pytest.mark.parametrize(
@@ -275,14 +277,6 @@ def test_the_planner_reads_why_the_change_is_planned_again() -> None:
     text = step_input.plan(c, Profile(), Path("/w"), {})
     assert "## Why the Change is planned again" in text
     assert "needs matlab for run the integration tests" in text
-
-
-def test_installed_and_rerun_resumes_the_same_task() -> None:
-    r = to_result(run(report("docker", "zsh: command not found: docker")), K.BUILD, NOW)
-    c = loop.apply(change(), r, NOW)
-    assert c.repairs.current is not None
-    stuck.applied(c, "fixed-setup")
-    assert (c.step.kind, c.step.task, loop.next_step(c, NOW)) == (K.BUILD, "t1", c.step)
 
 
 def test_pause_is_never_delivered_to_the_session_after_resume() -> None:
