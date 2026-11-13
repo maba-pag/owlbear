@@ -3,6 +3,7 @@
 ``fixtures/ahp/version-negotiation.json`` and its ``LICENSE`` are byte copies from microsoft/agent-host-protocol,
 tag ``spec/v1.0.0`` (commit 5f16d81bb7045b66d7bc768d244feab75002d943), path ``types/test-cases/``; refresh them with
 each AHP release analysis (#849). ``negotiate`` is the host's rule as the spec's 1.0.0 changelog states it.
+The fixture is unchanged at ``spec/v1.1.0`` (commit a501ea480fde1adc2675243039cb6195085f4b96).
 """
 
 from __future__ import annotations
@@ -42,5 +43,5 @@ def test_the_negotiator_matches_every_row_of_the_spec_fixture(case):
 
 
 def test_owlbears_offer_is_accepted_and_the_old_one_was_not():
-    assert negotiate([ahp.PROTOCOL]) == "1.0.0"
+    assert negotiate([ahp.PROTOCOL]) == "1.1.0"
     assert negotiate(["0.10.0"]) is None

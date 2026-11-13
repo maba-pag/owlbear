@@ -432,7 +432,7 @@ def test_connect_initializes_and_never_signs_in() -> None:
     path, server = _host(lambda conn: ended.put(_answer(conn, seen=seen)))
     try:
         conn = ahp.connect(_entry(path), "c1")
-        assert conn.protocol == "1.0.0"
+        assert conn.protocol == "1.1.0"
         conn.close()
         assert ended.get(timeout=5) == b"\x03\xe8"
     finally:
@@ -467,7 +467,7 @@ def test_a_version_the_client_did_not_offer_ends_the_connection() -> None:
     path, server = _host(lambda conn: ended.put(_answer(conn, seen=seen, version="0.9.0")))
     try:
         with pytest.raises(
-            ahp.HostRefusedError, match=r"chose protocol '0\.9\.0', which OwlBear did not offer \(1\.0\.0\)"
+            ahp.HostRefusedError, match=r"chose protocol '0\.9\.0', which OwlBear did not offer \(1\.1\.0\)"
         ):
             ahp.connect(_entry(path), "c1")
         assert ended.get(timeout=5) == b"\x03\xe8"
@@ -714,7 +714,7 @@ def test_a_stale_endpoint_still_starts_vscode_and_connects_to_the_fresh_one(
         for each in [server, *servers]:
             each.close()
 
-    assert (conn.protocol, launched) == ("1.0.0", [["code", str(tmp_path)]])
+    assert (conn.protocol, launched) == ("1.1.0", [["code", str(tmp_path)]])
     warned = [r.getMessage() for r in caplog.records if r.name == vscode_adapter.__name__ and r.levelname == "WARNING"]
     assert len(warned) == 1
     assert "the published agent host failed: " in warned[0]
