@@ -26,7 +26,7 @@ def local(tmp_path: Path, monkeypatch) -> Store:
     return Store(tmp_path / "store")
 
 
-def test_a_stale_ordinary_save_keeps_a_pending_claim_and_its_basis(local):
+def test_a_stale_ordinary_save_keeps_the_current_pending_claim_then_done_marker(local):
     local.write_profile(Profile())
     stale = local.read_profile()
     assert local.mark_prefs_import("", "pending", "basis-1")[2] is True
@@ -36,11 +36,6 @@ def test_a_stale_ordinary_save_keeps_a_pending_claim_and_its_basis(local):
     prof = local.read_profile()
     assert (prof.prefs_import, prof.prefs_basis) == ("pending", "basis-1")
 
-
-def test_a_stale_ordinary_save_keeps_a_done_marker(local):
-    local.write_profile(Profile())
-    stale = local.read_profile()
-    local.mark_prefs_import("", "pending", "basis-1")
     local.mark_prefs_import("pending", "done")
 
     local.write_profile(stale)
@@ -53,7 +48,7 @@ def shared_store(root: Path, tmp_path: Path, name: str) -> Store:
     return Store(tmp_path / name, DataRepo(root), "shop-site")
 
 
-def test_a_stale_writer_keeps_a_claim_another_store_made_on_the_shared_repo(shared_repo, tmp_path):
+def test_a_stale_writer_preserves_another_stores_pending_then_done_markers_on_the_remote(shared_repo, tmp_path):
     root, remote = shared_repo
     late = shared_store(root, tmp_path, "late")
     late.write_profile(Profile())
@@ -63,22 +58,14 @@ def test_a_stale_writer_keeps_a_claim_another_store_made_on_the_shared_repo(shar
 
     late.write_profile(stale)  # the late writer still holds the snapshot from before the claim
 
-    _, got = clone_profile(remote, tmp_path)
+    _, got = clone_profile(remote, tmp_path / "pending")
     assert (got.prefs_import, got.prefs_basis) == ("pending", "basis-1")
 
-
-def test_a_stale_writer_keeps_a_done_marker_another_store_made_on_the_shared_repo(shared_repo, tmp_path):
-    root, remote = shared_repo
-    late = shared_store(root, tmp_path, "late")
-    late.write_profile(Profile())
-    stale = late.read_profile()
-    owner = shared_store(root, tmp_path, "owner")
-    owner.mark_prefs_import("", "pending", "basis-1")
     owner.mark_prefs_import("pending", "done")
 
     late.write_profile(stale)
 
-    _, got = clone_profile(remote, tmp_path)
+    _, got = clone_profile(remote, tmp_path / "done")
     assert (got.prefs_import, got.prefs_basis) == ("done", "")
 
 
