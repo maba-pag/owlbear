@@ -303,6 +303,7 @@ def _ask_missing_preparation(repo, store, proposal, monkeypatch):
     assert json.loads(r.diff) == {"preparations": [proposal.option.model_dump(mode="json")]}
     assert all(text in q.text for text in (r.diff, proposal.description, failure.reason, r.witness.output))
     assert q.text.startswith("Save this test preparation and run the step again?")
+    assert c.outcome.reason == "Approve the proposed test preparation"
     assert "Data permissions do not change" in q.text
     assert "No changes no settings" in q.text
     assert (r.witness.exit, r.witness.commands) == (

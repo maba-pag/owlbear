@@ -382,7 +382,13 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
             error=o.cause in c.budgets.causes or _direct_error(o.cause),
         )
     if o and o.exit == Exit.STOP and c.stop:
-        return Status(f"{s} · stopped: {c.stop.reason}", c.stop.action, c.stop.actor, error=True, stopped=True)
+        kept = c.repairs.done[-1] if c.repairs.done else None
+        reason = (
+            stuck.obstruction(c.stop.reason)
+            if kept and kept.fix == "preparation" and kept.phase == "stopped" and kept.cause == o.cause and kept.diff
+            else c.stop.reason
+        )
+        return Status(f"{s} · stopped: {reason}", c.stop.action, c.stop.actor, error=True, stopped=True)
     if (repairing := _repairing(c, s)) is not None:
         return repairing
     if o and o.exit == Exit.PENDING:

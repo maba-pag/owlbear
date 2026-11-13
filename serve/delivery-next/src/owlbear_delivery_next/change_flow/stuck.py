@@ -73,6 +73,8 @@ def asked(c: Change, text: str, now: datetime) -> None:
     q = Question(step=c.step.kind, text=text, options=options, cause=r.cause, subject="reserved", follows=r.root)
     if (asked := ask(c, q, now)) is not None:  # the gate stops a cause's third question (#1064)
         r.phase, r.question = "asked", asked.id
+        if r.fix == "preparation" and c.outcome is not None:
+            c.outcome.reason = "Approve the proposed test preparation"
 
 
 def owned(c: Change, question: str) -> bool:
