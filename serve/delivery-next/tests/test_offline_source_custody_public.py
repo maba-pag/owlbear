@@ -4,7 +4,6 @@ import json
 import os
 import shutil
 import stat
-import subprocess
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
@@ -26,17 +25,16 @@ from owlbear_delivery_next.state_store import (
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
 from owlbear_delivery_next.state_store.store import Store
 
-BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
-AFTER = "BBBBBBBB-0000-4000-8000-000000000002"
+from . import test_offline_source_pin as sources
+from . import test_offline_switch_fence_public as switch
+
+BEFORE, AFTER = sources.BEFORE, sources.AFTER
 pytestmark = pytest.mark.usefixtures("current_binding")
 
 
 @pytest.fixture
 def prepared(tmp_path, monkeypatch):
-    repo = tmp_path / "shop"
-    subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)  # noqa: S603, S607
-    folder = project_home.clone_dir(repo)
-    folder.mkdir()
+    repo, folder = sources.make_clone(tmp_path)
     (folder / MARKER).write_text("7\n")
     (folder / "config.json").write_text(json.dumps({"format": 1, "widths": [1600]}))
     run = pack_state.blank() | {"state": "running", "run": "a", "started_at": "2026-01-01T00:00:00+00:00"}
@@ -44,6 +42,22 @@ def prepared(tmp_path, monkeypatch):
     monkeypatch.setattr(offline_protocol, "boot_session", lambda: BEFORE)
     assert cli.main(["--repo", str(repo), "prepare"]) == 0
     monkeypatch.setattr(offline_protocol, "boot_session", lambda: AFTER)
+    return repo, folder
+
+
+@pytest.fixture
+def journey_source(tmp_path, prior):
+    repo, folder = sources.make_clone(tmp_path)
+    if prior == "format-7":
+        (folder / MARKER).write_text("7\n")
+    (folder / "config.json").write_text(json.dumps({"format": 1, "widths": [1600]}))
+    run = pack_state.blank() | {"state": "running", "run": "a", "started_at": "2026-01-01T00:00:00+00:00"}
+    (folder / pack_state.FILE).write_text(json.dumps(run))
+    (folder / "changes" / "c1").mkdir(parents=True)
+    (folder / "changes" / "c1" / "runner.log").write_text("ran\n")
+    (folder / "payload").mkdir()
+    (folder / "payload" / "a").write_text("old\n")
+    (folder / "payload" / "b").write_text("later\n")
     return repo, folder
 
 
@@ -350,9 +364,48 @@ def test_repeated_prepare_reads_receipt_before_retained_payload_and_writes_nothi
     assert snapshot(target) == target_before
 
 
-def test_repeated_prepare_preserves_its_boot_prior_and_generation(prepared):
-    repo, folder = prepared
+@pytest.mark.parametrize("prior", ["markerless", "format-7"])
+def test_public_prepare_finish_retains_source_and_generation(journey_source, monkeypatch, capsys):
+    repo, folder = journey_source
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: BEFORE)
+    assert cli.main(["--repo", str(repo), "prepare"]) == 0
+    assert (folder / MARKER).read_text() == f"{offline_protocol.FENCE}\n"
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: AFTER)
     before = snapshot(folder)
     assert cli.main(["--repo", str(repo), "prepare"]) == 0
     assert snapshot(folder) == before
-    assert cli.main(["--repo", str(repo), "finish"]) == 0
+
+    real_finish, real_fdopen = offline_protocol.finish, os.fdopen
+    proofs = []
+    later = (folder / "payload" / "b").stat()
+
+    def finish(*args, **kwargs):
+        proof = real_finish(*args, **kwargs)
+        proofs.append(proof)
+        return proof
+
+    def enable(_target):
+        def opened(fd, *args, **kwargs):
+            stream = real_fdopen(fd, *args, **kwargs)
+            return switch.DigestReader(stream, lambda: None) if os.path.samestat(os.fstat(fd), later) else stream
+
+        monkeypatch.setattr(os, "fdopen", opened)
+
+    monkeypatch.setattr(offline_protocol, "finish", finish)
+    fired = switch.at_sync(monkeypatch, folder, "receipt", enable)
+    code = cli.main(["--repo", str(repo), "finish"])
+    error = capsys.readouterr().err
+    assert fired == [True]
+    assert code == 0, error
+    assert len(proofs) == 1
+    st = folder.stat()
+    assert proofs[0].identity == (st.st_dev, st.st_ino)
+    rec = switch.record(folder)
+    assert rec["phase"] == project_move.SWITCHED
+    target = project_home.home(project_home.clone_id(folder))
+    assert (folder / "payload" / "b").read_text() == (target / "payload" / "b").read_text() == "later\n"
+    assert (target / "payload" / "a").read_text() == "old\n"
+    assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
+    assert (folder / MARKER).read_text() == f"{offline_protocol.FENCE}\n"
+    assert json.loads((folder / "config.json").read_text())["widths"] == [1600]
+    assert json.loads((target / "config.json").read_text())["widths"] == [1600]

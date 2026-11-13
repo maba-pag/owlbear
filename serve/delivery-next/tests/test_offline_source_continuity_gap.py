@@ -4,31 +4,24 @@ No identity is faked here. The swapped-in folder has its own device and inode, s
 what refuses it. The source folder is renamed aside, never deleted, and nothing is written in the foreign folder.
 """
 
-import subprocess
-
 import pytest
 
 from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
 
-SOURCE_ID = "abc123"
-BEFORE, AFTER = "AAAAAAAA-0000-4000-8000-000000000001", "BBBBBBBB-0000-4000-8000-000000000002"
+from . import test_offline_source_pin as sources
+
 PREPARED = offline_protocol.PREPARED
 FOREIGN_BYTES = "7\n"
 
 
 @pytest.fixture
 def prepared_source(tmp_path, monkeypatch):
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=repo, check=True, capture_output=True)  # noqa: S607
-    folder = repo / ".git" / "owlbear-delivery"
-    (folder / "changes" / "c1").mkdir(parents=True)
-    (folder / "changes" / "c1" / "runner.log").write_text("ran\n")
-    (folder / "clone-id").write_text(f"{SOURCE_ID}\n")
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: BEFORE)
+    repo, folder = sources.make_clone(tmp_path)
+    sources.seed_retained_log(folder)
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: sources.BEFORE)
     offline_protocol.prepare_clone(repo, gaps=lambda: ())
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: AFTER)
+    monkeypatch.setattr(offline_protocol, "boot_session", lambda: sources.AFTER)
     proof = offline_protocol.finish(folder, gaps=lambda: ())
     return repo, folder, proof
 
@@ -54,17 +47,27 @@ def assert_foreign_untouched_and_source_kept(aside, foreign, before_foreign):
     assert (aside / PREPARED).exists()
 
 
-def test_a_source_name_swapped_to_a_foreign_folder_after_finish_is_refused_and_nothing_is_written(
-    prepared_source, tmp_path
-):
+@pytest.mark.parametrize("generation", ["unprepared", "copied-witnesses"])
+def test_mover_refuses_a_different_source_after_proof(prepared_source, tmp_path, generation):
     repo, folder, proof = prepared_source
     aside = tmp_path / "source-aside"
     folder.rename(aside)
     foreign = make_foreign(folder)  # a real folder with its own identity at the logical path
+    if generation == "copied-witnesses":
+        (foreign / "clone-id").write_text(f"{sources.SOURCE_ID}\n")
+        (foreign / MARKER).write_text(f"{offline_protocol.FENCE}\n")
+        (foreign / PREPARED).write_bytes((aside / PREPARED).read_bytes())
     before_foreign = snapshot(foreign)
     with pytest.raises(StoreError, match="was replaced after its offline proof was issued"):
         project_home.migrated(repo, proof)
-    assert_foreign_untouched_and_source_kept(aside, foreign, before_foreign)
+    if generation == "unprepared":
+        assert_foreign_untouched_and_source_kept(aside, foreign, before_foreign)
+    else:
+        assert snapshot(foreign) == before_foreign
+        assert sorted(p.name for p in foreign.iterdir()) == sorted(before_foreign)
+        assert (foreign / MARKER).read_text() == f"{offline_protocol.FENCE}\n"
+        assert not (foreign / project_move.MOVE_RECORD).exists()
+        assert (aside / "changes" / "c1" / "runner.log").read_text() == "ran\n"
 
 
 def test_a_source_name_swapped_to_a_foreign_folder_in_flight_writes_only_the_pinned_source(

@@ -13,18 +13,16 @@ from owlbear_delivery_next.state_store import fd_tree, format_marker, offline_pr
 from owlbear_delivery_next.state_store.database import MARKER, FormatTooNewError
 from owlbear_delivery_next.state_store.store import Store
 
-BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
-AFTER = "BBBBBBBB-0000-4000-8000-000000000002"
+from . import test_offline_source_pin as sources
+
+BEFORE, AFTER = sources.BEFORE, sources.AFTER
 OWNER_BOOT = "CCCCCCCC-0000-4000-8000-000000000003"
 pytestmark = pytest.mark.usefixtures("current_binding")
 
 
 @pytest.fixture
 def prepared(tmp_path, monkeypatch):
-    repo = tmp_path / "shop"
-    subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)  # noqa: S603, S607
-    source = project_home.clone_dir(repo)
-    source.mkdir()
+    repo, source = sources.make_clone(tmp_path)
     (source / MARKER).write_text("7")
     (source / project_move.CLONE_ID).write_text("owned\n")
     (source / "config.json").write_text(json.dumps({"format": 1, "widths": [1600]}))
@@ -165,21 +163,40 @@ def test_finish_keeps_a_receipt_replaced_during_its_durability_work(prepared, mo
     assert json.loads(quarantined[0].read_text())["phase"] == project_move.SWITCHED
 
 
-@pytest.mark.parametrize("after", ["marker", "source-digest"])
-def test_finish_rechecks_its_receipt_after_the_final_validator_reads(prepared, monkeypatch, after):
+@pytest.mark.parametrize(
+    ("validator", "witness"),
+    [
+        ("written-format", "receipt"),
+        ("source-digest", "receipt"),
+        ("source-digest", "preparation"),
+        ("source-digest", "proof"),
+        ("source-digest", "marker"),
+    ],
+    ids=[
+        "marker-receipt",
+        "source-digest-receipt",
+        "source-digest-preparation",
+        "source-digest-proof",
+        "source-digest-marker",
+    ],
+)
+def test_terminal_authority_survives_later_validator_reads(prepared, monkeypatch, validator, witness):
     repo, source = prepared
     owners, changed = {}, []
     owner = '{"owner":"replacement during final validation"}\n'
 
     def enable(target):
-        module = format_marker if after == "marker" else project_move
-        name = "written_format" if after == "marker" else "_source_unchanged"
+        module = format_marker if validator == "written-format" else project_move
+        name = "written_format" if validator == "written-format" else "_source_unchanged"
         real = getattr(module, name)
 
         def late(*args, **kwargs):
             result = real(*args, **kwargs)
             changed.append(True)
-            (source / project_move.MOVE_RECORD).write_text(owner)
+            if witness == "receipt":
+                (source / project_move.MOVE_RECORD).write_text(owner)
+            else:
+                change_owner(source, target, witness)
             owners.update({source: snapshot(source), target: snapshot(target)})
             return result
 
@@ -191,26 +208,32 @@ def test_finish_rechecks_its_receipt_after_the_final_validator_reads(prepared, m
     assert fired == [True]
     assert changed == [True]
     assert code == 1
-    assert (source / project_move.MOVE_RECORD).read_text() == owner
+    if witness == "receipt":
+        assert (source / project_move.MOVE_RECORD).read_text() == owner
+    else:
+        assert record(source)["phase"] == project_move.COPYING
     assert {path: snapshot(path) for path in owners} == owners
 
 
-def test_finish_keeps_a_receipt_atomically_replaced_during_its_terminal_predicate(prepared, monkeypatch):
+@pytest.mark.parametrize("witness", ["receipt", "preparation"])
+def test_terminal_reads_refuse_atomic_witness_replacement(prepared, monkeypatch, witness):
     repo, source = prepared
     owner = '{"owner":"atomic replacement during the receipt predicate"}\n'
     checks, active, changed = [], [], []
     owners = {}
 
     def enable(target):
-        real_holds, real_read = fd_tree.holds_text_at, os.read
+        name = "holds_text_at" if witness == "receipt" else "read_at"
+        wanted = project_move.MOVE_RECORD if witness == "receipt" else project_move.PREPARED
+        real_witness, real_read = getattr(fd_tree, name), os.read
 
-        def holds(dfd, name, text):
-            if name != project_move.MOVE_RECORD:
-                return real_holds(dfd, name, text)
+        def observed(dfd, entry, *args):
+            if entry != wanted:
+                return real_witness(dfd, entry, *args)
             checks.append(True)
             active.append(len(checks))
             try:
-                return real_holds(dfd, name, text)
+                return real_witness(dfd, entry, *args)
             finally:
                 active.pop()
 
@@ -218,13 +241,18 @@ def test_finish_keeps_a_receipt_atomically_replaced_during_its_terminal_predicat
             data = real_read(fd, count)
             if data and active == [2] and not changed:
                 changed.append(True)
-                replacement = source / "owner-receipt"
-                replacement.write_text(owner)
-                replacement.replace(source / project_move.MOVE_RECORD)
+                replacement = source / f"owner-{witness}"
+                if witness == "receipt":
+                    replacement.write_text(owner)
+                else:
+                    value = json.loads((source / project_move.PREPARED).read_text())
+                    value["boot"] = OWNER_BOOT
+                    replacement.write_text(json.dumps(value))
+                replacement.replace(source / wanted)
                 owners.update({source: snapshot(source), target: snapshot(target)})
             return data
 
-        monkeypatch.setattr(fd_tree, "holds_text_at", holds)
+        monkeypatch.setattr(fd_tree, name, observed)
         monkeypatch.setattr(os, "read", read)
 
     fired = at_sync(monkeypatch, source, "receipt", enable)
@@ -234,49 +262,10 @@ def test_finish_keeps_a_receipt_atomically_replaced_during_its_terminal_predicat
     assert changed == [True]
     assert code == 1
     assert {path: snapshot(path) for path in owners} == owners
-    assert (source / project_move.MOVE_RECORD).read_text() == owner
-
-
-def test_finish_rejects_a_preparation_atomically_replaced_during_its_final_read(prepared, monkeypatch):
-    repo, source = prepared
-    owners, reads, active, changed = {}, [], [], []
-
-    def enable(target):
-        real_read_at, real_read = fd_tree.read_at, os.read
-
-        def read_at(dfd, name):
-            if name != project_move.PREPARED:
-                return real_read_at(dfd, name)
-            reads.append(True)
-            active.append(len(reads))
-            try:
-                return real_read_at(dfd, name)
-            finally:
-                active.pop()
-
-        def read(fd, count):
-            data = real_read(fd, count)
-            if data and active == [2] and not changed:
-                changed.append(True)
-                replacement = source / "owner-preparation"
-                value = json.loads((source / project_move.PREPARED).read_text())
-                value["boot"] = OWNER_BOOT
-                replacement.write_text(json.dumps(value))
-                replacement.replace(source / project_move.PREPARED)
-                owners.update({source: snapshot(source), target: snapshot(target)})
-            return data
-
-        monkeypatch.setattr(fd_tree, "read_at", read_at)
-        monkeypatch.setattr(os, "read", read)
-
-    fired = at_sync(monkeypatch, source, "receipt", enable)
-    code = cli.main(["--repo", str(repo), "finish"])
-
-    assert fired == [True]
-    assert changed == [True]
-    assert code == 1
-    assert record(source)["phase"] == project_move.COPYING
-    assert {path: snapshot(path) for path in owners} == owners
+    if witness == "receipt":
+        assert (source / project_move.MOVE_RECORD).read_text() == owner
+    else:
+        assert record(source)["phase"] == project_move.COPYING
 
 
 def test_finish_refuses_source_payload_replaced_inside_its_final_hash(prepared, monkeypatch):
@@ -287,62 +276,19 @@ def test_finish_refuses_source_payload_replaced_inside_its_final_hash(prepared, 
     def enable(target):
         real_fdopen = os.fdopen
 
-        class Reader:
-            def __init__(self, stream):
-                self.stream = stream
-
-            def __getattr__(self, name):
-                return getattr(self.stream, name)
-
-            def __enter__(self):
-                self.stream.__enter__()
-                return self
-
-            def __exit__(self, *args):
-                return self.stream.__exit__(*args)
-
-            def read(self, size):
-                data = self.stream.read(size)
-                if data and not changed:
-                    changed.append(True)
-                    replacement = source / "owner-config"
-                    replacement.write_text(json.dumps({"format": 1, "widths": [987]}))
-                    replacement.replace(source / "config.json")
-                    owners.update({source: snapshot(source), target: snapshot(target)})
-                return data
+        def change():
+            if not changed:
+                changed.append(True)
+                replacement = source / "owner-config"
+                replacement.write_text(json.dumps({"format": 1, "widths": [987]}))
+                replacement.replace(source / "config.json")
+                owners.update({source: snapshot(source), target: snapshot(target)})
 
         def opened(fd, *args, **kwargs):
             stream = real_fdopen(fd, *args, **kwargs)
-            return Reader(stream) if os.path.samestat(os.fstat(fd), before) else stream
+            return DigestReader(stream, change) if os.path.samestat(os.fstat(fd), before) else stream
 
         monkeypatch.setattr(os, "fdopen", opened)
-
-    fired = at_sync(monkeypatch, source, "receipt", enable)
-    code = cli.main(["--repo", str(repo), "finish"])
-
-    assert fired == [True]
-    assert changed == [True]
-    assert code == 1
-    assert record(source)["phase"] == project_move.COPYING
-    assert {path: snapshot(path) for path in owners} == owners
-
-
-@pytest.mark.parametrize("change", ["preparation", "proof", "marker"])
-def test_finish_rechecks_cheap_authority_witnesses_after_final_source_hashing(prepared, monkeypatch, change):
-    repo, source = prepared
-    owners, changed = {}, []
-
-    def enable(target):
-        real = project_move._source_unchanged  # noqa: SLF001 - mutate only after the actual final payload digest
-
-        def late(dfd, rec, *args, **kwargs):
-            valid = real(dfd, rec, *args, **kwargs)
-            changed.append(True)
-            change_owner(source, target, change)
-            owners.update({source: snapshot(source), target: snapshot(target)})
-            return valid
-
-        monkeypatch.setattr(project_move, "_source_unchanged", late)
 
     fired = at_sync(monkeypatch, source, "receipt", enable)
     code = cli.main(["--repo", str(repo), "finish"])
@@ -474,7 +420,7 @@ def test_finish_keeps_its_witness_set_stable_through_the_last_content_read(prepa
     assert {path: snapshot(path) for path in owners} == owners
 
 
-def test_finish_switches_after_a_failed_real_receipt_sync_is_retried(prepared, monkeypatch, capsys):
+def test_public_finish_recovers_only_after_owner_keeps_quarantined_receipt(prepared, monkeypatch, capsys):
     repo, source = prepared
 
     def fail(_target):
@@ -528,8 +474,7 @@ def test_a_changed_publication_guard_is_an_unknown_build_not_an_offline_proof(
     assert not (source / project_move.MOVE_RECORD).exists()
 
 
-@pytest.mark.parametrize("edit_earlier", [False, True], ids=["control", "edited"])
-def test_finish_refuses_an_earlier_sibling_edited_during_a_later_hash(prepared, monkeypatch, capsys, edit_earlier):
+def test_finish_refuses_an_earlier_sibling_edited_during_a_later_hash(prepared, monkeypatch, capsys):
     repo, source = prepared
     payload = source / "payload"
     payload.mkdir()
@@ -541,7 +486,7 @@ def test_finish_refuses_an_earlier_sibling_edited_during_a_later_hash(prepared, 
 
     def enable(target):
         def change():
-            if edit_earlier and not edited:
+            if not edited:
                 edited.append(True)
                 (payload / "a").write_text("edited while b was hashed\n")
                 owners.update({source: snapshot(source), target: snapshot(target)})
@@ -560,10 +505,6 @@ def test_finish_refuses_an_earlier_sibling_edited_during_a_later_hash(prepared, 
     assert fired == [True]
     assert (source / "payload" / "b").read_text() == (target / "payload" / "b").read_text() == "later\n"
     assert (target / "payload" / "a").read_text() == "old\n"
-    if not edit_earlier:
-        assert code == 0, error
-        assert record(source)["phase"] == project_move.SWITCHED
-        return
     assert edited == [True]
     assert code == 1, error
     assert record(source)["phase"] == project_move.COPYING
@@ -595,64 +536,44 @@ class DigestReader:
         return data
 
 
-@pytest.mark.parametrize("nested", [False, True], ids=["top-level", "nested"])
-def test_finish_retains_payload_images_through_the_terminal_receipt_read(prepared, monkeypatch, nested):
-    repo, source = prepared
+def retained_payload(source, nested):
     entry = source / "config.json"
     if nested:
         entry = source / "payload" / "nested" / "a"
         entry.parent.mkdir(parents=True)
         entry.write_text("old\n")
-    old = entry.read_bytes()
-    relative = entry.relative_to(source)
-    owner = b'{"format":1,"widths":[987]}\n'
-    checks, changed, owners = [], [], {}
-
-    def enable(target):
-        real = fd_tree.holds_text_at
-
-        def holds(dfd, name, text):
-            valid = real(dfd, name, text)
-            if name == project_move.MOVE_RECORD:
-                checks.append(True)
-                if len(checks) == 2:
-                    changed.append(True)
-                    entry.write_bytes(owner)
-                    owners.update({source: snapshot(source), target: snapshot(target)})
-            return valid
-
-        monkeypatch.setattr(fd_tree, "holds_text_at", holds)
-
-    fired = at_sync(monkeypatch, source, "receipt", enable)
-    with pytest.raises(project_move.StoreError):
-        offline_protocol.finish_clone(repo)
-
-    assert fired == [True]
-    assert changed == [True]
-    assert record(source)["phase"] == project_move.COPYING
-    target = Path(record(source)["target"])
-    assert entry.read_bytes() == owner
-    assert (target / relative).read_bytes() == old
-    assert {path: snapshot(path) for path in owners} == owners
+    return entry, entry.relative_to(source), entry.read_bytes()
 
 
-@pytest.mark.parametrize("nested", [False, True], ids=["top-level", "nested"])
-@pytest.mark.parametrize("boundary", ["source-hash", "receipt"])
-def test_finish_retains_target_payload_images_through_later_reads(prepared, monkeypatch, nested, boundary):
+@pytest.mark.parametrize(
+    ("side", "boundary", "nested"),
+    [
+        ("source", "receipt", False),
+        ("source", "receipt", True),
+        ("target", "source-hash", False),
+        ("target", "source-hash", True),
+        ("target", "receipt", False),
+        ("target", "receipt", True),
+    ],
+    ids=[
+        "source-receipt-top-level",
+        "source-receipt-nested",
+        "target-source-hash-top-level",
+        "target-source-hash-nested",
+        "target-receipt-top-level",
+        "target-receipt-nested",
+    ],
+)
+def test_terminal_validation_retains_payload_images(prepared, monkeypatch, side, boundary, nested):
     repo, source = prepared
-    entry = source / "config.json"
-    if nested:
-        entry = source / "payload" / "nested" / "a"
-        entry.parent.mkdir(parents=True)
-        entry.write_text("old\n")
-    old, relative = entry.read_bytes(), entry.relative_to(source)
+    entry, relative, old = retained_payload(source, nested)
     owner = b'{"format":1,"widths":[987]}\n'
     checks, changed, owners = [], [], {}
 
     def enable(target):
         def change():
             changed.append(True)
-            (target / relative).write_bytes(owner)
+            (entry if side == "source" else target / relative).write_bytes(owner)
             owners.update({source: snapshot(source), target: snapshot(target)})
 
         if boundary == "source-hash":
@@ -685,8 +606,8 @@ def test_finish_retains_target_payload_images_through_later_reads(prepared, monk
     assert changed == [True]
     assert record(source)["phase"] == project_move.COPYING
     target = Path(record(source)["target"])
-    assert entry.read_bytes() == old
-    assert (target / relative).read_bytes() == owner
+    assert entry.read_bytes() == (owner if side == "source" else old)
+    assert (target / relative).read_bytes() == (old if side == "source" else owner)
     assert {path: snapshot(path) for path in owners} == owners
 
 
