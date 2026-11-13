@@ -84,7 +84,7 @@ def release_environment(repo: Path, monkeypatch, tmp_path):
         monkeypatch.setenv(name, value)
     for name in ("RELEASE_TAGS", "RELEASE_TOKEN", "GITHUB_STEP_SUMMARY"):
         monkeypatch.delenv(name, raising=False)
-    return floor, gh, tmp_path / "summary.md"
+    return gh, tmp_path / "summary.md"
 
 
 def test_labelled_merges_become_versions_in_order_and_the_walk_waits_at_one_whose_ci_has_not_passed(repo: Path):
@@ -134,7 +134,7 @@ def test_a_tag_name_taken_meanwhile_fails_the_run_instead_of_moving(repo: Path, 
 
 def test_a_major_missing_its_partner_gets_it_on_the_same_commit(repo: Path, release_environment, monkeypatch):
     """TD-392: tags are made one by one through the API, so a run that stopped between them is completed later."""
-    _, gh, _ = release_environment
+    gh, _ = release_environment
     a = merge(repo, "a")
     gh.create("v1.0", a, "v1.0")
     monkeypatch.setenv("RELEASE_TAGS", "on")
@@ -172,7 +172,7 @@ def test_the_api_makes_the_annotated_tag_object_then_its_ref_with_the_owners_tok
 
 def test_without_the_switch_the_run_only_reports_and_with_it_tags(repo: Path, release_environment, monkeypatch):
     """TD-315: dry run until the owner sets the repository variable RELEASE_TAGS to on."""
-    _, gh, summary = release_environment
+    gh, summary = release_environment
     a = merge(repo, "a")
     gh.prs, gh.runs = {a: pr(1, "release:minor")}, {a: "success"}
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
