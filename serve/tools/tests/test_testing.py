@@ -59,6 +59,13 @@ def _routed(*paths: str, coverage: bool = False) -> list[list[str]]:
     return [command for command, _cwd in commands]
 
 
+def _sources(root: Path, texts: dict[str, str]) -> None:
+    for name, text in texts.items():
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+
+
 def test_delivery_next_source_runs_testmon_beside_the_tests_it_cannot_see() -> None:
     (plain, monitored) = _routed(_LOOP)
 
@@ -489,10 +496,7 @@ def test_a_known_source_reader_cannot_hide_an_unresolved_runtime_resource(tmp_pa
             "def test_other_corpus(tmp_path):\n    list(tmp_path.glob('*.bin'))\n"
         ),
     }
-    for name, text in texts.items():
-        path = tmp_path / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text)
+    _sources(tmp_path, texts)
     evidence = Evidence("map", 1, 1, "python", 1, 1, {}, frozenset(), ())
     with (
         patch("owlbear_tools.test_impact.git", return_value="\0".join(texts)),
@@ -531,10 +535,7 @@ def test_observed_runtime_readers_do_not_expand_unrelated_importer_methods(tmp_p
         direct: "from demo.common import PATH\ndef test_direct():\n    return PATH.read_text()\n",
         resource: "data",
     }
-    for name, text in texts.items():
-        path = tmp_path / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text)
+    _sources(tmp_path, texts)
     consumers = _Consumers(tmp_path, set(texts))
     value = tuple(methods_to_checksums(b.code for b in Module(source_code=texts[reader]).blocks if b.name == "value"))
     unrelated = tuple(
@@ -598,10 +599,7 @@ def test_a_module_level_resource_value_retains_importing_tests_without_function_
         reader: "from pathlib import Path\nDATA = Path(__file__).with_name('data.md').read_text()\n",
         test: "from demo.value import DATA\ndef test_data():\n    assert DATA == 'data'\n",
     }
-    for name, text in texts.items():
-        path = tmp_path / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text)
+    _sources(tmp_path, texts)
     hashes = dict.fromkeys(texts, "same")
     selection = _Selection(
         tmp_path,
@@ -645,10 +643,7 @@ def test_source_relative_resource_paths_do_not_claim_an_unread_sibling_with_the_
         "def locate(FILE):\n    return PurePosixPath(__file__).parent / FILE\n"
         "def value():\n    return locate('data.md').read_text()\n",
     }
-    for name, text in texts.items():
-        path = tmp_path / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text)
+    _sources(tmp_path, texts)
     consumers = _Consumers(tmp_path, set(texts))
     assert "value" in consumers.resource_readers(resource)[reader]
     assert "value" in consumers.resource_readers(resource)[packaged]
@@ -772,10 +767,7 @@ def test_page_consumers_keep_real_indirect_http_but_not_dictionary_gets(tmp_path
         ),
         other: ("FAILING = {}\n\ndef test_lookup(parent, word):\n    return FAILING.get(word, parent.get(word))\n"),
     }
-    for name, text in texts.items():
-        path = tmp_path / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text)
+    _sources(tmp_path, texts)
     consumers = _Consumers(tmp_path, set(texts))
     expected = {
         f"{test}::test_http",
@@ -810,10 +802,7 @@ def test_observed_changes_keep_platform_callers_and_only_relevant_test_drift(tmp
         other: "from other_helper import value\n\ndef test_other():\n    return value()\n",
         helper: "DATA = Path('other.json').read_text()\n\ndef value():\n    return DATA\n",
     }
-    for name, text in texts.items():
-        path = tmp_path / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text)
+    _sources(tmp_path, texts)
     (tmp_path / data).write_text("{}")
     consumers = _Consumers(tmp_path, set(texts) | {data})
     recorded = dict.fromkeys(set(texts) - {newer, helper}, "same")
@@ -971,10 +960,7 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
             "def test_indirect_route(page):\n    indirect(page, 'http://localhost', '/updates/owlbear')\n"
         ),
     }
-    for path, text in texts.items():
-        target = tmp_path / path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(text)
+    _sources(tmp_path, texts)
     consumers = test_impact._Consumers(tmp_path, set(texts))  # noqa: SLF001
     load = consumers.block_hashes(entry, {"load"})
     unknown = set(Module(source_code=texts[entry]).checksums) - consumers.block_hashes(
