@@ -369,7 +369,7 @@ def repo(tmp_path, monkeypatch) -> Path:
 def test_planning_starts_on_a_clean_tree_whatever_step_left_edits(repo, monkeypatch) -> None:
     events: list[dict] = []
     store = SimpleNamespace(log=lambda _lock, _slug, e: events.append(e))
-    monkeypatch.setattr(worker_input.plan_round, "scopes", lambda *_: {"c2": ["b"]})
+    monkeypatch.setattr(worker_input.overlap, "scopes", lambda *_: {"c2": ["b"]})
     assert worker_input.planning(store, None, "c1", repo) == {"c2": ["b"]}
     assert (events, worktree.git(repo, "stash", "list")) == ([], "")
     (repo / "a.txt").write_text("edited\n")

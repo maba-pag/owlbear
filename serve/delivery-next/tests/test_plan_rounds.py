@@ -509,7 +509,7 @@ def test_a_continued_plan_challenge_records_its_start_before_its_challenger_runs
 
     monkeypatch.setattr(plan_round.worktree, "ensure", lambda *_a: tmp_path)
     monkeypatch.setattr(plan_round, "git_common_dir", lambda repo: repo)
-    monkeypatch.setattr(plan_round, "scopes", lambda *_a: {})
+    monkeypatch.setattr(plan_round.overlap, "scopes", lambda *_a: {})
     monkeypatch.setattr(plan_round, "challenge", challenge)
     assert plan_round.continued(store, Lock("c1"), store.read("c1"), tmp_path)
     assert seen == [True]

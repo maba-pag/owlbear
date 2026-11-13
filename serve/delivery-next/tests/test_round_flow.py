@@ -89,7 +89,8 @@ def built(store: Store, clone: Path, monkeypatch, write: str, *reject: str):
         (clone / "a.txt").write_text(write)
         git(clone, "commit", "-qam", f"build {write.strip()}")
         rejected = [{"finding": k, "reason": f"{k} is wrong"} for k in reject]
-        payload = tools.BuildResult(summary="Built.", checks=[], rejected=rejected)
+        merge = {"merge": {"this": "", "other": ""}} if cfg.submit is tools.MERGED else {}  # a merge task's report
+        payload = cfg.submit.model(summary="Built.", checks=[], rejected=rejected, **merge)
         return Run(cfg.session_id, "result", payload, head=git(clone, "rev-parse", "HEAD"), termination=DONE)
 
     monkeypatch.setattr(runner, "_kept", kept)
