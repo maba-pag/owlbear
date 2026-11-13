@@ -210,14 +210,17 @@ def test_an_integration_result_without_its_merge_report_stops(merged_cleanly, tm
         Task(id="t3", title="repair integration", origin="review", fixes="t2", done=True, base=head),
         Task(id="t4", title="repair again", origin="review", fixes="t3", base=head, scope=["src"]),
     ]
-    c.plan = carry_integrations(c, plan("src"))
+    replacement = plan("src")
+    replacement.tasks.append(Task(id="t2", title="second replacement task", scope=["src"]))
+    c.plan = carry_integrations(c, replacement)
     assert [(t.id, t.fixes, t.done) for t in c.plan.tasks] == [
         ("t1", None, False),
-        ("t2", None, True),
-        ("t3", "t2", True),
-        ("t4", "t3", False),
+        ("t2", None, False),
+        ("t3", None, True),
+        ("t4", "t3", True),
+        ("t5", "t4", False),
     ]
-    c.step = Step(kind=K.BUILD, task="t4")
+    c.step = Step(kind=K.BUILD, task="t5")
     parts = step_input.session(c, Profile(), repo, {})
     assert parts.submit is tools.MERGED
     assert start in parts.message
@@ -226,7 +229,7 @@ def test_an_integration_result_without_its_merge_report_stops(merged_cleanly, tm
     report = told()
     asked = overlap.integrated(Store(tmp_path / "store"), C1, c, repo, head, StepResult(exit=Exit.DONE), report)
     assert asked.cause == overlap.collision(c, report.merge, overlap._merges(repo, start)).cause  # noqa: SLF001
-    root = c.plan.tasks[1]
+    root = c.plan.tasks[2]
     root.base = None
     assert overlap.starting(c, c.plan.tasks[-1]).exit == Exit.STOP
     assert (
