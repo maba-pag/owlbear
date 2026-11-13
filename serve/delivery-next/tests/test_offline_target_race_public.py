@@ -7,55 +7,34 @@ bytes stay untouched, the target name is not recreated, and the public Store.ope
 """
 
 import json
-import subprocess
 from pathlib import Path
 
 import pytest
+from tests import publication_offline
 
-from owlbear_delivery_next.commands import cli
-from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move
+from owlbear_delivery_next.state_store import project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
 from owlbear_delivery_next.state_store.store import Store
 
-BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
-AFTER = "BBBBBBBB-0000-4000-8000-000000000002"
 FOREIGN_BYTES = b"foreign data\n"
 
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
-    path = tmp_path / "shop"
-    subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True, capture_output=True)  # noqa: S603, S607
-    folder = project_home.clone_dir(path)
-    folder.mkdir(parents=True)
-    (folder / MARKER).write_text("7")
-    (folder / "config.json").write_text(json.dumps({"format": 1, "widths": [1600]}))
-    return path
+    return publication_offline.repo(tmp_path, payload=False)
 
 
 @pytest.fixture
 def boot(monkeypatch) -> dict:
-    state = {"id": BEFORE}
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: state["id"])
-    return state
-
-
-def _switched_store(repo: Path, boot: dict, capsys) -> Path:
-    """Real Prepare, a modeled reboot and real Finish; returns the SWITCHED target with its marker removed."""
-    assert cli.main(["--repo", str(repo), "prepare"]) == 0
-    boot["id"] = AFTER
-    assert cli.main(["--repo", str(repo), "finish"]) == 0
-    capsys.readouterr()
-    target = Store.open(repo).root
-    (target / MARKER).unlink()
-    return target
+    return publication_offline.boot(monkeypatch)
 
 
 @pytest.mark.usefixtures("current_binding")
 def test_a_target_replaced_before_marker_publication_is_refused_and_nothing_is_written_through(
-    repo, boot, capsys, monkeypatch
+    repo, boot, monkeypatch
 ) -> None:
-    target = _switched_store(repo, boot, capsys)
+    target = publication_offline.switched_store(repo, boot)
+    (target / MARKER).unlink()
     before = {p.name: p.read_bytes() for p in target.iterdir() if p.is_file()}
     aside = target.with_name(target.name + ".aside")
     real_publish = project_home._publish_markers  # noqa: SLF001 - the gap hook wraps the real publication
