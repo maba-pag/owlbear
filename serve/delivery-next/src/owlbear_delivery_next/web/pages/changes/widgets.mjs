@@ -58,9 +58,9 @@ export function hd(level, title, size, { tabindex } = {}) {
   return html`<p-heading size=${size}>${t}</p-heading>`;
 }
 
-export function text(value, { size, weight, color, tag } = {}) {
+export function text(value, { size, weight, color, tag, cls } = {}) {
   return html`<p-text size=${size ?? nothing} weight=${weight ?? nothing} color=${color ?? nothing}
-    tag=${tag ?? nothing}>${value}</p-text>`;
+    tag=${tag ?? nothing} class=${cls ?? nothing}>${value}</p-text>`;
 }
 
 export function list(items, ordered = false) {
