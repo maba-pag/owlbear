@@ -11,14 +11,13 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.github.account import Origin, Writer
 from owlbear_delivery_next.github.gh_client import GhClient, invalid, repo
-from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_delivery_next.github.gh_client import Json, Runner
 
-PAGE, PAGES = 100, 10  # issues a page reads; pages a search reads, newest first
+PAGE = 100
 
 
 @dataclass(frozen=True)
@@ -50,11 +49,11 @@ class OwlbearIssues(GhClient):
         """The newest issue whose body carries *marker*, pull requests left out; None when no issue has it.
 
         Raises:
-            ProviderError: The response is not a list, or every page read was full without the marker: the issue may
-                be older, so it is not taken as absent.
+            ProviderError: A page cannot be read or its response is not a list; an unread issue is not taken as absent.
         """
         query = f"state=all&sort=created&direction=desc&per_page={PAGE}"
-        for page in range(1, PAGES + 1):
+        page = 1
+        while True:
             found = self._api("find_issue", "GET", f"{repo(self.repository)}/issues?{query}&page={page}")
             if not isinstance(found, list):
                 invalid("find_issue", "the issues are not a list")
@@ -63,8 +62,7 @@ class OwlbearIssues(GhClient):
                     return _issue(item, "find_issue")
             if len(found) < PAGE:
                 return None
-        detail = f"no marker in the newest {PAGE * PAGES} issues; older ones are not read"
-        raise ProviderError(FailureCode.INVALID_RESPONSE, "find_issue", detail, retry_safe=True)
+            page += 1
 
     def create(self, title: str, body: str) -> Issue:
         """Open one issue; an unknown outcome is found again by its marker before it is made again."""

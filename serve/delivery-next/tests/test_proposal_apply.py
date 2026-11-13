@@ -5,6 +5,7 @@ import gzip
 import json
 import subprocess
 from types import SimpleNamespace
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from owlbear_memory.engine import MemoryEngine
@@ -45,7 +46,9 @@ class FakeGitHub:
         body = json.loads(data) if data else None
         self.sent.append(body)
         if method == "GET":
-            return self._done(self.issues[::-1] if "page=1" in endpoint else [])
+            query = parse_qs(urlsplit(endpoint).query)
+            page, size = int(query["page"][0]), int(query["per_page"][0])
+            return self._done(self.issues[::-1][(page - 1) * size : page * size])
         if method == "POST":
             n = len(self.issues) + 1
             self.issues.append(body | {"number": n, "html_url": f"https://github.com/o/r/issues/{n}", "state": "open"})
@@ -195,21 +198,32 @@ def test_an_owlbear_change_is_one_issue_in_its_repository_carrying_the_marker(wo
     assert done["applied"][0]["artefact"]["link"] == "https://github.com/o/r/issues/2"
 
 
-def test_an_issue_search_that_reads_every_page_without_the_marker_makes_none(world, tmp_path):
+def test_an_issue_search_past_a_thousand_entries_files_once_and_finds_an_older_marker(world, tmp_path):
     asked = []
 
-    def full(argv, _data, _timeout, _cwd, _env):  # every page is full and none carries the marker
+    def tracked(argv, data, timeout, cwd, env):
         asked.append(argv[argv.index("--method") + 1])
-        page = [{"number": n, "body": "other", "html_url": "u", "state": "open"} for n in range(100)]
-        return subprocess.CompletedProcess((), 0, json.dumps(page).encode(), b"")
+        return world.gh(argv, data, timeout, cwd, env)
 
     pid = _waiting("delivery-change", "delivery:hand-off", ["f-1"])
-    world.seams = dataclasses.replace(world.seams, issues=lambda: OwlbearIssues("o/r", tmp_path, runner=full))
-    _accept(pid, world)
+    marker = f"<!-- retro-proposal:{pid} -->"
+    world.gh.issues.extend({"number": n, "body": "other"} for n in range(2, 1002))
+    world.gh.issues.append({"number": 1002, "pull_request": {}, "body": marker})
+    issues = OwlbearIssues("o/r", tmp_path, runner=tracked)
+    world.seams = dataclasses.replace(world.seams, issues=lambda: issues)
 
-    snap = props.folded()[pid]
-    assert (snap["apply_state"], asked) == ("failed", ["GET"] * 10)  # unsure the issue is absent: none is made
-    assert "find_issue" in snap["failures"][0]["error"]
+    done = _accept(pid, world)
+    assert done["apply_state"] == "done", done["failures"]
+    assert asked == ["GET"] * 11 + ["POST"]
+    made = world.gh.issues[-1]
+    assert (made["title"], marker in made["body"]) == (TEXT["title"], True)
+
+    world.gh.issues.extend({"number": n, "pull_request": {}, "body": marker} for n in range(1004, 2004))
+    asked.clear()
+    found = issues.find(marker)
+    assert found is not None
+    assert found.url == done["applied"][0]["artefact"]["link"]
+    assert asked == ["GET"] * 11
 
 
 def test_a_failure_longer_than_any_cut_is_kept_whole_and_masked(world, whole_error):
