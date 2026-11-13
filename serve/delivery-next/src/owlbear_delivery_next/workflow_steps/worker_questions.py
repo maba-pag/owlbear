@@ -311,7 +311,7 @@ def message(c: Change, proposed: tools.AskQuestion) -> str:
         "integration_target": c.names.target,
         "question": proposed.model_dump(mode="json"),
         "answered": [
-            {"id": q.id, "question": q.text[:300], "answer": answer_kinds.answer_text(q)[:300]}
+            {"id": q.id, "question": q.text[:300], "answer": answer_kinds.answer_text(q)}  # whole: what was chosen
             for q in c.questions
             if q.answer is not None
         ],
