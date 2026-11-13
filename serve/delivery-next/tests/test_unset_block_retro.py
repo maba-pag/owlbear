@@ -173,7 +173,7 @@ def test_automatic_runs_start_only_for_the_project_whose_settings_are_set_and_on
     assert "Retro may run chg:pa:fix-it again" in said
 
 
-def test_late_records_of_a_blocked_project_wait_and_its_button_records_a_plain_refusal(a_b, machine):
+def test_late_records_of_a_blocked_project_wait_and_its_button_records_a_plain_refusal(a_b, machine, monkeypatch):
     a, _ = a_b
     _layer(a, Prefs(ci_poll_seconds=20))
     job = _job(machine, said := [])
@@ -191,8 +191,13 @@ def test_late_records_of_a_blocked_project_wait_and_its_button_records_a_plain_r
     assert said.count(f"Retro does not run chg:pa:fix-it: {UNSET}") == 1
 
     _layer(a, Prefs(ci_poll_seconds=20))
+    _unset_while_queued(job, a, monkeypatch)
     job.tick(3.0)
-    assert _runs()[before + 1 :] == [("chg:pa:fix-it", "change", "grade-only", "judged")]
+    assert _runs()[before + 1 :] == [("chg:pa:fix-it", "change", "grade-only", f"refused: {UNSET}")]
+    assert failed_grading() == set()
+    _layer(a, Prefs(ci_poll_seconds=20))
+    job.tick(4.0)
+    assert _runs()[before + 2 :] == [("chg:pa:fix-it", "change", "grade-only", "judged")]
     assert "rec-late" in retro_store.graded()
 
 
@@ -266,24 +271,6 @@ def test_a_button_rerun_held_before_any_work_leaves_the_judged_revision_as_it_wa
     job.tick(1.0)
     assert ("chg:pb:fix-it", "button", "judge", f"refused: {UNSET}") in _runs()
     assert retro_store.known()["chg:pb:fix-it"]["revisions"] == [judged]
-
-
-def test_a_late_grading_held_while_it_waits_for_a_slot_is_offered_again_once_set(a_b, machine, monkeypatch):
-    a, _ = a_b
-    _layer(a, Prefs(ci_poll_seconds=20))
-    job = _job(machine, [])
-    job.tick(0.0)
-    _record("rec-late", "pa", "s-pa", "2026-01-01T00:01:00+00:00")
-    before = len(_runs())
-    _unset_while_queued(job, a, monkeypatch)
-    job.tick(1.0)
-    assert _runs()[before:] == [("chg:pa:fix-it", "change", "grade-only", f"refused: {UNSET}")]
-    assert failed_grading() == set()
-
-    _layer(a, Prefs(ci_poll_seconds=20))
-    job.tick(2.0)
-    assert _runs()[before + 1 :] == [("chg:pa:fix-it", "change", "grade-only", "judged")]
-    assert "rec-late" in retro_store.graded()
 
 
 @pytest.mark.parametrize("reverse", [False, True], ids=["parent-first", "child-first"])

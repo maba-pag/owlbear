@@ -21,6 +21,7 @@ from owlbear_delivery_next.improvement import (
     cases,
     chatlogs,
     retro_evidence,
+    retro_judge,
     retro_store,
     retro_units,
     spotter,
@@ -601,12 +602,20 @@ def test_an_unconfirmed_runtime_end_keeps_its_lease_and_ends_the_run_stopped(uni
     assert (len(_runs()), len(retro_store.queued())) == (1, 1)  # no Retro call starts until Maintenance recovers it
 
 
-@pytest.mark.parametrize("site", ["a role cannot be read", "a runtime's end is not confirmed"])
+@pytest.mark.parametrize("site", ["a role cannot be read", "a runtime's end is not confirmed", "the judge fails"])
 @pytest.mark.usefixtures("said")
 def test_a_retro_run_keeps_its_whole_reason(monkeypatch, whole_error, site, tmp_path):
     names, told = whole_error.splitlines(), []
     if site == "a role cannot be read":
         monkeypatch.setattr(retro_inputs, "session", lambda _agent: (_ for _ in ()).throw(ValueError(whole_error)))
+    elif site == "the judge fails":
+
+        def failing(_work):
+            error = RuntimeError(whole_error)
+            error.add_note("the runtime said more after the error")
+            raise error
+
+        monkeypatch.setattr(retro_judge, "run", failing)
     job = _job(Asker(during=lambda _n: spotter_look.UNENDED.get().extend(names)), projects=_finished_change(tmp_path))
     job.seams = dataclasses.replace(job.seams, say=told.append)
     retro_store.request("owner", change="p1:fix-it")
@@ -614,6 +623,15 @@ def test_a_retro_run_keeps_its_whole_reason(monkeypatch, whole_error, site, tmp_
     [run] = _runs()
     if site == "a role cannot be read":
         assert (run["result"], told) == (f"refused: ValueError: {whole_error}", [])
+        return
+    if site == "the judge fails":
+        assert (run["unit"], run["trigger"], run["calls"], run["spent"], run["result"]) == (
+            "chg:p1:fix-it",
+            "button",
+            0,
+            0.0,
+            f"failed: RuntimeError: {whole_error}\nthe runtime said more after the error",
+        )
         return
     reason = f"the end of Retro sessions was not confirmed: {', '.join(names)}"
     [lease] = job.maintenance.read()["sessions"]

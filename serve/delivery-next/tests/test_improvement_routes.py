@@ -17,6 +17,7 @@ from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.improvement import (
     case_edits,
     case_replay,
+    case_review,
     cases,
     followups,
     improvement_view,
@@ -28,10 +29,10 @@ from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement.cases import CaseError
 from owlbear_delivery_next.improvement.credit_meter import Meter
-from owlbear_delivery_next.local_system import codebase
-from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.local_system import codebase, maintenance
+from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import app, cases_job, improvement_routes
+from owlbear_delivery_next.machine_host import app, cases_job, improvement_routes, retro_job
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.state_store import machine_settings, registry, watch_reports
@@ -127,10 +128,6 @@ def test_a_decision_names_what_the_page_read_and_a_stale_one_is_refused_with_not
     bad = world.http.post(f"{API}/proposals/{pid}/decide", json={"state": "merged", "token": shown["token"]})
     assert bad.status_code == 422
     assert world.http.post(f"{API}/proposals/{pid}/apply").status_code == 409  # not accepted
-
-
-def test_an_accepted_proposal_is_applied_from_the_page(world) -> None:
-    pid = _waiting()
     (shown,) = world.http.get(API).json()["proposals"]
 
     after = world.http.post(f"{API}/proposals/{pid}/decide", json={"state": "accepted", "token": shown["token"]})
@@ -382,8 +379,7 @@ def _job(monkeypatch) -> cases_job.CasesJob:
     return cases_job.CasesJob(slots, paused=lambda: False, looked=looked, asked=asked, shared=lambda: None)
 
 
-@pytest.mark.usefixtures("world")
-def test_a_check_the_job_refuses_still_names_the_cases_it_was_asked_about(monkeypatch) -> None:
+def test_case_checks_keep_whole_failure_results(monkeypatch, whole_error) -> None:
     cid = cases.freeze({"intent": {"task": "t refused"}}, {"source": "pilot", "family": "f"})
     cases.commit(cases.current()["n"], {cid: {"stage": "candidate", "call": "none", "why": "w", "example": "",
                                               "review": None}}, "t", "add")  # fmt: skip
@@ -394,6 +390,129 @@ def test_a_check_the_job_refuses_still_names_the_cases_it_was_asked_about(monkey
 
     run = next(r for r in case_replay.results() if r["id"] == rid)
     assert (run["result"], list(run["ids"])) == ("refused: the Retro run credit limit is unset", [cid])
+
+    ids = []
+    for task in ("t one", "t two"):
+        cid = cases.freeze({"intent": {"task": task}, "recent": [{"tool": "bash", "args": "ls"}]},
+                           {"source": "pilot", "family": "f"})  # fmt: skip
+        entry = {"stage": "candidate", "call": "none", "why": "why", "example": "", "review": None}
+        cases.commit(cases.current()["n"], {cid: entry}, "t", "add")
+        ids.append(cid)
+    job = _job(monkeypatch)
+
+    async def asked(_text, _meter, _role):
+        raise _noted(RuntimeError(whole_error))
+
+    def unread(_name):
+        raise _noted(RuntimeError(whole_error))
+
+    job.asked = asked
+    refused = case_edits.check_request(ids[:1], "t")
+    with monkeypatch.context() as roles:
+        roles.setattr(cases_job, "role", unread)
+        job.tick(0.0)
+    reviewed = case_edits.check_request(ids[1:], "t")
+    job.tick(0.0)
+    expected = f"failed: RuntimeError: {whole_error}\nthe runtime said more after the error"
+    results = {r["id"]: r for r in case_replay.results()}
+    for cid, request in zip(ids, (refused, reviewed), strict=True):
+        assert (results[request]["result"], list(results[request]["ids"])) == (expected, [cid])
+        shown = next(c for c in improvement_view.spotter_cases()["cases"] if c["id"] == cid)
+        assert (shown["last_check"]["id"], shown["last_check"]["result"]) == (request, expected)
+
+
+def test_case_replay_keeps_whole_failure_note(monkeypatch, whole_error) -> None:
+    chosen = _checked()
+    cur = cases.current()
+    edits = {chosen: cases.edited(chosen, cur["cases"][chosen], stage="example", example="a moment")}
+    request = case_replay.regression(edits, "owner", "promote")
+    _quiet, failing = request["frozen"]
+    answers = [{"category": "hand-off-fitness", "note": "It said done early."}, {"category": "none", "note": ""},
+               _noted(RuntimeError(whole_error)), _noted(RuntimeError(whole_error)),
+               {"category": "failed", "note": ""}, {"category": "failed", "note": ""}]  # fmt: skip
+
+    async def looked(_card, _prompt, meter, _spot):
+        said = answers.pop(0)
+        if isinstance(said, Exception):
+            raise said
+        share = meter.part()
+        share.call(0.1)
+        share.ended(0.1, confirmed=True)
+        return said
+
+    job = _job(monkeypatch)
+    job.looked = looked
+    rid = case_replay.ask(request)
+    job.tick(0.0)
+    [run] = [r for r in case_replay.results() if r["id"] == rid and "answers" in r]
+    note = f"RuntimeError: {whole_error}\nthe runtime said more after the error"
+    before = run["answers"][failing]["before"]
+    assert (before["category"], before["note"], answers) == ("failed", note, [])
+
+
+def _one_pass() -> SimpleNamespace:
+    passes = iter([False, True])
+    return SimpleNamespace(wait=lambda _s: next(passes))
+
+
+def test_job_pass_failures_keep_separate_whole_errors(monkeypatch, whole_error) -> None:
+    def raising(exc):
+        raise _noted(exc)
+
+    told: list[str] = []
+    cases_now = _job(monkeypatch)
+    cases_now.say = told.append
+    monkeypatch.setattr(cases_job, "limits", lambda: raising(OSError(whole_error)))
+    with monkeypatch.context() as due:
+        due.setattr(case_review, "due", lambda: ({"c-1": "r"}, {}, []))
+        cases_now.loop(_one_pass(), lambda: 0.0)
+    with monkeypatch.context() as due:
+        due.setattr(case_review, "due", lambda: raising(cases.CaseError(whole_error)))
+        cases_now.loop(_one_pass(), lambda: cases_job.PUBLISH_EVERY)
+    slots = Slots(lambda: 1)
+    slots.open()
+    seams = retro_job.Seams(say=told.append, projects=lambda: raising(RuntimeError(whole_error)))
+    retro_now = retro_job.RetroJob(slots, seams, maintenance.Maintenance(slots))
+    retro_now.loop(_one_pass(), lambda: 0.0)
+    unpublished = f"the credit limits cannot be read: OSError: {whole_error}\nthe runtime said more after the error"
+    failed = f"CaseError: {whole_error}\nthe runtime said more after the error"
+    retro_failed = f"RuntimeError: {whole_error}\nthe runtime said more after the error"
+    assert told == [
+        f"the Spotter cases are not published: {unpublished}",
+        f"the Spotter cases job failed: {failed}",
+        f"Retro failed: {retro_failed}",
+    ]
+    assert (cases_now.unpublished, cases_now.failed, retro_now.failed) == (unpublished, failed, retro_failed)
+
+
+def test_case_publication_keeps_failed_and_pending_reasons(monkeypatch, shared_repo, whole_error) -> None:
+    ids = []
+    for task in ("t one", "t two"):
+        cid = cases.freeze({"intent": {"task": task}}, {"source": "pilot", "family": "f"})
+        entry = {"stage": "candidate", "call": "hand-off-fitness", "why": "why", "example": "", "review": None}
+        cases.commit(cases.current()["n"], {cid: entry}, "t", "add")
+        reviewed = cases.edited(cid, entry, stage="test", reviewed_by="sol")
+        cases.commit(cases.current()["n"], {cid: reviewed}, "t", "reviewed")
+        ids.append(cid)
+    refused, unpushed = ids
+    warned = f"saved and committed in {shared_repo[0]}, but not pushed: the push failed: {whole_error}"
+
+    def publish(_self: DataRepo, path: Path, _message: str) -> str:
+        if path.stem == refused:
+            raise _noted(DataRepoError(whole_error))
+        return warned
+
+    monkeypatch.setattr(DataRepo, "publish", publish)
+    job = _job(monkeypatch)
+    job.shared = lambda: DataRepo(shared_repo[0])
+    job._publish()  # noqa: SLF001 - one publication sync, as the job's loop runs it
+    [run] = [r for r in case_replay.results() if r["kind"] == "publication"]
+    reasons = {
+        refused: f"failed: DataRepoError: {whole_error}\nthe runtime said more after the error",
+        unpushed: f"pending: {warned}",
+    }
+    expected = "\n".join(f"case {cid}, {reasons[cid]}" for cid in sorted(ids))
+    assert (run["failed"], run["pending"], run["result"]) == ([refused], [unpushed], expected)
 
 
 def test_a_case_run_the_job_has_taken_still_holds_the_moves(world) -> None:
