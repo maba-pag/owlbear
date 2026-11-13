@@ -393,8 +393,10 @@ def test_case_checks_keep_whole_failure_results(monkeypatch, whole_error) -> Non
 
     ids = []
     for task in ("t one", "t two"):
-        cid = cases.freeze({"intent": {"task": task}, "recent": [{"tool": "bash", "args": "ls"}]},
-                           {"source": "pilot", "family": "f"})  # fmt: skip
+        cid = cases.freeze(
+            {"intent": {"task": task}, "recent": [{"tool": "bash", "args": "ls"}]},
+            {"source": "pilot", "family": "f"},
+        )
         entry = {"stage": "candidate", "call": "none", "why": "why", "example": "", "review": None}
         cases.commit(cases.current()["n"], {cid: entry}, "t", "add")
         ids.append(cid)
