@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next.change_contracts.preparation import Preparation
+from owlbear_delivery_next.change_contracts.preparation import LIVE, Preparation
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
@@ -32,6 +32,8 @@ class Prepared(BaseModel):
     open: bool = False
     home: str = ""
     trial: bool = False  # owns a temporary proof or capture checkout until cleanup and disposal finish
+    snapshot_from: str = ""  # the check owns the frozen snapshot; a before copy borrows its command environment
+    snapshot_only: bool = False  # environment commands have not started; only snapshot/setup cleanup is owed
 
 
 def folder(store: Store, slug: str) -> Path:
@@ -65,7 +67,35 @@ def left(store: Store, c: Change) -> list[Prepared]:
 def cleanup_records(store: Store, c: Change, now: datetime) -> list[Prepared]:
     """Ordinary cleanup and disposal are immediate; failed trial cleanup keeps its retry deadline."""
     wake = c.outcome.wake_at if c.outcome else None
-    return [r for r in left(store, c) if not r.trial or not r.open or wake is None or wake <= now]
+    pending = left(store, c)
+    borrowed = {r.snapshot_from for r in pending if r.open and r.snapshot_from}
+    return [
+        r for r in pending if r.check not in borrowed and (not r.trial or not r.open or wake is None or wake <= now)
+    ]
+
+
+def cleanup_record(store: Store, slug: str, rec: Prepared) -> Prepared:
+    """Supply the borrowed snapshot to commands without transferring deletion ownership."""
+    if not rec.snapshot_from:
+        return rec
+    source = read(store, slug, rec.snapshot_from)
+    if source is None:
+        msg = f"the borrowed snapshot's owner {rec.snapshot_from} is missing in {folder(store, slug)}"
+        raise ValueError(msg)
+    return rec.model_copy(update={"snapshot": source.snapshot, "digest": source.digest})
+
+
+def snapshot_owner(store: Store, slug: str, rec: Prepared) -> Prepared:
+    """Keep the one frozen source active without claiming a second environment was seeded there."""
+    if not rec.snapshot_from:
+        return rec
+    source = read(store, slug, rec.snapshot_from)
+    if source is None:
+        msg = f"the snapshot owner {rec.snapshot_from} is missing in {folder(store, slug)}"
+        raise ValueError(msg)
+    source.open, source.snapshot_only = source.option.kind in LIVE, True
+    write(store, slug, source)
+    return source
 
 
 def write(store: Store, slug: str, rec: Prepared, patch: bytes | None = None) -> None:

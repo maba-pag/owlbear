@@ -52,6 +52,9 @@ if act == "fail":
     sys.exit("restore refused")
 if act == "fail-whole":
     sys.exit(pathlib.Path(__file__).with_name("whole.txt").read_text())
+if act == "cleanup" and os.environ.get("REQUIRE_SNAPSHOT"):
+    assert snap, "cleanup needs the same frozen snapshot environment"
+    assert pathlib.Path(snap, "db.txt").read_text() == "user-1"
 """
 SETUP = """import os, pathlib, sys
 act, log = sys.argv[1], pathlib.Path(os.environ["TEST_LOG"])
@@ -344,8 +347,10 @@ def test_without_a_declared_option_no_check_launches_and_repair_proposes_one(env
 
 def test_one_frozen_snapshot_is_restored_separately_before_each_capture_and_ended(env):
     repo, store, log, tmp = env
-    c, s, events = change(repo), settings(option(tmp)), []
-    prepare._write(store, "c1", prepare.Prepared(check="visual", option=option(tmp)))  # noqa: SLF001 - as accepted
+    copy = option(tmp)
+    copy.isolation["REQUIRE_SNAPSHOT"] = "1"
+    c, s, events = change(repo), settings(copy), []
+    prepare._write(store, "c1", prepare.Prepared(check="visual", option=copy))  # noqa: SLF001 - as accepted
     before_root = tmp / "merge-base"
     git(repo, "worktree", "add", "--detach", str(before_root), "HEAD")
 

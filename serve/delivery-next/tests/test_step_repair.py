@@ -34,6 +34,7 @@ from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import stop_routes
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.config import Layer
+from owlbear_delivery_next.state_store import prepared
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import check, defect_issue, prepare, repair_copy, sessions, step_repair
 
@@ -503,6 +504,8 @@ def _reject_escaping_home(store, c, repo, owner_home):
         assert "resolves outside" in result.reason
         with pytest.raises(prepare.PrepareError, match="resolves outside"):
             prepare.environ(store, c)
+        active = prepare.read(store, c.slug, "visual")
+        prepared.write(store, c.slug, active.model_copy(update={"open": True, "snapshot_only": False}))
         c.env = None
         assert prepare.end(store, c, repo, store.settings(), events.append) is None
         assert prepare.read(store, c.slug, "visual").open
@@ -522,6 +525,8 @@ def _reject_escaping_home(store, c, repo, owner_home):
         assert "redirects to source directory" in result.reason
         with pytest.raises(prepare.PrepareError, match="redirects to source directory"):
             prepare.environ(store, c)
+        active = prepare.read(store, c.slug, "visual")
+        prepared.write(store, c.slug, active.model_copy(update={"open": True, "snapshot_only": False}))
         c.env = None
         assert prepare.end(store, c, repo, store.settings(), events.append) is None
         assert "redirects to source directory" in events[-1]["cleanup"]

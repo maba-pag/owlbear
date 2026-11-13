@@ -39,9 +39,11 @@ from owlbear_delivery_next.change_flow.worktree import failure
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.state_store.prepared import (
     Prepared,
+    cleanup_record,
     cleanup_records,
     left,
     read,
+    snapshot_owner,
 )
 from owlbear_delivery_next.state_store.prepared import (
     file as _file,
@@ -53,6 +55,7 @@ from owlbear_delivery_next.state_store.prepared import (
     write as _write,
 )
 from owlbear_delivery_next.workflow_steps import before, check, engine, preparer, repair_copy, snapshot_files
+from owlbear_delivery_next.workflow_steps.check import PrepareError
 from owlbear_delivery_next.workflow_steps.snapshot_files import snapshots
 
 if TYPE_CHECKING:
@@ -65,14 +68,6 @@ if TYPE_CHECKING:
 type Log = Callable[[dict[str, Any]], None]
 SESSION = "session.open"  # a running preparer session's root and the edits it found (JSON)
 SHAPING = "shaping"  # the shaping capture's own test copy (D-01M6Q56RXK85C5T4AG7R051X6N)
-
-
-class PrepareError(Exception):
-    """The check cannot start on a test copy; its result says why."""
-
-    def __init__(self, result: loop.StepResult) -> None:
-        super().__init__(result.reason)
-        self.result = result
 
 
 def _git(root: Path, *args: str, env: Mapping[str, str] | None = None) -> bytes:
@@ -312,14 +307,15 @@ def _into(  # noqa: PLR0913 - the run, its two worktrees and the permissions in 
         raise PrepareError(asked)
     if why:
         raise PrepareError(check.failed(f"the preparation option {rec.option.id} is no longer permitted"))
-    rec.open = True
+    rec.open, rec.snapshot_only = True, True
     _write(store, c.slug, rec)
-    if note := _snapshot(store, c.slug, rec, home or Path(c.names.worktree), log):
+    source = snapshot_owner(store, c.slug, rec)
+    if note := _snapshot(store, c.slug, source, home or Path(c.names.worktree), log):
         return note
-    if rec.snapshot and snapshot_files.digest(Path(rec.snapshot)) != rec.digest:
+    if source.snapshot and snapshot_files.digest(Path(source.snapshot)) != source.digest:
         return "the snapshot changed after it was frozen"
-    patch = _file(store, c.slug, rec.check, ".patch")
-    if rec.paths and patch.is_file():
+    patch = _file(store, c.slug, source.check, ".patch")
+    if source.paths and patch.is_file():
         if keep:
             rec.applied = str(root)
             _write(store, c.slug, rec)  # before applying: the end of the check discards even a partial patch
@@ -327,7 +323,9 @@ def _into(  # noqa: PLR0913 - the run, its two worktrees and the permissions in 
             _git(root, "apply", "--binary", str(patch))
         except subprocess.CalledProcessError as exc:
             return f"the setup patch did not apply: {exc.stderr.decode(errors='replace').strip()}"
-    env = isolated(rec, root)
+    env = isolated(source, root)
+    rec.snapshot_only = False
+    _write(store, c.slug, rec)
     return snapshot_files.command(rec, "restore", root, log, env) or snapshot_files.command(rec, "seed", root, log, env)
 
 
@@ -338,20 +336,19 @@ def merge_base(store: Store, c: Change, settings: Settings, log: Log) -> Callabl
     def go(root: Path) -> dict[str, str]:
         if rec is None:
             raise PrepareError(check.failed("the check has no test preparation; nothing launches without one"))
-        _write(
-            store,
-            c.slug,
-            Prepared(
-                check=f"before-{VISUAL}",
-                option=rec.option,
-                home=str(root),
-                open=True,
-                trial=True,
-            ),
+        owned = Prepared(
+            check=f"before-{VISUAL}",
+            option=rec.option,
+            home=str(root),
+            open=True,
+            trial=True,
+            snapshot_from=rec.check,
+            snapshot_only=True,
         )
-        if note := _into(store, c, rec, root, settings=settings, log=log, keep=False):
+        _write(store, c.slug, owned)
+        if note := _into(store, c, owned, root, settings=settings, log=log, keep=False):
             raise PrepareError(check.failed(note))
-        return isolated(rec, root)
+        return isolated(cleanup_record(store, c.slug, owned), root)
 
     return go
 
@@ -449,7 +446,7 @@ def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> lo
         keep = settings.data.retention == "keep" and bool(rec.digest) and rec.check != SHAPING  # never a shaping copy
         try:
             _reapply(store, c, rec, home)
-            note = _cleanup(rec, home, log)
+            note = "" if rec.snapshot_only else _cleanup(cleanup_record(store, c.slug, rec), home, log)
             if not (gone := keep or snapshot_files.gone(rec.snapshot)):
                 note = "; ".join(filter(None, [note, f"the snapshot {rec.snapshot} could not be deleted"]))
         finally:
@@ -482,7 +479,7 @@ def ran(store: Store, lock: Lock, c: Change, repo: Path, *, runnable: bool) -> b
     if left(store, c) and (stop := end(store, c, repo, store.settings(), log)):
         store.write(lock, loop.apply(c, stop, datetime.now(UTC)))
         return True
-    if any(rec.trial for rec in left(store, c)):
+    if any(rec.trial or rec.snapshot_only for rec in left(store, c)):
         if c.outcome is None or c.outcome.exit == Exit.PENDING:
             c.outcome = Outcome(exit=Exit.RETRY, reason="test-copy cleanup is pending; see its recorded error",
                                 at=datetime.now(UTC))  # fmt: skip
