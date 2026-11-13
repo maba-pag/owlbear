@@ -42,11 +42,6 @@ class Neighbour(NamedTuple):
     merged: bool
 
 
-class _Merge(NamedTuple):
-    sides: tuple[str, str]
-    pending: bool = False
-
-
 def neighbours(store: Store, slug: str, now: datetime) -> list[Neighbour]:
     """The other open or recently merged Changes with their plan's task scopes, else their brief's."""
     out = []
@@ -116,34 +111,19 @@ def _quiet(path: Path, *args: str, missing: bool = False) -> str | None:
     return None
 
 
-def _merges(path: Path, since: str | None) -> list[_Merge]:
-    """The Change's merge history since its durable base, oldest first, then any unfinished merge."""
-    if since and _quiet(path, "merge-base", "--is-ancestor", since, "HEAD", missing=True) is None:
+def _merges(path: Path, since: str) -> list[tuple[str, str]]:
+    """Both parents of each merge on the Change's branch since the integration's durable base, oldest first."""
+    if _quiet(path, "merge-base", "--is-ancestor", since, "HEAD", missing=True) is None:
         msg = "The integration start head is not an ancestor of the current work"
         raise ValueError(msg)
-    commits = (
-        _quiet(
-            path,
-            "rev-list",
-            "--first-parent",
-            "--merges",
-            "--reverse",
-            *([f"{since}..HEAD"] if since else ["--no-walk", "HEAD"]),
-        )
-        or ""
-    )
+    commits = _quiet(path, "rev-list", "--first-parent", "--merges", "--reverse", f"{since}..HEAD") or ""
     found = []
     for commit in commits.splitlines():
         parents = (_quiet(path, "show", "--no-patch", "--format=%P", commit) or "").split()
         if len(parents) != 2:  # noqa: PLR2004 - one target update has exactly two parents
             msg = "Git did not return exactly two integration parents"
             raise ValueError(msg)
-        found.append(_Merge((parents[0], parents[1])))
-    if theirs := _quiet(path, "rev-parse", "--verify", "--quiet", "MERGE_HEAD", missing=True):
-        if not (ours := _quiet(path, "rev-parse", "--verify", "HEAD")):
-            msg = "Git did not identify the unfinished integration's start head"
-            raise ValueError(msg)
-        found.append(_Merge((ours, theirs), pending=True))
+        found.append((parents[0], parents[1]))
     return found
 
 
@@ -225,15 +205,16 @@ def integrated(  # noqa: PLR0913, PLR0917 - the runner's writer and lock, the Ch
     if start is None:
         return _unverified("The integration start head is missing, so collisions cannot be checked")
     try:
-        merges = _merges(path, start)
+        pending = _quiet(path, "rev-parse", "--verify", "--quiet", "MERGE_HEAD", missing=True)
+        sides = _merges(path, start)
     except (OSError, subprocess.SubprocessError, ValueError) as exc:
         reason = f"Integration collisions could not be checked: {failure(exc)}"
         store.log(
             lock, c.slug, {"event": "collisions-unchecked", "at": datetime.now(UTC).isoformat(), "reason": reason}
         )
         return _unverified(reason)
-    if any(m.pending for m in merges):
+    if pending:
         return _unverified("The integration reported completion while a merge is still unfinished")
     if (told := getattr(payload, "merge", None)) is None:
         return _unverified("The integration result does not say what the merge did to behaviour")
-    return collision(c, told, [m.sides for m in merges]) or result
+    return collision(c, told, sides) or result
