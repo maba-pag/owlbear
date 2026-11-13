@@ -227,7 +227,7 @@ def _issue(pid: str, _accepted: Mapping[str, Any], text: Text, _done: Done, seam
     marker = f"<!-- retro-proposal:{pid} -->"
     issue = gh.find(marker)
     if issue is None:
-        issue = gh.create(title, f"{body}\n\n{marker}")
+        issue = gh.create(title, f"{body}\n\n{marker}", marker=marker)
     made = _artefact("issue", gh.repository, f"#{issue.number}", issue.url)
     props.outcome(pid, "applied", step="created", artefact=made)
 
