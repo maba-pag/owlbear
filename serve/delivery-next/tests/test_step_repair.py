@@ -333,24 +333,31 @@ def _decline_missing_preparation(store, asked):
     assert (store.config_path.read_bytes(), worktree.git(store.shared.root, "rev-parse", "HEAD")) == (before, head)
 
 
-def _publish_missing_preparation(store, asked, remote, repo):
+def _publish_missing_preparation(store, asked, remote, repo, monkeypatch):
     q = loop.open_question(asked)
     approved = loop.fold(asked, [AnswerItem(question=q.id, option="yes", at=NOW)], NOW)
     assert approved.repairs.current.phase == "approved"
     stale = approved.model_copy(deep=True)
     remote_head = worktree.git(remote, "rev-parse", "HEAD")
     offline = remote.with_name("offline.git")
-    remote.rename(offline)
-    try:
+    publish = DataRepo.publish
+
+    def offline_publish(shared, path, message, until=None):
+        remote.rename(offline)
+        try:
+            return publish(shared, path, message, until)
+        finally:
+            offline.rename(remote)
+
+    with monkeypatch.context() as disconnected:
+        disconnected.setattr(DataRepo, "publish", offline_publish)
         step_repair.run(store, Lock(approved.slug), approved, repo)
-    finally:
-        offline.rename(remote)
     held = store.read(approved.slug)
     assert (held.repairs.current.phase, held.repairs.current.applied, held.repairs.done) == ("approved", "", [])
     assert (held.outcome.exit, held.stop.action) == (Exit.STOP, stuck.RERUN)
     assert "the approved preparation is not published:" in held.stop.reason
     assert str(remote) in held.stop.reason
-    assert "the push failed:" in held.stop.reason
+    assert "a held automatic change cannot be checked:" in held.stop.reason
     assert worktree.git(remote, "rev-parse", "HEAD") == remote_head
     written = store.config_path.read_bytes()
     config_history = worktree.git(store.shared.root, "log", "--format=%H", "--", str(store.config_path))
@@ -469,6 +476,27 @@ def _reject_ignored_preparation(store, asked, proposal, repo, monkeypatch):
     assert store.read_config().preparations is None
 
 
+def _reject_remote_preparation(store, asked, repo, remote, other):
+    worktree.git(repo, "clone", "--quiet", str(remote), str(other))
+    path = other / store.config_path.relative_to(store.shared.root)
+    owner = Layer.model_validate_json(path.read_text()).model_copy(update={"preparations": []})
+    path.write_text(owner.model_dump_json(indent=1))
+    worktree.git(other, "add", ".")
+    worktree.git(other, "commit", "-qm", "owner changes preparation from another clone")
+    worktree.git(other, "push", "--quiet")
+    head = worktree.git(remote, "rev-parse", "HEAD")
+    q = loop.open_question(asked)
+    approved = loop.fold(asked, [AnswerItem(question=q.id, option="yes", at=NOW)], NOW)
+    step_repair.run(store, Lock(approved.slug), approved, repo)
+    held = store.read(approved.slug)
+    assert held.repairs.current.phase == "approved"
+    assert held.outcome.exit == Exit.STOP
+    assert held.repairs.current.applied == ""
+    assert store.read_config().preparations == []
+    assert worktree.git(remote, "rev-parse", "HEAD") == head
+    assert "preparations changed after this proposal was shown; nothing was overwritten" in held.stop.reason
+
+
 def test_missing_visual_preparation_requires_owner_approval_before_project_settings_write(
     repo, tmp_path, shared_repo, monkeypatch
 ) -> None:
@@ -514,7 +542,7 @@ def test_missing_visual_preparation_requires_owner_approval_before_project_setti
         )
         == ""
     )
-    applied, stale = _publish_missing_preparation(store, asked.model_copy(deep=True), shared_repo[1], repo)
+    applied, stale = _publish_missing_preparation(store, asked.model_copy(deep=True), shared_repo[1], repo, monkeypatch)
     assert store.read_config().model_dump(exclude={"preparations", "widths"}) == initial.model_dump(
         exclude={"preparations", "widths"}
     )
@@ -544,6 +572,7 @@ def test_missing_visual_preparation_requires_owner_approval_before_project_setti
     assert store.read_config().preparations == [proposal.option, other]
     assert len(calls) == 1
     _reject_ignored_preparation(store, asked, proposal, repo, monkeypatch)
+    _reject_remote_preparation(store, asked.model_copy(deep=True), repo, shared_repo[1], tmp_path / "other-settings")
     assert (store.shared.global_path.read_bytes() if store.shared.global_path.exists() else None) == global_before
     assert not store.machine_path.exists()
     assert sentinel.read_bytes() == b'{"private": "owner ledger must stay unchanged"}\n'

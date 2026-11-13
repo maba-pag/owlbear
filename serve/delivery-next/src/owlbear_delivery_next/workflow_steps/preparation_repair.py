@@ -9,7 +9,9 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import preparation
 from owlbear_delivery_next.change_contracts.repair_records import Witness
+from owlbear_delivery_next.local_system.publication_hold import Requires
 from owlbear_delivery_next.settings.config import Layer
+from owlbear_delivery_next.state_store import config_save, profile_share
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import check, prepare, repair_copy
 
@@ -176,11 +178,17 @@ def apply(store: Store, change: Change) -> str:
         if layer.preparations not in (r.preparations_before, after):
             msg = "the project's preparations changed after this proposal was shown; nothing was overwritten"
             raise repair_copy.RepairError(msg)
+        _permitted(r.preparation, store.settings())
         return layer.model_copy(update={"preparations": after})
 
+    prepared = config_save.Prepared(
+        profile_share.config_digest(store.config_path),
+        changed,
+        Requires("the project settings the preparation proposal was approved against"),
+    )
     try:
         notice = store.save(
-            store.config_path, Layer, changed, f"{store.name or 'the project'}: approved test preparation", owner=True
+            store.config_path, Layer, prepared, f"{store.name or 'the project'}: approved test preparation"
         )
     except StoreError as exc:
         msg = f"the approved preparation could not be published: {exc}"
