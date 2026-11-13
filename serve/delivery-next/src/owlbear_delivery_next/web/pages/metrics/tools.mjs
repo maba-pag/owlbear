@@ -68,7 +68,8 @@ export function toolsChart(t) {
     parts: kept.map(([k, name]) => ({ id: `tool:${k}`, name, values: tools.map((r) => r[k]) })),
     colours: (th) => kept.map(([, , j]) => (j ? th.parts[REFUSED[j - 1]] : th.success)), relative: pick.relative,
   });  // fmt: skip
-  draw("tools", { ...spec, ids: tools.map((r) => r.tool), key: query(), label: "Tool use chart", act: (i) => open(tools[i].tool) });
+  draw("tools", { ...spec, ids: tools.map((r) => r.tool), key: query(), label: "Tool use chart",
+    act: (i) => open(tools[i].tool) });
 }
 
 function open(tool) {
