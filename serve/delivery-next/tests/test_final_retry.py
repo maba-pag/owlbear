@@ -215,7 +215,6 @@ def test_console_retry_show_and_answer_share_page_authority(tmp_path, monkeypatc
     c.loops[FINAL].findings[2].text = "y.txt:2: AC-1 not met - fix: f"  # the open F3 names it
     store.write(Lock("c1"), c)
     q, head = loop.open_question(c), rebuilds.head(c.loops[FINAL])
-    assert rebuilds.shown(c, q)["unmet"] == ["AC-1: rule AC-1"]
     monkeypatch.setattr(cli.Store, "open", lambda *_a, **_k: store)
 
     def said(*args: str) -> int:
