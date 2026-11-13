@@ -65,23 +65,9 @@ def ruff_toolchain_module() -> ModuleType:
     return module
 
 
-def _fake_uv(tmp_path: Path, version: str) -> Path:
-    executable = tmp_path / "uv"
-    executable.write_text(f"#!/bin/sh\nprintf 'uv {version}\\n'\n", encoding="utf-8")
-    executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
-    return executable
-
-
-def _fake_node(tmp_path: Path, version: str) -> Path:
-    executable = tmp_path / "node"
-    executable.write_text(f"#!/bin/sh\nprintf 'v{version}\\n'\n", encoding="utf-8")
-    executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
-    return executable
-
-
-def _fake_ruff(tmp_path: Path, version: str) -> Path:
-    executable = tmp_path / "ruff"
-    executable.write_text(f"#!/bin/sh\nprintf 'ruff {version}\\n'\n", encoding="utf-8")
+def _fake_version(tmp_path: Path, name: str, output: str) -> Path:
+    executable = tmp_path / name
+    executable.write_text(f"#!/bin/sh\nprintf '{output}\\n'\n", encoding="utf-8")
     executable.chmod(executable.stat().st_mode | stat.S_IXUSR)
     return executable
 
@@ -96,16 +82,6 @@ def _workspace_ruff_version() -> str:
         if (match := re.fullmatch(r"ruff==(?P<version>[0-9]+\.[0-9]+\.[0-9]+)", requirement)) is not None
     )
     return match.group("version")
-
-
-def _run_uv_version_check(executable: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # noqa: S603
-        [sys.executable, str(UV_VERSION_SCRIPT), "--uv-executable", str(executable)],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
 
 
 def test_dependency_workflow_runs_without_dependency_label_gate() -> None:
@@ -241,9 +217,6 @@ def test_copilot_setup_keeps_task_checkout_and_bounds_installation() -> None:
     assert "ref" not in checkout.get("with", {})
     assert checkout["with"]["persist-credentials"] is False
     runs = [step["run"] for step in steps if "run" in step]
-    assert "uv python install" in runs
-    assert COPILOT_UV_SYNC in runs
-    assert "npm ci --engine-strict --no-audit --no-fund" in runs
     install_commands = {
         "uv python install",
         COPILOT_UV_SYNC,
@@ -259,9 +232,6 @@ def test_copilot_setup_keeps_task_checkout_and_bounds_installation() -> None:
         "actions/setup-node",
     }
 
-
-def test_copilot_setup_installs_after_toolchains_before_reporting() -> None:
-    steps = _job(_workflow(COPILOT_SETUP_PATH), "copilot-setup-steps")["steps"]
     install_commands = {
         COPILOT_UV_SYNC,
         "npm ci --engine-strict --no-audit --no-fund",
@@ -284,9 +254,6 @@ def test_copilot_setup_installs_after_toolchains_before_reporting() -> None:
     assert len(following) == 1
     assert "uv run --locked --no-sync python --version" in following[0]["run"]
 
-
-def test_copilot_setup_uses_renovate_managed_version_sources() -> None:
-    steps = _job(_workflow(COPILOT_SETUP_PATH), "copilot-setup-steps")["steps"]
     uv_setup = next(step for step in steps if step.get("uses", "").startswith("astral-sh/setup-uv@"))
     required = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["uv"]["required-version"]
     assert required.startswith(">=")
@@ -300,17 +267,14 @@ def test_copilot_setup_uses_renovate_managed_version_sources() -> None:
             assert re.search(r"@[0-9a-f]{40}\s+# v[0-9]+\.[0-9]+\.[0-9]+$", line)
 
 
-def test_uv_runtime_checker_accepts_the_declared_boundary(tmp_path: Path) -> None:
-    result = _run_uv_version_check(_fake_uv(tmp_path, "0.11.0"))
+@pytest.mark.parametrize("version", ["0.11.0", "0.10.9"])
+def test_uv_runtime_checker_accepts_only_the_declared_boundary_or_newer(tmp_path: Path, version: str) -> None:
+    executable = _fake_version(tmp_path, "uv", f"uv {version}")
+    result = _run_script(UV_VERSION_SCRIPT, "--uv-executable", str(executable))
 
-    assert result.returncode == 0
-
-
-def test_uv_runtime_checker_rejects_an_older_executable(tmp_path: Path) -> None:
-    result = _run_uv_version_check(_fake_uv(tmp_path, "0.10.9"))
-
-    assert result.returncode != 0
-    assert "below" in result.stderr
+    assert (result.returncode == 0) is (version == "0.11.0")
+    if version == "0.10.9":
+        assert "below" in result.stderr
 
 
 def test_ruff_toolchain_proof_accepts_aligned_repository_versions(
@@ -318,7 +282,9 @@ def test_ruff_toolchain_proof_accepts_aligned_repository_versions(
     ruff_toolchain_module: ModuleType,
 ) -> None:
     version = _workspace_ruff_version()
-    ruff_toolchain_module.check_ruff_toolchain(ROOT, ruff_executable=str(_fake_ruff(tmp_path, version)))
+    ruff_toolchain_module.check_ruff_toolchain(
+        ROOT, ruff_executable=str(_fake_version(tmp_path, "ruff", f"ruff {version}"))
+    )
 
 
 def test_ruff_toolchain_proof_rejects_installed_version_drift(
@@ -326,7 +292,9 @@ def test_ruff_toolchain_proof_rejects_installed_version_drift(
     ruff_toolchain_module: ModuleType,
 ) -> None:
     with pytest.raises(ValueError, match=r"installed Ruff=0\.16\.1"):
-        ruff_toolchain_module.check_ruff_toolchain(ROOT, ruff_executable=str(_fake_ruff(tmp_path, "0.16.1")))
+        ruff_toolchain_module.check_ruff_toolchain(
+            ROOT, ruff_executable=str(_fake_version(tmp_path, "ruff", "ruff 0.16.1"))
+        )
 
 
 @pytest.mark.parametrize(
@@ -513,102 +481,41 @@ def test_node_runtime_checker_accepts_the_checked_in_contract() -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_node_runtime_checker_accepts_an_aligned_pin_and_floor(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("pin", "installed", "accepted"),
+    [
+        ("24.21.0", None, True),
+        ("25.0.0", None, False),
+        ("24.20.0", None, False),
+        ("24.21.0", "24.21.0", True),
+        ("24.21.0", "24.20.0", False),
+    ],
+)
+def test_node_runtime_checker_requires_aligned_declarations_and_installed_runtime(
+    tmp_path: Path, pin: str, installed: str | None, *, accepted: bool
+) -> None:
     version_file = tmp_path / ".nvmrc"
     engines_file = tmp_path / "package.json"
-    version_file.write_text("24.21.0\n", encoding="utf-8")
+    version_file.write_text(f"{pin}\n", encoding="utf-8")
     engines_file.write_text(json.dumps({"engines": {"node": ">=24.21.0"}}), encoding="utf-8")
 
+    options = (
+        ("--expected-version", "24.21.0", "--node-executable", str(_fake_version(tmp_path, "node", f"v{installed}")))
+        if installed
+        else ()
+    )
     result = _run_script(
         RUNTIME_SCRIPT,
         "--version-file",
         str(version_file),
         "--engines-file",
         str(engines_file),
+        *options,
     )
 
-    assert result.returncode == 0, result.stderr
-
-
-def test_node_runtime_checker_rejects_a_raised_pin_with_a_stale_floor(tmp_path: Path) -> None:
-    version_file = tmp_path / ".nvmrc"
-    engines_file = tmp_path / "package.json"
-    version_file.write_text("25.0.0\n", encoding="utf-8")
-    engines_file.write_text(json.dumps({"engines": {"node": ">=24.21.0"}}), encoding="utf-8")
-
-    result = _run_script(
-        RUNTIME_SCRIPT,
-        "--version-file",
-        str(version_file),
-        "--engines-file",
-        str(engines_file),
-    )
-
-    assert result.returncode != 0
-    assert "does not match" in result.stderr
-
-
-def test_node_runtime_checker_rejects_a_lower_runtime(tmp_path: Path) -> None:
-    version_file = tmp_path / ".nvmrc"
-    engines_file = tmp_path / "package.json"
-    version_file.write_text("24.20.0\n", encoding="utf-8")
-    engines_file.write_text(json.dumps({"engines": {"node": ">=24.21.0"}}), encoding="utf-8")
-
-    result = _run_script(
-        RUNTIME_SCRIPT,
-        "--version-file",
-        str(version_file),
-        "--engines-file",
-        str(engines_file),
-    )
-
-    assert result.returncode != 0
-    assert "does not match" in result.stderr
-
-
-def test_node_runtime_checker_accepts_the_expected_installed_runtime(tmp_path: Path) -> None:
-    node = _fake_node(tmp_path, "24.21.0")
-    version_file = tmp_path / ".nvmrc"
-    engines_file = tmp_path / "package.json"
-    version_file.write_text("24.21.0\n", encoding="utf-8")
-    engines_file.write_text(json.dumps({"engines": {"node": ">=24.21.0"}}), encoding="utf-8")
-
-    result = _run_script(
-        RUNTIME_SCRIPT,
-        "--version-file",
-        str(version_file),
-        "--engines-file",
-        str(engines_file),
-        "--expected-version",
-        "24.21.0",
-        "--node-executable",
-        str(node),
-    )
-
-    assert result.returncode == 0, result.stderr
-
-
-def test_node_runtime_checker_rejects_an_unexpected_installed_runtime(tmp_path: Path) -> None:
-    node = _fake_node(tmp_path, "24.20.0")
-    version_file = tmp_path / ".nvmrc"
-    engines_file = tmp_path / "package.json"
-    version_file.write_text("24.21.0\n", encoding="utf-8")
-    engines_file.write_text(json.dumps({"engines": {"node": ">=24.21.0"}}), encoding="utf-8")
-
-    result = _run_script(
-        RUNTIME_SCRIPT,
-        "--version-file",
-        str(version_file),
-        "--engines-file",
-        str(engines_file),
-        "--expected-version",
-        "24.21.0",
-        "--node-executable",
-        str(node),
-    )
-
-    assert result.returncode != 0
-    assert "does not match" in result.stderr
+    assert (result.returncode == 0) is accepted, result.stderr
+    if not accepted:
+        assert "does not match" in result.stderr
 
 
 def test_uv_workspace_lock_regeneration_tracks_member_changes() -> None:

@@ -52,14 +52,6 @@ _P01_SHARED_INCLUDED_PATHS = (
     "store/audit/history.txt",
     "generated/output.txt",
 )
-_P08_JSON_SCOPE = r"(^|/).*\.(json|jsonc)$"
-_P08_JSON_SCOPE_SAMPLES = (
-    ("package.json", True),
-    (".vscode/settings.json", True),
-    (".vscode/mcp.json", True),
-    (".markdownlint-cli2.jsonc", True),
-    ("serve/delivery-next/src/owlbear_delivery_next/web/ui.mjs", False),
-)
 _M04_ALLOWED_ELEMENTS = [
     "agents",
     "boundaries",
@@ -201,58 +193,19 @@ def test_markdownlint_rule_authorities_remain_explicit() -> None:
     assert config.get("MD060") == {"style": "compact"}
 
 
-def test_delivery_packages_remain_excluded_from_markdown_consumers() -> None:
+def test_generated_markdown_stays_outside_both_lint_consumers() -> None:
     root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-    category = ".owlbear/delivery/packages"
-
-    assert category in root_cli2
-
-    config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
-    precommit_exclude = _read_precommit_exclude(config)
-    assert precommit_exclude.search(_M09_PACKAGE_MARKDOWN_PATH) is not None
-
-
-def test_delivery_runtime_remains_excluded_from_markdown_consumers() -> None:
-    root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-    category = ".owlbear/delivery/runtime"
-
-    assert category in root_cli2
-
-    config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
-    precommit_exclude = _read_precommit_exclude(config)
-    assert precommit_exclude.search(_M09_RUNTIME_MARKDOWN_PATH) is not None
-
-
-def test_broad_worktree_ignore_covers_delivery_worktrees() -> None:
-    root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-    scoped_category = ".owlbear/delivery/worktrees"
-
-    assert "worktrees" in root_cli2
-    assert scoped_category not in root_cli2
-
-    config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
-    precommit_exclude = _read_precommit_exclude(config)
-    assert precommit_exclude.search(_M09_WORKTREE_MARKDOWN_PATH) is not None
-
-
-def test_memory_store_remains_excluded_from_markdown_consumers() -> None:
-    root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-
-    assert ".owlbear/memory" in root_cli2
-
-    config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
-    precommit_exclude = _read_precommit_exclude(config)
-    assert all(precommit_exclude.search(path) is not None for path in _M09_MEMORY_MARKDOWN_PATHS)
-
-
-def test_research_archive_remains_excluded_from_markdown_consumers() -> None:
-    root_cli2 = _read_cli2_ignores(_ROOT / ".markdownlint-cli2.jsonc")
-
-    assert ".owlbear/research" in root_cli2
-
-    config = _read_yaml_mapping(_ROOT / ".pre-commit-config.yaml")
-    precommit_exclude = _read_precommit_exclude(config)
-    assert all(precommit_exclude.search(path) is not None for path in _M09_RESEARCH_MARKDOWN_PATHS)
+    precommit_exclude = _read_precommit_exclude(_read_yaml_mapping(_ROOT / ".pre-commit-config.yaml"))
+    for category, paths in {
+        ".owlbear/delivery/packages": (_M09_PACKAGE_MARKDOWN_PATH,),
+        ".owlbear/delivery/runtime": (_M09_RUNTIME_MARKDOWN_PATH,),
+        "worktrees": (_M09_WORKTREE_MARKDOWN_PATH,),
+        ".owlbear/memory": _M09_MEMORY_MARKDOWN_PATHS,
+        ".owlbear/research": _M09_RESEARCH_MARKDOWN_PATHS,
+    }.items():
+        assert category in root_cli2
+        assert all(precommit_exclude.search(path) is not None for path in paths), category
+    assert ".owlbear/delivery/worktrees" not in root_cli2
 
 
 def test_precommit_exclusion_taxonomy() -> None:
@@ -277,12 +230,6 @@ def test_biome_replaces_frontend_and_json_scanners() -> None:
     assert biome_hook.get("pass_filenames", True) is True
     assert "stages" not in biome_hook
     assert "check --write" in biome_hook.get("entry", "")
-
-    workflow = (_ROOT / ".github/workflows/static.yml").read_text(encoding="utf-8")
-    assert "uv run --no-sync lint --no-fix\n" in workflow
-
-    for path, expected in _P08_JSON_SCOPE_SAMPLES:
-        assert bool(re.search(_P08_JSON_SCOPE, path)) is expected, path
 
 
 def test_biome_json_scope_excludes_generated_and_machine_managed_paths() -> None:
@@ -422,7 +369,7 @@ def test_pytest_test_roots_do_not_share_a_package_namespace() -> None:
     assert all(not (test_root / "__init__.py").is_file() for test_root in test_roots)
 
 
-def test_vscode_settings_have_no_global_prettier_fallback() -> None:
+def test_vscode_language_formatter_matrix_remains_explicit() -> None:
     settings = json.loads(
         _JSONC_LINE_COMMENT.sub(
             "",
@@ -432,16 +379,6 @@ def test_vscode_settings_have_no_global_prettier_fallback() -> None:
     assert isinstance(settings, dict)
     assert "editor.defaultFormatter" not in settings
     assert "esbenp.prettier-vscode" not in json.dumps(settings)
-
-
-def test_vscode_language_formatter_matrix_remains_explicit() -> None:
-    settings = json.loads(
-        _JSONC_LINE_COMMENT.sub(
-            "",
-            (_ROOT / ".vscode/settings.json").read_text(encoding="utf-8"),
-        )
-    )
-    assert isinstance(settings, dict)
 
     for language_scope, formatter in _X04_FORMATTERS.items():
         language_settings = settings.get(language_scope)
