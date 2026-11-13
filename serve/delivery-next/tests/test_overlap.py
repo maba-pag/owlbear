@@ -10,6 +10,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Change,
     ErrorKind,
     Exit,
+    Overlap,
     Plan,
     Step,
     StepKind,
@@ -20,6 +21,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import FINAL, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import loop, round_flow
 from owlbear_delivery_next.change_flow.loop import StepResult
+from owlbear_delivery_next.change_flow.status import Activity, card
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -123,6 +125,32 @@ def conflicted(tmp_path):
     start = git(repo, "rev-parse", "HEAD")
     git(repo, "merge", "-q", "main", check=False)
     return repo, start
+
+
+def test_overlapping_plans_are_recorded_as_information_on_the_card():
+    others = {"c2": ["packages/app"], "c3": ["packages/web"], "c4": ["."]}
+    assert overlap.found(plan("packages/app/src"), others) == [
+        Overlap(other="c2", paths=["packages/app/src"]),
+        Overlap(other="c4", paths=["packages/app/src"]),
+    ]
+    c = loop.apply(integrating(step=Step(kind=K.PLAN), plan=None), StepResult(exit=Exit.DONE, plan=plan("x")), NOW)
+    assert (c.step.kind, loop.open_question(c)) == (K.BUILD, None)  # planning continues
+    c.overlaps = [Overlap(other="c3", paths=["src/app.ts"])]
+    alive = Activity(host_up=True, runner_alive=True, last_event_at=NOW)
+    assert card(c, alive, [], NOW)["overlaps"] == ["overlaps with c3: src/app.ts"]
+
+
+@pytest.mark.parametrize(
+    "shared", [["README.md"], ["docs/guide"], ["uv.lock"], ["web/package-lock.json"], ["dist"], ["a/app.min.js"]]
+)
+def test_docs_lockfiles_and_generated_output_are_no_overlap(shared):
+    assert overlap.found(plan(*shared), {"c2": shared}) == []
+
+
+def test_linguist_generated_paths_are_no_overlap(tmp_path):
+    (tmp_path / ".gitattributes").write_text("# x\napi/gen/** linguist-generated\n*.pb.go linguist-generated=true\n")
+    patterns = overlap.generated(tmp_path)
+    assert overlap.found(plan("api/gen/client.ts", "x/y.pb.go"), {"c2": ["api", "x"]}, patterns) == []
 
 
 SHOWS, HIDES = "On a day without values, the page shows an empty chart.", "On such a day, the page hides the chart."
