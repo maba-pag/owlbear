@@ -192,7 +192,7 @@ def test_each_source_s_failure_is_named_while_the_others_update(world, breaks, s
     reader = world.reader()
     first = reader.read()
     assert (first.failures, first.succeeded_at) == ([], first.read_at)
-    if breaks is not _shared_global:
+    if breaks not in (_shared_global, _hand_edit):
         world.push(**builder("elsewhere"))
     world.models(["m1", "m2"])
     place = breaks(world)
