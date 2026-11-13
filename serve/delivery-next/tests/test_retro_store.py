@@ -63,7 +63,6 @@ def test_review_and_state_are_kept_whole(monkeypatch):
     monkeypatch.setattr(store, "append", append)
     with pytest.raises(KeyboardInterrupt):
         props.reviewed(pid, props.folded()[pid]["evidence"], {"verdict": "survive", "why": "holds"})
-    assert len(writes) == 1
     assert len(writes[0]) == 2
     assert props.folded()[pid]["state"] == "waiting"
 

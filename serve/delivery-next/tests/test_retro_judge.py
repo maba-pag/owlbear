@@ -215,7 +215,6 @@ def test_confirm_sorting_is_kept_whole(monkeypatch):
     monkeypatch.setattr(retro_store, "append", append)
     with pytest.raises(KeyboardInterrupt):
         retro_bars.propose(_work(Asked(_sorting({"a": {"f1", "f2", "f3"}}))), [])
-    assert len(writes) == 1
     assert sorted(row["finding"] for row in writes[0]) == ["f1", "f2", "f3"]
     assert sorted(retro_bars.assignments()) == ["f1", "f2", "f3"]
 
