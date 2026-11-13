@@ -859,14 +859,7 @@ def test_a_publication_that_did_not_go_through_shows_each_cases_whole_reason(
     tmp_path, monkeypatch, pds, whole_error
 ) -> None:
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
-        ids = []
-        for task in ("t one", "t two"):
-            cid = cases.freeze({"intent": {"task": task}}, {"source": "pilot", "family": "f"})
-            entry = {"stage": "candidate", "call": "hand-off-fitness", "why": "why", "example": "", "review": None}
-            cases.commit(cases.current()["n"], {cid: entry}, "t", "add")
-            reviewed = cases.edited(cid, entry, stage="test", reviewed_by="sol")
-            cases.commit(cases.current()["n"], {cid: reviewed}, "t", "reviewed")
-            ids.append(cid)
+        ids = ["c-failed", "c-pending"]
         refused, unpushed = ids
         warned = f"saved and committed in {tmp_path / 'shared'}, but not pushed: the push failed: {whole_error}"
         reasons = {refused: f"failed: DataRepoError: {whole_error}\n{NOTE}", unpushed: f"pending: {warned}"}
