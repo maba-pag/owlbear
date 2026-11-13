@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
@@ -17,9 +16,8 @@ from owlbear_delivery_next.change_flow import amending, loop
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.state_store.store import Lock, Store
 
-from .test_approval_view import Host, served
+from .test_approval_view import Host, opened, served
 from .test_approval_view import big as big_enough
-from .test_approval_view import opened as approval_opened
 from .test_approval_view import replied as posted
 
 if TYPE_CHECKING:
@@ -83,18 +81,12 @@ def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
         yield store, base
 
 
-@contextlib.contextmanager
-def opened(base: str, pds: Any, details: str = "on") -> Iterator[Any]:
-    with approval_opened(base, SLUG, pds, details=details == "on") as page:
-        yield page
-
-
 @pytest.mark.browser
 def test_the_brief_panel_lists_each_amendment_and_takes_an_objection_to_an_applied_one(page_url, pds) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
-    with opened(base, pds) as page:
+    with opened(base, SLUG, pds, details=True) as page:
         part = page.locator(".brief section").filter(has=page.get_by_role("heading", name="Amendments", exact=True))
         expect(part).to_contain_text("Current version v3; reference version v3, from which the challenger judges")
         expect(part).to_contain_text("None.")  # none yet: the part says so instead of an empty list
@@ -153,7 +145,7 @@ def test_an_amendment_applied_in_an_unreviewed_wording_is_an_open_item_with_the_
     for a in c.amendments:
         a.unreviewed = True  # A1 applied, A2 declined
     store.write(Lock(SLUG), c)
-    with opened(base, pds, details="off") as page:
+    with opened(base, SLUG, pds, details=False) as page:
         items = page.locator("#detail .actions")
         expect(items).to_contain_text(
             "Amendment A1 was applied in a wording no challenger reviewed: turn on Show details to read it, and object "
@@ -171,7 +163,7 @@ def test_the_question_on_a_tightening_says_what_it_sets_off_and_its_one_primary_
 
     store, base = page_url
     store.write(Lock(SLUG), tightening_asked())
-    with opened(base, pds) as page:
+    with opened(base, SLUG, pds, details=True) as page:
         first = page.locator(".brief .amendment", has_text="A1, proposed at the build step")
         expect(first).to_contain_text("Object: not now, an amendment runs now; object after it ends.")
         expect(page.locator(".brief .amendment", has_text="A3, proposed")).to_contain_text("in progress")
