@@ -26,7 +26,7 @@ from owlbear_delivery_next.improvement import (
     spotter,
 )
 from owlbear_delivery_next.improvement import retro_proposals as props
-from owlbear_delivery_next.local_system import codebase, maintenance, processes
+from owlbear_delivery_next.local_system import codebase, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import cases_job, retro_inputs, retro_job
 from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR
@@ -35,23 +35,12 @@ from owlbear_delivery_next.machine_host.retro_inputs import pinned
 from owlbear_delivery_next.machine_host.retro_job import LINGERING, RetroJob, Seams
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import spotter_look
-from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import machine_settings
+from owlbear_delivery_next.state_store.store import Store
 
 
 def _owner(*, closed=False):
     return maintenance.Maintenance(Slots(lambda: 2, closed=closed), boot=lambda: 10.0, observe=lambda *_: False)
-
-
-def test_a_retro_lease_is_begun_persisted_finished_and_reloaded_under_its_own_kind():
-    owner = _owner()
-    assert owner.slots.take("retro", "retro:b-1", 1, 1) == 1
-    lease = owner.begin("retro", "retro:b-1", "retro", "")
-    assert owner.holding("retro") == ["retro"]
-    owner.finished(lease, Run("x", termination=processes.Termination(confirmed=True)))
-    again = _owner(closed=True)
-    assert again.holding("retro") == []
-    assert [(s["kind"], s["state"]) for s in again.read()["sessions"]] == [("retro", "released")]
 
 
 def test_a_dead_owners_retro_lease_reloads_held_with_its_slot():
@@ -173,7 +162,7 @@ def _chat(tmp_path, sid, *, quiet_days=2):
     return str(folder)
 
 
-def _finished_change(tmp_path):
+def _finished_change(tmp_path, *, events=None, records=None):
     """A finished Change of project p1, finished after Retro started, with one captured session and one record of it."""
     retro_store.update(lambda t: t.update(watermark=(datetime.now(UTC) - timedelta(days=1)).isoformat()))
     place, sid = str(tmp_path / "wt" / "fix-it"), "s-build"
@@ -183,14 +172,25 @@ def _finished_change(tmp_path):
     )
     folder = retro_units.folder(sid)
     folder.mkdir(parents=True)
-    turns = [("user.message", "add the week column"), ("assistant.message", "Added; the tests pass.")]
-    log = "".join(json.dumps({"type": t, "data": {"content": c}}) + "\n" for t, c in turns)
+    events = (
+        events
+        if events is not None
+        else [
+            {"type": t, "data": {"content": c}}
+            for t, c in [("user.message", "add the week column"), ("assistant.message", "Added; the tests pass.")]
+        ]
+    )
+    log = "".join(json.dumps(e) + "\n" for e in events)
     (folder / "log.jsonl.gz").write_bytes(gzip.compress(log.encode()))
     (folder / "sidecar.json").write_text(json.dumps({"session": sid, "provisional": False, "outputs": []}))
     record = {"id": "rec-c", "at": "2026-01-01T00:00:00+00:00", "look": "handoff", "call": "c", "cutoff": 2}
     record |= {"category": "none", "project": "p1", "change": "fix-it", "step": "build", "session": sid}
-    (spotter.root() / "records-2026-01-01.jsonl").write_text(json.dumps(record) + "\n")
-    (spotter.root() / "cards" / "rec-c.json.gz").write_bytes(gzip.compress(b"{}"))
+    records = records if records is not None else [record]
+    for r in records:
+        card = r.pop("card", {})
+        r.update(session=sid, step="build", project="p1", change="fix-it", provenance="real")
+        (spotter.root() / "cards" / f"{r['id']}.json.gz").write_bytes(gzip.compress(json.dumps(card).encode()))
+    (spotter.root() / "records-2026-01-01.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
     change = Change(
         slug="fix-it",
         finished_at=datetime.now(UTC),
@@ -199,25 +199,17 @@ def _finished_change(tmp_path):
         reviews=[Review(commit="abc", inputs=Inputs(), verdict="fix", findings=["the week starts on Sunday"])],
         outcome=Outcome(exit=Exit.DONE, at=datetime.now(UTC)),
     )
-    st = SimpleNamespace(
-        root=tmp_path / "p1", name="p1", slugs=lambda: ["fix-it"], read=lambda _s: change, events=lambda _s: []
-    )
+    st = Store(tmp_path / "p1", name="p1")
+    with st.lock(change.slug) as lock:
+        st.write(lock, change)
     return {"p1": (st, None)}
 
 
 def _large_change(tmp_path):
     """A real Change whose captured session has enough fixture events for two judging batches."""
-    projects, spec = _finished_change(tmp_path), _large()
+    spec = _large()
     events, _ = syn.events(spec)
-    log = "".join(json.dumps(event) + "\n" for event in events)
-    (retro_units.folder("s-build") / "log.jsonl.gz").write_bytes(gzip.compress(log.encode()))
-    records = syn.records(spec)
-    for r in records:
-        card = r.pop("card")
-        r.update(session="s-build", step="build", project="p1", change="fix-it", provenance="real")
-        (spotter.root() / "cards" / f"{r['id']}.json.gz").write_bytes(gzip.compress(json.dumps(card).encode()))
-    (spotter.root() / "records-2026-01-01.jsonl").write_text("".join(json.dumps(r) + "\n" for r in records))
-    return projects
+    return _finished_change(tmp_path, events=events, records=syn.records(spec))
 
 
 def _large_chat(tmp_path, sid):
@@ -238,35 +230,42 @@ def _large_chat(tmp_path, sid):
     return folder
 
 
-def test_a_finished_change_is_planned_then_judged_against_its_brief_and_reviews_with_its_records_graded(said, tmp_path):
+def test_finished_change_journey(said, tmp_path):
     projects, said.retro_after_change = _finished_change(tmp_path), "on"
+    st, _ = projects["p1"]
+    with st.lock("fix-it") as lock:
+        change = st.read("fix-it")
+        change.brief.decisions.append(BriefDecision(question="week start?", answer="Monday", origin="approved"))
+        st.write(lock, change)
+        for n in range(250):
+            st.log(lock, "fix-it", {"event": "step", "n": n, "token": SECRET if n == 249 else ""})
     assert retro_evidence.plan("chg:p1:fix-it", projects)["judge_batches"] == 1
 
-    _job(asker := Asker(), projects=projects).tick(0.0)
+    job = _job(asker := Asker(), projects=projects)
+    held = []
+    asker.during = lambda _n: held.append(job.maintenance.holding("retro"))
+    job.tick(0.0)
 
     [run] = _runs()
     assert (run["unit"], run["trigger"], run["result"]) == ("chg:p1:fix-it", "change", "judged")
     assert [g["grade"] for g in retro_store.grades(unit="chg:p1:fix-it")] == ["worth-it"]
+    assert retro_store.units()["chg:p1:fix-it"]["revisions"][-1]["state"] == "judged"
     later = _evidence(asker.messages[0])["parts"][0]["later"]
     assert "its brief: a week column" in later
     assert "finding: the week starts on Sunday" in later
-
-
-def test_a_changes_evidence_holds_its_brief_decisions_and_its_last_activity_masked_and_bounded(said, tmp_path):
-    projects, said.retro_after_change = _finished_change(tmp_path), "on"
-    st, _ = projects["p1"]
-    st.read("fix-it").brief.decisions.append(BriefDecision(question="week start?", answer="Monday", origin="approved"))
-    events = [{"event": "step", "n": n, "token": SECRET if n == 249 else ""} for n in range(250)]
-    st.events = lambda _s: events
-
-    _job(asker := Asker(), projects=projects).tick(0.0)
-
     sent = _evidence(asker.messages[0])
     assert "decision (approved): week start? -> Monday" in sent["parts"][0]["later"]
     lines = sent["activity"].splitlines()
     assert ('"n": 249' in lines[-1], SECRET in sent["activity"]) == (True, False)
     assert len(lines) <= retro_evidence.EVENTS
     assert len(json.dumps(sent["activity"])) - 2 <= retro_evidence.ACTIVITY
+    assert len(asker.messages) == 1
+    assert len(held) == 1
+    assert held[0]
+    assert job.maintenance.holding("retro") == []
+    again = _owner(closed=True)
+    assert again.holding("retro") == []
+    assert [(s["kind"], s["state"]) for s in again.read()["sessions"]] == [("retro", "released")]
 
 
 # Interruptions, gates F1, H1 and J2
@@ -473,22 +472,6 @@ def test_chats_are_looked_for_only_when_their_switch_allows_it_and_owlbear_is_id
     monkeypatch.setattr(retro_units, "due_chats", lambda *_a, **_k: seen.append("looked") or [])
     _job(Asker(), SimpleNamespace(paused=paused, fence="", idle=idle)).tick(0.0)
     assert bool(seen) is looked
-
-
-def test_an_enrolled_chat_is_judged_once_owlbear_is_idle(said, tmp_path):
-    said.enrolled_chats, said.retro_when_idle = [_chat(tmp_path, "c3")], "on"
-    old = (datetime.now(UTC) - timedelta(days=3)).isoformat()
-    retro_store.update(lambda t: t.update(watermark=old))
-    state = SimpleNamespace(paused=False, fence="", idle=False)  # a builder works
-    job = _job(asker := Asker(), state)
-    job.tick(0.0)
-    assert _runs() == []
-    state.idle = True
-    job.tick(1.0)
-    [run] = _runs()
-    assert (run["unit"], run["trigger"], run["result"]) == ("chat:c3", "idle", "judged")
-    assert asker.seen
-    assert retro_store.units()["chat:c3"]["revisions"][-1]["state"] == "judged"
 
 
 def test_a_late_record_whose_grade_only_run_failed_waits_for_the_button_and_later_ones_are_graded_again(said, tmp_path):
@@ -703,23 +686,34 @@ def test_the_machine_waits_for_retros_running_run():
         m.stop_all()
 
 
-def test_an_idle_run_waits_at_its_next_call_once_owlbear_is_busy_and_goes_on_when_idle_again(said, tmp_path):
+def test_idle_chat_journey(said, tmp_path):
     said.retro_when_idle = "on"
     said.enrolled_chats = [_large_chat(tmp_path, "large-chat")]
-    state = SimpleNamespace(paused=False, fence="", idle=True)
+    state = SimpleNamespace(paused=False, fence="", idle=False)
     asker = Asker(during=lambda n: n == 1 and setattr(state, "idle", False))  # a builder starts after its first call
     job = _job(asker, state)
     job.tick(0.0)
+    assert (_runs(), asker.messages, retro_units.folder("large-chat").exists()) == ([], [], False)
+    state.idle = True
+    job.tick(1.0)
     [run] = _runs()
     assert (run["state"], run["why"], run["calls"], len(asker.seen)) == ("waiting", "OwlBear is not idle", 1, 1)
+    assert len(asker.messages) == 1
+    saved = retro_store.lines("batches.jsonl")
+    assert saved
+    assert retro_store.grades()
 
-    job.tick(1.0)
+    job.tick(2.0)
     assert (retro_store.run_states()[run["id"]]["state"], len(asker.seen)) == ("waiting", 1)
+    assert retro_store.lines("batches.jsonl") == saved
 
     state.idle = True
-    job.tick(2.0)
+    job.tick(3.0)
     run = retro_store.run_states()[run["id"]]
     assert (run["result"], run["trigger"], run["calls"]) == ("judged", "idle", 2)
+    assert run["unit"] == "chat:large-chat"
+    assert len(asker.messages) == 2
+    assert retro_store.units()["chat:large-chat"]["revisions"][-1]["state"] == "judged"
 
 
 @pytest.mark.parametrize("restarted", [False, True])
@@ -780,9 +774,9 @@ def test_a_paused_automatic_run_waits_while_the_button_runs_and_is_taken_over_wi
 
 
 @pytest.mark.usefixtures("said")
-def test_pruning_keeps_every_capture_something_rests_on_and_removes_a_judged_unreferenced_one():
+def test_capture_pruning_journey():
     old = (datetime.now(UTC) - timedelta(days=40)).isoformat()
-    for sid in ("s-find", "s-case", "s-prop", "c-two", "s-ctl"):
+    for sid in ("s-find", "s-case", "s-prop", "c-two", "s-ctl", "s-rec", "s-pil"):
         retro_units.folder(sid).mkdir(parents=True)
         (retro_units.folder(sid) / "log.jsonl.gz").write_bytes(b"x")
     judged = [{"rev": "r1", "state": "judged"}]
@@ -800,19 +794,16 @@ def test_pruning_keeps_every_capture_something_rests_on_and_removes_a_judged_unr
     assert props.file("k", ["f2"], kind="lesson")
     cases.place().mkdir(parents=True)
     (cases.place() / "c-1.json").write_text(json.dumps({"provenance": {"record": {"session": "s-case"}}}))
+    made = {"c-2": {"record": {"session": "s-rec"}}, "c-3": {"pilot": {"session": "s-pil"}}, "c-4": {"synthetic": "s"}}
+    for cid, prov in made.items():
+        (cases.place() / f"{cid}.json").write_text(json.dumps({"id": cid, "provenance": prov}))
+    assert pinned() == {"s-find", "s-case", "s-prop", "s-rec", "s-pil"}
+    assert "c-two" not in retro_inputs.judged_sessions()
 
     _job(Asker()).tick(0.0)
 
     kept = sorted(p.name for p in retro_units.folder("s-ctl").parent.iterdir() if not p.name.startswith("."))
-    assert kept == ["c-two", "s-case", "s-find", "s-prop"]
-
-
-def test_the_sessions_a_record_or_pilot_case_rests_on_are_kept_and_a_synthetic_case_has_none():
-    cases.place().mkdir(parents=True, exist_ok=True)
-    made = {"c-1": {"record": {"session": "s-rec"}}, "c-2": {"pilot": {"session": "s-pil"}}, "c-3": {"synthetic": "s"}}
-    for cid, prov in made.items():
-        (cases.place() / f"{cid}.json").write_text(json.dumps({"id": cid, "provenance": prov}))
-    assert pinned() == {"s-rec", "s-pil"}
+    assert kept == ["c-two", "s-case", "s-find", "s-pil", "s-prop", "s-rec"]
 
 
 @pytest.mark.usefixtures("said")
