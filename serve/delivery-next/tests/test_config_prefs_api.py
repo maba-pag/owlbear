@@ -10,6 +10,7 @@ from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.state_store.store import Store
 
 from .test_config_api import client
+from .test_prefs_recovery import refuse_config_once
 
 AUTH = {"authorization": "Bearer " + "t"}
 
@@ -48,18 +49,6 @@ def test_the_five_preferences_save_resolve_and_clear_to_unset_through_the_api(st
     assert "prefs.ci_poll_seconds" in again["settings"]["missing"]
     assert store.read_config().prefs.ci_poll_seconds is None
     assert store.read_profile().prefs_import == "done"
-
-
-def _refuse_config_publication_once(monkeypatch, config_path):
-    real, refused = data_repo.DataRepo.publish, []
-
-    def refuse(self, path, message, until=None):
-        if path == config_path and not refused:
-            refused.append(message)
-            return "remote refused"
-        return real(self, path, message, until)
-
-    monkeypatch.setattr(data_repo.DataRepo, "publish", refuse)
 
 
 def _fresh_store(tmp_path: Path, remote: Path) -> Store:
@@ -101,7 +90,7 @@ def test_a_refused_publication_of_an_edited_preference_stays_pending_until_publi
         assert response.status_code == 200
         first = response.json()
     store.mark_prefs_import("", "pending", "absent")
-    _refuse_config_publication_once(monkeypatch, store.config_path)
+    refuse_config_once(monkeypatch, store)
     poll = None if clearing else 30
     layer = first["project"] | {"prefs": {"ci_poll_seconds": poll}}
     refused = c.put(

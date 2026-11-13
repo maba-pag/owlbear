@@ -23,6 +23,8 @@ from owlbear_delivery_next.state_store.store import (
     update_layer,
 )
 
+from .test_prefs_recovery import refuse_config_once
+
 
 @pytest.fixture(autouse=True)
 def no_base(monkeypatch):
@@ -281,15 +283,7 @@ def test_refused_import_config_publishes_current_bytes_on_native_retry(shared_re
     store = Store(tmp_path / "store", shared, "shop-site")
     confirmed = ProfileEntry(state="known", value="45", evidence=f"{profile.CONFIRMED}; owner")
     store.write_profile(Profile(entries={profile.POLL: confirmed}))
-    real, refused = DataRepo.publish, []
-
-    def refuse_the_config_once(self, path, message, until=None):
-        if path == store.config_path and not refused:
-            refused.append(message)
-            return "remote refused"
-        return real(self, path, message, until)
-
-    monkeypatch.setattr(DataRepo, "publish", refuse_the_config_once)
+    refused = refuse_config_once(monkeypatch, store)
     with pytest.raises(StoreError, match="not published"):
         prefs_import.run(store)
     assert refused
