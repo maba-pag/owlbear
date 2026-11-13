@@ -469,13 +469,11 @@ def test_job_pass_failures_keep_separate_whole_errors(monkeypatch, whole_error) 
     with monkeypatch.context() as due:
         due.setattr(case_review, "due", lambda: raising(cases.CaseError(whole_error)))
         cases_now.loop(_one_pass(), lambda: cases_job.PUBLISH_EVERY)
-    broken = [True]
     slots = Slots(lambda: 1)
     slots.open()
-    seams = retro_job.Seams(say=told.append, projects=lambda: raising(RuntimeError(whole_error)) if broken else {})
+    seams = retro_job.Seams(say=told.append, projects=lambda: raising(RuntimeError(whole_error)))
     retro_now = retro_job.RetroJob(slots, seams, maintenance.Maintenance(slots))
     retro_now.loop(_one_pass(), lambda: 0.0)
-    broken.clear()
     unpublished = f"the credit limits cannot be read: OSError: {whole_error}\nthe runtime said more after the error"
     failed = f"CaseError: {whole_error}\nthe runtime said more after the error"
     retro_failed = f"RuntimeError: {whole_error}\nthe runtime said more after the error"
