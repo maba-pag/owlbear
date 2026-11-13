@@ -205,11 +205,11 @@ def test_a_run_whose_usage_was_never_read_says_why() -> None:
         end("r2", "2026-10-01T11:40:00+00:00", {"error": said}, session="s2"),
         start("r3", "2026-10-01T12:00:00+00:00", session="s3", before={}),
     ]
-    totals = spend_metrics.query(spend_shares.derive(lines), tz=UTC)["totals"]
-    assert (totals["unknown"], totals["open"], totals["unknown_why"], totals["failed_why"]) == (3, 1, [said], [])
     pieces = spend_shares.derive(lines)
-    assert [(p["kind"], p["credits"]) for p in pieces if p["run"] == "r3"] == [("open", None)]
     found = spend_metrics.query(pieces, tz=UTC)
+    totals = found["totals"]
+    assert (totals["unknown"], totals["open"], totals["unknown_why"], totals["failed_why"]) == (3, 1, [said], [])
+    assert [(p["kind"], p["credits"]) for p in pieces if p["run"] == "r3"] == [("open", None)]
     assert found["coverage"]["open"] == 1
     assert next(r for r in found["runs"]["items"] if r["run"] == "r3")["open"] is True
 
