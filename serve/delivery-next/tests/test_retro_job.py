@@ -250,10 +250,10 @@ def test_finished_change_journey(said, tmp_path):
     assert (run["unit"], run["trigger"], run["result"]) == ("chg:p1:fix-it", "change", "judged")
     assert [g["grade"] for g in retro_store.grades(unit="chg:p1:fix-it")] == ["worth-it"]
     assert retro_store.units()["chg:p1:fix-it"]["revisions"][-1]["state"] == "judged"
-    later = _evidence(asker.messages[0])["parts"][0]["later"]
+    sent = _evidence(asker.messages[0])
+    later = sent["parts"][0]["later"]
     assert "its brief: a week column" in later
     assert "finding: the week starts on Sunday" in later
-    sent = _evidence(asker.messages[0])
     assert "decision (approved): week start? -> Monday" in sent["parts"][0]["later"]
     lines = sent["activity"].splitlines()
     assert ('"n": 249' in lines[-1], SECRET in sent["activity"]) == (True, False)
