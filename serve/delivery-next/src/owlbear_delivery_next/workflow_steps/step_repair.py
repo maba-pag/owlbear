@@ -177,7 +177,7 @@ def _unchanged(
         change.outcome = Outcome(exit=Exit.RETRY, cause=r.cause, reason=f"repairing: {why}", at=datetime.now(UTC))
         store.write(lock, change)
         return
-    said = f"no change was needed; the unchanged checks passed; the step runs again.{_defect(r)}"
+    said = f"no change was needed; the unchanged checks passed; the step runs again.{repair_messages.defect(r)}"
     _log(store, lock, change, said)
     stuck.unchanged(change, f"Delivery's repair: {said}", datetime.now(UTC))
     store.write(lock, change)
@@ -277,22 +277,17 @@ def _apply(store: Store, lock: Lock, change: Change, path: Path, prof: Profile) 
         message = f"fix: {stuck.obstruction(r.found)}\n\nRepaired by an agent; applied by Delivery (#1066)."
         made = repair_copy.apply(path, change.names.branch, r.base, r.commit, message)
         repair_copy.git(path, ["update-ref", "-d", f"{KEPT}{change.slug}"])
-    _log(store, lock, change, f"applied {made}; the step runs again.{_defect(r)}")
+    _log(store, lock, change, f"applied {made}; the step runs again.{repair_messages.defect(r)}")
     stuck.applied(change, made)
     store.write(lock, change)
 
 
 def _stopped(store: Store, lock: Lock, change: Change, why: str) -> None:
     r = change.repairs.current
-    said = f"{why}.{_defect(r)}".rstrip(".") if r else why
+    said = f"{why}.{repair_messages.defect(r)}".rstrip(".") if r else why
     _log(store, lock, change, f"stopped: {said}")
     stuck.stopped(change, said, datetime.now(UTC))
     store.write(lock, change)
-
-
-def _defect(r: Repair | None) -> str:
-    """What became of the issue for a defect in OwlBear's code, as the owner reads it with the repair."""
-    return repair_messages.defect(r)
 
 
 def _session(  # noqa: PLR0913, PLR0917 - the Change, its copy and lookup, the settings and the witness
