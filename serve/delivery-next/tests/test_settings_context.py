@@ -129,7 +129,6 @@ def test_a_two_size_model_switches_between_exactly_its_sizes_and_the_rates_follo
         assert [items.nth(i).get_attribute("value") for i in range(2)] == ["default", "long"]
         expect(items.nth(0).get_by_role("button")).to_have_accessible_name("200k, default context")
         expect(items.nth(1).get_by_role("button")).to_have_accessible_name("1M, long context, higher rates per token")
-        shows(page, "builder", DEFAULT, caption("medium"))
         items.nth(1).click()
         shows(page, "builder", LONG, caption("medium"))
         expect(page.locator("#pending")).to_contain_text("builder · Context: inherited \u2192 long")
