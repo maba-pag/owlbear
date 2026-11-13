@@ -368,8 +368,7 @@ def test_a_survivor_without_a_title_and_body_is_an_attempt_and_its_retry_keeps_t
 
 
 def test_a_survivors_body_naming_only_longer_ids_still_ends_with_its_own():
-    pid = props.file("real|spotter-case|w", ["rg-w"], kind="spotter-case", provenance="real")
-    due = props.folded()[pid]
+    due = {"id": "rp-0123456789ab", "kind": "spotter-case", "findings": ["rg-w"]}
     ids = [due["id"], *due["findings"]]
     body = "see " + ", ".join(f"{i}0" for i in ids)
     review = {"verdict": "survive", "publishable": {"title": "a case", "body": body}}
@@ -377,12 +376,11 @@ def test_a_survivors_body_naming_only_longer_ids_still_ends_with_its_own():
 
 
 def test_a_survivors_credential_that_its_bound_would_cut_in_two_is_found_before_the_cut():
-    pid = props.file("real|spotter-case|w", ["rg-w"], kind="spotter-case", provenance="real")
     review = {"verdict": "survive", "why": "holds", "risks": [], "publishable": {"title": "a case"}}
     url = "https://ada:" + "s3cretPw" * 3 + "@git.example.com/r"  # its "@" falls past the body's bound
     review["publishable"]["body"] = "b" * (retro_judge.BODY - 20) + " " + url
 
-    got = retro_judge.settled(props.folded()[pid], review)
+    got = retro_judge.settled({"id": "rp-0123456789ab", "kind": "spotter-case", "findings": ["rg-w"]}, review)
     assert (got["verdict"], got["why"], got["publishable"]) == ("reject", "leak: a credential, an email address", {})
 
 

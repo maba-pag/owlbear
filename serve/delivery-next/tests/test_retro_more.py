@@ -227,8 +227,7 @@ def test_a_queued_synthetic_spotter_case_redraft_is_refused_without_a_call(world
 
 
 def test_a_lessons_redraft_body_fits_a_memory_refs_included():
-    pid = props.file("real|lesson|builder", ["rf-2"], kind="lesson", provenance="real")
-    new = props.folded()[pid]
+    new = {"id": "rp-0123456789ab", "kind": "lesson", "findings": ["rf-2"]}
     body = retro_judge.settled(new, _redraft(publishable={"title": "t", "body": "w" * 1_400}))["publishable"]["body"]
     assert len(body) <= targets.MEMORY
     assert body.endswith(f"Refs: {new['id']}, rf-2")
