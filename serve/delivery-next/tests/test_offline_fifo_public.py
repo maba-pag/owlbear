@@ -24,7 +24,6 @@ from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.machine_host import selfcheck
 from owlbear_delivery_next.state_store import (
     database,
-    offline_protocol,
     project_home,
     project_move,
     registry,
@@ -32,6 +31,7 @@ from owlbear_delivery_next.state_store import (
 )
 from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, Database, StoreError
 from owlbear_delivery_next.state_store.store import Store
+
 
 def _chain(exc: BaseException) -> str:
     parts: list[str] = []
