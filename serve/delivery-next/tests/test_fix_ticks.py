@@ -122,13 +122,12 @@ def ticks(text: str) -> dict[str, bool]:
     return {line[6:]: line[3] == "x" for line in text.splitlines() if line.startswith("- [")}
 
 
-def test_a_merged_change_ticks_only_the_items_its_changed_files_cover(tmp_path, shared, github, merged):
+def test_merged_cleanup_credits_only_this_changes_verified_work(tmp_path, shared, github, merged):
     repo, sha = merged
     partial = entry(shared, FIX, [f"Change c0: Notes ({URL[:-1]}5)", "a.py", "src/x/", "src/y/", "docs/c.md", "!e.py"])
     whole = entry(shared, FIX.replace("D1", "D2"), ["a.py", "src/x/b.py"])
     other = entry(shared, "Tidy a.py", ["a.py"])  # not a decision fix
     later = entry(shared, FIX.replace("D1", "D3"), ["a.py"], change="c2")  # another Change's
-
     finish(tmp_path, shared, repo, Gh(pr(sha)))
 
     left = now(shared, partial)
@@ -140,44 +139,31 @@ def test_a_merged_change_ticks_only_the_items_its_changed_files_cover(tmp_path, 
     assert (done.status, github.issues[int(whole)]["state"], all(ticks(done.text).values())) == ("done", "closed", True)
     for untouched in (other, later):
         assert (now(shared, untouched).status, ticks(now(shared, untouched).text)) == ("in-change", {"a.py": False})
-
-
-def test_the_change_is_found_under_this_clone_s_id_and_an_owner_s_tick_meanwhile_is_kept(
-    tmp_path, shared, github, merged
-):
-    repo, sha = merged
     (repo / ".git" / "owlbear-delivery").mkdir()
     (repo / ".git" / "owlbear-delivery" / "clone-id").write_text("abc123\n")
-    fix = entry(shared, FIX, ["a.py", "docs/c.md"], change="abc123/c1")
-    elsewhere = entry(shared, FIX.replace("D1", "D2"), ["a.py"], change="zzz999/c1")  # another clone's c1
-    issue = github.issues[int(fix)]
-    issue["body"] = issue["body"].replace("- [ ] docs/c.md", "- [x] docs/c.md", 1)  # ticked on GitHub
-
+    owner = entry(shared, FIX.replace("D1", "D4"), ["a.py", "docs/c.md"], change="abc123/c1")
+    elsewhere = entry(shared, FIX.replace("D1", "D5"), ["a.py"], change="zzz999/c1")
+    issue = github.issues[int(owner)]
+    issue["body"] = issue["body"].replace("- [ ] docs/c.md", "- [x] docs/c.md", 1)
     finish(tmp_path, shared, repo, Gh(pr(sha)))
-
-    assert (now(shared, fix).status, ticks(now(shared, fix).text)) == ("done", {"a.py": True, "docs/c.md": True})
-    assert now(shared, elsewhere).status == "in-change"
+    assert (now(shared, owner).status, ticks(now(shared, owner).text)) == ("done", {"a.py": True, "docs/c.md": True})
+    assert (now(shared, elsewhere).status, ticks(now(shared, elsewhere).text)) == ("in-change", {"a.py": False})
 
 
 @pytest.mark.usefixtures("github")
-@pytest.mark.parametrize("ended", ["abandoned", "unchanged"])
-def test_a_change_that_merged_nothing_ticks_nothing_and_reopens_its_fixes(tmp_path, shared, change_repo, ended):
-    fix = entry(shared, FIX, ["a.py", "!docs/c.md"])
-    gh = Gh(pr(None, merged=False) if ended == "abandoned" else None)
-
-    finish(tmp_path, shared, change_repo, gh, "abandon" if ended == "abandoned" else None)
-
-    assert (now(shared, fix).status, ticks(now(shared, fix).text)) == ("open", {"a.py": False, "docs/c.md": True})
+@pytest.mark.parametrize("ended", ["abandoned", "unchanged", "merged-while-abandoning"])
+def test_cleanup_without_delivery_reopens_without_credit(tmp_path, shared, change_repo, ended):
+    items = ["a.txt"] if ended == "merged-while-abandoning" else ["a.py", "!docs/c.md"]
+    expected = {"a.txt": False} if ended == "merged-while-abandoning" else {"a.py": False, "docs/c.md": True}
+    fix = entry(shared, FIX, items)
+    observed = None
+    if ended == "abandoned":
+        observed = pr(None, merged=False)
+    elif ended == "merged-while-abandoning":
+        observed = pr(git(change_repo, "rev-parse", "HEAD"))
+    finish(tmp_path, shared, change_repo, Gh(observed), None if ended == "unchanged" else "abandon")
+    assert (now(shared, fix).status, ticks(now(shared, fix).text)) == ("open", expected)
     assert "Verified by" not in now(shared, fix).text
-
-
-@pytest.mark.usefixtures("github")
-def test_an_abandoning_change_whose_pr_merged_anyway_credits_nothing(tmp_path, shared, change_repo):
-    fix = entry(shared, FIX, ["a.txt"])  # the file the fixture's HEAD changed, so a wrong credit would tick it
-
-    finish(tmp_path, shared, change_repo, Gh(pr(git(change_repo, "rev-parse", "HEAD"))), "abandon")
-
-    assert (now(shared, fix).status, ticks(now(shared, fix).text)) == ("open", {"a.txt": False})
 
 
 def scheduled(shared: DataRepo, impact: Impact, change: str) -> str:
@@ -191,41 +177,32 @@ def scheduled(shared: DataRepo, impact: Impact, change: str) -> str:
 
 
 @pytest.mark.usefixtures("github")
-@pytest.mark.parametrize("launched", ["confirmed", "unknown"])
-def test_a_path_free_fix_is_completed_by_the_merged_change_launched_from_it_and_by_no_other(
-    tmp_path, shared, merged, launched
-):
-    repo, sha = merged
+def test_path_free_fix_requires_its_own_nonempty_merged_change(shared):
     built = {"slug": "c0", "title": "Notes", "pr": f"{URL[:-1]}5", "from": "merged"}
-    impacts = {"confirmed": Impact(PROJECT, "confirmed", "built under it", (built,), ()),
-               "unknown": Impact(PROJECT, "unknown", "no record", (), ())}  # fmt: skip
-    fix = scheduled(shared, impacts.pop(launched), "c1")
-    unrelated = scheduled(shared, impacts.popitem()[1], "c9")
-
-    finish(tmp_path, shared, repo, Gh(pr(sha)))
-
-    done = now(shared, fix)
-    assert (done.status, all(ticks(done.text).values()), done.evidence[-1]) == ("done", True, URL)
-    assert f"Verified by Change c1 ({URL}), merged: its checklist names no files." in done.text
-    left = now(shared, unrelated)
-    assert (left.status, any(ticks(left.text).values()), "Verified by" in left.text) == ("in-change", False, False)
-
-
-@pytest.mark.usefixtures("github")
-def test_a_merge_that_changed_no_files_does_not_complete_a_path_free_fix(shared):
-    impact = Impact(PROJECT, "unknown", "no record", (), ())
-    fix = now(shared, scheduled(shared, impact, "c1"))
-
+    impacts = (
+        Impact(PROJECT, "confirmed", "built under it", (built,), ()),
+        Impact(PROJECT, "unknown", "no record", (), ()),
+    )
+    fixes = [scheduled(shared, impact, "c1") for impact in impacts]
+    unrelated = [scheduled(shared, impact, "c9") for impact in impacts]
+    fix = now(shared, fixes[1])
     fields = decision_fixes._verify(frozenset(), {"c1"}, PROJECT, ("c1", URL))(fix, "")  # noqa: SLF001
 
     assert fields["status"] == "open"
     assert not any(ticks(fields["text"]).values())
     assert "Verified by" not in fields["text"]
+    decision_fixes.verified(Backlog(shared, PROJECT), "c1", None, frozenset({"a.py", "src/x/b.py"}), URL)
+    for entry_id in fixes:
+        done = now(shared, entry_id)
+        assert (done.status, all(ticks(done.text).values()), done.evidence[-1]) == ("done", True, URL)
+        assert f"Verified by Change c1 ({URL}), merged: its checklist names no files." in done.text
+    for entry_id in unrelated:
+        left = now(shared, entry_id)
+        assert (left.status, any(ticks(left.text).values()), "Verified by" in left.text) == ("in-change", False, False)
 
 
 @pytest.mark.usefixtures("github")
-def test_an_entry_reassigned_meanwhile_is_left_as_it_is(tmp_path, shared, merged, monkeypatch):
-    repo, sha = merged
+def test_fix_reassignment_is_rechecked_during_revision(shared, monkeypatch):
     fix = entry(shared, FIX, ["a.py"])
     revise = Backlog.revise
 
@@ -234,14 +211,14 @@ def test_an_entry_reassigned_meanwhile_is_left_as_it_is(tmp_path, shared, merged
         return revise(self, entry_id, work)
 
     monkeypatch.setattr(Backlog, "revise", reassigned_first)
-    finish(tmp_path, shared, repo, Gh(pr(sha)))
+    decision_fixes.verified(Backlog(shared, PROJECT), "c1", None, frozenset({"a.py"}), URL)
 
     assert (now(shared, fix).change, now(shared, fix).status, ticks(now(shared, fix).text)) == (
         "c9", "in-change", {"a.py": False})  # fmt: skip
 
 
 @pytest.mark.parametrize("failure", ["github", "diff"])
-def test_a_failure_leaves_the_fixes_as_they_were_and_cleanup_finishes_with_a_notice(
+def test_fix_update_failure_preserves_records_and_finishes_cleanup_with_a_notice(
     shared, github, merged, whole_error, failure
 ):
     repo, sha = merged  # the clone lies in the test's tmp_path, beside the store finish makes
