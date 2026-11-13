@@ -12,7 +12,7 @@ from owlbear_delivery_next.settings.config import Agent, Layer
 
 from . import test_settings_page
 from .test_config_api import offered_model, prices
-from .test_settings_page import hold_first, settings_page
+from .test_settings_page import hold_first, settings_page, until
 
 local_store = test_settings_page.local_store
 
@@ -80,6 +80,7 @@ def test_a_one_size_model_shows_its_size_and_rates_with_no_switch_or_select(stor
         assert removed is not None
         layer = pds.select(page, "Layer").get_by_role("combobox")
         layer.focus()
+        until(page, lambda: held[0])
         route, response = held[0][0]
         route.fulfill(response=response)
         expect(page.locator("#models-note")).to_contain_text("as this machine's Copilot offers them")
