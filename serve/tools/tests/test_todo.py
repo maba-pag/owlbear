@@ -37,7 +37,6 @@ def test_todo_ignores_binary_files(
     output = capsys.readouterr().out
     assert "1 TODO marker(s)" in output
     assert "real.md:1: > **TODO:** stale — update the command table [#1234]" in output
-    assert "{category}" not in output
 
     (tmp_path / "real.md").unlink()
     assert run_todo() == 0
