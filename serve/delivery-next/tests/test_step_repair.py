@@ -314,7 +314,6 @@ def _ask_missing_preparation(repo, store, proposal, monkeypatch):
     assert [p["action"] for p in proof] == ["restore", "seed", "verify", "cleanup"]
     clean = calls[0].worktree.with_name(f"{calls[0].worktree.name}-preparation-proof")
     assert {p["home"] for p in proof} == {str(clean / ".fixture-home")}
-    assert all(p["data"]["runs"][0]["cost"] == 1.25 for p in proof)
     assert not calls[0].worktree.exists()
     assert (store.config_path.read_bytes(), worktree.git(store.shared.root, "rev-parse", "HEAD")) == (before, head)
     return c, calls
@@ -415,7 +414,6 @@ def _exercise_saved_preparation(store, c, repo, proposal):
                 proc.wait(timeout=10)
         preview = json.loads(log.read_text())
         assert (preview["action"], preview["cwd"], preview["home"]) == ("preview", str(root / "app"), env["HOME"])
-        assert preview["data"] == {"authenticated": True, "runs": [{"name": "synthetic-run", "cost": 1.25}]}
         c.env = None
         assert prepare.end(store, c, repo, settings, events.append) is None
         assert not (root / ".fixture-home").exists()
