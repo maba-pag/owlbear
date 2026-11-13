@@ -903,7 +903,7 @@ def test_seed_and_cleanup_run_with_the_setup_patch_and_a_failed_cleanup_stays_ou
     assert (lines(log), (tmp / "test.db").read_text()) == (["seed-from-patch"], "seeded by the patch")
     assert (repo / "fixtures" / "users.json").read_text() == '[{"name": "Ada"}]\n'
     assert (repo / "fixtures" / "orders.json").read_text() == "[]\n"
-    assert sorted(prepare.edits(repo)) == paths + ["src/left.py"]
+    assert sorted(prepare.edits(repo)) == [*paths, "src/left.py"]
     (fails := tmp / "cleanup-fails").write_text("")
     c.env, events = None, []
     assert prepare.end(store, c, repo, s, events.append) is None
