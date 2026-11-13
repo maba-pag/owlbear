@@ -12,16 +12,18 @@ import io
 import json
 import os
 import stat
-import subprocess
 from pathlib import Path
 
 import pytest
+from tests import publication_offline
+from tests.publication_offline import AFTER
+from tests.publication_offline import source as _source
+from tests.publication_offline import switched_store as _move_to_next_boot
 
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.machine_host import selfcheck
 from owlbear_delivery_next.state_store import (
     database,
-    offline_protocol,
     project_home,
     project_move,
     registry,
@@ -29,9 +31,6 @@ from owlbear_delivery_next.state_store import (
 )
 from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT, Database, StoreError
 from owlbear_delivery_next.state_store.store import Store
-
-BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
-AFTER = "BBBBBBBB-0000-4000-8000-000000000002"
 
 
 def _chain(exc: BaseException) -> str:
@@ -82,24 +81,12 @@ def blocking_opens(monkeypatch) -> list[str]:
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
-    path = tmp_path / "shop"
-    subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True, capture_output=True)  # noqa: S603, S607
-    folder = project_home.clone_dir(path)
-    folder.mkdir(parents=True)
-    (folder / MARKER).write_text("7")
-    (folder / "config.json").write_text(json.dumps({"format": 1, "widths": [1600]}))
-    return path
+    return publication_offline.repo(tmp_path, payload=False)
 
 
 @pytest.fixture
 def boot(monkeypatch) -> dict:
-    state = {"id": BEFORE}
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: state["id"])
-    return state
-
-
-def _source(repo: Path) -> Path:
-    return project_home.clone_dir(repo)
+    return publication_offline.boot(monkeypatch)
 
 
 def _snapshot(folder: Path) -> dict[str, bytes | str]:
@@ -146,14 +133,6 @@ def _open(repo: Path) -> tuple[Path | None, str]:
         return Store.open(repo).root, ""
     except Exception as exc:  # noqa: BLE001 - the refusal is the assertion
         return None, _chain(exc)
-
-
-def _move_to_next_boot(repo: Path, boot: dict) -> Path:
-    """Real Prepare, a modeled reboot, real Finish and a positive Store.open; returns the active store's root."""
-    assert cli.main(["--repo", str(repo), "prepare"]) == 0
-    boot["id"] = AFTER
-    assert cli.main(["--repo", str(repo), "finish"]) == 0
-    return Store.open(repo).root
 
 
 # A FIFO at a metadata entry of the source while the move is pending: Finish must refuse it before anything moves.
