@@ -40,9 +40,9 @@ ALL = ("merge", "squash", "rebase")
 LIMIT = "Upgrade to GitHub Pro or make this repository public to enable this feature."
 
 
-def git(cwd: Path, *args: str) -> str:
+def git(cwd: Path, *args: str, strip: bool = True) -> str:
     done = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True)  # noqa: S603, S607
-    return done.stdout.strip()
+    return done.stdout.strip() if strip else done.stdout
 
 
 class Hub:
@@ -196,26 +196,11 @@ def facts(info: dict[str, Any]) -> dict[str, Any]:
     return {k: stage(info, "end")["result"][k] for k in ("registered", "profile", "ready")}
 
 
-def test_a_new_private_project_from_zero_is_published_protected_and_set_up(hub, jobs, tmp_path):
-    found = jobs.probe({"kind": "new", "name": "demo", "folder": str(tmp_path / "demo")})
-    assert (found["entry"], found["refusal"]) == ("E5", "")
-    plan = plan_for(found, repository="ada/demo")
-    assert onboarding_probe.preflight(plan) == []
-    info = run(jobs, plan)
-    assert [s["state"] for s in info["stages"]] == ["done"] * len(info["stages"]), info
-    folder = Path(found["folder"])
-    pushed = git(hub.remotes / "ada/demo.git", "ls-tree", "-r", "--name-only", "main").split("\n")
-    assert pushed == [".github/workflows/ci.yml", "README.md"]
-    assert git(folder, "rev-parse", "--abbrev-ref", "@{upstream}") == "origin/main"
-    assert ("create", "ada/demo", "private") in hub.calls
-    rules = {r["type"]: r.get("parameters") for r in hub.rulesets["ada/demo"][1]["rules"]}
-    assert rules["pull_request"]["allowed_merge_methods"] == ["merge"]
-    assert rules["required_status_checks"]["required_status_checks"] == [{"context": "CI"}]
-    store = Store.open(folder)
-    assert store.read_config().prefs.merge_method == MergeMethod.MERGE
-    assert store.read_profile().confirmed_at is not None
-    assert setup.registered(folder)
-    assert facts(info) == {"registered": True, "profile": True, "ready": True}
+def committed_clone(hub: Hub, parent: Path, repository: str, *, methods: tuple[str, ...] = ALL) -> Path:
+    """Create one committed remote and its native local clone; callers own rules and failure injections."""
+    hub.add(repository, commits=True, methods=methods)
+    name = repository.rsplit("/", 1)[-1]
+    return Path(onboarding_git.clone(parent, f"https://github.com/{repository}.git", name, Access.LOCAL))
 
 
 def test_a_local_only_project_makes_no_github_effect_registers_nothing_and_stays_listed(hub, jobs, tmp_path):
@@ -234,6 +219,10 @@ def test_a_local_only_project_makes_no_github_effect_registers_nothing_and_stays
     again = jobs.probe({"kind": "folder", "folder": found["folder"], "github": True})
     assert again["entry"] == "E3b"
     assert "repository" in again["stages"]
+    assert "job" not in again  # a finished local-only run is no run to resume
+    published = run(jobs, plan_for(again, repository="ada/notes"))
+    assert published["ended"] == "done"
+    assert info["id"] not in [j["id"] for j in jobs.listed()]
 
 
 def test_an_ignored_file_staged_before_it_was_ignored_stays_unpublished(hub, jobs, tmp_path):
@@ -270,8 +259,7 @@ def test_an_empty_repository_with_an_unborn_clone_gets_a_first_commit_and_merge_
 
 
 def test_an_existing_clone_left_unprotected_gets_no_rule_and_no_merge_method(hub, jobs, tmp_path):
-    hub.add("ada/patch", commits=True)
-    folder = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/patch.git", "patch", Access.LOCAL))
+    folder = committed_clone(hub, tmp_path, "ada/patch")
     found = jobs.probe({"kind": "folder", "folder": str(folder)})
     assert found["entry"] == "E2"
     assert found["stages"][0] == "protection"
@@ -389,11 +377,10 @@ def test_a_running_stage_counts_as_busy(jobs, tmp_path, monkeypatch):
 
 
 def test_one_ruleset_without_merge_gets_merge_added_and_its_answer_is_checked(hub, jobs, tmp_path):
-    hub.add("ada/proj", commits=True, methods=("merge", "squash"))
+    folder = committed_clone(hub, tmp_path, "ada/proj", methods=("merge", "squash"))
     body = branch_rules.new_ruleset("main", require_ci=False)
     body["rules"][2]["parameters"]["allowed_merge_methods"] = ["squash"]
     hub.rulesets["ada/proj"] = {7: body}
-    folder = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/proj.git", "proj", Access.LOCAL))
     found = jobs.probe({"kind": "folder", "folder": str(folder)})
     assert "merge_method" in [i["key"] for i in found["rules"]["items"] if not i["holds"]]
     hub.answer = {**body, "bypass_actors": [{"actor_id": 1, "actor_type": "Integration", "bypass_mode": "always"}]}
@@ -404,17 +391,6 @@ def test_one_ruleset_without_merge_gets_merge_added_and_its_answer_is_checked(hu
     info = settle(jobs, jobs.resume(info["id"])["id"])
     sent = hub.rulesets["ada/proj"][7]["rules"][2]["parameters"]["allowed_merge_methods"]
     assert sorted(sent) == ["merge", "squash"]
-
-
-def test_classic_protection_is_listed_for_github_and_never_written(hub, jobs, tmp_path):
-    hub.add("ada/proj", commits=True)
-    hub.classic["ada/proj"] = {"required_linear_history": {"enabled": True}}
-    folder = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/proj.git", "proj", Access.LOCAL))
-    found = jobs.probe({"kind": "folder", "folder": str(folder)})
-    assert found["rules"]["links"] == {"classic": "https://github.com/ada/proj/settings/branches"}
-    info = run(jobs, plan_for(found, method="squash"))
-    assert stage(info, "protection")["result"] == {"applied": False, "listed": True}
-    assert [c for c in hub.calls if c[0] == "ruleset"] == []
 
 
 @pytest.mark.usefixtures("hub")
@@ -477,9 +453,41 @@ def served(monkeypatch: pytest.MonkeyPatch, pds: Any) -> Iterator[tuple[Any, str
                 assert not thread.is_alive(), "the owned page server did not stop"
 
 
+def new_project_choices(page: Any, base: str, pds: Any, folder: Path) -> tuple[Any, Any, dict[str, Any]]:
+    """Open E5 Choices through its real probe; preflight and all observations stay with the caller."""
+    page.goto(f"{base}/projects#token=t")
+    opener = page.get_by_role("button", name="Add a project")
+    opener.click()
+    modal = pds.modal(page)
+    modal.get_by_role("textbox", name="Name").fill(folder.name)
+    modal.get_by_role("textbox", name="Folder").fill(str(folder))
+    with page.expect_response("**/onboarding/probe") as probed:
+        modal.get_by_role("button", name="Look").click()
+    found = probed.value.json()
+    modal.get_by_role("textbox", name="Owner").fill("ada")
+    return opener, modal, found
+
+
+@pytest.fixture
+def registered_setup_page(hub, tmp_path, monkeypatch, pds) -> Iterator[tuple[Any, Any, Path]]:
+    """A registered clone on Projects with conflicting rules, an unknown profile and failed readiness."""
+    folder = committed_clone(hub, tmp_path, "ada/proj", methods=("merge", "squash"))
+    body = branch_rules.new_ruleset("main", require_ci=False)
+    body["rules"][2]["parameters"].update(allowed_merge_methods=["squash"], required_approving_review_count=1)
+    hub.rulesets["ada/proj"] = {7: body}
+    registry.register(folder)
+    partial = ProfileEntry(state="unknown", value="Lint", evidence="unresolved check names: codeql.yml")
+    monkeypatch.setattr(setup_profile.profile, "detect", lambda *_a: Profile(version=1, entries={DECLARED: partial}))
+    with served(monkeypatch, pds) as (page, base, machine):
+        failing = readiness.Check("first commit", ok=False, detail="none yet", fix="commit")
+        monkeypatch.setattr(project.readiness, "ready", lambda *_a, **_k: [failing])
+        next(p for p in machine.projects.values() if Path(p.entry.path) == folder)._ready()  # noqa: SLF001
+        page.goto(f"{base}/projects#token=t")
+        yield page, page.get_by_role("listitem", name="proj"), folder
+
+
 @pytest.mark.browser
-@pytest.mark.usefixtures("hub")
-def test_the_dialog_takes_a_new_project_from_zero_to_new_change(tmp_path, monkeypatch, pds):
+def test_the_dialog_takes_a_new_project_from_zero_to_new_change(hub, tmp_path, monkeypatch, pds):
     """A failed stage shows whole with Retry; the profile is confirmed in the dialog and saved; the ending's three
     facts hold and New Change opens the shaping chat for this project; closing gives focus back to its opener."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
@@ -500,16 +508,12 @@ def test_the_dialog_takes_a_new_project_from_zero_to_new_change(tmp_path, monkey
         page.route("**/new-change", lambda r: opened.append(r.request.url) or r.fulfill(
             json={"started": True, "launch": "L1"}))  # fmt: skip
         page.route("**/new-change/L1", lambda r: r.fulfill(json={"state": "open"}))
-        page.goto(f"{base}/projects#token=t")
-        opener = page.get_by_role("button", name="Add a project")
-        opener.click()
-        modal = pds.modal(page)
-        modal.get_by_role("textbox", name="Name").fill("demo")
-        modal.get_by_role("textbox", name="Folder").fill(str(folder))
-        modal.get_by_role("button", name="Look").click()
+        opener, modal, found = new_project_choices(page, base, pds, folder)
+        assert (found["entry"], found["refusal"]) == ("E5", "")
         expect(modal).to_contain_text("Found nothing yet")
-        modal.get_by_role("textbox", name="Owner").fill("ada")
-        modal.get_by_role("button", name="Check and continue").click()
+        with page.expect_response("**/onboarding/preflight") as checked:
+            modal.get_by_role("button", name="Check and continue").click()
+        assert checked.value.json()["problems"] == []
         expect(modal).to_contain_text("save the merge method merge for this project")
         modal.get_by_role("button", name="Create and set up demo").click()
         expect(modal.locator("pre")).to_have_text("LocalGitError: git push failed: the network went away")
@@ -518,7 +522,22 @@ def test_the_dialog_takes_a_new_project_from_zero_to_new_change(tmp_path, monkey
         expect(modal.locator(".facts")).to_contain_text("Registered: yes")
         expect(modal.locator(".facts")).to_contain_text("Profile confirmed: yes")
         expect(modal.locator(".facts")).to_contain_text("Ready for Delivery: yes")
-        assert Store.open(folder).read_profile().confirmed_at is not None
+        info = next(iter(machine.onboarding.jobs.values())).info()
+        assert [s["state"] for s in info["stages"]] == ["done"] * len(info["stages"]), info
+        assert git(hub.remotes / "ada/demo.git", "ls-tree", "-r", "--name-only", "main").split("\n") == [
+            ".github/workflows/ci.yml",
+            "README.md",
+        ]
+        assert git(folder, "rev-parse", "--abbrev-ref", "@{upstream}") == "origin/main"
+        assert ("create", "ada/demo", "private") in hub.calls
+        rules = {r["type"]: r.get("parameters") for r in hub.rulesets["ada/demo"][1]["rules"]}
+        assert rules["pull_request"]["allowed_merge_methods"] == ["merge"]
+        assert rules["required_status_checks"]["required_status_checks"] == [{"context": "CI"}]
+        store = Store.open(folder)
+        assert store.read_config().prefs.merge_method == MergeMethod.MERGE
+        assert store.read_profile().confirmed_at is not None
+        assert setup.registered(folder)
+        assert facts(info) == {"registered": True, "profile": True, "ready": True}
         pid = next(p for p in machine.projects.values() if Path(p.entry.path) == folder).entry.id
         modal.get_by_role("button", name="New Change").click()
         pds.answer(page, "Open the chat")
@@ -530,65 +549,71 @@ def test_the_dialog_takes_a_new_project_from_zero_to_new_change(tmp_path, monkey
 
 
 @pytest.mark.browser
-def test_finish_setup_on_a_registered_clone_changes_its_ruleset_and_says_what_is_missing(hub, tmp_path, monkeypatch,
-                                                                                           pds):  # fmt: skip
+def test_finish_setup_on_a_registered_clone_changes_its_ruleset_and_says_what_is_missing(
+    hub, registered_setup_page, pds
+):
     """A registered row's Finish setup opens the dialog on its folder; the rules list shows the conflict and the
     advice, ticked changes reach the ruleset; with the chat server declined the ending says it isn't ready and offers
     no New Change; Tab stays inside the dialog."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    hub.add("ada/proj", commits=True, methods=("merge", "squash"))
-    body = branch_rules.new_ruleset("main", require_ci=False)
-    body["rules"][2]["parameters"].update(allowed_merge_methods=["squash"], required_approving_review_count=1)
-    hub.rulesets["ada/proj"] = {7: body}
-    folder = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/proj.git", "proj", Access.LOCAL))
-    registry.register(folder)
-    partial = ProfileEntry(state="unknown", value="Lint", evidence="unresolved check names: codeql.yml")
-    monkeypatch.setattr(setup_profile.profile, "detect", lambda *_a: Profile(version=1, entries={DECLARED: partial}))
-    with served(monkeypatch, pds) as (page, base, _machine):
-        page.goto(f"{base}/projects#token=t")
-        held: list[Any] = []
+    page, row, folder = registered_setup_page
+    expect(row.get_by_role("button", name="Finish setup")).to_be_visible()
+    expect(row.get_by_role("list", name="Failed readiness checks")).to_be_visible()
+    held: list[Any] = []
 
-        def hold(route: Any) -> None:  # the probe answers once the dialog is seen open
-            held.append(route)
+    def hold(route: Any) -> None:  # the probe answers once the dialog is seen open
+        held.append(route)
 
-        page.route("**/onboarding/probe", hold)
-        page.get_by_role("listitem", name="proj").get_by_role("button", name="Finish setup").click()
-        modal = pds.modal(page)
-        while not held:
-            page.wait_for_timeout(50)
-        expect(modal).to_be_visible()
-        page.unroute("**/onboarding/probe", hold)
-        held[0].continue_()
-        expect(modal).to_contain_text("registered here")
-        for _ in range(12):  # past the last control focus goes to the browser (body), never to the page behind
-            page.keyboard.press("Tab")
-            assert modal.evaluate("m => m.contains(document.activeElement) || document.activeElement === document.body")
-        modal.get_by_role("checkbox", name="Protect the default branch (opt-in: it has history)").check()
-        rules = modal.locator(".rules")
-        expect(rules).to_contain_text("conflicts: Delivery needs")
-        rules.get_by_role("checkbox", name=re.compile("approv")).check()
-        modal.get_by_role("checkbox", name="Register Delivery's chat server in .mcp.json").uncheck()
-        modal.get_by_role("button", name="Check and continue").click()
-        expect(modal).to_contain_text(
-            "change ruleset 7 of the default branch: allow merge commits in its pull-request rule; require no approvals"
-        )
-        expect(modal).to_contain_text("save the merge method merge for this project")
-        expect(modal).to_contain_text("Nothing is published.")  # an existing clone: nothing is created or published
-        modal.get_by_role("button", name="Set up proj", exact=True).click()
-        expect(modal).to_contain_text("Found so far: Lint. unresolved check names: codeql.yml")
-        modal.get_by_role("button", name="Confirm profile").click()
-        expect(modal.locator(".facts")).to_contain_text("Ready for Delivery: no")
-        expect(modal).to_contain_text("chats can't reach Delivery")
-        expect(modal.get_by_role("button", name="New Change")).to_have_count(0)
+    page.route("**/onboarding/probe", hold)
+    row.get_by_role("button", name="Finish setup").click()
+    modal = pds.modal(page)
+    while not held:
+        page.wait_for_timeout(50)
+    expect(modal).to_be_visible()
+    page.unroute("**/onboarding/probe", hold)
+    held[0].continue_()
+    expect(modal).to_contain_text("registered here")
+    for _ in range(12):  # past the last control focus goes to the browser (body), never to the page behind
+        page.keyboard.press("Tab")
+        assert modal.evaluate("m => m.contains(document.activeElement) || document.activeElement === document.body")
+    modal.get_by_role("checkbox", name="Protect the default branch (opt-in: it has history)").check()
+    expect(modal.locator(".rules")).to_contain_text("conflicts: Delivery needs")
+    modal.locator(".rules").get_by_role("checkbox", name=re.compile("approv")).check()
+    modal.get_by_role("checkbox", name="Register Delivery's chat server in .mcp.json").uncheck()
+    modal.get_by_role("button", name="Check and continue").click()
+    expect(modal).to_contain_text(
+        "change ruleset 7 of the default branch: allow merge commits in its pull-request rule; require no approvals"
+    )
+    expect(modal).to_contain_text("save the merge method merge for this project")
+    expect(modal).to_contain_text("Nothing is published.")  # an existing clone: nothing is created or published
+    modal.get_by_role("button", name="Set up proj", exact=True).click()
+    expect(modal).to_contain_text("Found so far: Lint. unresolved check names: codeql.yml")
+    expect(modal.get_by_role("button", name="Confirm profile")).to_be_visible()
+    modal.get_by_role("button", name="Close").click()
+    expect(row).to_have_count(1)
+    expect(row.locator("p-tag", has_text="Not fully added")).to_be_visible()  # the page's next poll
+    expect(row).to_contain_text("Waits for you to confirm its profile")
+    expect(row.get_by_role("button", name="Finish setup")).to_have_count(0)
+    assert row.get_by_role("list", name="Failed readiness checks").count() == 0
+    expect(page.get_by_role("heading", name="Not added yet")).to_have_count(0)
+    row.get_by_role("button", name="Confirm profile").click()
+    modal = pds.modal(page)
+    modal.get_by_role("button", name="Confirm profile").click()
+    expect(modal.locator(".facts")).to_contain_text("Registered: yes")
+    expect(modal.locator(".facts")).to_contain_text("Profile confirmed: yes")
+    expect(modal.locator(".facts")).to_contain_text("Ready for Delivery: no")
+    expect(modal).to_contain_text("chats can't reach Delivery")
+    expect(modal.get_by_role("button", name="New Change")).to_have_count(0)
+    modal.get_by_role("button", name="Close").click()
+    expect(row.locator("p-tag", has_text="Not fully added")).to_have_count(0)
     pull = hub.rulesets["ada/proj"][7]["rules"][2]["parameters"]
     assert (sorted(pull["allowed_merge_methods"]), pull["required_approving_review_count"]) == (["merge", "squash"], 0)
     assert Store.open(folder).read_config().prefs.merge_method == MergeMethod.MERGE
 
 
 def test_a_registered_clone_is_found_through_a_linked_path(hub, jobs, tmp_path):
-    hub.add("ada/proj", commits=True)
-    folder = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/proj.git", "proj", Access.LOCAL))
+    folder = committed_clone(hub, tmp_path, "ada/proj")
     entry = registry.register(folder)
     (tmp_path / "linked").symlink_to(tmp_path)
     found = jobs.probe({"kind": "folder", "folder": str(tmp_path / "linked" / "proj")})
@@ -636,13 +661,17 @@ def test_a_first_commit_interrupted_on_either_side_of_the_commit_resumes_with_it
 
     monkeypatch.setattr(onboarding_git, "first_commit", interrupted)
     info = run(jobs, plan_for(found, repository="ada/demo"))
+    assert stage(info, "commit")["state"] == "failed"
     assert stage(info, "commit")["detail"] == "RuntimeError: killed before the commit"
+    edited = "# demo\n\nWhat this project is for.\n"
+    (Path(found["folder"]) / "README.md").write_text(edited)
     info = settle(jobs, jobs.resume(info["id"])["id"])
     assert stage(info, "commit")["detail"] == "RuntimeError: killed after the commit, before its result was recorded"
     info = settle(jobs, jobs.resume(info["id"])["id"])
     assert stage(info, "commit")["result"] == {"sha": git(Path(found["folder"]), "rev-parse", "HEAD"), "ci": True}
     checks = [r for r in hub.rulesets["ada/demo"][1]["rules"] if r["type"] == "required_status_checks"]
     assert checks[0]["parameters"]["required_status_checks"] == [{"context": "CI"}]
+    assert git(hub.remotes / "ada/demo.git", "show", "main:README.md", strip=False) == edited
 
 
 def test_a_profile_whose_publication_fails_fails_its_stage_and_retry_saves_it(hub, jobs, tmp_path, monkeypatch):
@@ -685,7 +714,10 @@ def test_rules_only_listed_for_github_keep_the_project_from_being_ready_with_the
     hub.classic["ada/proj"] = {"required_linear_history": {"enabled": True}}
     folder = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/proj.git", "proj", Access.LOCAL))
     found = jobs.probe({"kind": "folder", "folder": str(folder)})
+    assert found["rules"]["links"] == {"classic": "https://github.com/ada/proj/settings/branches"}
     info = run(jobs, plan_for(found, method="squash"))
+    assert stage(info, "protection")["result"] == {"applied": False, "listed": True}
+    assert [c for c in hub.calls if c[0] == "ruleset"] == []
     end = stage(info, "end")["result"]
     assert end["ready"] is False
     link = "https://github.com/ada/proj/settings/branches"
@@ -693,16 +725,6 @@ def test_rules_only_listed_for_github_keep_the_project_from_being_ready_with_the
         f"rules: {i['sentence']}; change it on GitHub: {link}"
         for i in found["rules"]["items"] if i["key"] in found["rules"]["needs"] and not i["holds"]
     ]  # fmt: skip
-
-
-@pytest.mark.usefixtures("hub")
-def test_publishing_a_local_only_project_retires_its_local_entry(jobs, tmp_path):
-    found = jobs.probe({"kind": "new", "name": "notes", "github": False, "folder": str(tmp_path / "notes")})
-    local = run(jobs, plan_for(found, repository=""))
-    again = jobs.probe({"kind": "folder", "folder": found["folder"], "github": True})
-    assert "job" not in again  # a finished local-only run is no run to resume
-    run(jobs, plan_for(again, repository="ada/notes"))
-    assert local["id"] not in [j["id"] for j in jobs.listed()]
 
 
 @pytest.mark.usefixtures("hub")
@@ -720,17 +742,21 @@ def test_a_project_whose_host_failed_to_load_is_not_ready(jobs, tmp_path, monkey
     assert (end["ready"], end["missing"][0]) == (False, "project: failed: another host holds its lock")
 
 
-def test_a_clone_gets_the_chosen_author_and_an_interrupted_clone_is_finished(hub, jobs, tmp_path, monkeypatch):
+@pytest.mark.parametrize("phase", ["transfer", "checkout"])
+def test_a_clone_gets_the_chosen_author_and_an_interrupted_clone_is_finished(hub, jobs, tmp_path, monkeypatch, phase):
     hub.add("ada/meter", commits=True)
     Path(os.environ["HOME"], ".gitconfig").write_text(f'[url "{hub.remotes}/"]\n\tinsteadOf = https://github.com/\n')
     real = onboarding_git.clone
 
     def interrupted(parent: Path, url: str, name: str, _access: Access) -> Path:
-        (parent / name).mkdir()
-        git(parent / name, "init", "-q", "-b", "main")
-        git(parent / name, "remote", "add", "origin", url)
+        if phase == "checkout":
+            git(parent, "clone", "-q", "--no-checkout", url, name)
+        else:
+            (parent / name).mkdir()
+            git(parent / name, "init", "-q", "-b", "main")
+            git(parent / name, "remote", "add", "origin", url)
         monkeypatch.setattr(onboarding_git, "clone", real)
-        said = "the clone was killed during its transfer"
+        said = f"the clone was killed during its {phase}"
         raise RuntimeError(said)
 
     monkeypatch.setattr(onboarding_git, "clone", interrupted)
@@ -738,12 +764,15 @@ def test_a_clone_gets_the_chosen_author_and_an_interrupted_clone_is_finished(hub
     assert found["stages"][:2] == ["folder", "git"]
     info = run(jobs, plan_for(found, protect=False, author={"name": "Ada", "email": "ada@example.com"}))
     assert stage(info, "folder")["state"] == "failed"
+    assert stage(info, "folder")["detail"] == f"RuntimeError: the clone was killed during its {phase}"
     info = settle(jobs, jobs.resume(info["id"])["id"])
     if info["waiting"]:
         info = settle(jobs, jobs.answer(info["id"], "profile", {})["id"])
     folder = tmp_path / "meter"
     assert git(folder, "rev-parse", "HEAD") == git(hub.remotes / "ada/meter.git", "rev-parse", "main")
     assert git(folder, "config", "user.name") == "Ada"
+    assert (folder / "README.md").read_text() == "# seeded\n"
+    assert git(folder, "status", "--porcelain") == ""
 
 
 @pytest.mark.usefixtures("hub")
@@ -836,45 +865,6 @@ def test_the_preflight_reads_the_identity_the_first_commit_will_use(hub, jobs, t
     found = jobs.probe({"kind": "folder", "folder": str(folder)})
     problems = onboarding_probe.preflight(plan_for(found))
     assert [p.split(":")[0] for p in problems] == ["commit signing"]
-
-
-def test_a_clone_stopped_before_its_checkout_gets_its_files_on_resume(hub, jobs, tmp_path, monkeypatch):
-    hub.add("ada/meter", commits=True)
-    real = onboarding_git.clone
-
-    def no_checkout(parent: Path, url: str, name: str, _access: Access) -> Path:
-        git(parent, "clone", "-q", "--no-checkout", url, name)
-        monkeypatch.setattr(onboarding_git, "clone", real)
-        said = "the clone was killed during its checkout"
-        raise RuntimeError(said)
-
-    monkeypatch.setattr(onboarding_git, "clone", no_checkout)
-    found = jobs.probe({"kind": "github", "repository": "ada/meter", "folder": str(tmp_path / "meter")})
-    info = run(jobs, plan_for(found, protect=False))
-    assert stage(info, "folder")["state"] == "failed"
-    info = settle(jobs, jobs.resume(info["id"])["id"])
-    if info["waiting"]:
-        info = settle(jobs, jobs.answer(info["id"], "profile", {})["id"])
-    assert (tmp_path / "meter" / "README.md").read_text() == "# seeded\n"
-    assert git(tmp_path / "meter", "status", "--porcelain") == ""
-
-
-def test_a_starter_file_edited_before_a_retry_keeps_the_edit(hub, jobs, tmp_path, monkeypatch):
-    found = jobs.probe({"kind": "new", "name": "demo", "folder": str(tmp_path / "demo")})
-    real = onboarding_git.first_commit
-
-    def once(_path: Path, _message: str) -> str:
-        monkeypatch.setattr(onboarding_git, "first_commit", real)
-        said = "the commit failed"
-        raise RuntimeError(said)
-
-    monkeypatch.setattr(onboarding_git, "first_commit", once)
-    info = run(jobs, plan_for(found, repository="ada/demo"))
-    assert stage(info, "commit")["state"] == "failed"
-    (Path(found["folder"]) / "README.md").write_text("# demo\n\nWhat this project is for.\n")
-    settle(jobs, jobs.resume(info["id"])["id"])
-    readme = git(hub.remotes / "ada/demo.git", "show", "main:README.md")
-    assert readme == "# demo\n\nWhat this project is for."
 
 
 def test_blank_author_fields_stop_the_preflight(hub, jobs, tmp_path):
@@ -988,13 +978,7 @@ def test_choices_changed_during_the_check_are_checked_again(tmp_path, monkeypatc
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with served(monkeypatch, pds) as (page, base, _machine):
-        page.goto(f"{base}/projects#token=t")
-        page.get_by_role("button", name="Add a project").click()
-        modal = pds.modal(page)
-        modal.get_by_role("textbox", name="Name").fill("demo")
-        modal.get_by_role("textbox", name="Folder").fill(str(tmp_path / "demo"))
-        modal.get_by_role("button", name="Look").click()
-        modal.get_by_role("textbox", name="Owner").fill("ada")
+        _opener, modal, _found = new_project_choices(page, base, pds, tmp_path / "demo")
         held: list[Any] = []
 
         def hold(route: Any) -> None:  # answered once Name changed
@@ -1102,39 +1086,6 @@ def test_a_file_two_consents_write_is_said_once(tmp_path, monkeypatch):
 
 
 @pytest.mark.browser
-def test_a_registered_project_being_added_shows_once_on_its_row(hub, tmp_path, monkeypatch, pds):
-    """Its row says where the run stands and goes on with it; the run shows without a reload, and the row is the
-    project's own again once the run is done."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    hub.add("ada/proj", commits=True)
-    folder = Path(onboarding_git.clone(tmp_path, "https://github.com/ada/proj.git", "proj", Access.LOCAL))
-    registry.register(folder)
-    with served(monkeypatch, pds) as (page, base, machine):
-        failing = readiness.Check("first commit", ok=False, detail="none yet", fix="commit")
-        monkeypatch.setattr(project.readiness, "ready", lambda *_a, **_k: [failing])
-        next(p for p in machine.projects.values() if Path(p.entry.path) == folder)._ready()  # noqa: SLF001
-        page.goto(f"{base}/projects#token=t")
-        row = page.get_by_role("listitem", name="proj")
-        expect(row.get_by_role("button", name="Finish setup")).to_be_visible()
-        expect(row.get_by_role("list", name="Failed readiness checks")).to_be_visible()
-        found = machine.onboarding.probe({"kind": "folder", "folder": str(folder)})
-        info = machine.onboarding.start(plan_for(found, protect=False))
-        settle(machine.onboarding, info["id"])
-        expect(row.locator("p-tag", has_text="Not fully added")).to_be_visible()  # the page's next poll
-        expect(row).to_contain_text("Waits for you to confirm its profile")
-        expect(row.get_by_role("button", name="Finish setup")).to_have_count(0)
-        assert row.get_by_role("list", name="Failed readiness checks").count() == 0  # drawn with the tag
-        expect(page.get_by_role("heading", name="Not added yet")).to_have_count(0)
-        row.get_by_role("button", name="Confirm profile").click()
-        modal = pds.modal(page)
-        modal.get_by_role("button", name="Confirm profile").click()
-        expect(modal.locator(".facts")).to_contain_text("Registered: yes")
-        modal.get_by_role("button", name="Close").click()
-        expect(row.locator("p-tag", has_text="Not fully added")).to_have_count(0)
-
-
-@pytest.mark.browser
 def test_a_run_that_leaves_the_list_takes_no_focus_to_another(tmp_path, monkeypatch, pds):
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -1209,13 +1160,7 @@ def test_a_new_private_repository_its_plan_cant_protect_is_confirmed_without_a_r
     why = "GitHub's free plan of ada allows no branch rules on a private repository: make it public, or upgrade"
     monkeypatch.setattr(repo_target, "private_rules_limit", lambda _c, _owner: why)
     with served(monkeypatch, pds) as (page, base, _machine):
-        page.goto(f"{base}/projects#token=t")
-        page.get_by_role("button", name="Add a project").click()
-        modal = pds.modal(page)
-        modal.get_by_role("textbox", name="Name").fill("demo")
-        modal.get_by_role("textbox", name="Folder").fill(str(tmp_path / "demo"))
-        modal.get_by_role("button", name="Look").click()
-        modal.get_by_role("textbox", name="Owner").fill("ada")
+        _opener, modal, _found = new_project_choices(page, base, pds, tmp_path / "demo")
         modal.get_by_role("button", name="Check and continue").click()
         expect(modal).to_contain_text(f"add no branch protection: {why}")
         expect(modal).not_to_contain_text("add a ruleset")
