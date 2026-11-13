@@ -22,7 +22,8 @@ function groupOf(label) {
 
 function card([c, label, variant]) {
   const line = statusLine(c), whole = c.error || line !== c.line;
-  const current = c.key === state.selected, [stage, rest] = split(whole ? line : short(line));
+  // a clamped card starts each paragraph on a new line: a blank line would cost one of its three (#1220)
+  const current = c.key === state.selected, [stage, rest] = split(whole ? line : short(line).replace(/\n{2,}/g, "\n"));
   const step = c.progress?.line;
   const open = (event) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
