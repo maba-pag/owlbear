@@ -131,6 +131,11 @@ def _diverge(w: World) -> str:
     return str(w.root)
 
 
+def _hand_edit(w: World) -> str:
+    (w.root / "config.json").write_text(layer(**builder("by hand")))
+    return str(w.root)
+
+
 def _no_remote(w: World) -> str:
     shutil.rmtree(w.remote)
     return str(w.root)
@@ -178,6 +183,7 @@ CASES = [  # what breaks, the source named, the Global value the read then finds
     pytest.param(_alone_layer, settings_read.SHARED, ELSEWHERE, id="unshared-project-layer"),
     pytest.param(_shared_global, settings_read.SHARED, None, id="shared-global"),
     pytest.param(_shared_project, settings_read.SHARED, ELSEWHERE, id="shared-project-layer"),
+    pytest.param(_hand_edit, settings_read.SHARED, '"by hand"', id="hand-edit"),
 ]
 
 
@@ -195,6 +201,8 @@ def test_each_source_s_failure_is_named_while_the_others_update(world, breaks, s
 
     assert [f.source for f in got.failures] == [source]
     assert place in got.failures[0].error
+    if breaks is _hand_edit:
+        assert settings_carry.EDITED in got.failures[0].error
     assert any(line.startswith(f"settings read: {source} failed at {place}") for line in world.said)
     assert (got.succeeded_at, got.read_at > first.read_at) == (first.succeeded_at, True)
     assert ids(reader) == (["m1"] if source == settings_read.MODELS else ["m1", "m2"])
@@ -204,14 +212,15 @@ def test_each_source_s_failure_is_named_while_the_others_update(world, breaks, s
     assert notices == ([("agents.builder.model", None, found)] if found else [])
 
 
-def test_the_last_full_read_holds_through_a_partial_one_and_a_new_reader(world, monkeypatch):
-    monkeypatch.delenv(data_repo.VIEW)
-    one = world.reader().read()
-    world.releases(b"not json")
-    two = world.reader().read()
-    kept = world.reader().ledger.load()
-    world.releases(b"[]")
-    three = world.reader().read()
+def test_the_last_full_read_holds_through_a_partial_one_and_a_new_reader(sources, monkeypatch):
+    mid = []
+    monkeypatch.setattr(model_choices, "_read", lambda: mid.append(datetime.now(UTC)) or [model("m1")])
+    one = sources.reader().read()
+    sources.releases(b"not json")
+    two = sources.reader().read()
+    kept = sources.reader().ledger.load()
+    sources.releases(b"[]")
+    three = sources.reader().read()
 
     assert (one.unshared, one.failures, one.succeeded_at) == (True, [], one.read_at)
     assert (two.succeeded_at, two.read_at > one.read_at) == (one.read_at, True)
@@ -220,39 +229,42 @@ def test_the_last_full_read_holds_through_a_partial_one_and_a_new_reader(world, 
     assert "GitHub's answer is not JSON" in kept.failures[0].error
     assert (three.unshared, three.failures, three.succeeded_at) == (True, [], three.read_at)
     assert three.read_at > two.read_at
+    assert all(got.read_at >= during for got, during in zip((one, two, three), mid, strict=True))
 
 
-def test_each_change_of_one_key_keeps_its_own_entry(world):
-    world.push(**builder("A"))
-    assert world.reader().read().notices == []  # the first read only records
-    world.push(**builder("B"))  # while this host is stopped
-    assert [(n.key, n.old, n.new) for n in world.reader().read().notices] == [("agents.builder.model", '"A"', '"B"')]
-    reader = world.reader()
-    world.push(**builder("C"))
-    reader.read()
-    world.push(machine={"channel": "major"})
-    got = reader.read()
+def test_each_change_of_one_key_keeps_its_own_entry(tmp_path):
+    path, at = tmp_path / NAME, datetime.now(UTC)
+
+    def found(**fields):
+        ledger = settings_seen.Ledger(path, [].append)
+        return ledger.finish(
+            settings_seen.flatten(GlobalLayer.model_validate({"format": CONFIG_FORMAT, **fields})),
+            [],
+            unshared=False,
+            at=at,
+        )
+
+    assert found(**builder("A")).notices == []  # the first snapshot only records
+    assert [(n.key, n.old, n.new) for n in found(**builder("B")).notices] == [("agents.builder.model", '"A"', '"B"')]
+    found(**builder("C"))
+    got = found(machine={"channel": "major"})
     assert [(n.key, n.old, n.new) for n in got.notices] == [
         ("agents.builder.model", '"A"', '"B"'),
         ("agents.builder.model", '"B"', '"C"'),
         ("agents.builder.model", '"C"', None),
         ("machine.channel", None, '"major"'),
     ]
-    reader.ledger.dismiss([got.notices[1].id])
-    again = world.reader().read()
+    assert len({n.id for n in got.notices}) == 4
+    settings_seen.Ledger(path, [].append).dismiss([got.notices[1].id])
+    again = settings_seen.Ledger(path, [].append).load()
     assert [n.id for n in again.notices] == [got.notices[i].id for i in (0, 2, 3)]
-
-
-def test_a_memory_value_changed_elsewhere_is_noticed_under_its_own_key(tmp_path):
-    """Global as two reads find it, flattened and recorded as a read does; the pull is the per-key entry test's."""
-    ledger, at = settings_seen.Ledger(tmp_path / NAME, [].append), datetime.now().astimezone()
-    tuned = {"format": CONFIG_FORMAT, **builder("A"), "memory": {"purge_days": 14, "stale_factor": 50}}
-    assert ledger.finish(settings_seen.flatten(as_saved("A")), [], unshared=False, at=at).notices == []
-    got = ledger.finish(settings_seen.flatten(GlobalLayer.model_validate(tuned)), [], unshared=False, at=at)
-    assert [(n.key, n.old, n.new) for n in got.notices] == [
+    tuned = found(machine={"channel": "major"}, memory={"purge_days": 14, "stale_factor": 50})
+    assert [(n.key, n.old, n.new) for n in tuned.notices] == [
+        *[(n.key, n.old, n.new) for n in again.notices],
         ("memory.purge_days", None, "14"),
         ("memory.stale_factor", None, "50"),
     ]
+    assert settings_seen.Ledger(path, [].append).load() == tuned
 
 
 def test_a_pass_cut_short_by_a_stop_records_nothing(world, monkeypatch):
@@ -274,17 +286,6 @@ def test_a_pass_cut_short_by_a_stop_records_nothing(world, monkeypatch):
     reader.read()
 
     assert (path.read_bytes(), later) == (before, [])
-
-
-def test_a_hand_edit_is_the_sync_s_refusal_and_still_noticed(world):
-    reader = world.reader()
-    reader.read()
-    (world.root / "config.json").write_text(layer(**builder("by hand")))
-
-    got = reader.read()
-
-    assert [(f.source, settings_carry.EDITED in f.error) for f in got.failures] == [(settings_read.SHARED, True)]
-    assert [(n.key, n.old, n.new) for n in got.notices] == [("agents.builder.model", None, '"by hand"')]
 
 
 def test_overrides_name_this_machine_and_its_projects(world):
@@ -345,27 +346,41 @@ def test_unreached_impeccable_releases_are_said_whole_with_their_type(sources, w
     assert failed[settings_read.IMPECCABLE] == f"{place}: {why}"
 
 
-def test_a_failed_model_read_keeps_the_last_list_and_says_why(world, tmp_path, monkeypatch):
-    reader, calls = world.reader(), []
+def test_a_failed_model_read_keeps_the_last_list_and_says_why(sources, tmp_path, monkeypatch, caplog, whole_error):
+    reader, calls = sources.reader(), []
     c = client(Store(tmp_path / "shop"), reader)
+    expected = f"RuntimeError: {whole_error}"
 
-    def read(*found: str) -> None:
+    def offered(*found: str, error: str = whole_error) -> None:
         def answer() -> list[rpc.Model]:
             calls.append(found)
             if not found:
-                msg = "the CLI is gone"
-                raise RuntimeError(msg)
+                raise RuntimeError(error)
             return [model(i) for i in found]
 
         monkeypatch.setattr(model_choices, "_read", answer)
-        reader.read()
 
-    read("m1")
-    read()
+    offered()
+    with caplog.at_level(logging.WARNING, logger=model_choices.__name__):
+        got = c.get("/api/next/config/models").json()
+    assert (got["models"], got["error"], len(calls)) == ([], expected, 1)
+    logged = [r.getMessage() for r in caplog.records if r.name == model_choices.__name__]
+    assert logged == [f"the offered models were not read: {expected}"]
+    offered("m1")
+    reader.read()
+    assert (ids(reader), c.get("/api/next/config/models").json()["error"], len(calls)) == (["m1"], "", 2)
+    failed = f"the CLI is gone:\n{whole_error}"
+    offered(error=failed)
+    reader.read()
     got = c.get("/api/next/config/models").json()
-    assert ([m["id"] for m in got["models"]], "the CLI is gone" in got["error"], len(calls)) == (["m1"], True, 2)
-    read("m2")
-    assert (c.get("/api/next/config/models").json()["error"], ids(reader), len(calls)) == ("", ["m2"], 3)
+    assert ([m["id"] for m in got["models"]], got["error"], len(calls)) == (["m1"], f"RuntimeError: {failed}", 3)
+    assert (
+        f"settings read: {settings_read.MODELS} failed at the Copilot CLI's model list: RuntimeError: {failed}"
+        in sources.said
+    )
+    offered("m2")
+    reader.read()
+    assert (c.get("/api/next/config/models").json()["error"], ids(reader), len(calls)) == ("", ["m2"], 4)
 
 
 def test_a_settings_save_is_not_noticed_but_a_key_pulled_during_it_is(world, tmp_path):
@@ -427,17 +442,6 @@ def test_a_save_published_before_the_sync_never_hides_a_change_the_sync_pulls(wo
     assert got.seen["agents.builder.model"] == '"C"'
 
 
-def test_a_read_is_dated_when_it_ends(sources, monkeypatch):
-    reader, mid = sources.reader(), []
-    real = reader._models  # noqa: SLF001
-    monkeypatch.setattr(reader, "_models", lambda: mid.append(datetime.now(UTC)) or real())
-
-    got = reader.read()
-
-    assert got.read_at >= mid[0]
-    assert got.succeeded_at == got.read_at
-
-
 def test_a_read_never_takes_an_own_save_for_one_from_elsewhere_before_its_hook_ran(world):
     world.push(**builder("A"))
     reader = world.reader()
@@ -478,24 +482,6 @@ def test_a_source_s_whole_error_is_said_and_shown(sources, tmp_path, monkeypatch
 
     assert (failure["source"], failure["error"]) == (settings_read.IMPECCABLE, expected)
     assert f"settings read: {settings_read.IMPECCABLE} failed: {expected}" in sources.said
-
-
-def test_a_failed_model_read_is_shown_and_logged_whole(sources, tmp_path, monkeypatch, caplog, whole_error):
-    """#921 D2: the runtime's whole error, type included, in Settings' models answer and the host's log."""
-
-    def broken() -> list[rpc.Model]:
-        raise RuntimeError(whole_error)
-
-    monkeypatch.setattr(model_choices, "_read", broken)
-    c = client(Store(tmp_path / "shop"), sources.reader())
-    expected = f"RuntimeError: {whole_error}"
-
-    with caplog.at_level(logging.WARNING, logger=model_choices.__name__):
-        got = c.get("/api/next/config/models").json()
-
-    assert got["error"] == expected
-    logged = [r.getMessage() for r in caplog.records if r.name == model_choices.__name__]
-    assert logged == [f"the offered models were not read: {expected}"]
 
 
 def _raising(exc: Exception) -> Callable[..., object]:
