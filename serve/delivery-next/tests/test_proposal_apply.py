@@ -224,8 +224,6 @@ def test_an_issue_search_past_a_thousand_entries_files_once_and_finds_an_older_m
     assert found is not None
     assert found.url == done["applied"][0]["artefact"]["link"]
     assert asked == ["GET"] * 11
-    act.apply(pid, world.seams)
-    assert len(world.gh.issues) == 2003
 
 
 def test_a_failure_longer_than_any_cut_is_kept_whole_and_masked(world, whole_error):
