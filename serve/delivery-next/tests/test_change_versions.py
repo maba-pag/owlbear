@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Plan, Step, StepKind, Task
@@ -170,10 +171,13 @@ def test_after_the_last_round_the_revision_asked_for_waits_for_you():
     assert shown(versions.brief(c)) == [(1, "findings", ["Challenge 1"], []), (2, "waits", [], ["approve"])]
 
 
-def test_a_draft_saved_after_a_legacy_loop_ended_is_not_challenged():
-    """Two rounds before versions were recorded ended on v3; the shaper's v4 is newer than anything judged."""
-    c = briefed(3, findings=[found(1), found(2, n=2)], round=2, head="3")
-    c.brief.version = 4
+@pytest.mark.parametrize("retry", [False, True], ids=["same-attempt", "retry"])
+def test_a_new_draft_after_legacy_challenges_is_unreviewed(retry):
+    c = briefed(3, findings=[found(1), found(2, n=2)], round=2, head="3", ended="max" if retry else "clean")
+    if retry:
+        c = briefed(4, ended="", attempt=2, history=[c.loops[BRIEF]])
+    else:
+        c.brief.version = 4
 
     assert shown(versions.brief(c)) == [
         (1, "unknown", [], []),
@@ -206,16 +210,3 @@ def test_a_rechecked_repair_stays_not_challenged_after_the_next_save():
     lp.verdict([], {}, "3", "v3", recheck=False)  # a full challenge of v3 clears the repair marks
     lp.read(3, recheck=False, upheld=0, repair=True)
     assert (lp.unreviewed, shown(versions.brief(c))[:2]) == ([], before)
-
-
-def test_a_draft_saved_after_a_retry_of_a_legacy_attempt_is_not_challenged():
-    """The owner chose to shape the brief again after legacy rounds that ended on v3; the new attempt has no head."""
-    old = briefed(3, findings=[found(1), found(2, n=2)], round=2, head="3", ended="max").loops[BRIEF]
-    c = briefed(4, ended="", attempt=2, history=[old])
-
-    assert shown(versions.brief(c)) == [
-        (1, "unknown", [], []),
-        (2, "unknown", [], []),
-        (3, "unknown", [], []),
-        (4, "unreviewed", [], ["approve"]),
-    ]
