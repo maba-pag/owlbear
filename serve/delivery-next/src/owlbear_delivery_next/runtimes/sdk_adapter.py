@@ -227,9 +227,11 @@ class _Step(StepTools):
                 self.gate.wrong_model("a subagent ran on auto")
             elif why:
                 self.gate.revoke(why)
-        elif kind in {"subagent.completed", "subagent.failed"}:
-            if (ended := self.watch.ended(data, kind.removeprefix("subagent."))) is not None:
-                self.log(event="subagent", **ended)
+        elif (
+            kind in {"subagent.completed", "subagent.failed"}
+            and (ended := self.watch.ended(data, kind.removeprefix("subagent."))) is not None
+        ):
+            self.log(event="subagent", **ended)
 
     def call_seen(self, data: Any) -> None:  # noqa: ANN401 - SDK usage event data
         """One billed call: Auto voids the step for anyone (TD-53); an allowed subagent's is counted as its own."""

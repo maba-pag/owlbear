@@ -376,7 +376,10 @@ def http_get(call: ast.Call, definition: ast.AST, tree: ast.AST) -> bool:
             targets = node.targets if isinstance(node, ast.Assign) else [node.target]
             if any(ast.unparse(target) == ast.unparse(receiver) for target in targets):
                 values.append(node.value)
-        elif isinstance(node, ast.withitem) and node.optional_vars is not None:
-            if ast.unparse(node.optional_vars) == ast.unparse(receiver):
-                values.append(node.context_expr)
+        elif (
+            isinstance(node, ast.withitem)
+            and node.optional_vars is not None
+            and ast.unparse(node.optional_vars) == ast.unparse(receiver)
+        ):
+            values.append(node.context_expr)
     return any(isinstance(value, ast.Call) and ast.unparse(value.func) in constructors for value in values)
