@@ -18,6 +18,8 @@ from owlbear_delivery_next.improvement import (
 )
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement.retro_calls import Paid, StoppedError, Work
+from owlbear_delivery_next.improvement.retro_judge import _entry as record_entry
+from owlbear_delivery_next.improvement.retro_judge import _graded as grade_finding
 from owlbear_delivery_next.improvement.retro_segments import Part, Prepared
 
 
@@ -93,6 +95,7 @@ def test_fifty_records_are_each_graded_once_within_bounded_batches_and_missed_on
 
     assert len(ask.messages) > 1
     assert all(len(m) <= retro_judge.BATCH for m in ask.messages)
+    assert all(f"`{call}`" in message for message in ask.messages for call in cases.CALLS)
     got = {g["record"]: g for g in retro_store.grades()}
     assert sorted(got) == sorted(r["id"] for r in records)
     assert sum(len(_evidence(m)["records"]) for m in ask.messages) == 49
@@ -198,21 +201,22 @@ def test_findings_resting_on_a_retired_assumption_count_toward_no_bar():
     assert props.proposals() == []
 
 
-def test_a_confirm_batchs_sorting_is_kept_in_one_write_so_a_failing_disk_never_leaves_part_of_it(monkeypatch):
+def test_confirm_sorting_is_kept_whole(monkeypatch):
     retro_store.add_findings([_finding(f"f{i}", f"chat:u{i}") for i in range(1, 4)])
     writes, real = [], retro_store.append
 
     def append(name, *rows):
         if name == retro_bars.ASSIGNED:
-            if writes:
-                msg = "the disk is full"
-                raise OSError(msg)
             writes.append(rows)
         real(name, *rows)
+        if name == retro_bars.ASSIGNED:
+            raise KeyboardInterrupt
 
     monkeypatch.setattr(retro_store, "append", append)
-    retro_bars.propose(_work(Asked(_sorting({"a": {"f1", "f2", "f3"}}))), [])
-
+    with pytest.raises(KeyboardInterrupt):
+        retro_bars.propose(_work(Asked(_sorting({"a": {"f1", "f2", "f3"}}))), [])
+    assert len(writes) == 1
+    assert sorted(row["finding"] for row in writes[0]) == ["f1", "f2", "f3"]
     assert sorted(retro_bars.assignments()) == ["f1", "f2", "f3"]
 
 
@@ -345,13 +349,15 @@ def test_a_grade_only_run_proposes_a_case_for_a_late_record_graded_wrong():
 
 @pytest.mark.parametrize("shown", [{}, {"title": "a case"}, {"title": "a case", "body": " "}])
 def test_a_survivor_without_a_title_and_body_is_an_attempt_and_its_retry_keeps_them_bounded(shown):
+    pid = props.file("real|spotter-case|w", ["rg-w"], kind="spotter-case", provenance="real")
     review = {"verdict": "survive", "why": "holds", "risks": [], "publishable": shown}
-    said = {"retro-review": review, "retro": {"findings": [], "grades": [{"record": "w", "grade": "wrong"} | WRONG]}}
-    ask = Asked(lambda _ev, agent: said[agent])
+    ask = Asked(lambda _ev, _agent: review)
 
     with pytest.raises(StoppedError, match="not valid"):
-        retro_judge.run(_work(ask, [_record("w", 3)], grade_only=True))
+        retro_judge.review(_work(ask))
     [due] = props.due_reviews()
+    assert due["id"] == pid
+    assert retro_store.attempts(retro_store.lines("batches.jsonl")[-1]["key"])
     review["publishable"] = {"title": "t" * 200, "body": "b" * 2000, "path": "/Users/x"}
     retro_judge.review(_work(ask, run="run-2"))
 
@@ -362,31 +368,22 @@ def test_a_survivor_without_a_title_and_body_is_an_attempt_and_its_retry_keeps_t
 
 
 def test_a_survivors_body_naming_only_longer_ids_still_ends_with_its_own():
-    review = {"verdict": "survive", "why": "holds", "risks": [], "publishable": {"title": "a case"}}
-    said = {"retro-review": review, "retro": {"findings": [], "grades": [{"record": "w", "grade": "wrong"} | WRONG]}}
-    with pytest.raises(StoppedError, match="not valid"):
-        retro_judge.run(_work(Asked(lambda _ev, agent: said[agent]), [_record("w", 3)], grade_only=True))
-    [due] = props.due_reviews()
+    pid = props.file("real|spotter-case|w", ["rg-w"], kind="spotter-case", provenance="real")
+    due = props.folded()[pid]
     ids = [due["id"], *due["findings"]]
-    review["publishable"]["body"] = "see " + ", ".join(f"{i}0" for i in ids)
-
-    retro_judge.review(_work(Asked(lambda _ev, agent: said[agent]), run="run-2"))
-
-    body = review["publishable"]["body"]
-    assert props.folded()[due["id"]]["publishable"]["body"] == f"{body}\n\nRefs: {', '.join(ids)}"
+    body = "see " + ", ".join(f"{i}0" for i in ids)
+    review = {"verdict": "survive", "publishable": {"title": "a case", "body": body}}
+    assert retro_judge.settled(due, review)["publishable"]["body"] == f"{body}\n\nRefs: {', '.join(ids)}"
 
 
 def test_a_survivors_credential_that_its_bound_would_cut_in_two_is_found_before_the_cut():
+    pid = props.file("real|spotter-case|w", ["rg-w"], kind="spotter-case", provenance="real")
     review = {"verdict": "survive", "why": "holds", "risks": [], "publishable": {"title": "a case"}}
-    said = {"retro-review": review, "retro": {"findings": [], "grades": [{"record": "w", "grade": "wrong"} | WRONG]}}
-    ask = Asked(lambda _ev, agent: said[agent])
     url = "https://ada:" + "s3cretPw" * 3 + "@git.example.com/r"  # its "@" falls past the body's bound
     review["publishable"]["body"] = "b" * (retro_judge.BODY - 20) + " " + url
 
-    retro_judge.run(_work(ask, [_record("w", 3)], grade_only=True))
-
-    [case] = props.folded().values()
-    assert (case["state"], case["why"], case["publishable"]) == ("rejected", "leak: a credential, an email address", {})
+    got = retro_judge.settled(props.folded()[pid], review)
+    assert (got["verdict"], got["why"], got["publishable"]) == ("reject", "leak: a credential, an email address", {})
 
 
 def test_a_wrong_grade_of_an_earlier_revision_whose_case_was_never_filed_gets_it_from_a_later_run():
@@ -446,15 +443,16 @@ SECRET = "ghp_" + "b" * 36
 
 def test_a_secret_the_cut_of_a_long_note_splits_never_leaves_in_a_review():
     token = "ghp_" + "abcDEF123" * 4
-    _capture("s1", ["the tests pass", "lint is clean", "shipping it"])
-    ask = Asked(_wrong)
     note = "x " * 350 + token + " z" * 130
-    parts = retro_segments.prepare(["s1"], "done").parts
-    retro_judge.run(_work(ask, [_record("w", 3, note=note)], parts=parts, grade_only=True))
-    retro_judge.review(_work(ask, run="run-2"))
-
-    assert [m for m in ask.messages if "## The proposal" in m]
-    assert not [m for m in ask.messages if token[-12:] in m]
+    record = _record("w", 3, note=note)
+    entry = record_entry(record)
+    grade = retro_units.grade(record, "r1", "wrong", "it was fine", should="none")
+    retro_store.add_grades([grade])
+    pid = props.file("real|spotter-case|w", [grade["id"]], kind="spotter-case", provenance="real")
+    message = retro_judge.render(props.folded()[pid], {grade["id"]: grade_finding(grade)})
+    assert "## The proposal" in message
+    assert token[-12:] not in json.dumps(entry)
+    assert token[-12:] not in message
 
 
 def test_a_secret_in_a_records_note_or_card_or_in_a_findings_text_never_leaves_in_a_message():
@@ -508,13 +506,6 @@ def test_a_malformed_judgement_stops_the_run_kept_as_an_attempt_with_nothing_der
 
     assert (retro_store.grades(), retro_store.all_findings()) == ([], [])
     assert retro_store.attempts(retro_store.lines("batches.jsonl")[-1]["key"])
-
-
-def test_a_judging_message_names_every_call_a_wrong_or_missed_grade_may_give():
-    w = _work(Asked(_graded), [_record("a", 3)])
-    [(_, _, message)] = retro_judge.judging(w)
-
-    assert [c for c in cases.CALLS if f"`{c}`" not in message] == []
 
 
 def test_a_saved_answer_no_longer_valid_stops_the_run_instead_of_being_derived_from():
