@@ -658,7 +658,6 @@ def test_emitted_checks_run_in_confirmed_folders(change_repo, monkeypatch):
     other.mkdir(parents=True)
     for home in (change_repo, package, other):
         (home / "Makefile").write_text("check:\n\t@pwd\n")
-    (package / "package.json").write_text('{"scripts":{"test":"make check"}}\n')
     git(change_repo, "add", "Makefile", "packages/app")
     git(change_repo, "commit", "-qm", "root and package check targets")
     command = "make check & make check; wait # both in this package"
