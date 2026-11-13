@@ -113,10 +113,10 @@ def reviewed(store: Store, clone: Path, monkeypatch, found: range = range(0), **
     return seen[0]
 
 
-def answer(store: Store, option: str) -> Change:
+def answer(store: Store, option: str, text: str = "") -> Change:
     c = store.read("c1")
     q = loop.open_question(c)
-    c, _ = loop.schedule(c, [AnswerItem(at=NOW, channel="status-view", question=q.id, option=option)], NOW)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, channel="status-view", question=q.id, option=option, text=text)], NOW)
     store.write(Lock("c1"), c)
     return c
 
