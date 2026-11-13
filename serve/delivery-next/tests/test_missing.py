@@ -338,14 +338,14 @@ def test_a_conversation_task_repairs_setup_and_keeps_window_tools_reserved() -> 
     ref = ItemRef(id="t1", kind="thread", version="v", task="pr-t1-v", url="https://x/pull/7#r1")
     task = Task(id="pr-t1-v", title="answer", item=ref, detail="boecht: add a docker test\n\nhttps://x/pull/7#r1")
     p = report("matlab", "matlab: license server unknown")
-    result = conversation.disputed(task, p, to_result(run(p), K.BUILD, NOW))
+    result = conversation.disputed(change(), task, p, to_result(run(p), K.BUILD, NOW))
     assert (result.exit, result.setup, result.question) == (Exit.RETRY, True, None)
     c = change(task=task.id)
     c.plan.tasks = [task]
     repaired = loop.apply(c, result, NOW)
     assert (repaired.repairs.current.task, repaired.step.task, repaired.questions) == (task.id, task.id, [])
     other = report("browser", "no browser tool in this session")
-    window = conversation.disputed(task, other, to_result(run(other), K.BUILD, NOW))
+    window = conversation.disputed(change(), task, other, to_result(run(other), K.BUILD, NOW))
     assert options(window) == [("decline", K.BUILD), ("pause", "pause")]
 
 

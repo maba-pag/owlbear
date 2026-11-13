@@ -232,7 +232,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     result = review.recorded(change, task, run, path, result)
     result = disputes.processed(change, task, run.session_id, run.payload, result, run.changed)
     result = review.delegated(change, task, result)
-    result = conversation.disputed(task, run.payload, result)
+    result = conversation.disputed(change, task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
     change = budgets.effect_observed(change, answer.id, end) if answer and session_result.effect_seen(run) else change
     events: list[dict[str, object]] = []

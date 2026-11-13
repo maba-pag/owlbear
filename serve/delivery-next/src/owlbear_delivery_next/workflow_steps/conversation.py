@@ -15,11 +15,11 @@ from owlbear_delivery_next.change_contracts.models import (
     Handling,
     ItemRef,
     Option,
-    Question,
     Response,
     StepKind,
 )
 from owlbear_delivery_next.change_flow.loop import StepResult
+from owlbear_delivery_next.runtimes import missing
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -207,11 +207,13 @@ def respond(task: Task | None, payload: object, head: str | None, exit_: Exit) -
 DECLINE = Option(id="decline", label="Do not implement it; reply with my reason (type it)", next=StepKind.BUILD)
 
 
-def disputed(task: Task | None, payload: object, result: StepResult) -> StepResult:
-    """A conversation task never re-plans the Change; it asks the owner instead.
+def disputed(c: Change, task: Task | None, payload: object, result: StepResult) -> StepResult:
+    """A conversation task's wrong premise is never the owner's to judge (#1189).
 
-    That holds for a reported wrong brief or plan and for a tool no runtime here provides; a missing-tool question
-    offers a reply without the tool where it would offer a new plan.
+    A tool only a VS Code window has stays reserved, replying without it where it would offer a new plan. A brief
+    conflict keeps its step back, so the runner starts the brief's amendment; its evidence names the request. A plan
+    that cannot carry the request, and a brief conflict whose amendment the owner already declined, are Delivery's
+    own: they go to repair with the request and the report whole.
     """
     p = payload
     if task is None or task.item is None:
@@ -219,24 +221,23 @@ def disputed(task: Task | None, payload: object, result: StepResult) -> StepResu
     if isinstance(p, tools.MissingTool) and result.exit == Exit.ASK and (q := result.question):
         options = [DECLINE if o.next == StepKind.PLAN else o for o in q.options]
         return result.model_copy(update={"question": q.model_copy(update={"options": options})})
-    if result.exit != Exit.BACK:
+    if result.exit != Exit.BACK or not isinstance(p, tools.WrongPremise) or p.stage not in {"brief", "plan"}:
         return result
-    if isinstance(p, tools.WrongPremise) and p.stage != "target":
-        said = f"{p.reason[:300]} ({'; '.join(p.evidence)[:300]})"
-    elif isinstance(p, tools.MissingTool):
-        said = result.reason[:600]
-    else:
-        return result
-    request = task.detail.split("\n\n")[0][:300]
-    text = f"A reviewer asks: {request} ({task.item.url}). The Builder reports: {said}. How should Delivery respond?"
-    options = [
-        Option(id="implement", label="Implement the request", next=StepKind.BUILD),
-        DECLINE,
-        Option(id="pause", label="Pause", next="pause"),
-    ]
-    cause = cause_key(ErrorKind.REVIEW, StepKind.BUILD, f"dispute-{task.item.id}")
-    question = Question(step=StepKind.BUILD, text=text, cause=cause, options=options)
-    return StepResult(exit=Exit.ASK, reason=text, cause=cause, question=question)
+    where = task.item.url or task.item.id
+    reported = f"{p.reason} ({'; '.join(p.evidence)})"
+    said = f"The request on {where} needs work this task cannot carry as planned: {reported}"
+    if p.stage == "brief":
+        mark = f"{where} (request {task.item.version[:8]})"
+        last = next((a for a in reversed(c.amendments) if mark in a.evidence), None)
+        if last is None or last.state not in {"declined", "refused"}:
+            p.evidence = [mark, *p.evidence][:10]
+            return result
+        said = (
+            f"The builder reports again that the request on {where} contradicts the brief, after amendment "
+            f"{last.id} for it was {last.state}: {reported}. It must be answered within the approved brief"
+        )
+    cause = cause_key(ErrorKind.SCOPE, StepKind.BUILD, f"request-{task.item.id}")
+    return missing.setup(cause, f"{said}. The request: {task.detail}")
 
 
 def summary(item: ConversationItem) -> str:
