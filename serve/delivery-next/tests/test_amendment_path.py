@@ -386,6 +386,8 @@ def test_an_objection_pauses_dependent_work_and_a_revert_is_a_new_version():
 
 def test_a_revert_brings_back_what_was_removed_or_changed_as_it_was():
     c = change()
+    c.brief.criteria[0].version = 2
+    c.checks[0].answer = passed(**{"AC-1": 2})
     c.brief.visual[1].steps = [VisualStep(do="click", target="Team")]
     c.checks[1].visual = True
     c.brief.approved = [
@@ -427,7 +429,7 @@ def test_a_revert_brings_back_what_was_removed_or_changed_as_it_was():
     amending.opened(c, amending.current(c), RoundPolicy())
     amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge-2", NOW)
 
-    assert sorted((k.id, k.text, k.version) for k in c.brief.criteria) == [("AC-1", AC1, 2), ("AC-2", AC2, 2)]
+    assert sorted((k.id, k.text, k.version) for k in c.brief.criteria) == [("AC-1", AC1, 3), ("AC-2", AC2, 2)]
     assert sorted((s.name, s.path, s.expect, [(x.do, x.target) for x in s.steps]) for s in c.brief.visual) == [
         ("about", "/about", "shows the team", [("click", "Team")]),
         ("home", "/", "shows Hallo", []),
