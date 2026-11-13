@@ -73,32 +73,32 @@ def _rendered(env: dict[str, str], github: dict[str, object]) -> dict[str, str]:
     return {name: render(text) for name, text in env.items()}
 
 
+def _git(root: Path, *args: str) -> str:
+    done = subprocess.run(  # noqa: S603 - fixed git argument vector
+        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],  # noqa: S607
+        cwd=root, capture_output=True, text=True, check=True,
+    )  # fmt: skip
+    return done.stdout.strip()
+
+
 def _queued(tmp_path: Path, files: dict[str, str]) -> dict[str, object]:
     """A repository whose merge queue built a group: main, then a pull request's *files* merged on top of it."""
-
-    def git(*args: str) -> str:
-        done = subprocess.run(  # noqa: S603 - fixed git argument vector
-            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],  # noqa: S607
-            cwd=tmp_path, capture_output=True, text=True, check=True,
-        )  # fmt: skip
-        return done.stdout.strip()
-
-    git("init", "-q", "-b", "main")
+    _git(tmp_path, "init", "-q", "-b", "main")
     for rel in (".github/scripts/ci_scope.py", "serve/tools/src/owlbear_tools/dependency_ci.py"):
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_bytes((ROOT / rel).read_bytes())
-    git("add", ".")
-    git("commit", "-q", "-m", "base")
-    base = git("rev-parse", "HEAD")
-    git("switch", "-q", "-c", "work")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
+    _git(tmp_path, "switch", "-q", "-c", "work")
     for rel, text in files.items():
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text(text)
-    git("add", ".")
-    git("commit", "-q", "-m", "change")
-    git("switch", "-q", "-c", "gh-readonly-queue/main/pr-1", "main")
-    git("merge", "-q", "--no-ff", "-m", "merge", "work")
-    head = git("rev-parse", "HEAD")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "change")
+    _git(tmp_path, "switch", "-q", "-c", "gh-readonly-queue/main/pr-1", "main")
+    _git(tmp_path, "merge", "-q", "--no-ff", "-m", "merge", "work")
+    head = _git(tmp_path, "rev-parse", "HEAD")
     return {"event_name": "merge_group", "sha": head, "event": {"merge_group": {"base_sha": base}}}
 
 
@@ -186,24 +186,14 @@ def test_the_scope_follows_github_path_filters(paths: list[str], touched: list[s
 
 
 def test_the_scope_reads_changed_paths_unquoted(tmp_path: Path) -> None:
-    def git(*args: str) -> str:
-        done = subprocess.run(  # noqa: S603 - fixed git argument vector
-            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],  # noqa: S607
-            cwd=tmp_path,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return done.stdout.strip()
-
-    git("init", "-q")
-    git("commit", "-q", "--allow-empty", "-m", "base")
-    base = git("rev-parse", "HEAD")
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "commit", "-q", "--allow-empty", "-m", "base")
+    base = _git(tmp_path, "rev-parse", "HEAD")
     source = tmp_path / "serve/delivery-next/src/caf\u00e9 x.py"
     source.parent.mkdir(parents=True)
     source.write_text("\n")
-    git("add", ".")
-    git("commit", "-q", "-m", "head")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "head")
 
     paths = subprocess.run(  # noqa: S603
         ["python3", str(ROOT / ".github/scripts/ci_scope.py"), base, "HEAD"],  # noqa: S607
@@ -285,28 +275,10 @@ def test_tooling_scopes_a_push_by_the_merge_against_its_first_parent() -> None:
 
 
 def test_a_push_is_scoped_by_the_merge_against_its_first_parent(tmp_path: Path) -> None:
-    def git(*args: str) -> str:
-        done = subprocess.run(  # noqa: S603 - fixed git argument vector
-            ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],  # noqa: S607
-            cwd=tmp_path, capture_output=True, text=True, check=True,
-        )  # fmt: skip
-        return done.stdout.strip()
-
-    git("init", "-q", "-b", "main")
-    (tmp_path / ".github/scripts").mkdir(parents=True)
-    (tmp_path / ".github/scripts/ci_scope.py").write_bytes((ROOT / ".github/scripts/ci_scope.py").read_bytes())
-    git("add", ".")
-    git("commit", "-q", "-m", "base")
-    git("switch", "-q", "-c", "work")
-    (tmp_path / "share/skills/x").mkdir(parents=True)
-    (tmp_path / "share/skills/x/SKILL.md").write_text("x\n")
-    git("add", ".")
-    git("commit", "-q", "-m", "skill")
-    git("switch", "-q", "main")
-    git("merge", "-q", "--no-ff", "-m", "merge", "work")
+    group = _queued(tmp_path, {"share/skills/x/SKILL.md": "x\n"})
     run = next(s["run"] for s in _jobs("ci.yml")["scope"]["steps"] if s.get("id") == "scope")
     out = tmp_path / "output"
-    env = {"PATH": os.environ["PATH"], "EVENT": "push", "BASE_SHA": "", "HEAD_SHA": git("rev-parse", "HEAD"),
+    env = {"PATH": os.environ["PATH"], "EVENT": "push", "BASE_SHA": "", "HEAD_SHA": str(group["sha"]),
            "GITHUB_OUTPUT": str(out)}  # fmt: skip
     subprocess.run(["bash", "-c", run], cwd=tmp_path, env=env, check=True)  # noqa: S603, S607
     assert out.read_text() == 'suites=["static", "agent-ecosystem"]\n'  # the merge's own change, not every suite
@@ -699,24 +671,6 @@ def test_each_matrix_shard_keeps_its_own_cached_pass_and_results(name: str) -> N
         ("python-browser.yml", "delivery-next-browser", "Run browser-marked tests"),
     ],
 )
-def test_tests_run_with_bare_repositories_named_explicitly_as_in_agent_shells(workflow, job, step) -> None:
-    env = next(s for s in _jobs(workflow)[job]["steps"] if s.get("name") == step)["env"]
-
-    assert {k: str(v) for k, v in env.items() if k.startswith("GIT_CONFIG_")} == {
-        "GIT_CONFIG_COUNT": "1",
-        "GIT_CONFIG_KEY_0": "safe.bareRepository",
-        "GIT_CONFIG_VALUE_0": "explicit",
-    }
-
-
-@pytest.mark.parametrize(
-    ("workflow", "job", "step"),
-    [
-        ("python.yml", "tests", "Run test shard"),
-        ("python-browser.yml", "browser", "Run browser-marked tests"),
-        ("python-browser.yml", "delivery-next-browser", "Run browser-marked tests"),
-    ],
-)
 def test_test_jobs_rerun_only_open_flaky_issues_and_upload_results_even_on_failure(workflow, job, step) -> None:
     steps = _jobs(workflow)[job]["steps"]
     names = [s.get("name") for s in steps]
@@ -726,6 +680,11 @@ def test_test_jobs_rerun_only_open_flaky_issues_and_upload_results_even_on_failu
     assert lookup["run"] == "python3 .github/scripts/flaky_issues.py"
     assert lookup["env"] == {"GH_TOKEN": "${{ github.token }}"}
     assert "GH_TOKEN" not in tests["env"]
+    assert {k: str(v) for k, v in tests["env"].items() if k.startswith("GIT_CONFIG_")} == {
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "safe.bareRepository",
+        "GIT_CONFIG_VALUE_0": "explicit",
+    }
     assert tests["env"]["OWLBEAR_FLAKY_REPORT"] == "${{ runner.temp }}/test-results/flaky.json"
     assert '--junitxml="$RUNNER_TEMP/test-results/junit.xml"' in tests["run"]
     assert upload["uses"].startswith("actions/upload-artifact@")
@@ -740,7 +699,7 @@ def test_static_runs_the_workspace_lint_on_every_change() -> None:
 
     assert ci_scope.SUITES["static"] == ("**",)
     assert "uv sync --locked --package owlbear-tools --group dev" in runs
-    assert "uv run --no-sync lint --no-fix" in runs
+    assert "uv run --no-sync lint --no-fix" in runs.splitlines()
     assert "uv run --no-sync format --no-fix" in runs
     assert "npm ci --engine-strict --no-audit --no-fund" in runs
     setup = next(s for s in _jobs("static.yml")["lint"]["steps"] if "astral-sh/setup-uv@" in str(s.get("uses", "")))
