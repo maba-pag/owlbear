@@ -1,6 +1,5 @@
 """TD-193, TD-208: the next round judges a rejection; the owner decides each one it does not accept, with a note."""
 
-import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -34,6 +33,10 @@ from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import reconsider, review
 
+from . import test_round_flow
+from .test_round_flow import git, step
+
+clone = test_round_flow.clone
 NOW = datetime(2026, 10, 17, 3, tzinfo=UTC)
 DONE = Termination(confirmed=True)
 K = StepKind
@@ -49,30 +52,6 @@ class Host:
 
     def activity(self, _slug):
         return Activity(host_up=True)
-
-
-def git(cwd: Path, *args: str) -> str:
-    done = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
-    return done.stdout.strip()
-
-
-@pytest.fixture
-def clone(tmp_path, monkeypatch) -> Path:
-    (tmp_path / "gitconfig").write_text("")
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    for who in ("AUTHOR", "COMMITTER"):
-        monkeypatch.setenv(f"GIT_{who}_NAME", "t")
-        monkeypatch.setenv(f"GIT_{who}_EMAIL", "t@t")
-    work = tmp_path / "work"
-    work.mkdir()
-    git(work, "init", "-q", "-b", "owlbear/c1")
-    (work / "a.txt").write_text("a\n")
-    git(work, "add", "-A")
-    git(work, "commit", "-qm", "base")
-    git(work, "branch", "main")
-    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: work)
-    return work
 
 
 def change() -> Change:
@@ -93,12 +72,6 @@ def stored(tmp_path: Path, c: Change) -> Store:
     store = Store(tmp_path / "store")
     store.write(Lock("c1"), c)
     return store
-
-
-def step(store: Store, clone: Path) -> Change:
-    c = store.read("c1")
-    runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
-    return store.read("c1")
 
 
 def build(store: Store, clone: Path, monkeypatch, *keys: str) -> sdk_adapter.Session:
