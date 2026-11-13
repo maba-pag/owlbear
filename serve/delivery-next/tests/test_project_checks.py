@@ -201,7 +201,16 @@ def test_the_detected_commands_once_confirmed_are_the_plans_and_saved(store, cha
     store.write_profile(Profile(entries={"check:.": entry()}))
     fake = sessions(monkeypatch)
     made(store, change_repo, ["src"])
-    step(store, change_repo)
+    c = step(store, change_repo)
+    q = c.questions[-1]
+    assert answers.shown(q, [])["ordinary"] is False
+    item = answers.answer_item(store, c, answers.AnswerBody(question=q.id, option="detected"))
+    assert isinstance(item, AnswerItem)
+    labels = " ".join(o.label for o in q.options)
+    assert "Every task of every Change then waits for these tests to pass" in q.text
+    assert "what they leave out is tested only in CI before merge. Use it?" in q.text
+    assert q.options[0].label == "Yes, use it: if it is wrong or slow, every task fails or slows with it"
+    assert "before anything is saved" in labels
     answer(store, "detected")
     c = step(store, change_repo)
     (cfg,) = fake.planned()
@@ -352,22 +361,6 @@ def test_a_failed_save_raises_before_any_session_and_the_rerun_saves(store, chan
     monkeypatch.setattr(store, "write_profile", write)
     assert step(store, change_repo).step.kind == StepKind.BUILD
     assert profile.is_confirmed(store.read_profile().entries["check:."])
-
-
-def test_the_question_is_an_engine_decision_the_changes_page_answers(store, change_repo, monkeypatch):
-    store.write_profile(Profile(entries={"check:.": entry()}))
-    sessions(monkeypatch)
-    made(store, change_repo, ["src"])
-    c = step(store, change_repo)
-    q = c.questions[-1]
-    assert answers.shown(q, [])["ordinary"] is False
-    item = answers.answer_item(store, c, answers.AnswerBody(question=q.id, option="detected"))
-    assert isinstance(item, AnswerItem)
-    labels = " ".join(o.label for o in q.options)
-    assert "Every task of every Change then waits for these tests to pass" in q.text
-    assert "what they leave out is tested only in CI before merge. Use it?" in q.text
-    assert q.options[0].label == "Yes, use it: if it is wrong or slow, every task fails or slows with it"
-    assert "before anything is saved" in labels
 
 
 @pytest.mark.parametrize("question", ["absent", "unrelated", "checks"])
