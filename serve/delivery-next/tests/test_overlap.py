@@ -171,9 +171,11 @@ def answered(c: Change, asked: StepResult, option: str = "keep") -> Change:
 
 def test_a_reported_difference_asks_which_behaviour_to_keep_and_no_difference_asks_nothing(conflicted, tmp_path):
     repo, start = conflicted
+    store, c, done = Store(tmp_path / "store"), building(), StepResult(exit=Exit.DONE)
+    stopped = overlap.integrated(store, C1, c, repo, start, done, told())
+    assert (stopped.exit, stopped.stop.kind) == (Exit.STOP, ErrorKind.STATE)
     (repo / "src/app.ts").write_text("both")
     git(repo, "commit", "-qam", "merge main")
-    store, c, done = Store(tmp_path / "store"), building(), StepResult(exit=Exit.DONE)
     asked = overlap.integrated(store, C1, c, repo, start, done, told())
     q = asked.question
     assert (asked.exit, q.step, q.subject) == (Exit.ASK, K.BUILD, "product")
@@ -188,13 +190,24 @@ def test_a_reported_difference_asks_which_behaviour_to_keep_and_no_difference_as
 
 def test_an_integration_that_asks_or_steps_back_passes_through_to_its_completion(tmp_path):
     store = Store(tmp_path / "store")
-    for exit_ in (Exit.ASK, Exit.BACK, Exit.RETRY):  # no Git repository here: any probe would fail
-        unfinished = StepResult(exit=exit_, reason="checks fail after the update")
+    stop = Stop(
+        kind=ErrorKind.CAPACITY, reason="runtime termination is unverified", action="Stop the old worker",
+        resume="The old worker is confirmed stopped", at=NOW,
+    )  # fmt: skip
+    results = [
+        StepResult(exit=exit_, reason="checks fail after the update") for exit_ in (Exit.ASK, Exit.BACK, Exit.RETRY)
+    ]
+    results.append(StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop))
+    for unfinished in results:  # no Git repository here: any probe would fail
         assert overlap.integrated(store, C1, building(), tmp_path, "a" * 40, unfinished) is unfinished
+    assert results[-1].stop == stop
 
 
 def test_an_integration_result_without_its_merge_report_stops(merged_cleanly, tmp_path):
     repo, start = merged_cleanly
+    stopped = overlap.integrated(Store(tmp_path / "store"), C1, building(), tmp_path, None,
+                                 StepResult(exit=Exit.DONE), told())  # fmt: skip
+    assert (stopped.exit, stopped.stop.kind) == (Exit.STOP, ErrorKind.STATE)
     old = tools.BuildResult(summary="merged", checks=[])  # a result held from before the report existed
     stopped = overlap.integrated(
         Store(tmp_path / "store"), C1, building(), repo, start, StepResult(exit=Exit.DONE), old
@@ -303,12 +316,6 @@ def test_a_committed_merge_survives_replanning_until_its_report_is_accepted(
     assert git(repo, "rev-parse", "HEAD") == merge
 
 
-def test_an_integration_build_without_its_start_head_stops_instead_of_passing(tmp_path):
-    stopped = overlap.integrated(Store(tmp_path / "store"), C1, building(), tmp_path, None,
-                                 StepResult(exit=Exit.DONE), told())  # fmt: skip
-    assert (stopped.exit, stopped.stop.kind) == (Exit.STOP, ErrorKind.STATE)
-
-
 def test_a_build_that_is_not_an_integration_is_not_checked_for_collisions(tmp_path):
     done = StepResult(exit=Exit.DONE)
     assert overlap.integrated(Store(tmp_path / "store"), C1, building("plan"), tmp_path, None, done) is done
@@ -375,15 +382,6 @@ def test_a_report_in_other_words_is_asked_again_but_reaches_the_owner_at_most_tw
     assert (len(c.questions), c.repairs.current is not None) == (2, True)  # Delivery handles it now
 
 
-def test_a_completed_result_with_an_unfinished_merge_stays_stopped(conflicted, tmp_path):
-    repo, start = conflicted
-    stopped = overlap.integrated(
-        Store(tmp_path / "store"), C1, building(), repo, start, StepResult(exit=Exit.DONE), told()
-    )
-    assert stopped.exit == Exit.STOP
-    assert stopped.stop.kind == ErrorKind.STATE
-
-
 @pytest.mark.parametrize("choice", ["keep", "adopt"])
 def test_pause_then_resume_does_not_authorize_collision_resolution(choice):
     c, report = building(), told().merge
@@ -403,19 +401,6 @@ def test_pause_then_resume_does_not_authorize_collision_resolution(choice):
     done, step = loop.schedule(resumed, [AnswerItem(at=NOW, question=fresh.id, option=choice)], NOW)
     assert step.kind == K.BUILD
     assert overlap.collision(done, report, SIDES) is None
-
-
-def test_unverified_integration_termination_keeps_its_stop_and_recovery(tmp_path):
-    stop = Stop(
-        kind=ErrorKind.CAPACITY, reason="runtime termination is unverified", action="Stop the old worker",
-        resume="The old worker is confirmed stopped", at=NOW,
-    )  # fmt: skip
-    stopped = StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
-
-    observed = overlap.integrated(Store(tmp_path / "store"), C1, building(), tmp_path, "a" * 40, stopped)
-
-    assert observed is stopped
-    assert observed.stop == stop
 
 
 def test_a_failed_git_collision_probe_stops_instead_of_passing(tmp_path, monkeypatch):
