@@ -2029,9 +2029,6 @@ def integration_collision_setup(tmp_path, clone):
     git(clone, "push", "-q", "origin", "HEAD:refs/heads/main")
     git(clone, "switch", "-q", "owlbear/c1")
     store, lock = Store(tmp_path / "store"), Lock("c1")
-    neighbour = Plan(tasks=[Task(id="t1", title="one", scope=["src/app.py"])])
-    with store.lock("c3") as other_lock:
-        store.write(other_lock, Change(slug="c3", handle="c3", brief=Brief(outcome="cache pages"), plan=neighbour))
     c = change(StepKind.MERGE, worktree=str(clone))
     c.plan.tasks[0].done = True
     c = loop.apply(c, engine.integrate(c, StepKind.MERGE, "origin/main"), NOW)

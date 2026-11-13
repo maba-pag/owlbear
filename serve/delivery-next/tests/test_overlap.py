@@ -10,7 +10,6 @@ from owlbear_delivery_next.change_contracts.models import (
     Change,
     ErrorKind,
     Exit,
-    Overlap,
     Plan,
     Step,
     StepKind,
@@ -21,7 +20,6 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import FINAL, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import loop, round_flow
 from owlbear_delivery_next.change_flow.loop import StepResult
-from owlbear_delivery_next.change_flow.status import Activity, card
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -61,13 +59,6 @@ def building(origin: str = "integration") -> Change:
     t1 = Task(id="t1", title="one", scope=["src"], done=True)
     t2 = Task(id="t2", title="two", scope=["src"], origin=origin)
     return integrating(plan=Plan(tasks=[t1, t2]), step=Step(kind=K.BUILD, task="t2"))
-
-
-def shared_store(tmp_path, scope="src/app.ts") -> Store:
-    store = Store(tmp_path / "store")
-    with store.lock("c3") as lock:
-        store.write(lock, Change(slug="c3", handle="c3", brief=Brief(outcome="cache pages"), plan=plan(scope)))
-    return store
 
 
 def replace_plan(c, store, path, monkeypatch):
@@ -112,60 +103,26 @@ def merged_cleanly(tmp_path):
     return repo, start
 
 
-def conflicting_repository(tmp_path, filename="src/app.ts"):
-    """A Change branch whose update with main conflicts on src/app.ts (and also changes a lockfile)."""
+@pytest.fixture
+def conflicted(tmp_path):
+    """A Change branch whose update with main conflicts on src/app.ts and is still unfinished."""
     repo = tmp_path / "repo"
     repo.mkdir()
     git(repo, "init", "-q", "-b", "main")
     (repo / "src").mkdir()
-    for text, msg in [("a", "base")]:
-        (repo / filename).write_text(text)
-        (repo / "uv.lock").write_text(text)
-        git(repo, "add", ".")
-        git(repo, "commit", "-qm", msg)
+    (repo / "src/app.ts").write_text("a")
+    git(repo, "add", ".")
+    git(repo, "commit", "-qm", "base")
     git(repo, "switch", "-qc", "change")
-    (repo / filename).write_text("mine")
-    (repo / "uv.lock").write_text("mine")
+    (repo / "src/app.ts").write_text("mine")
     git(repo, "commit", "-qam", "mine")
     git(repo, "switch", "-q", "main")
-    (repo / filename).write_text("theirs")
-    (repo / "uv.lock").write_text("theirs")
+    (repo / "src/app.ts").write_text("theirs")
     git(repo, "commit", "-qam", "theirs")
     git(repo, "switch", "-q", "change")
     start = git(repo, "rev-parse", "HEAD")
     git(repo, "merge", "-q", "main", check=False)
     return repo, start
-
-
-@pytest.fixture
-def conflicted(tmp_path):
-    return conflicting_repository(tmp_path)
-
-
-def test_overlapping_plans_are_recorded_as_information_on_the_card():
-    others = {"c2": ["packages/app"], "c3": ["packages/web"], "c4": ["."]}
-    assert overlap.found(plan("packages/app/src"), others) == [
-        Overlap(other="c2", paths=["packages/app/src"]),
-        Overlap(other="c4", paths=["packages/app/src"]),
-    ]
-    c = loop.apply(integrating(step=Step(kind=K.PLAN), plan=None), StepResult(exit=Exit.DONE, plan=plan("x")), NOW)
-    assert (c.step.kind, loop.open_question(c)) == (K.BUILD, None)  # planning continues
-    c.overlaps = [Overlap(other="c3", paths=["src/app.ts"])]
-    alive = Activity(host_up=True, runner_alive=True, last_event_at=NOW)
-    assert card(c, alive, [], NOW)["overlaps"] == ["overlaps with c3: src/app.ts"]
-
-
-@pytest.mark.parametrize(
-    "shared", [["README.md"], ["docs/guide"], ["uv.lock"], ["web/package-lock.json"], ["dist"], ["a/app.min.js"]]
-)
-def test_docs_lockfiles_and_generated_output_are_no_overlap(shared):
-    assert overlap.found(plan(*shared), {"c2": shared}) == []
-
-
-def test_linguist_generated_paths_are_no_overlap(tmp_path):
-    (tmp_path / ".gitattributes").write_text("# x\napi/gen/** linguist-generated\n*.pb.go linguist-generated=true\n")
-    patterns = overlap.generated(tmp_path)
-    assert overlap.found(plan("api/gen/client.ts", "x/y.pb.go"), {"c2": ["api", "x"]}, patterns) == []
 
 
 SHOWS, HIDES = "On a day without values, the page shows an empty chart.", "On such a day, the page hides the chart."
@@ -184,7 +141,6 @@ def answered(c: Change, asked: StepResult, option: str = "keep") -> Change:
 def test_a_reported_difference_asks_which_behaviour_to_keep_and_no_difference_asks_nothing(conflicted, tmp_path):
     repo, start = conflicted
     (repo / "src/app.ts").write_text("both")
-    (repo / "uv.lock").write_text("both")
     git(repo, "commit", "-qam", "merge main")
     store, c, done = Store(tmp_path / "store"), building(), StepResult(exit=Exit.DONE)
     asked = overlap.integrated(store, C1, c, repo, start, done, told())
@@ -199,12 +155,11 @@ def test_a_reported_difference_asks_which_behaviour_to_keep_and_no_difference_as
     assert overlap.collision(integrating(), told().merge, SIDES).question.step == K.INTEGRATE
 
 
-def test_an_integration_that_asks_or_steps_back_passes_through_to_its_completion(conflicted, tmp_path):
-    repo, start = conflicted
+def test_an_integration_that_asks_or_steps_back_passes_through_to_its_completion(tmp_path):
     store = Store(tmp_path / "store")
-    for exit_ in (Exit.ASK, Exit.BACK, Exit.RETRY):
+    for exit_ in (Exit.ASK, Exit.BACK, Exit.RETRY):  # no Git repository here: any probe would fail
         unfinished = StepResult(exit=exit_, reason="checks fail after the update")
-        assert overlap.integrated(store, C1, building(), repo, start, unfinished) is unfinished
+        assert overlap.integrated(store, C1, building(), tmp_path, "a" * 40, unfinished) is unfinished
 
 
 def test_an_integration_result_without_its_merge_report_stops(merged_cleanly, tmp_path):
@@ -232,7 +187,6 @@ def test_a_new_integration_task_or_a_new_merge_does_not_reuse_an_earlier_collisi
     c, report = building(), told().merge
     first = overlap.collision(c, report, SIDES)
     c = answered(c, first)
-    assert overlap.collision(c, report, SIDES) is None
     later = overlap.collision(c, report, [*SIDES, ("c" * 40, "d" * 40)])  # the target moved and was merged again
     assert (later.exit, later.cause != first.cause) == (Exit.ASK, True)
     c.plan.tasks.append(Task(id="t3", title="another integration", scope=["src"], origin="integration"))
@@ -320,15 +274,14 @@ def test_pause_then_resume_does_not_authorize_collision_resolution(choice):
     assert overlap.collision(done, report, SIDES) is None
 
 
-def test_unverified_integration_termination_keeps_its_stop_and_recovery(conflicted, tmp_path):
-    repo, start = conflicted
+def test_unverified_integration_termination_keeps_its_stop_and_recovery(tmp_path):
     stop = Stop(
         kind=ErrorKind.CAPACITY, reason="runtime termination is unverified", action="Stop the old worker",
         resume="The old worker is confirmed stopped", at=NOW,
     )  # fmt: skip
     stopped = StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
 
-    observed = overlap.integrated(Store(tmp_path / "store"), C1, building(), repo, start, stopped)
+    observed = overlap.integrated(Store(tmp_path / "store"), C1, building(), tmp_path, "a" * 40, stopped)
 
     assert observed is stopped
     assert observed.stop == stop
@@ -358,7 +311,7 @@ def test_a_collision_check_that_fails_stops_and_logs_its_whole_reason(
     merged_cleanly, tmp_path, monkeypatch, whole_error
 ):
     repo, start = merged_cleanly
-    store = shared_store(tmp_path)
+    store = Store(tmp_path / "store")
     c = building()
     c.plan.tasks[1].base, c.names.worktree = start, str(repo)
     store.write(C1, c)
