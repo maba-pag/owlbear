@@ -2044,7 +2044,7 @@ def test_an_integration_build_collision_asks_the_owner_once_across_a_restart_the
 ):
     clone, mine, store, lock, tid = integration_collision_setup
     report = {"this": "The page shows an empty chart.", "other": "The page hides the chart."}
-    built = tools.MergedResult(summary="s", checks=[], response={"how": "fixed", "text": "Merged."}, merge=report)
+    built = tools.MergedResult(summary="s", checks=[], merge=report)
     runs = []
 
     async def build(cfg):
