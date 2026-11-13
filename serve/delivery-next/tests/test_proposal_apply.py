@@ -4,6 +4,7 @@ import dataclasses
 import gzip
 import json
 import subprocess
+from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
@@ -12,7 +13,7 @@ from owlbear_memory.engine import MemoryEngine
 from owlbear_memory.models import MemoryState
 
 from owlbear_delivery_next.commands import cli
-from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
+from owlbear_delivery_next.github.owlbear_issues import Issue, OwlbearIssues
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.improvement import (
     assumptions,
@@ -262,7 +263,7 @@ def test_an_issue_search_past_a_thousand_entries_files_once_and_finds_an_older_m
     assert asked == ["GET"] * 11
 
 
-def test_a_missing_issue_list_cannot_repeat_a_filing_or_erase_a_recovered_issue(world, tmp_path):
+def test_a_missing_issue_list_cannot_repeat_a_filing_or_erase_a_recovered_issue(world, tmp_path, monkeypatch):
     control = SimpleNamespace(hidden=False, reject=False, posts=0)
     marker, legacy = "<!-- marker -->", "<!-- legacy -->"
 
@@ -277,9 +278,7 @@ def test_a_missing_issue_list_cannot_repeat_a_filing_or_erase_a_recovered_issue(
             control.posts += 1
             if control.reject:
                 control.hidden = False
-                found = client().find(legacy)
-                assert found is not None
-                assert found.number == 3
+                assert client().find(legacy) == Issue(3, "https://github.com/o/r/issues/3", "open")
                 control.hidden = True
                 return subprocess.CompletedProcess((), 1, b"", b"gh: API rate limit exceeded (HTTP 429)")
         return world.gh(argv, data, timeout, cwd, env)
@@ -311,9 +310,26 @@ def test_a_missing_issue_list_cannot_repeat_a_filing_or_erase_a_recovered_issue(
         client().create("legacy", legacy, marker=legacy)
     assert control.posts == 2
     control.hidden = False
-    found = client().find(legacy)
-    assert found is not None
-    assert found.number == 3
+    assert client().find(legacy) == Issue(3, "https://github.com/o/r/issues/3", "open")
+
+    ordering = "<!-- recovered at claim -->"
+    world.gh.issues.append(
+        {"number": 4, "html_url": "https://github.com/o/r/issues/4", "state": "open", "body": ordering}
+    )
+    control.hidden, control.reject = True, False
+    touch, once = Path.touch, iter([True])
+
+    def recovered_at_claim(path, *args, **kwargs):
+        if path.suffix == ".pending" and next(once, False):
+            control.hidden = False
+            assert client().find(ordering) == Issue(4, "https://github.com/o/r/issues/4", "open")
+            control.hidden = True
+        return touch(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "touch", recovered_at_claim)
+    with pytest.raises(ProviderError):
+        client().create("ordering", ordering, marker=ordering)
+    assert control.posts == 2
 
 
 def test_a_failure_longer_than_any_cut_is_kept_whole_and_masked(world, whole_error):
