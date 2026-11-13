@@ -66,8 +66,10 @@ def test_each_role_has_its_skills_in_the_one_skills_folder_and_none_loads_the_ch
         assert sdk_adapter.agent(kind)["skills"] == list(preload.REQUIRED[sdk_adapter.ROLES[kind]])
 
 
-@pytest.mark.usefixtures("gap")
-def test_a_missing_or_misnamed_skill_is_reported() -> None:
+def test_missing_misnamed_and_malformed_skills_are_reported(gap) -> None:
+    assert preload.missing("builder") == ["owlbear-module-design", "owlbear-acceptance-criteria"]
+    (gap / "owlbear-acceptance-criteria").mkdir()
+    (gap / "owlbear-acceptance-criteria" / "SKILL.md").write_text('---\nname: "owlbear-acceptance-criteria\n---\n')
     assert preload.missing("builder") == ["owlbear-module-design", "owlbear-acceptance-criteria"]
 
 
@@ -79,24 +81,6 @@ def test_front_matter_is_read_as_yaml() -> None:
     for bad in ("name: x\n", "---\nname: x\n", "---\n- x\n---\n"):
         with pytest.raises(ValueError, match="no front matter"):
             preload.front_matter(bad)
-
-
-def test_a_skill_whose_front_matter_is_not_yaml_counts_as_missing(gap) -> None:
-    (gap / "owlbear-acceptance-criteria").mkdir()
-    (gap / "owlbear-acceptance-criteria" / "SKILL.md").write_text('---\nname: "owlbear-acceptance-criteria\n---\n')
-    assert preload.missing("builder") == ["owlbear-module-design", "owlbear-acceptance-criteria"]
-
-
-def test_the_sdk_session_sees_only_its_roles_skill_folders() -> None:
-    st = sdk_adapter._Step(session(), SimpleNamespace(call_soon_threadsafe=lambda *_: None))  # noqa: SLF001
-    opts = st.options()
-    folder = preload.directory()
-    assert opts["skill_directories"] == [
-        str(folder / "owlbear-module-design"),
-        str(folder / "owlbear-acceptance-criteria"),
-    ]
-    assert "disabled_skills" not in opts  # a project's own skills stay as the project has them
-    assert opts["custom_agents"][0]["skills"] == ["owlbear-module-design", "owlbear-acceptance-criteria"]
 
 
 def _user_skills(home: Path, tmp_path: Path) -> None:
@@ -129,6 +113,7 @@ def test_the_owners_skills_are_available_only_with_his_switch_on_never_as_delive
     his = [str(home / "skills" / n) for n in ("ah-asking", "ah-decisions", "mine")]  # by their link path
     assert opts["skill_directories"] == own + (his if on else [])
     assert opts["custom_agents"][0]["skills"] == ["owlbear-module-design", "owlbear-acceptance-criteria"]
+    assert "disabled_skills" not in opts  # a project's own skills stay as the project has them
     assert (opts["enable_config_discovery"], opts["included_builtin_skills"]) == (False, [])
 
 
