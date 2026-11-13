@@ -346,14 +346,12 @@ def test_a_failed_git_collision_probe_stops_instead_of_passing(tmp_path, monkeyp
     assert "collision" in stopped.reason.lower()
 
 
-def test_neighbours_are_other_open_or_recently_merged_changes(tmp_path):
+def test_the_scopes_a_plan_is_compared_with_are_the_other_open_changes(tmp_path):
     store = Store(tmp_path / "store")
-    old, recent = NOW - overlap.RECENT - timedelta(seconds=1), NOW - timedelta(days=1)
-    for slug, finished in [("c1", None), ("c2", None), ("c3", recent), ("c4", old)]:
+    for slug, finished in [("c1", None), ("c2", None), ("c3", NOW - timedelta(days=1))]:
         with store.lock(slug) as lock:
             store.write(lock, Change(slug=slug, plan=plan(f"{slug}/x"), finished_at=finished))
-    near = overlap.neighbours(store, "c1", NOW)
-    assert [(n.handle, n.scope, n.merged) for n in near] == [("c2", ["c2/x"], False), ("c3", ["c3/x"], True)]
+    assert overlap.scopes(store, "c1") == {"c2": ["c2/x"]}
 
 
 def test_a_collision_check_that_fails_stops_and_logs_its_whole_reason(

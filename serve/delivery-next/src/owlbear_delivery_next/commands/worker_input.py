@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.impeccable import design_tools
-from owlbear_delivery_next.workflow_steps import design, plan_round, sessions
+from owlbear_delivery_next.workflow_steps import design, overlap, sessions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -37,4 +37,4 @@ def planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list[
     if worktree.shelve(path, message):
         store.log(lock, slug, {"event": "shelved", "at": datetime.now(UTC).isoformat(timespec="seconds")})
         sessions.out(f"{slug}: uncommitted edits kept in `git stash list` as '{message}'")
-    return plan_round.scopes(store, slug)
+    return overlap.scopes(store, slug)

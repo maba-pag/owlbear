@@ -6,9 +6,9 @@ import fnmatch
 import hashlib
 import json
 import subprocess
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import PurePosixPath
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import evidence
 from owlbear_delivery_next.change_contracts.failures import cause_key
@@ -25,7 +25,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.tools import MergeReport
     from owlbear_delivery_next.state_store.store import Lock, Store
 
-RECENT = timedelta(days=14)  # a merged Change's scope still explains a collision this long
 LOCKS = frozenset({"uv.lock", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "poetry.lock"})
 LOCKS |= {"Cargo.lock", "go.sum", "Gemfile.lock", "composer.lock"}
 DOCS = (".md", ".rst", ".txt")
@@ -33,27 +32,17 @@ GENERATED = (".min.js", ".map")
 FOLDERS = frozenset({"docs", "dist", "build"})
 
 
-class Neighbour(NamedTuple):
-    """Another open or recently merged Change of this clone."""
-
-    handle: str
-    scope: list[str]
-    outcome: str
-    merged: bool
-
-
-def neighbours(store: Store, slug: str, now: datetime) -> list[Neighbour]:
-    """The other open or recently merged Changes with their plan's task scopes, else their brief's."""
-    out = []
+def scopes(store: Store, slug: str) -> dict[str, list[str]]:
+    """Scopes of the other open Changes of this clone: their plan's task scopes, else their brief's."""
+    out = {}
     for other in store.slugs():
         try:
             o = store.read(other)
         except StoreError:
             continue
         scope = sorted({p for t in o.plan.tasks for p in t.scope} if o.plan else set(o.brief.scope))
-        live = not o.finished_at or now - o.finished_at <= RECENT
-        if other != slug and scope and live and not o.intent.abandoned_at:
-            out.append(Neighbour(o.handle or other, scope, o.brief.outcome or o.brief.title, bool(o.finished_at)))
+        if other != slug and scope and not o.finished_at and not o.intent.abandoned_at:
+            out[o.handle or other] = scope
     return out
 
 
