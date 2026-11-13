@@ -29,19 +29,12 @@ def boot(monkeypatch) -> dict:
     return publication_offline.boot(monkeypatch)
 
 
-def _switched_store(repo: Path, boot: dict, capsys) -> Path:
-    """Real Prepare, a modeled reboot and real Finish; returns the SWITCHED target with its marker removed."""
-    target = publication_offline.switched_store(repo, boot)
-    capsys.readouterr()
-    (target / MARKER).unlink()
-    return target
-
-
 @pytest.mark.usefixtures("current_binding")
 def test_a_target_replaced_before_marker_publication_is_refused_and_nothing_is_written_through(
-    repo, boot, capsys, monkeypatch
+    repo, boot, monkeypatch
 ) -> None:
-    target = _switched_store(repo, boot, capsys)
+    target = publication_offline.switched_store(repo, boot)
+    (target / MARKER).unlink()
     before = {p.name: p.read_bytes() for p in target.iterdir() if p.is_file()}
     aside = target.with_name(target.name + ".aside")
     real_publish = project_home._publish_markers  # noqa: SLF001 - the gap hook wraps the real publication
