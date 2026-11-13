@@ -483,7 +483,7 @@ def registered_setup_page(hub, tmp_path, monkeypatch, pds) -> Iterator[tuple[Any
         monkeypatch.setattr(project.readiness, "ready", lambda *_a, **_k: [failing])
         next(p for p in machine.projects.values() if Path(p.entry.path) == folder)._ready()  # noqa: SLF001
         page.goto(f"{base}/projects#token=t")
-        yield page, page.get_by_role("listitem", name="proj"), folder
+        yield page, page.get_by_role("listitem", name="proj", include_hidden=True), folder
 
 
 @pytest.mark.browser
@@ -591,13 +591,13 @@ def test_finish_setup_on_a_registered_clone_changes_its_ruleset_and_says_what_is
     modal.get_by_role("button", name="Set up proj", exact=True).click()
     expect(modal).to_contain_text("Found so far: Lint. unresolved check names: codeql.yml")
     expect(modal.get_by_role("button", name="Confirm profile")).to_be_visible()
-    modal.get_by_role("button", name="Close").click()
     expect(row).to_have_count(1)
     expect(row.locator("p-tag", has_text="Not fully added")).to_be_visible()  # the page's next poll
     expect(row).to_contain_text("Waits for you to confirm its profile")
-    expect(row.get_by_role("button", name="Finish setup")).to_have_count(0)
-    assert row.get_by_role("list", name="Failed readiness checks").count() == 0
-    expect(page.get_by_role("heading", name="Not added yet")).to_have_count(0)
+    expect(row.get_by_role("button", name="Finish setup", include_hidden=True)).to_have_count(0)
+    assert row.get_by_role("list", name="Failed readiness checks", include_hidden=True).count() == 0
+    expect(page.get_by_role("heading", name="Not added yet", include_hidden=True)).to_have_count(0)
+    modal.get_by_role("button", name="Close").click()
     row.get_by_role("button", name="Confirm profile").click()
     modal.get_by_role("button", name="Confirm profile").click()
     expect(modal.locator(".facts")).to_contain_text("Registered: yes")
