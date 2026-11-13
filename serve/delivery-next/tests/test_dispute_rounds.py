@@ -1,6 +1,5 @@
 """TD-193, TD-208: the next round judges a rejection; the owner decides each one it does not accept, with a note."""
 
-import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -16,7 +15,6 @@ from owlbear_delivery_next.change_contracts.models import (
     Dispute,
     ErrorKind,
     Exit,
-    ItemRef,
     Names,
     Plan,
     Question,
@@ -24,7 +22,6 @@ from owlbear_delivery_next.change_contracts.models import (
     StepKind,
     Task,
 )
-from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_flow import budgets, disputes, loop
 from owlbear_delivery_next.change_flow.moves import ask
 from owlbear_delivery_next.change_flow.status import Activity
@@ -32,11 +29,14 @@ from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.runtimes import sdk_adapter
-from owlbear_delivery_next.runtimes.results import ACCEPTED, Gate
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import reconsider, review
 
+from . import test_round_flow
+from .test_round_flow import git, step
+
+clone = test_round_flow.clone
 NOW = datetime(2026, 10, 17, 3, tzinfo=UTC)
 DONE = Termination(confirmed=True)
 K = StepKind
@@ -52,31 +52,6 @@ class Host:
 
     def activity(self, _slug):
         return Activity(host_up=True)
-
-
-def git(cwd: Path, *args: str) -> str:
-    done = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
-    return done.stdout.strip()
-
-
-@pytest.fixture
-def clone(tmp_path, monkeypatch) -> Path:
-    (tmp_path / "gitconfig").write_text("")
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    for who in ("AUTHOR", "COMMITTER"):
-        monkeypatch.setenv(f"GIT_{who}_NAME", "t")
-        monkeypatch.setenv(f"GIT_{who}_EMAIL", "t@t")
-    work = tmp_path / "work"
-    work.mkdir()
-    git(work, "init", "-q", "-b", "owlbear/c1")
-    (work / "a.txt").write_text("a\n")
-    git(work, "add", "-A")
-    git(work, "commit", "-qm", "base")
-    git(work, "branch", "main")
-    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: work)
-    monkeypatch.setattr(reconsider.worktree, "ensure", lambda *_a: work)
-    return work
 
 
 def change() -> Change:
@@ -97,12 +72,6 @@ def stored(tmp_path: Path, c: Change) -> Store:
     store = Store(tmp_path / "store")
     store.write(Lock("c1"), c)
     return store
-
-
-def step(store: Store, clone: Path) -> Change:
-    c = store.read("c1")
-    runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
-    return store.read("c1")
 
 
 def build(store: Store, clone: Path, monkeypatch, *keys: str) -> sdk_adapter.Session:
@@ -140,20 +109,17 @@ def answer(store: Store, option: str, text: str = "") -> Change:
     return c
 
 
-def gate(tmp_path: Path, kind: StepKind, tree: tools.Worktree, submit: tools.Spec, **bounds) -> Gate:
-    cfg = sdk_adapter.Session(
-        kind, tmp_path, "s1", "m", resume=False, policy=Policy(tmp_path), observe=lambda: tree, checks=("npm test",),
-        submit=submit, **bounds,
-    )  # fmt: skip
-    return Gate(cfg, Run("s1"), lambda **_e: None, lambda: None)
-
-
-def test_the_next_round_judges_each_rejection_and_the_owner_decides_one_it_does_not_accept(
-    tmp_path, clone, monkeypatch
-):
-    store = stored(tmp_path, change())
+@pytest.mark.parametrize("owner", ["drop", "fix", "approved"])
+def test_disputes_are_judged_before_their_disposition(tmp_path, clone, monkeypatch, owner):
+    c = change()
+    if owner == "approved":
+        c.brief.approved_version = 1
+    store = stored(tmp_path, c)
     cfg = build(store, clone, monkeypatch, "F1", "F2")
     assert (cfg.rejectable, cfg.settled) == (("F1", "F2"), ())
+    assert f"> F1. {ONE}" in cfg.message
+    c = store.read("c1")
+    assert (c.step.kind, c.step.task, [d.key for d in c.plan.tasks[2].disputes]) == (K.REVIEW, "t3", ["F1", "F2"])
     rechecked = [
         {"finding": "F1", "upheld": True, "reason": "it still greets in English"},
         {"finding": "F2", "upheld": False, "reason": "a test exists"},
@@ -165,11 +131,73 @@ def test_the_next_round_judges_each_rejection_and_the_owner_decides_one_it_does_
         False,
     )
     c = store.read("c1")
-    q = loop.open_question(c)
-    assert ("did not accept the builder's rejection" in q.text, "it still greets in English" in q.text) == (True, True)
-    assert [o.label for o in q.options] == ["Fix it", RECONSIDER, "Drop it"]
     assert [(d.key, d.upheld) for d in c.plan.tasks[2].disputes] == [("F1", True), ("F2", False)]
     assert "(rejection accepted by the reviewer)" in disputes.review_lines(c, None)[-1]
+    if owner == "approved":
+        assert (c.questions, len(c.plan.tasks), c.step.kind, c.step.mode) == ([], 3, K.REVIEW, "final")
+        assert [e.model_dump() for e in c.left] == [
+            {
+                "loop": "t1",
+                "attempt": 0,
+                "id": "F1",
+                "text": ONE,
+                "reason": "F1 is wrong",
+                "judgement": "it still greets in English",
+            }
+        ]
+        assert c.plan.tasks[2].disputes[0].owner == ""
+        return
+    q = loop.open_question(c)
+    assert (c.outcome.exit, q.cause.startswith(disputes.PREFIX), "F1" in q.text) == (Exit.ASK, True, True)
+    assert ("did not accept the builder's rejection" in q.text, "it still greets in English" in q.text) == (True, True)
+    assert [o.label for o in q.options] == ["Fix it", RECONSIDER, "Drop it"]
+    assert (len(c.plan.tasks), c.budgets.rounds, len(c.reviews)) == (3, {}, 1)
+    answer(store, owner)
+    monkeypatch.setattr(runner, "_kept", lambda *_a: pytest.fail("a decided dispute starts no session"))
+    c = step(store, clone)
+    if owner == "drop":
+        assert ([t.done for t in c.plan.tasks], c.step.kind, c.step.mode) == ([True] * 3, K.REVIEW, "final")
+    else:
+        fix = c.plan.tasks[-1]
+        assert (c.step.kind, c.step.task, fix.fixes, fix.detail) == (K.BUILD, fix.id, "t3", f"- {ONE}")
+        assert sum(c.budgets.rounds.values()) == 1
+        assert (disputes.rejectable(fix), fix.settled) == ((), ["F1"])
+
+
+def test_each_upheld_finding_is_decided_on_its_own(tmp_path, clone, monkeypatch):
+    store = stored(tmp_path, change())
+    build(store, clone, monkeypatch, "F1", "F2")
+    review_(store, clone, monkeypatch, [{"finding": k, "upheld": True, "reason": "holds"} for k in ("F1", "F2")])
+    assert "F1" in loop.open_question(store.read("c1")).text
+    assert "F2" in loop.open_question(answer(store, "drop")).text
+    answer(store, "fix")
+    monkeypatch.setattr(runner, "_kept", lambda *_a: pytest.fail("a decided dispute starts no session"))
+    c = step(store, clone)
+    assert c.plan.tasks[-1].detail == f"- {TWO}"
+    assert [(d.key, d.owner) for d in c.plan.tasks[2].disputes] == [("F1", "drop"), ("F2", "fix")]
+
+
+def test_a_review_whose_session_stops_consumes_no_recheck(tmp_path, clone, monkeypatch):
+    store = stored(tmp_path, change())
+    build(store, clone, monkeypatch, "F1", "F2")
+    payload = tools.ReviewResult(
+        verdict="pass", rechecked=[{"finding": k, "upheld": True, "reason": "holds"} for k in ("F1", "F2")]
+    )
+    monkeypatch.setattr(
+        runner,
+        "_kept",
+        lambda _s, _l, _c, path, config: Run(
+            config(path).session_id,
+            "result",
+            payload,
+            head=git(clone, "rev-parse", "HEAD"),
+            termination=Termination(confirmed=False),
+        ),
+    )
+    c = step(store, clone)
+    assert c.outcome.exit == Exit.STOP
+    assert [d.upheld for d in c.plan.tasks[2].disputes] == [None, None]
+    assert not c.reviews
 
 
 def reconsidering(tmp_path: Path, clone: Path, monkeypatch) -> Store:
@@ -337,63 +365,6 @@ def test_the_owners_note_guides_the_fix_and_authorises_its_round():
     assert f"> F1: {note.strip()}" in disputes.build_lines(fix)
     task.disputes[0].owner = "drop"
     assert (disputes.kept(task), disputes.authorised(task)) == ({}, False)
-
-
-@pytest.mark.parametrize(
-    ("offered", "keys", "error"),
-    [
-        (("F2",), ("F1", "F2"), "rejected: F1 is the owner's decision"),
-        (("F2",), ("F2",), "changes: no commit - fix and commit F1"),
-        (("F2",), ("F3",), "rejected: F3 is no finding key of this task - use F2"),
-        ((), ("F1",), "rejected: the owner decided every finding"),
-    ],
-)
-def test_a_finding_the_owner_decided_is_never_rejected(tmp_path, offered, keys, error):
-    g = gate(tmp_path, K.BUILD, tools.Worktree(head="a", base="a"), tools.SUBMIT, rejectable=offered, settled=("F1",))
-    rejected = [{"finding": k, "reason": "r"} for k in keys]
-    text, ok = g.call(tools.SUBMIT, {"summary": "R.", "checks": [], "rejected": rejected})
-    assert (ok, error in text, "or reject" in text) == (False, True, False)
-
-
-def test_a_conversation_reply_never_skips_a_finding_the_owner_decided(tmp_path):
-    item = ItemRef(id="c1", kind="comment", version="v1", task="t1")
-    tree = tools.Worktree(head="a", base="a")
-    g = gate(tmp_path, K.BUILD, tree, tools.SUBMIT, rejectable=("F2",), settled=("F1",), item=item)
-    reply = {"how": "answered", "text": "It already greets in German."}
-    text, ok = g.call(tools.SUBMIT, {"summary": "R.", "checks": [], "response": reply})
-    assert (ok, "changes: no commit - fix and commit F2, F1" in text) == (False, True)
-
-
-@pytest.mark.parametrize(
-    ("given", "cap", "error"),
-    [
-        ({"upheld": True}, 1, None),
-        ({}, 1, "rechecked: F1 needs upheld true or false"),
-        ({"upheld": False}, 0, "findings: 1 given, at most 0"),  # a rejections-only check finds nothing new
-    ],
-)
-def test_a_judgement_needs_a_verdict_and_new_findings_stay_within_the_cap(tmp_path, given, cap, error):
-    g = gate(tmp_path, K.REVIEW, tools.Worktree(head="b", base="a"), tools.REVIEW, rechecks=("F1",), cap=cap)
-    found = [{"place": "a.txt:3", "problem": "p", "fix": "f"}]
-    args = {"verdict": "fix", "findings": found, "rechecked": [{"finding": "F1", "reason": "r"} | given]}
-    text, ok = g.call(tools.REVIEW, args)
-    assert (ok, text) == (True, ACCEPTED) if error is None else (not ok and error in text)
-
-
-@pytest.mark.parametrize(
-    ("given", "error"),
-    [
-        ([("F1", "withdrawn", ""), ("F2", "clarified", "a.txt:2: p - fix: f")], None),
-        ([("F1", "withdrawn", "")], "reconsidered: missing F2"),
-        ([("F1", "withdrawn", ""), ("F2", "clarified", " ")], "reconsidered: F2 is clarified but has no text"),
-    ],
-)
-def test_a_reconsideration_answers_each_finding_and_restates_a_clarified_one(tmp_path, given, error):
-    tree = tools.Worktree(head="a", base="a")
-    g = gate(tmp_path, K.REVIEW, tree, dispute_tools.SUBMIT, rechecks=("F1", "F2"))
-    verdicts = [{"finding": k, "verdict": v, "text": t, "reason": "r"} for k, v, t in given]
-    text, ok = g.call(dispute_tools.SUBMIT, {"reconsidered": verdicts})
-    assert (ok, text) == (True, ACCEPTED) if error is None else (not ok and error in text)
 
 
 def test_each_repair_part_marks_the_findings_the_owner_decided():

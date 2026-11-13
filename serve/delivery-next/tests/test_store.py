@@ -269,23 +269,24 @@ def test_a_current_held_record_with_an_unknown_field_is_written_by_another_deliv
         store.read("c1")
 
 
-def test_a_stored_brief_review_becomes_its_challenge(store):
+def test_a_format_1_record_migrates_brief_reviews_and_drops_the_merge_queue_field(store):
     approved = Brief(version=1, challenged=None)
-    save(store, Change(slug="c1", brief=Brief(version=2, challenged=2, approved=[approved])))
+    save(
+        store,
+        Change(
+            slug="c1",
+            brief=Brief(version=2, challenged=2, approved=[approved]),
+            consent=MergeConsent(head="a" * 40, at=datetime(2026, 10, 10, tzinfo=UTC)),
+        ),
+    )
     old = json.loads(record(store, "c1"))
     old["format"], old["brief"]["reviewed"] = 1, old["brief"].pop("challenged")
     old["brief"]["approved"][0]["reviewed"] = old["brief"]["approved"][0].pop("challenged")
+    old["consent"]["queued_at"] = None
     overwrite(store, "c1", json.dumps(old))
-    brief = store.read("c1").brief
-    assert (brief.challenged, brief.approved) == (2, [approved])
-
-
-def test_a_format_1_consent_drops_the_merge_queue_field(store):
-    save(store, Change(slug="c1", consent=MergeConsent(head="a" * 40, at=datetime(2026, 10, 10, tzinfo=UTC))))
-    old = json.loads(record(store, "c1"))
-    old["format"], old["consent"]["queued_at"] = 1, None
-    overwrite(store, "c1", json.dumps(old))
-    assert store.read("c1").consent.head == "a" * 40
+    migrated = store.read("c1")
+    assert (migrated.brief.challenged, migrated.brief.approved) == (2, [approved])
+    assert migrated.consent.head == "a" * 40
 
 
 def test_a_format_3_change_drops_the_td_189_round_fields(store):

@@ -9,18 +9,16 @@ import errno
 import json
 import os
 import stat
-import subprocess
 from pathlib import Path
 
 import pytest
+from tests import publication_offline
+from tests.publication_offline import AFTER
+from tests.publication_offline import source as _source
 
 from owlbear_delivery_next.commands import cli
-from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move
-from owlbear_delivery_next.state_store.database import MARKER
+from owlbear_delivery_next.state_store import project_move
 
-BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
-AFTER = "BBBBBBBB-0000-4000-8000-000000000002"
-PAYLOAD_FILE = Path("changes/c1/notes.txt")
 PAYLOAD_FIFO = Path("changes/c1/output.pipe")
 
 
@@ -50,26 +48,12 @@ def blocking_opens(monkeypatch) -> list[str]:
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
-    path = tmp_path / "shop"
-    subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True, capture_output=True)  # noqa: S603, S607
-    folder = project_home.clone_dir(path)
-    folder.mkdir(parents=True)
-    (folder / MARKER).write_text("7")
-    (folder / "config.json").write_text(json.dumps({"format": 1, "widths": [1600]}))
-    (folder / PAYLOAD_FILE.parent).mkdir(parents=True)
-    (folder / PAYLOAD_FILE).write_text("regular payload\n")
-    return path
+    return publication_offline.repo(tmp_path)
 
 
 @pytest.fixture
 def boot(monkeypatch) -> dict:
-    state = {"id": BEFORE}
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: state["id"])
-    return state
-
-
-def _source(repo: Path) -> Path:
-    return project_home.clone_dir(repo)
+    return publication_offline.boot(monkeypatch)
 
 
 @pytest.mark.usefixtures("current_binding")

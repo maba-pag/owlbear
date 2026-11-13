@@ -5,46 +5,25 @@ import sys
 from pathlib import Path
 
 import pytest
+from tests import publication_offline
+from tests.publication_offline import source
+from tests.publication_offline import switched_store as move_to_next_boot
 
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.machine_host import selfcheck
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
-from owlbear_delivery_next.state_store import offline_protocol, project_home, project_move, registry
+from owlbear_delivery_next.state_store import offline_protocol, project_move, registry
 from owlbear_delivery_next.state_store.database import MARKER, STORE_FORMAT
-from owlbear_delivery_next.state_store.store import Store
-
-BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
-AFTER = "BBBBBBBB-0000-4000-8000-000000000002"
 
 
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
-    path = tmp_path / "shop"
-    subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True, capture_output=True)  # noqa: S603, S607
-    folder = project_home.clone_dir(path)
-    folder.mkdir(parents=True)
-    (folder / MARKER).write_text("7")
-    (folder / "config.json").write_text(json.dumps({"format": 1, "widths": [1600]}))
-    return path
+    return publication_offline.repo(tmp_path, payload=False)
 
 
 @pytest.fixture
 def boot(monkeypatch) -> dict:
-    state = {"id": BEFORE}
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: state["id"])
-    return state
-
-
-def source(repo: Path) -> Path:
-    return project_home.clone_dir(repo)
-
-
-def move_to_next_boot(repo: Path, boot: dict) -> Path:
-    """Prepare, reboot, Finish; returns the target folder the switched receipt names."""
-    assert cli.main(["--repo", str(repo), "prepare"]) == 0
-    boot["id"] = AFTER
-    assert cli.main(["--repo", str(repo), "finish"]) == 0
-    return Store.open(repo).root
+    return publication_offline.boot(monkeypatch)
 
 
 @pytest.mark.usefixtures("current_binding", "boot")
@@ -81,12 +60,8 @@ def test_a_finished_move_source_is_canonical_only_while_its_switched_receipt_hol
 
 
 @pytest.mark.usefixtures("current_binding", "boot")
-@pytest.mark.parametrize(
-    "backup",
-    [b"{not json"],
-    ids=["malformed"],
-)
-def test_the_selfcheck_ignores_the_backup_config_of_a_validated_move(repo, boot, backup) -> None:
+def test_the_selfcheck_ignores_the_backup_config_of_a_validated_move(repo, boot) -> None:
+    backup = b"{not json"
     target = move_to_next_boot(repo, boot)
     registry.register(repo)
     (source(repo) / "config.json").write_bytes(backup)  # the retained copy; the target's config is what counts

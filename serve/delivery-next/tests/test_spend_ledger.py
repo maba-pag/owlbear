@@ -17,10 +17,18 @@ def written() -> list[dict]:
 
 
 def test_a_run_writes_its_start_and_end_with_where_it_ran_and_the_sessions_own_job() -> None:
+    async def inside() -> tuple[str, str]:
+        async def read_change() -> str:
+            return spend_ledger.where().change
+
+        return await asyncio.create_task(read_change()), await asyncio.to_thread(lambda: spend_ledger.where().change)
+
     place = Where(project="owlbear", name="owlbear", clone="c1", change="fix-it", step="build", job="chat lookup")
     with spend_ledger.at(place):
         spend_ledger.started("r1", "s1", agent="picker", job="decision-pick", model="m1", before={})
         spend_ledger.ended("r1", "s1", usage={"credits": 0.5, "models": {}}, ending="result", limit=2.0)
+        assert asyncio.run(inside()) == ("fix-it", "fix-it")
+    assert spend_ledger.where() == Where()
     spend_ledger.started("r2", "s2", agent="curator", job="", model="m1", before=None)
     first, last, other = written()
     assert first | {"at": ""} == {
@@ -33,16 +41,6 @@ def test_a_run_writes_its_start_and_end_with_where_it_ran_and_the_sessions_own_j
     files = list(spend_ledger.folder().glob("spend-*.jsonl"))
     assert len(files) == 1
     assert oct(files[0].stat().st_mode & 0o777) == "0o600"
-
-
-def test_a_place_reaches_tasks_and_threads_the_block_starts() -> None:
-    async def inside() -> tuple[str, str]:
-        task = await asyncio.create_task(asyncio.sleep(0, spend_ledger.where().change))
-        return task, await asyncio.to_thread(lambda: spend_ledger.where().change)
-
-    with spend_ledger.at(Where(change="c")):
-        assert asyncio.run(inside()) == ("c", "c")
-    assert spend_ledger.where() == Where()
 
 
 def test_a_store_names_its_project_by_its_shared_folder_else_its_clone(tmp_path: Path) -> None:

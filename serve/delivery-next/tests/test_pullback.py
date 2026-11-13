@@ -66,40 +66,26 @@ def test_a_clean_checked_out_target_is_fast_forwarded(repos):
     assert pullback.run(repo, "main", NOW, Writer.rule(repo)).reason == "already up to date"
 
 
-def test_a_target_not_checked_out_has_only_its_ref_fast_forwarded(repos):
+@pytest.mark.parametrize("local_target", [True, False], ids=["ref-only", "remote-only"])
+def test_pullback_without_a_holder_updates_only_target_refs(repos, local_target):
     repo, other = repos
     git(repo, "switch", "-q", "-c", "work")
     (repo / "w.txt").write_text("mine\n")
+    if not local_target:
+        git(repo, "branch", "-q", "-D", "main")
     head = merged(other)
     result = pullback.run(repo, "main", NOW, Writer.rule(repo))
-    assert (result.state, result.worktree, git(repo, "rev-parse", "main")) == ("updated", "", head)
+    assert (result.state, result.worktree, git(repo, "rev-parse", "origin/main")) == ("updated", "", head)
+    if local_target:
+        assert git(repo, "rev-parse", "main") == head
+    else:
+        assert result.reason == "no local main branch; origin/main updated"
     assert (git(repo, "branch", "--show-current"), (repo / "w.txt").read_text()) == ("work", "mine\n")
-
-
-def test_without_a_local_target_branch_only_the_remote_ref_is_updated(repos):
-    repo, other = repos
-    git(repo, "switch", "-q", "-c", "work")
-    git(repo, "branch", "-q", "-D", "main")
-    head = merged(other)
-    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
-    assert (result.state, result.reason) == ("updated", "no local main branch; origin/main updated")
-    assert git(repo, "rev-parse", "origin/main") == head
 
 
 def state(repo):
     status = git(repo, "status", "--porcelain=v1", "--untracked-files=all")
     return git(repo, "rev-parse", "HEAD"), git(repo, "rev-parse", "refs/heads/main"), status
-
-
-def test_unrelated_local_changes_survive_a_fast_forward(repos):
-    repo, other = repos
-    (repo / ".gitignore").write_text("edited\n")
-    (repo / "new.txt").write_text("untracked\n")
-    head = merged(other)
-    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
-    assert (result.state, git(repo, "rev-parse", "HEAD"), (repo / "b.txt").exists()) == ("updated", head, True)
-    assert ((repo / ".gitignore").read_text(), (repo / "new.txt").read_text()) == ("edited\n", "untracked\n")
-    assert git(repo, "stash", "list") == ""
 
 
 @pytest.mark.parametrize("staged", [False, True])
@@ -128,42 +114,39 @@ def full(repo):
     return (*state(repo), git(repo, "ls-files", "-s"), files)
 
 
-def test_local_commits_are_replayed_and_unrelated_local_changes_kept(repos):
-    repo, other = repos
-    (repo / "local.txt").write_text("x\n")
-    git(repo, "add", "local.txt")
-    git(repo, "commit", "-q", "-m", "my message", "--author", "Ann <ann@a>")
-    (repo / ".gitignore").write_text("edited\n")
-    (repo / "new.txt").write_text("untracked\n")
-    head, wts = merged(other), worktrees(repo)
-    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
-    assert (result.state, result.reason) == ("updated", "replayed 1 local commits onto the merged change")
-    assert git(repo, "rev-parse", "HEAD~1") == head
-    assert git(repo, "log", "-1", "--format=%s|%an <%ae>") == "my message|Ann <ann@a>"
-    assert ((repo / ".gitignore").read_text(), (repo / "new.txt").read_text()) == ("edited\n", "untracked\n")
-    assert (git(repo, "stash", "list"), git(repo, "status", "--porcelain")) == ("", "M .gitignore\n?? new.txt")
-    assert worktrees(repo) == wts
-
-
 @pytest.mark.parametrize(
     ("diverged", "reason"), [(False, "fast-forwarded"), (True, "replayed 1 local commits onto the merged change")]
 )
-def test_a_partially_staged_file_keeps_its_index_entry_and_content(repos, diverged, reason):
+def test_pullback_preserves_unrelated_staged_and_working_content(repos, diverged, reason):
     repo, other = repos
     commit(repo, "part.txt", "head\n")
     git(repo, "push", "-q", "origin", "main")
     git(other, "pull", "-q")
     if diverged:
-        commit(repo, "local.txt")
+        (repo / "local.txt").write_text("x\n")
+        git(repo, "add", "local.txt")
+        git(repo, "commit", "-q", "-m", "my message", "--author", "Ann <ann@a>")
+    (repo / ".gitignore").write_text("edited\n")
+    (repo / "new.txt").write_text("untracked\n")
     (repo / "part.txt").write_text("staged\n")
     git(repo, "add", "part.txt")
     (repo / "part.txt").write_text("working\n")
     entry, cached = git(repo, "ls-files", "-s", "part.txt"), git(repo, "diff", "--cached")
-    merged(other)
+    head, wts = merged(other), worktrees(repo)
     result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, result.reason) == ("updated", reason)
+    assert git(repo, "rev-parse", "HEAD~1" if diverged else "HEAD") == head
+    if diverged:
+        assert git(repo, "log", "-1", "--format=%s|%an <%ae>") == "my message|Ann <ann@a>"
     assert (git(repo, "ls-files", "-s", "part.txt"), git(repo, "diff", "--cached")) == (entry, cached)
     assert (repo / "part.txt").read_text() == "working\n"
+    assert (repo / "b.txt").exists()
+    assert ((repo / ".gitignore").read_text(), (repo / "new.txt").read_text()) == ("edited\n", "untracked\n")
+    assert (git(repo, "stash", "list"), git(repo, "status", "--porcelain")) == (
+        "",
+        "M .gitignore\nMM part.txt\n?? new.txt",
+    )
+    assert worktrees(repo) == wts
 
 
 def test_a_conflicting_replay_leaves_the_local_copy_and_worktrees_as_before(repos):
@@ -505,34 +488,51 @@ def test_a_switch_to_a_branch_containing_the_merge_does_not_count_as_updated(rep
     assert git(repo, "rev-parse", "main") == head
 
 
-@pytest.mark.parametrize("conflict", [False, True])
-def test_a_temporary_worktree_that_survives_cleanup_is_reported(repos, monkeypatch, conflict):
+@pytest.mark.parametrize(
+    ("ending", "interrupted"),
+    [
+        ("updated", ()),
+        ("conflict", ()),
+        ("cherry-timeout", ("cherry-pick",)),
+        ("diff-timeout", ("diff", "--name-status")),
+    ],
+    ids=["success", "conflict", "during-replay", "after-replay"],
+)
+def test_replay_cleanup_notes_survive_success_conflict_and_timeout(repos, monkeypatch, ending, interrupted):
     repo, other = repos
-    commit(repo, "b.txt" if conflict else "local.txt", "local commit\n")
+    commit(repo, "b.txt" if ending == "conflict" else "local.txt", "local commit\n")
     real, left = pullback.pullback_replay.git, []
 
     def stuck(path, *args):
         if args[:2] in {("worktree", "remove"), ("worktree", "prune")}:
             left.append(args[-1])
             return subprocess.CompletedProcess(args, 1, "", "fatal: busy\n")
+        if interrupted and args[: len(interrupted)] == interrupted:
+            timeout()
         return real(path, *args)
 
-    monkeypatch.setattr(pullback.pullback_replay, "git", stuck)
-    monkeypatch.setattr(pullback.pullback_replay.shutil, "rmtree", lambda *_a, **_k: None)
     merged(other)
-    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
-    monkeypatch.undo()
+    with monkeypatch.context() as fault:
+        fault.setattr(pullback.pullback_replay, "git", stuck)
+        fault.setattr(pullback.pullback_replay.shutil, "rmtree", lambda *_a, **_k: None)
+        result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     git(repo, "worktree", "remove", "--force", left[0])
-    assert result.state == ("behind" if conflict else "updated")
+    assert result.state == ("updated" if ending == "updated" else "behind")
     assert "was not removed" in result.reason
+    if interrupted:
+        assert "git timed out" in result.reason
 
 
-def test_a_failed_tree_update_undoes_type_changes_directories_and_filtered_files(repos):
+def test_failed_tree_update_restores_kinds_bytes_modes_and_commit_attributes(repos):
     """The failed update puts the whole local copy back, and a retry once the filter works updates the target."""
     repo, other = repos
     (repo / "l").symlink_to(".gitignore")
     commit(repo, "d", "file\n")
-    commit(repo, ".gitattributes", "*.x filter=x\n*.y filter=y\n")
+    commit(repo, ".gitattributes", "f text eol=crlf\n*.x filter=x\n*.y filter=y\n")
+    commit(repo, "f", "a\nb\n")
+    (repo / "f").unlink()
+    git(repo, "checkout", "--", "f")
+    commit(repo, "run.sh", "echo\n")
     git(repo, "add", "l")
     git(repo, "commit", "-q", "-m", "link")
     git(repo, "push", "-q", "origin", "main")
@@ -541,6 +541,10 @@ def test_a_failed_tree_update_undoes_type_changes_directories_and_filtered_files
         git(repo, "config", f"filter.{key}", value)
     before = full(repo)
     commit(other, "a.txt")  # an unfiltered root file the update writes before z.x stops it
+    commit(other, ".gitattributes", "*.x filter=x\n*.y filter=y\n")
+    commit(other, "f", "a\nb\nc\n")
+    (other / "run.sh").chmod(0o755)
+    git(other, "commit", "-q", "-am", "exec")
     git(other, "rm", "-q", "d", "l")
     (other / "l").write_text(".gitignore")
     (other / "d").mkdir()
@@ -554,6 +558,8 @@ def test_a_failed_tree_update_undoes_type_changes_directories_and_filtered_files
     assert (full(repo), (repo / "l").is_symlink(), (repo / "d").read_text()) == (before, True, "file\n")
     assert not (repo / "a.txt").exists()
     assert not (repo / "a.y").exists()
+    assert (repo / "f").read_bytes() == b"a\r\nb\r\n"
+    assert not os.access(repo / "run.sh", os.X_OK)
     git(repo, "config", "filter.x.smudge", "cat")
     result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, git(repo, "rev-parse", "HEAD"), (repo / "z.x").read_text()) == ("updated", head, "lower\n")
@@ -574,20 +580,6 @@ def test_a_filesystem_error_leaves_the_target_behind(repos, monkeypatch):
     assert full(repo) == before
 
 
-def fail_on_x(repo, other):
-    """Share ``*.x filter=x`` and make that filter fail in *repo*: a tree update stops at ``z.x``."""
-    commit(repo, ".gitattributes", "*.x filter=x\n")
-    git(repo, "push", "-q", "origin", "main")
-    git(other, "pull", "-q")
-    git(repo, "config", "filter.x.smudge", "false")
-    git(repo, "config", "filter.x.required", "true")
-
-
-def stopped_at_x(result):
-    assert (result.state, "external filter 'false' failed" in result.reason) == ("behind", True)
-    assert ("kept" in result.reason, "partial update" in result.reason) == (False, False)
-
-
 def test_a_directory_replaced_by_a_symlink_is_restored_without_writing_through_it(repos):
     repo, other = repos
     elsewhere = repo.parent / "elsewhere"
@@ -595,7 +587,11 @@ def test_a_directory_replaced_by_a_symlink_is_restored_without_writing_through_i
     (elsewhere / "f").write_text("file\n")
     (repo / "d").mkdir()
     commit(repo, "d/f", "file\n")
-    fail_on_x(repo, other)
+    commit(repo, ".gitattributes", "*.x filter=x\n")
+    git(repo, "push", "-q", "origin", "main")
+    git(other, "pull", "-q")
+    git(repo, "config", "filter.x.smudge", "false")
+    git(repo, "config", "filter.x.required", "true")
     before, old = full(repo), git(repo, "rev-parse", "HEAD")
     git(other, "rm", "-q", "-r", "d")
     (other / "d").symlink_to("../elsewhere")
@@ -608,38 +604,6 @@ def test_a_directory_replaced_by_a_symlink_is_restored_without_writing_through_i
         pullback.pullback_replay.apply(repo, "refs/heads/main", old, new, lambda _paths: {})  # the guard refuses d
     assert ("kept" in str(failed.value), "partial update" in str(failed.value)) == (False, False)
     assert (full(repo), (repo / "d").is_symlink(), (elsewhere / "f").read_text()) == (before, False, "file\n")
-
-
-def test_attributes_the_update_changes_do_not_mislabel_the_files_it_wrote(repos):
-    repo, other = repos
-    commit(repo, ".gitattributes", "f text eol=crlf\n*.x filter=x\n")
-    commit(repo, "f", "a\nb\n")
-    (repo / "f").unlink()
-    git(repo, "checkout", "--", "f")  # as checkout writes it, with CRLF
-    git(repo, "push", "-q", "origin", "main")
-    git(other, "pull", "-q")
-    git(repo, "config", "filter.x.smudge", "false")
-    git(repo, "config", "filter.x.required", "true")
-    before = full(repo)
-    commit(other, ".gitattributes", "*.x filter=x\n")
-    commit(other, "f", "a\nb\nc\n")
-    commit(other, "z.x")
-    git(other, "push", "-q", "origin", "main")
-    stopped_at_x(pullback.run(repo, "main", NOW, Writer.rule(repo)))
-    assert (full(repo), (repo / "f").read_bytes()) == (before, b"a\r\nb\r\n")
-
-
-def test_an_exec_bit_the_update_set_is_undone(repos):
-    repo, other = repos
-    commit(repo, "run.sh", "echo\n")
-    fail_on_x(repo, other)
-    before = full(repo)
-    (other / "run.sh").chmod(0o755)
-    git(other, "commit", "-q", "-am", "exec")
-    commit(other, "z.x")
-    git(other, "push", "-q", "origin", "main")
-    stopped_at_x(pullback.run(repo, "main", NOW, Writer.rule(repo)))
-    assert (full(repo), os.access(repo / "run.sh", os.X_OK)) == (before, False)
 
 
 def test_a_fifo_left_at_an_incoming_path_is_kept_without_being_read(repos, monkeypatch):
@@ -657,33 +621,6 @@ def test_a_fifo_left_at_an_incoming_path_is_kept_without_being_read(repos, monke
     result = pullback.run(repo, "main", NOW, Writer.rule(repo))
     assert (result.state, "b.txt appeared during pull-back and were kept" in result.reason) == ("behind", True)
     assert (stat.S_ISFIFO((repo / "b.txt").lstat().st_mode), git(repo, "rev-parse", "HEAD")) == (True, head)
-
-
-@pytest.mark.parametrize("step", [("cherry-pick",), ("diff", "--name-status")])
-def test_a_timeout_during_or_after_the_replay_keeps_the_cleanup_note(repos, monkeypatch, step):
-    repo, other = repos
-    commit(repo, "local.txt")
-    real, left = pullback.pullback_replay.git, []
-
-    def stuck(path, *args):
-        if args[:2] in {("worktree", "remove"), ("worktree", "prune")}:
-            left.append(args[-1])
-            return subprocess.CompletedProcess(args, 1, "", "fatal: busy\n")
-        if args[: len(step)] == step:
-            timeout()
-        return real(path, *args)
-
-    monkeypatch.setattr(pullback.pullback_replay, "git", stuck)
-    monkeypatch.setattr(pullback.pullback_replay.shutil, "rmtree", lambda *_a, **_k: None)
-    merged(other)
-    result = pullback.run(repo, "main", NOW, Writer.rule(repo))
-    monkeypatch.undo()
-    git(repo, "worktree", "remove", "--force", left[0])
-    assert (result.state, "git timed out" in result.reason, "was not removed" in result.reason) == (
-        "behind",
-        True,
-        True,
-    )
 
 
 def test_a_failed_reverse_names_a_recovery_that_restores_the_local_copy(repos, monkeypatch):

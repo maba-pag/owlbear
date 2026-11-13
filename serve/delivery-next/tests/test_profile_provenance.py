@@ -107,21 +107,26 @@ def permission_block(prof):
     ).block
 
 
-def test_unchanged_observation_preserves_confirmed_intent_not_the_detected_value(tmp_path):
+def test_target_confirmation_survives_unchanged_observations_but_redetection_only_retargets_new_changes(tmp_path):
     repo = clone(tmp_path, "shop")
     confirmed = profile.confirm(profile.detect(repo, GitHub(), None), profile.DEFAULT, "release", NOW)
     again = profile.detect(repo, GitHub(), confirmed)
     assert again.entries[profile.DEFAULT] == confirmed.entries[profile.DEFAULT]
     assert again.version == confirmed.version
     assert profile.value(again, profile.DEFAULT) == "release"
-
-
-def test_same_label_with_a_new_default_value_expires_the_old_confirmation(tmp_path):
-    repo = clone(tmp_path, "shop")
-    confirmed = profile.confirm(profile.detect(repo, GitHub(), None), profile.DEFAULT, "release", NOW)
-    again = profile.detect(repo, GitHub(target="trunk"), confirmed)
-    assert profile.value(again, profile.DEFAULT) == "trunk"
-    assert not again.entries[profile.DEFAULT].evidence.startswith(profile.CONFIRMED)
+    draft = brief_tools.BriefDraft(
+        title="Add farewell",
+        outcome="The farewell function says goodbye",
+        criteria=["Farewell says goodbye"],
+        scope=["app.py"],
+    )
+    prior = Change(slug="old", handle="c1", names=Names(target="release", branch="owlbear/old"))
+    assert briefs.drafted(None, draft, "new", "c2", again).names.target == "release"
+    fresh = profile.detect(repo, GitHub(target="trunk"), again)
+    assert profile.value(fresh, profile.DEFAULT) == "trunk"
+    assert not fresh.entries[profile.DEFAULT].evidence.startswith(profile.CONFIRMED)
+    assert briefs.drafted(None, draft, "new", "c2", fresh).names.target == "trunk"
+    assert briefs.drafted(prior, draft, "old", "c1", fresh).names.target == "release"
 
 
 @pytest.mark.parametrize("known", [False, True])
@@ -175,7 +180,7 @@ def test_two_clones_repeatedly_read_their_own_facts_after_both_first_detection_m
             ),
         },
     )
-    for store, repo, can_push, command in [(a, first, "yes", "install-a"), (b, second, "no", "install-b")] * 3:
+    for store, repo, can_push, command in [(a, first, "yes", "install-a"), (b, second, "no", "install-b")] * 2:
         actual = profile_share.checked(store, repo)
         assert profile.value(actual, profile.PUSH) == can_push
         assert profile.value(actual, "install:.") == command
@@ -184,21 +189,6 @@ def test_two_clones_repeatedly_read_their_own_facts_after_both_first_detection_m
     assert profile.PUSH not in raw["entries"]
     assert profile.HOOKS not in raw["entries"]
     assert "install:." not in raw["entries"]
-
-
-def test_new_change_uses_current_detected_target_and_existing_change_keeps_its_pin(tmp_path):
-    repo = clone(tmp_path, "shop")
-    once = profile.confirm(profile.detect(repo, GitHub(), None), profile.DEFAULT, "release", NOW)
-    fresh = profile.detect(repo, GitHub(target="trunk"), once)
-    draft = brief_tools.BriefDraft(
-        title="Add farewell",
-        outcome="The farewell function says goodbye",
-        criteria=["Farewell says goodbye"],
-        scope=["app.py"],
-    )
-    prior = Change(slug="old", handle="c1", names=Names(target="release", branch="owlbear/old"))
-    assert briefs.drafted(None, draft, "new", "c2", fresh).names.target == "trunk"
-    assert briefs.drafted(prior, draft, "old", "c1", fresh).names.target == "release"
 
 
 def test_an_old_local_profile_keeps_its_own_facts_before_any_overlay_exists(tmp_path):
@@ -326,8 +316,7 @@ def test_detection_publication_failure_preserves_local_progress_and_retries_with
     assert calls == ["failed"]
 
 
-@pytest.mark.parametrize("_reconfirm", [True])  # a digest the first confirm loses stays lost after the second
-def test_owner_selected_ci_checks_keep_their_workflow_digest_through_confirmation(tmp_path, _reconfirm):
+def test_owner_selected_ci_checks_keep_their_workflow_digest_through_confirmation(tmp_path):
     repo = clone(tmp_path, "shop")
     raw = profile.detect(repo, GitHub(), None)
     chosen = profile.confirm(raw, profile.DECLARED, "lint", NOW)

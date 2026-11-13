@@ -1,6 +1,8 @@
 import subprocess
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from owlbear_delivery_next.change_contracts import failures
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
@@ -50,7 +52,7 @@ def failing(n: int, reason: str = "test_a failed") -> StepResult:
     return StepResult(exit=Exit.RETRY, cause=cause, reason=reason, score=Score(failing=n, findings=["test_a"]))
 
 
-def test_transient_failures_never_exhaust_and_their_pauses_grow_to_the_cap():
+def test_network_episodes_wait_reset_on_a_new_failure_and_repair_after_a_day():
     c, at, pauses = change(), NOW, []
     for _ in range(10):
         c = loop.apply(c, retry(ErrorKind.NETWORK, HTTP_503), at)
@@ -61,26 +63,27 @@ def test_transient_failures_never_exhaust_and_their_pauses_grow_to_the_cap():
     assert (pauses[0], pauses[-1]) == (PAUSE, PAUSE_CAP)
     assert all(b.count == 0 for b in c.budgets.causes.values())
     assert budgets.episode(c).attempts == 10
-
-
-def test_a_day_of_the_same_failure_repairs_and_an_applied_fix_starts_a_new_episode():
-    c = loop.apply(change(), retry(ErrorKind.NETWORK, HTTP_503), NOW)
-    c = loop.apply(c, retry(ErrorKind.NETWORK, "HTTP 504 Service Unavailable"), NOW + EPISODE_ASK)  # numbers differ
+    changed = NOW + EPISODE_ASK
+    c = loop.apply(c, retry(ErrorKind.NETWORK, "connection reset by peer"), changed)
+    assert c.outcome.exit == Exit.PENDING
+    assert (budgets.episode(c).since, budgets.episode(c).attempts) == (changed, 1)
+    early = card(c, Activity(host_up=True), [], changed + timedelta(minutes=1))
+    late = card(c, Activity(host_up=True), [], changed + timedelta(hours=2))
+    assert "network failing for" in early["now"]
+    assert "attempt 1" in early["now"]
+    assert (early["quiet"], late["quiet"]) == (False, True)
+    restarted = changed + timedelta(minutes=1)
+    c = loop.apply(c, retry(ErrorKind.NETWORK, HTTP_503), restarted)
+    day = restarted + EPISODE_ASK
+    c = loop.apply(c, retry(ErrorKind.NETWORK, "HTTP 504 Service Unavailable"), day)
     cause = c.outcome.cause
     assert (c.outcome.exit, c.questions) == (Exit.RETRY, [])
     assert c.repairs.current.cause == cause
     assert "Service Unavailable" in c.repairs.current.evidence
     stuck.applied(c, "a" * 40)
     assert cause not in c.budgets.causes
-    c = loop.apply(c, retry(ErrorKind.NETWORK, HTTP_503), NOW + EPISODE_ASK)
+    c = loop.apply(c, retry(ErrorKind.NETWORK, HTTP_503), day)
     assert budgets.episode(c).attempts == 1
-
-
-def test_a_changed_failure_signature_restarts_the_episode():
-    c = loop.apply(change(), retry(ErrorKind.NETWORK, HTTP_503), NOW)
-    c = loop.apply(c, retry(ErrorKind.NETWORK, "connection reset by peer"), NOW + EPISODE_ASK)
-    assert c.outcome.exit == Exit.PENDING
-    assert (budgets.episode(c).since, budgets.episode(c).attempts) == (NOW + EPISODE_ASK, 1)
 
 
 def test_the_same_delivery_defect_three_times_stops_its_existing_repair_with_the_error(whole_error):
@@ -181,29 +184,21 @@ def scored(findings: list[str], satisfied: int = 0, reason: str = "test_a failed
     return StepResult(exit=Exit.RETRY, cause=cause, reason=reason, score=score)
 
 
-def test_a_strict_subset_of_the_failures_resets_the_count():
+@pytest.mark.parametrize(
+    ("before", "after", "satisfied", "expected"),
+    [
+        (["test_a", "test_b"], ["test_a"], 0, (Exit.RETRY, K.BUILD, 1)),
+        (["test_a", "test_b"], ["test_a", "test_c"], 0, (Exit.BACK, K.PLAN, budgets.RETRY_LIMIT + 1)),
+        (["test_a"], ["test_a"], 1, (Exit.RETRY, K.BUILD, 1)),
+    ],
+    ids=["strict-subset", "swapped-failure", "more-criteria"],
+)
+def test_only_fewer_failures_or_more_satisfied_criteria_reset_the_count(before, after, satisfied, expected):
     c = change()
     for _ in range(budgets.RETRY_LIMIT):
-        c = loop.apply(c, scored(["test_a", "test_b"]), NOW)
-    c = loop.apply(c, scored(["test_a"]), NOW)
-    assert (c.outcome.exit, c.step.kind) == (Exit.RETRY, K.BUILD)
-    assert c.budgets.causes[c.outcome.cause].count == 1
-
-
-def test_swapping_one_failure_for_another_is_not_progress():
-    c = change()
-    for _ in range(budgets.RETRY_LIMIT):
-        c = loop.apply(c, scored(["test_a", "test_b"]), NOW)
-    c = loop.apply(c, scored(["test_a", "test_c"]), NOW)
-    assert (c.outcome.exit, c.step.kind) == (Exit.BACK, K.PLAN)
-
-
-def test_more_criteria_satisfied_without_a_new_failure_is_progress():
-    c = change()
-    for _ in range(budgets.RETRY_LIMIT):
-        c = loop.apply(c, scored(["test_a"]), NOW)
-    c = loop.apply(c, scored(["test_a"], satisfied=1), NOW)
-    assert c.budgets.causes[c.outcome.cause].count == 1
+        c = loop.apply(c, scored(before), NOW)
+    c = loop.apply(c, scored(after, satisfied=satisfied), NOW)
+    assert (c.outcome.exit, c.step.kind, c.budgets.causes[c.outcome.cause].count) == expected
 
 
 def test_different_failure_signatures_are_counted_separately():
@@ -215,10 +210,17 @@ def test_different_failure_signatures_are_counted_separately():
     assert (c.outcome.exit, sorted(budget.counts.values())) == (Exit.RETRY, [budgets.RETRY_LIMIT] * 2)
 
 
-def test_quota_is_never_asked_about_even_beyond_a_day():
+def test_capacity_waits_for_its_reset_and_quota_never_asks_even_beyond_a_day():
+    c = change(spend=Spend(credits=12.5))
+    c = loop.apply(c, retry(ErrorKind.CAPACITY, "quota exceeded", wake_at=NOW + timedelta(hours=3)), NOW)
+    assert (c.outcome.exit, c.outcome.wake_at) == (Exit.PENDING, NOW + timedelta(hours=3))
+    line = status(c, Activity(host_up=True), NOW + timedelta(minutes=5)).line
+    assert "12.50 credits used" in line
+    assert "next try at 15:00" in line
+    assert "raise" not in line.lower()
     cause = failures.cause_key(ErrorKind.CAPACITY, K.BUILD, failures.QUOTA)
-    c, at = change(), NOW
-    while at < NOW + EPISODE_ASK + timedelta(hours=6):
+    start = at = c.outcome.wake_at
+    while at < start + EPISODE_ASK + timedelta(hours=6):
         c = loop.apply(c, StepResult(exit=Exit.RETRY, cause=cause, reason="quota exhausted"), at)
         assert c.outcome.exit == Exit.PENDING
         at = c.outcome.wake_at
@@ -230,25 +232,6 @@ def test_a_new_commit_or_error_text_with_the_same_failing_check_is_not_progress(
     for sha in ("1a2b3c4d", "5e6f7a8b", "9c0d1e2f", "3a4b5c6d"):
         c = loop.apply(c, failing(2, f"test_a failed at {sha}"), NOW)
     assert (c.outcome.exit, c.step.kind) == (Exit.BACK, K.PLAN)
-
-
-def test_quota_waits_for_its_reset_and_shows_credits_without_a_quota_question():
-    c = change(spend=Spend(credits=12.5))
-    c = loop.apply(c, retry(ErrorKind.CAPACITY, "quota exceeded", wake_at=NOW + timedelta(hours=3)), NOW)
-    assert (c.outcome.exit, c.outcome.wake_at) == (Exit.PENDING, NOW + timedelta(hours=3))
-    line = status(c, Activity(host_up=True), NOW + timedelta(minutes=5)).line
-    assert "12.50 credits used" in line
-    assert "next try at 15:00" in line
-    assert "raise" not in line.lower()
-
-
-def test_the_card_shows_the_episode_and_turns_quiet_after_an_hour():
-    c = loop.apply(change(), retry(ErrorKind.NETWORK, HTTP_503), NOW)
-    early = card(c, Activity(host_up=True), [], NOW + timedelta(minutes=1))
-    late = card(c, Activity(host_up=True), [], NOW + timedelta(hours=2))
-    assert "network failing for" in early["now"]
-    assert "attempt 1" in early["now"]
-    assert (early["quiet"], late["quiet"]) == (False, True)
 
 
 def test_the_card_shows_the_latest_tool_call_only_when_newer_than_the_last_event():

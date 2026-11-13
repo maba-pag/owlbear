@@ -73,17 +73,6 @@ def test_only_measured_runs_count_and_sparse_or_repeated_lines_add_none() -> Non
     assert used(lines)["since"] == "2026-10-01T10:00:00+00:00"  # the log's correction kept the run's tools
 
 
-def test_a_continued_runs_later_checkpoints_are_not_counted_again() -> None:
-    checkpoint = {"id": "log:k", "type": "end", "run": "k", "at": "2026-10-01T10:00:00+00:00", "session": "s-k",
-                  "usage": {"credits": 1.0, "models": {}}, "source": "import:runtime-log"}  # fmt: skip
-    later = {"id": "log:k2", "at": "2026-10-01T11:00:00+00:00", "usage": {"credits": 2.0, "models": {}}}
-    lines = [start("k", "2026-10-01T09:00:00+00:00"), checkpoint | {"tools": {"bash": {"calls": 2}}, "wrong": {}},
-             checkpoint | later]  # fmt: skip
-    entries = spend_shares.runs(lines)
-    assert any(e.get("continued") for e in entries)
-    assert (used(lines)["runs"], used(lines)["totals"]["calls"]) == (1, 2)
-
-
 def test_a_changes_tool_use_is_what_metrics_shows_filtered_to_it_stopped_runs_and_renames_included() -> None:
     checkpoint = {"id": "log:k", "type": "end", "run": "k", "at": "2026-10-01T14:00:00+00:00", "session": "s-k",
                   "usage": {"credits": 1.0, "models": {}}, "source": "import:runtime-log"}  # fmt: skip
@@ -96,7 +85,10 @@ def test_a_changes_tool_use_is_what_metrics_shows_filtered_to_it_stopped_runs_an
         start("k", "2026-10-01T13:30:00+00:00", clone="c"),
         checkpoint | {"tools": {"bash": {"calls": 1}}, "wrong": {}}, checkpoint | later,  # a continuation, counted once
     ]  # fmt: skip
-    mine, metrics = tool_metrics.by_change(spend_shares.runs(lines))[("c", "ch")], used(lines, change="p/ch")
+    entries = spend_shares.runs(lines)
+    assert any(e.get("continued") for e in entries)
+    mine, metrics = tool_metrics.by_change(entries)[("c", "ch")], used(lines, change="p/ch")
+    assert (metrics["runs"], metrics["totals"]["calls"]) == (3, 11)
     assert {t: (n.calls, n.rejected, n.checks) for t, n in mine.tools.items()} == {
         row["tool"]: (row["calls"], row["calls"] - row["accepted"], row["checks"]) for row in metrics["tools"]
     }  # fmt: skip

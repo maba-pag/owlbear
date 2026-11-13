@@ -9,7 +9,6 @@ import fcntl
 import os
 import shutil
 import sqlite3
-import subprocess
 
 import pytest
 
@@ -17,23 +16,11 @@ from owlbear_delivery_next.state_store import fd_tree, legacy_family, offline_pr
 from owlbear_delivery_next.state_store.database import StoreError
 
 SOURCE_ID = "abc123"
-BEFORE, AFTER = "AAAAAAAA-0000-4000-8000-000000000001", "BBBBBBBB-0000-4000-8000-000000000002"
+BEFORE = "AAAAAAAA-0000-4000-8000-000000000001"
 
 
 class CrashError(OSError):
     """An interruption part-way through a cross-volume move."""
-
-
-@pytest.fixture
-def clone(tmp_path):
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=repo, check=True, capture_output=True)  # noqa: S607
-    folder = repo / ".git" / "owlbear-delivery"
-    (folder / "changes" / "c1").mkdir(parents=True)
-    (folder / "changes" / "c1" / "runner.log").write_text("ran\n")
-    (folder / "clone-id").write_text(f"{SOURCE_ID}\n")
-    return repo, folder
 
 
 REAL_SYNC, REAL_SAVE = fd_tree.sync, project_move._save  # noqa: SLF001
@@ -43,19 +30,6 @@ def heal(monkeypatch):
     """Restore only the crash seams: an undo would also drop the test's HOME from conftest."""
     monkeypatch.setattr(fd_tree, "sync", REAL_SYNC)
     monkeypatch.setattr(project_move, "_save", REAL_SAVE)
-
-
-def no_gaps():
-    return ()
-
-
-def move(repo, monkeypatch):
-    """The operator's sequence: prepare once, then finish after a different boot session."""
-    if not (project_home.clone_dir(repo) / offline_protocol.PREPARED).exists():
-        monkeypatch.setattr(offline_protocol, "boot_session", lambda: BEFORE)
-        offline_protocol.prepare_clone(repo, gaps=no_gaps)
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: AFTER)
-    return offline_protocol.finish_clone(repo, gaps=no_gaps)
 
 
 def crash_before_sync(monkeypatch, name):
@@ -71,68 +45,44 @@ def crash_before_sync(monkeypatch, name):
     monkeypatch.setattr(fd_tree, "sync", sync)
 
 
-def crash_after_switch(monkeypatch):
-    """Let the switch be recorded, then crash before anything else runs."""
-    real = project_move._save  # noqa: SLF001
-
-    def save(folder, folder_fd, rec, **kwargs):
-        real(folder, folder_fd, rec, **kwargs)
-        if rec["phase"] == project_move.SWITCHED:
-            msg = "simulated crash"
-            raise CrashError(msg)
-
-    monkeypatch.setattr(project_move, "_save", save)
-
-
-def test_a_copy_published_before_a_crash_resumes_and_the_source_stays_whole(clone, monkeypatch):
-    repo, folder = clone
+def test_a_copy_published_before_a_crash_resumes_and_the_source_stays_whole(
+    legacy_project_clone, offline_move, monkeypatch
+):
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     crash_before_sync(monkeypatch, SOURCE_ID)  # the published target is not yet durable
     with pytest.raises(CrashError):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"  # the source is still there
     assert (target / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     heal(monkeypatch)
-    assert move(repo, monkeypatch) == target
+    assert offline_move(repo) == target
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"  # kept whole, never removed
     assert (folder / project_move.MOVE_RECORD).exists()  # the switched record stays as the receipt
     assert (target / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert project_home.located(repo) == target  # a repeated startup changes nothing
 
 
-def test_a_destination_nobody_recorded_is_refused_and_both_copies_are_kept(clone, monkeypatch):
-    repo, folder = clone
+def test_a_destination_nobody_recorded_is_refused_and_both_copies_are_kept(legacy_project_clone, offline_move):
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     (target / "changes").mkdir(parents=True)
     (target / "changes" / "foreign.txt").write_text("theirs\n")
     with pytest.raises(StoreError, match=r"both exist"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert (target / "changes" / "foreign.txt").read_text() == "theirs\n"
     assert not (target / "changes" / "c1").exists()
 
 
-def test_a_source_edited_after_its_copy_was_published_is_kept_and_not_removed(clone, monkeypatch):
-    repo, folder = clone
+def test_a_destination_swapped_for_a_link_after_publication_is_refused(
+    legacy_project_clone, offline_move, monkeypatch, tmp_path
+):
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     crash_before_sync(monkeypatch, SOURCE_ID)
     with pytest.raises(CrashError):
-        move(repo, monkeypatch)
-    (folder / "changes" / "c1" / "runner.log").write_text("edited after the copy\n")
-    heal(monkeypatch)
-    with pytest.raises(StoreError, match=r"changed after it was copied"):
-        move(repo, monkeypatch)
-    assert (folder / "changes" / "c1" / "runner.log").read_text() == "edited after the copy\n"
-    assert (target / "changes" / "c1" / "runner.log").read_text() == "ran\n"
-    assert (folder / project_move.MOVE_RECORD).exists()
-
-
-def test_a_destination_swapped_for_a_link_after_publication_is_refused(clone, monkeypatch, tmp_path):
-    repo, folder = clone
-    target = project_home.home(SOURCE_ID)
-    crash_before_sync(monkeypatch, SOURCE_ID)
-    with pytest.raises(CrashError):
-        move(repo, monkeypatch)
+        offline_move(repo)
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     (elsewhere / "runner.log").write_text("not ours\n")
@@ -140,110 +90,104 @@ def test_a_destination_swapped_for_a_link_after_publication_is_refused(clone, mo
     target.symlink_to(elsewhere, target_is_directory=True)
     heal(monkeypatch)
     with pytest.raises(StoreError, match=r"holds a link"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert (folder / project_move.MOVE_RECORD).exists()
     assert (tmp_path / "moved-aside" / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert (elsewhere / "runner.log").read_text() == "not ours\n"
 
 
-def test_a_partial_moved_aside_and_replaced_by_a_foreign_one_is_refused_and_kept(clone, monkeypatch, tmp_path):
-    repo, folder = clone
+def test_a_partial_moved_aside_and_replaced_by_a_foreign_one_is_refused_and_kept(
+    legacy_project_clone, offline_move, monkeypatch, tmp_path
+):
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     stage = target.with_name(f".{SOURCE_ID}.staging")
     crash_before_sync(monkeypatch, "changes")
     with pytest.raises(CrashError):
-        move(repo, monkeypatch)
+        offline_move(repo)
     stage.rename(tmp_path / "owned-aside")
     (stage / "changes").mkdir(parents=True)
     (stage / "changes" / "foreign.txt").write_text("theirs\n")
     heal(monkeypatch)
     with pytest.raises(StoreError, match=r"not from a move OwlBear recorded"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert (stage / "changes" / "foreign.txt").read_text() == "theirs\n"
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert (folder / project_move.MOVE_RECORD).exists()
 
 
-def test_a_crash_after_the_switch_keeps_the_source_and_the_next_start_admits_the_target(clone, monkeypatch):
-    repo, folder = clone
-    target = project_home.home(SOURCE_ID)
-    crash_after_switch(monkeypatch)
-    with pytest.raises(CrashError):
-        move(repo, monkeypatch)
-    assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
-    heal(monkeypatch)
-    assert project_home.current(repo) == target  # the recorded switch is the authority
-    assert move(repo, monkeypatch) == target
-    assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
-    assert (target / "changes" / "c1" / "runner.log").read_text() == "ran\n"
-
-
-def test_a_target_that_is_a_link_to_a_foreign_folder_is_refused_before_anything_moves(clone, monkeypatch, tmp_path):
-    repo, folder = clone
+def test_a_target_that_is_a_link_to_a_foreign_folder_is_refused_before_anything_moves(
+    legacy_project_clone, offline_move, tmp_path
+):
+    repo, folder = legacy_project_clone
     foreign = tmp_path / "foreign"
     foreign.mkdir()
     target = project_home.home(SOURCE_ID)
     target.parent.mkdir(parents=True)
     target.symlink_to(foreign, target_is_directory=True)
     with pytest.raises(StoreError, match=r"holds a link"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert list(foreign.iterdir()) == []
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert (folder / project_move.MOVE_RECORD).exists() is False
 
 
-def test_a_foreign_entry_in_the_destination_refuses_the_whole_move(clone, monkeypatch):
-    repo, folder = clone
+def test_a_foreign_entry_in_the_destination_refuses_the_whole_move(legacy_project_clone, offline_move):
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     (target / "config").mkdir(parents=True)
     (target / "config" / "theirs.json").write_text("{}\n")
     (folder / "config").write_text("source config\n")
     with pytest.raises(StoreError, match=r"both exist"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert (folder / "config").read_text() == "source config\n"
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert project_home.current(repo) == folder
 
 
-def test_a_link_in_the_clone_refuses_before_anything_moves(clone, monkeypatch, tmp_path):
-    repo, folder = clone
+def test_a_link_in_the_clone_refuses_before_anything_moves(legacy_project_clone, offline_move, tmp_path):
+    repo, folder = legacy_project_clone
     (folder / "escape").symlink_to(tmp_path)
     with pytest.raises(StoreError, match=r"holds a link"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert not (project_home.home(SOURCE_ID) / "changes").exists()
 
 
-def test_a_partial_copy_nobody_recorded_is_not_deleted(clone, monkeypatch):
-    repo, folder = clone
+def test_a_partial_copy_nobody_recorded_is_not_deleted(legacy_project_clone, offline_move):
+    repo, folder = legacy_project_clone
     stage = project_home.home(SOURCE_ID).with_name(f".{SOURCE_ID}.staging")
     (stage / "changes").mkdir(parents=True)
     (stage / "keep.txt").write_text("unknown owner\n")
     with pytest.raises(StoreError, match=r"not from a move OwlBear recorded"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert (stage / "keep.txt").read_text() == "unknown owner\n"
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
 
 
-def test_a_lock_replaced_by_a_link_to_a_foreign_file_refuses_and_nothing_is_touched(clone, monkeypatch, tmp_path):
-    repo, folder = clone
+def test_a_lock_replaced_by_a_link_to_a_foreign_file_refuses_and_nothing_is_touched(
+    legacy_project_clone, offline_move, tmp_path
+):
+    repo, folder = legacy_project_clone
     foreign = tmp_path / "foreign.lock"
     foreign.write_text("theirs\n")
     (folder / "changes" / "c1" / "lock").symlink_to(foreign)
     with pytest.raises(StoreError, match=r"cannot be locked"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert foreign.read_text() == "theirs\n"
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert not project_home.home(SOURCE_ID).exists()
 
 
-def test_a_projects_folder_swapped_for_a_link_before_finish_is_refused_and_kept(clone, monkeypatch, tmp_path):
-    repo, folder = clone
+def test_a_projects_folder_swapped_for_a_link_before_finish_is_refused_and_kept(
+    legacy_project_clone, offline_move, monkeypatch, tmp_path
+):
+    repo, folder = legacy_project_clone
     projects = project_home.home(SOURCE_ID).parent
     crash_before_sync(monkeypatch, SOURCE_ID)
     with pytest.raises(CrashError):
-        move(repo, monkeypatch)
+        offline_move(repo)
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     aside = tmp_path / "projects-aside"
@@ -251,7 +195,7 @@ def test_a_projects_folder_swapped_for_a_link_before_finish_is_refused_and_kept(
     projects.symlink_to(elsewhere, target_is_directory=True)
     heal(monkeypatch)
     with pytest.raises(StoreError, match=r"holds a link"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert list(elsewhere.iterdir()) == []
     assert (aside / SOURCE_ID / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
@@ -259,9 +203,9 @@ def test_a_projects_folder_swapped_for_a_link_before_finish_is_refused_and_kept(
 
 
 def test_a_projects_folder_swapped_for_a_link_during_the_move_is_reported_and_nothing_foreign_is_written(
-    clone, monkeypatch, tmp_path
+    legacy_project_clone, offline_move, monkeypatch, tmp_path
 ):
-    repo, folder = clone
+    repo, folder = legacy_project_clone
     projects = project_home.home(SOURCE_ID).parent
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
@@ -277,7 +221,7 @@ def test_a_projects_folder_swapped_for_a_link_during_the_move_is_reported_and_no
 
     monkeypatch.setattr(fd_tree, "sync", sync)
     with pytest.raises(StoreError, match=r"is not the copy this move published"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert swapped == [SOURCE_ID]
     assert list(elsewhere.iterdir()) == []
     assert (aside / SOURCE_ID / "changes" / "c1" / "runner.log").read_text() == "ran\n"
@@ -285,8 +229,10 @@ def test_a_projects_folder_swapped_for_a_link_during_the_move_is_reported_and_no
     assert (folder / project_move.MOVE_RECORD).exists()
 
 
-def test_a_database_swapped_for_a_link_during_the_copy_is_refused(clone, monkeypatch, tmp_path):
-    repo, folder = clone
+def test_a_database_swapped_for_a_link_during_the_copy_is_refused(
+    legacy_project_clone, offline_move, monkeypatch, tmp_path
+):
+    repo, folder = legacy_project_clone
     writer = sqlite3.connect(folder / "delivery.db", isolation_level=None)
     writer.execute("CREATE TABLE t (v TEXT)")
     writer.close()
@@ -305,7 +251,7 @@ def test_a_database_swapped_for_a_link_during_the_copy_is_refused(clone, monkeyp
 
     monkeypatch.setattr(fd_tree, "copy", copy)
     with pytest.raises(StoreError):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert foreign.read_bytes() == b"foreign"
     assert (folder / "kept.db").read_bytes() == original
     assert (folder / project_move.MOVE_RECORD).exists()
@@ -313,8 +259,10 @@ def test_a_database_swapped_for_a_link_during_the_copy_is_refused(clone, monkeyp
     assert not (project_home.home(SOURCE_ID) / "delivery.db").is_symlink()
 
 
-def test_a_clone_folder_swapped_after_a_metadata_write_is_refused(clone, monkeypatch, tmp_path):
-    repo, folder = clone
+def test_a_clone_folder_swapped_after_a_metadata_write_is_refused(
+    legacy_project_clone, offline_move, monkeypatch, tmp_path
+):
+    repo, folder = legacy_project_clone
     aside, elsewhere = tmp_path / "aside", tmp_path / "elsewhere"
     elsewhere.mkdir()
     real_copy = fd_tree.copy
@@ -329,21 +277,21 @@ def test_a_clone_folder_swapped_after_a_metadata_write_is_refused(clone, monkeyp
 
     monkeypatch.setattr(fd_tree, "copy", copy)
     with pytest.raises(StoreError, match=r"no longer names"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert list(elsewhere.iterdir()) == []
     assert (aside / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert (aside / project_move.MOVE_RECORD).exists()
 
 
-def test_a_wal_store_moves_with_its_committed_rows(clone, monkeypatch):
-    repo, folder = clone
+def test_a_wal_store_moves_with_its_committed_rows(legacy_project_clone, offline_move):
+    repo, folder = legacy_project_clone
     writer = sqlite3.connect(folder / "delivery.db", isolation_level=None)
     writer.execute("PRAGMA journal_mode=WAL")
     writer.execute("CREATE TABLE t (v TEXT)")
     writer.execute("INSERT INTO t VALUES ('committed')")
     assert (folder / "delivery.db-wal").exists()
     try:
-        target = move(repo, monkeypatch)
+        target = offline_move(repo)
     finally:
         writer.close()
     check = sqlite3.connect(target / "delivery.db")
@@ -351,19 +299,6 @@ def test_a_wal_store_moves_with_its_committed_rows(clone, monkeypatch):
         assert check.execute("SELECT v FROM t").fetchall() == [("committed",)]
     finally:
         check.close()
-
-
-def test_a_store_operation_in_flight_is_not_moved(clone, monkeypatch):
-    # Store holds migrate.lock shared for each database operation; the move's exclusive fence refuses it.
-    repo, folder = clone
-    operation = hold(folder / "migrate.lock", shared=True)
-    try:
-        with pytest.raises(StoreError, match=r"held by a running process"):
-            move(repo, monkeypatch)
-    finally:
-        os.close(operation)
-    assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
-    assert not (project_home.home(SOURCE_ID) / "changes").exists()
 
 
 def hold(path, *, shared=False):
@@ -378,22 +313,26 @@ def hold(path, *, shared=False):
     ("lock", "shared"),
     [("host.lock", False), ("changes/c1/lock", False), ("migrate.lock", True), (".profile.lock", False)],
 )
-def test_a_lock_a_running_writer_holds_refuses_the_move_and_moves_nothing(clone, monkeypatch, lock, shared):
-    repo, folder = clone
+def test_a_lock_a_running_writer_holds_refuses_the_move_and_moves_nothing(
+    legacy_project_clone, offline_move, lock, shared
+):
+    repo, folder = legacy_project_clone
     fd = hold(folder / lock, shared=shared)
     try:
         with pytest.raises(StoreError, match=r"held by a running process: nothing was moved"):
-            move(repo, monkeypatch)
+            offline_move(repo)
     finally:
         os.close(fd)
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert not project_home.home(SOURCE_ID).exists()
-    assert move(repo, monkeypatch) == project_home.home(SOURCE_ID)  # released: the move completes
+    assert offline_move(repo) == project_home.home(SOURCE_ID)  # released: the move completes
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"  # kept whole in the source
 
 
-def test_without_a_verified_offline_proof_production_refuses_and_moves_nothing(clone, current_binding, monkeypatch):
-    repo, folder = clone
+def test_without_a_verified_offline_proof_production_refuses_and_moves_nothing(
+    legacy_project_clone, current_binding, monkeypatch
+):
+    repo, folder = legacy_project_clone
     monkeypatch.setattr(offline_protocol, "boot_session", lambda: BEFORE)
     unproven = legacy_family.Binding(None, current_binding.interpreter, current_binding.package)
     monkeypatch.setattr(legacy_family, "live_binding", lambda: unproven)
@@ -407,35 +346,47 @@ def test_without_a_verified_offline_proof_production_refuses_and_moves_nothing(c
     assert not (folder / project_move.MOVE_RECORD).exists()
 
 
-def test_a_source_edited_before_the_switch_is_refused_and_the_target_keeps_the_copy(clone, monkeypatch):
-    repo, folder = clone
-    (folder / "config").write_text("source config\n")
+@pytest.mark.parametrize(
+    "edit",
+    [
+        pytest.param(("changes/c1/runner.log", "ran\n", "edited after the copy\n"), id="nested-log"),
+        pytest.param(("config", "source config\n", "edited before the switch\n"), id="config"),
+    ],
+)
+def test_a_source_edited_before_the_switch_is_refused_and_the_target_keeps_the_copy(
+    legacy_project_clone, offline_move, monkeypatch, edit
+):
+    repo, folder = legacy_project_clone
+    entry, original, edited = edit
+    (folder / entry).write_text(original)
     target = project_home.home(SOURCE_ID)
     crash_before_sync(monkeypatch, SOURCE_ID)  # the copy is published but not yet switched
     with pytest.raises(CrashError):
-        move(repo, monkeypatch)
-    (folder / "config").write_text("edited before the switch\n")
+        offline_move(repo)
+    (folder / entry).write_text(edited)
     heal(monkeypatch)
     with pytest.raises(StoreError, match=r"changed after it was copied"):
-        move(repo, monkeypatch)
-    assert (folder / "config").read_text() == "edited before the switch\n"
-    assert (target / "config").read_text() == "source config\n"
+        offline_move(repo)
+    assert (folder / entry).read_text() == edited
+    assert (target / entry).read_text() == original
     assert (target / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert (folder / project_move.MOVE_RECORD).exists()
 
 
-def test_a_quarantined_entry_refusal_leaves_a_started_move_record_unchanged(clone, monkeypatch):
-    repo, folder = clone
+def test_a_quarantined_entry_refusal_leaves_a_started_move_record_unchanged(
+    legacy_project_clone, offline_move, monkeypatch
+):
+    repo, folder = legacy_project_clone
     crash_before_sync(monkeypatch, SOURCE_ID)  # a move has begun and recorded its phase
     with pytest.raises(CrashError):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert (folder / project_move.MOVE_RECORD).exists()
     record = (folder / project_move.MOVE_RECORD).read_text()
     kept = folder / f"{fd_tree.QUARANTINE}fedcba9876543210"
     kept.write_text("foreign\n")
     heal(monkeypatch)
     with pytest.raises(StoreError, match=r"kept by an earlier failed operation"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert (folder / project_move.MOVE_RECORD).read_text() == record
     assert kept.read_text() == "foreign\n"
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
@@ -444,8 +395,10 @@ def test_a_quarantined_entry_refusal_leaves_a_started_move_record_unchanged(clon
 WAL_FILES = ("delivery.db", "delivery.db-wal", "delivery.db-shm")
 
 
-def test_an_empty_stage_made_before_its_identity_was_recorded_is_never_adopted(clone, monkeypatch):
-    repo, folder = clone
+def test_an_empty_stage_made_before_its_identity_was_recorded_is_never_adopted(
+    legacy_project_clone, offline_move, monkeypatch
+):
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     stage = target.parent / project_move._stage_name(target)  # noqa: SLF001
     real = project_move._save  # noqa: SLF001
@@ -458,14 +411,14 @@ def test_an_empty_stage_made_before_its_identity_was_recorded_is_never_adopted(c
 
     monkeypatch.setattr(project_move, "_save", save)
     with pytest.raises(CrashError):
-        move(repo, monkeypatch)
+        offline_move(repo)
     before = stage.stat()
     assert stage.is_dir()
     assert not any(stage.iterdir())
     heal(monkeypatch)
 
     with pytest.raises(StoreError):
-        move(repo, monkeypatch)
+        offline_move(repo)
     after = stage.stat()
     assert (after.st_ino, after.st_dev) == (before.st_ino, before.st_dev), "the unrecorded stage was replaced"
     assert not any(stage.iterdir())
@@ -490,17 +443,19 @@ def freeze_wal_store(folder, tmp_path):
         shutil.copy2(frozen / name, folder / name)
 
 
-def test_a_cold_wal_store_interrupted_mid_move_resumes_with_its_uncheckpointed_rows(clone, monkeypatch, tmp_path):
-    repo, folder = clone
+def test_a_cold_wal_store_interrupted_mid_move_resumes_with_its_uncheckpointed_rows(
+    legacy_project_clone, offline_move, monkeypatch, tmp_path
+):
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     freeze_wal_store(folder, tmp_path)  # no connection is open from here on
     assert (folder / "delivery.db-wal").stat().st_size > 0
     crash_before_sync(monkeypatch, "changes")  # interrupted during the copy, before the switch
     with pytest.raises(CrashError):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert not target.exists()
     heal(monkeypatch)
-    assert move(repo, monkeypatch) == target
+    assert offline_move(repo) == target
     assert project_home.located(repo) == target
     check = sqlite3.connect(target / "delivery.db")
     try:

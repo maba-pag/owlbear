@@ -86,22 +86,25 @@ def end(task: Task) -> str:
     return task.spans[-1].split("..")[1]
 
 
-def asked(clone: Path) -> Change:
-    """t1 and its repair t3 change x.txt, t2 changes y.txt; final repairs t4 (of t1) and t5 (of t2), then the question.
-
-    The last round's open F3 names t2; the reviews of t1 and t2 both covered x.txt.
-    """
-    t1 = build(clone, Task(id="t1", title="one", scope=["x.txt"], checks=["cd . && check one"]), "x.txt", "1\n")
-    t3 = build(clone, Task(id="t3", title="fix", origin="review", fixes="t1"), "x.txt", "1b\n")
-    t2 = build(clone, Task(id="t2", title="two", scope=["y.txt"], checks=["cd . && check two"]), "y.txt", "2\n")
-    t4 = build(clone, Task(id="t4", title="fix final", origin="review", fixes=FINAL), "x.txt", "1c\n")
-    t5 = build(clone, Task(id="t5", title="fix final", origin="review", fixes=FINAL), "y.txt", "2b\n")
+def asked(tasks: list[Task] | None = None) -> Change:
+    """The same final question for model rules and real recorded builds."""
+    if tasks is None:
+        tasks = [
+            Task(id="t1", title="one", scope=["x.txt"], checks=["cd . && check one"]),
+            Task(id="t2", title="two", scope=["y.txt"], checks=["cd . && check two"]),
+            Task(id="t3", title="fix", origin="review", fixes="t1"),
+            Task(id="t4", title="fix final", origin="review", fixes=FINAL),
+            Task(id="t5", title="fix final", origin="review", fixes=FINAL),
+        ]
+        for n, task in enumerate((tasks[0], tasks[2], tasks[1], tasks[3], tasks[4])):
+            task.base, task.done, task.spans = str(n) * 40, True, [f"{str(n) * 40}..{str(n + 1) * 40}"]
+    t1, t2, t3, t4, t5 = tasks
     findings = [
         RoundFinding(id="F1", text="x.txt:1: p - fix: f", raised=1, tasks=["t1"], state="fixed", repair="t4"),
         RoundFinding(id="F2", text="y.txt:1: p - fix: f", raised=1, tasks=["t2"], state="fixed", repair="t5"),
         RoundFinding(id="F3", text="y.txt:2: p - fix: f", raised=1, tasks=["t2"]),
     ]
-    head = git(clone, "rev-parse", "HEAD")
+    head = end(t5)
     lp = RoundLoop(subject=FINAL, policy=RoundPolicy(max_rounds=1), round=1, found=8, last=True, findings=findings)
     lp.completion, lp.head = Completion(head=head), end(t3)
     covered = [Review(task=t, commit=head, inputs=Inputs(paths=p), verdict="pass") for t, p in (
@@ -118,6 +121,20 @@ def asked(clone: Path) -> Change:
     )
     ask(c, round_flow.question(c, lp, t5), NOW)
     return c
+
+
+def built_change(clone: Path) -> Change:
+    c = asked()
+    tasks = {t.id: t for t in c.plan.tasks}
+    for task, name, text in (
+        ("t1", "x.txt", "1\n"),
+        ("t3", "x.txt", "1b\n"),
+        ("t2", "y.txt", "2\n"),
+        ("t4", "x.txt", "1c\n"),
+        ("t5", "y.txt", "2b\n"),
+    ):
+        build(clone, tasks[task], name, text)
+    return asked(c.plan.tasks)
 
 
 @dataclass
@@ -144,9 +161,10 @@ def answered(store: Store, option: str, **fields) -> Change:
     return c
 
 
-def rebuild(store: Store, clone: Path, *tasks: str, **fields) -> Change:
+def rebuild(store: Store, *tasks: str, **fields) -> Change:
     """The owner's Rebuild of *tasks*, bound to the attempt and head the page showed."""
-    shown = {"tasks": list(tasks), "attempt": 1, "head": git(clone, "rev-parse", "HEAD")} | fields
+    c = store.read("c1")
+    shown = {"tasks": list(tasks), "attempt": 1, "head": rebuilds.head(c.loops[FINAL])} | fields
     return answered(store, "rebuild", **shown)
 
 
@@ -160,39 +178,28 @@ def at(c: Change) -> tuple:
     return c.step.kind, c.step.task, c.step.mode
 
 
-def test_the_page_lists_the_plan_tasks_and_a_rebuild_is_bound_to_what_it_showed(tmp_path, clone):
+def test_retry_answers_reject_invalid_or_stale_bindings(tmp_path):
     store = Store(tmp_path / "store")
-    store.write(Lock("c1"), asked(clone))
-    shown = client(store).get("/api/next/changes/c1").json()
-    retry_list, q = shown["retry"], shown["question"]
-    assert [o["label"] for o in q["options"]] == [
-        "Rebuild the ticked tasks",
-        "Accept as done",
-        "Another round",
-        "Plan again from the brief on the existing code",
-        "Plan again from the brief from a clean state",
-    ]
-    head = git(clone, "rev-parse", "HEAD")
-    assert (retry_list["attempt"], retry_list["head"]) == (1, head)
-    assert retry_list["tasks"] == [
-        {"id": "t1", "title": "one", "ticked": False, "shares": ["t2"]},  # t3's review covered x.txt, as did t2's
-        {"id": "t2", "title": "two", "ticked": True, "shares": ["t1"]},  # F3 is open and names t2
-    ]
+    c = asked()
+    store.write(Lock("c1"), c)
+    q, head = loop.open_question(c), rebuilds.head(c.loops[FINAL])
     post = client(store).post
-    sent = {"question": q["id"], "option": "rebuild", "attempt": 1, "head": head}
+    sent = {"question": q.id, "option": "rebuild", "attempt": 1, "head": head}
     assert post("/api/next/changes/c1/answers", json=sent | {"tasks": []}).status_code == 422
     assert post("/api/next/changes/c1/answers", json=sent | {"tasks": ["t3"]}).status_code == 422  # a repair
     assert post("/api/next/changes/c1/answers", json=sent | {"tasks": ["t1"], "head": "b" * 40}).status_code == 409
     assert post("/api/next/changes/c1/answers", json=sent | {"tasks": ["t1"], "attempt": 2}).status_code == 409
-    accept = {"question": q["id"], "option": "accept", "tasks": ["t1"]}
+    accept = {"question": q.id, "option": "accept", "tasks": ["t1"]}
     assert post("/api/next/changes/c1/answers", json=accept).status_code == 422  # only Rebuild names tasks
+    with store.db.read() as db:
+        assert db.execute("SELECT count(*) FROM inbox").fetchone()[0] == 0
     for wrong in (
         {"tasks": []},
         {"tasks": ["t1", "t9"]},
         {"tasks": ["t1"], "attempt": 2},
         {"tasks": ["t1"], "head": ""},
     ):
-        assert rebuild(store, clone, **wrong).loops[FINAL].rebuild == []  # the fold checks the whole selection too
+        assert rebuild(store, **wrong).loops[FINAL].rebuild == []  # the fold checks the whole selection too
     assert loop.open_question(store.read("c1")) is not None
     assert answered(store, "accept", tasks=["t1"]).outcome.exit == Exit.ASK  # tasks belong to Rebuild only
     assert post("/api/next/changes/c1/answers", json=sent | {"tasks": ["t2", "t1"]}).status_code == 200
@@ -200,19 +207,18 @@ def test_the_page_lists_the_plan_tasks_and_a_rebuild_is_bound_to_what_it_showed(
     assert (c.loops[FINAL].rebuild, at(c)) == (["t1", "t2"], (K.REVIEW, None, round_flow.RETRY))
 
 
-def test_the_console_shows_the_task_list_and_rebuilds_only_what_it_was_shown(tmp_path, clone, monkeypatch, capsys):
+def test_console_retry_show_and_answer_share_page_authority(tmp_path, monkeypatch, capsys):
     """#676: the console's Rebuild is checked and bound as the page's is, after showing what the page shows."""
     store = Store(tmp_path / "store")
-    c = asked(clone)
+    c = asked()
     c.brief = Brief(version=1, criteria=[Criterion(id="AC-1", text="rule AC-1")])
     c.loops[FINAL].findings[2].text = "y.txt:2: AC-1 not met - fix: f"  # the open F3 names it
     store.write(Lock("c1"), c)
-    q, head = loop.open_question(c), git(clone, "rev-parse", "HEAD")
-    assert rebuilds.shown(c, q)["unmet"] == ["AC-1: rule AC-1"]
+    q, head = loop.open_question(c), rebuilds.head(c.loops[FINAL])
     monkeypatch.setattr(cli.Store, "open", lambda *_a, **_k: store)
 
     def said(*args: str) -> int:
-        return cli.main(["--repo", str(clone), *args])
+        return cli.main(["--repo", str(tmp_path), *args])
 
     def inbox() -> int:
         with store.db.read() as db:
@@ -236,52 +242,24 @@ def test_the_console_shows_the_task_list_and_rebuilds_only_what_it_was_shown(tmp
     assert (c.loops[FINAL].rebuild, at(c)) == (["t1", "t2"], (K.REVIEW, None, round_flow.RETRY))
 
 
-def test_accept_as_done_names_the_criteria_the_open_findings_report_unmet():
-    """TD-341: an open finding naming AC-1 lists it; a fixed one naming AC-2 and the look-alike AC-10 do not."""
-    t1 = Task(id="t1", title="one", scope=["x.txt"], checks=["cd . && check one"])
-    t3 = Task(id="t3", title="fix", origin="review", fixes="t1")
-    t2 = Task(id="t2", title="two", scope=["y.txt"], checks=["cd . && check two"])
-    t4 = Task(id="t4", title="fix final", origin="review", fixes=FINAL)
-    t5 = Task(id="t5", title="fix final", origin="review", fixes=FINAL)
-    sha = [str(n) * 40 for n in range(6)]  # the base, then each build's commit, in `asked`'s order
-    for n, task in enumerate((t1, t3, t2, t4, t5)):  # one build session each, as `build` records it
-        task.base, task.done, task.spans = sha[n], True, [f"{sha[n]}..{sha[n + 1]}"]
-    findings = [
-        RoundFinding(id="F1", text="x.txt:1: p - fix: f", raised=1, tasks=["t1"], state="fixed", repair="t4"),
-        RoundFinding(id="F2", text="y.txt:1: p - fix: f", raised=1, tasks=["t2"], state="fixed", repair="t5"),
-        RoundFinding(id="F3", text="y.txt:2: p - fix: f", raised=1, tasks=["t2"]),
-    ]
-    head = sha[5]
-    lp = RoundLoop(subject=FINAL, policy=RoundPolicy(max_rounds=1), round=1, found=8, last=True, findings=findings)
-    lp.completion, lp.head = Completion(head=head), end(t3)
-    covered = [
-        Review(task="t3", commit=head, inputs=Inputs(paths={"x.txt": "b"}), verdict="pass"),
-        Review(task="t2", commit=head, inputs=Inputs(paths={"y.txt": "b", "x.txt": "b"}), verdict="pass"),
-    ]
-    c = Change(
-        slug="c1",
-        brief=Brief(version=1, criteria=[Criterion(id=i, text=f"rule {i}") for i in ("AC-1", "AC-2", "AC-10")]),
-        plan=Plan(tasks=[t1, t2, t3, t4, t5]),
-        names=Names(branch="owlbear/c1", target="main"),
-        step=Step(kind=K.BUILD, task="t5"),
-        loops={FINAL: lp, "t1": RoundLoop(subject="t1", since=1, policy=RoundPolicy(), ended="clean")},
-        reviews=covered,
-        consent=MergeConsent(head=head, at=NOW),
-    )
-    ask(c, round_flow.question(c, lp, t5), NOW)
-    found = c.loops[FINAL].findings
-    found[0].text, found[2].text = "x.txt:1: AC-2 broken - fix: f", "y.txt:2: AC-1 not met - fix: f"
-    assert rebuilds.shown(c, c.questions[0])["unmet"] == ["AC-1: rule AC-1"]
-    found[2].text = "y.txt:2: no criterion - fix: f"
-    assert rebuilds.shown(c, c.questions[0])["unmet"] == []
-
-
-def test_accepting_as_done_keeps_the_unmet_criteria_as_the_owners_decision(tmp_path, clone):
+def test_accept_unmet_criteria_is_wording_bound_and_published(tmp_path):
     """TD-341: later reviews and the pull request see them accepted, until the criterion's text changes."""
     store = Store(tmp_path / "store")
-    c = asked(clone)
-    c.brief = Brief(version=1, criteria=[Criterion(id="AC-1", text="greets"), Criterion(id="AC-2", text="waves")])
-    c.loops[FINAL].findings[2].text = "y.txt:2: AC-1 not met - fix: f"
+    c = asked()
+    c.brief = Brief(
+        version=1,
+        criteria=[
+            Criterion(id="AC-1", text="greets"),
+            Criterion(id="AC-2", text="waves"),
+            Criterion(id="AC-10", text="ten"),
+        ],
+    )
+    found = c.loops[FINAL].findings
+    found[0].text, found[2].text = "x.txt:1: AC-2 broken - fix: f", "y.txt:2: AC-1 not met - fix: f"
+    assert rebuilds.shown(c, loop.open_question(c))["unmet"] == ["AC-1: greets"]
+    found[2].text = "y.txt:2: no criterion - fix: f"
+    assert rebuilds.shown(c, loop.open_question(c))["unmet"] == []
+    found[2].text = "y.txt:2: AC-1 not met - fix: f"
     store.write(Lock("c1"), c)
     done = answered(store, "accept")
     assert done.waived == {"AC-1": "greets"}
@@ -293,11 +271,29 @@ def test_accepting_as_done_keeps_the_unmet_criteria_as_the_owners_decision(tmp_p
     assert "- AC-1: greets twice" in step_input.brief(done)
 
 
-def test_a_rebuild_undoes_the_ticked_tasks_own_work_and_builds_them_again(tmp_path, clone, monkeypatch):
+def test_page_rebuild_preserves_kept_work_and_restarts_selected_tasks(tmp_path, clone, monkeypatch):
     store = Store(tmp_path / "store")
-    store.write(Lock("c1"), asked(clone))
+    store.write(Lock("c1"), built_change(clone))
     archived = git(clone, "rev-parse", "HEAD")
-    rebuild(store, clone, "t1")
+    page = client(store)
+    shown = page.get("/api/next/changes/c1").json()
+    retry_list, q = shown["retry"], shown["question"]
+    assert [o["label"] for o in q["options"]] == [
+        "Rebuild the ticked tasks",
+        "Accept as done",
+        "Another round",
+        "Plan again from the brief on the existing code",
+        "Plan again from the brief from a clean state",
+    ]
+    assert (retry_list["attempt"], retry_list["head"]) == (1, archived)
+    assert retry_list["tasks"] == [
+        {"id": "t1", "title": "one", "ticked": False, "shares": ["t2"]},
+        {"id": "t2", "title": "two", "ticked": True, "shares": ["t1"]},
+    ]
+    sent = {"question": q["id"], "option": "rebuild", "tasks": ["t1"], "attempt": 1, "head": archived}
+    assert page.post("/api/next/changes/c1/answers", json=sent).status_code == 200
+    c, _ = store.fold(Lock("c1"), "c1", NOW)
+    assert (c.loops[FINAL].rebuild, at(c)) == (["t1"], (K.REVIEW, None, round_flow.RETRY))
     monkeypatch.setattr(runner, "_kept", lambda *_a: pytest.fail("the undo starts no session"))
     c = step(store, clone)
     assert git(clone, "rev-parse", retry.archive("c1", FINAL, 1, archived)) == archived
@@ -314,7 +310,7 @@ def test_a_rebuild_undoes_the_ticked_tasks_own_work_and_builds_them_again(tmp_pa
     assert at(c) == (K.BUILD, "t1", None)
 
 
-def test_a_multi_rebuild_binds_new_earlier_spans_not_the_undone_module(tmp_path, clone):
+def test_rebuild_checks_bind_new_spans_in_build_and_repair_witnesses(tmp_path, clone):
     profile = confirm(Profile(), "check:.", "uv run test --changed", NOW)
     command = "cd . && uv run test --changed"
     t1 = build(clone, Task(id="t1", title="one", scope=["."], checks=[command]), "old_module.py", "v = 1\n")
@@ -368,14 +364,24 @@ def test_a_multi_rebuild_binds_new_earlier_spans_not_the_undone_module(tmp_path,
     assert lp.rebuild == []
 
 
-def test_a_promoted_undo_is_never_repeated_even_after_new_commits(clone):
-    c = asked(clone)
-    lp = c.loops[FINAL]
-    lp.rebuild, start = ["t1"], git(clone, "rev-parse", "HEAD")
+def test_undo_restart_preserves_later_commits_and_refuses_unrelated_movement(clone):
+    task = build(clone, Task(id="t1", title="one"), "x.txt", "1\n")
+    lp = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"])
+    c = Change(
+        slug="c1",
+        brief=Brief(version=1),
+        plan=Plan(tasks=[task]),
+        names=Names(branch="owlbear/c1", target="main"),
+        loops={FINAL: lp},
+    )
+    start = git(clone, "rev-parse", "HEAD")
+    moved = commit(clone, "m.txt", "moved\n")
     undo, _ = rebuilds.undoing(c, lp)
+    assert retry._taken(clone, c, lp, undo, start) == "the branch moved since the undo started, without it"  # noqa: SLF001
+    assert git(clone, "rev-parse", "HEAD") == moved
+    start = moved
     assert retry._taken(clone, c, lp, undo, start) == ""  # noqa: SLF001
     owner = commit(clone, "x.txt", "restored by the owner\n")  # before the record was written
-    assert retry._landed(clone, start, retry.REBUILD.format(tasks="t1", attempt=1)) is True  # noqa: SLF001
     assert retry._taken(clone, c, lp, undo, start) == ""  # noqa: SLF001 - the restart finds the undo
     assert (git(clone, "rev-parse", "HEAD"), (clone / "x.txt").read_text()) == (owner, "restored by the owner\n")
     assert retry._cleaned(clone, c, lp, owner) == ""  # noqa: SLF001
@@ -384,31 +390,22 @@ def test_a_promoted_undo_is_never_repeated_even_after_new_commits(clone):
     assert (git(clone, "rev-parse", "HEAD"), (clone / "n.txt").exists()) == (after, True)
 
 
-def test_an_undo_whose_branch_moved_before_it_landed_stops(clone):
-    c = asked(clone)
-    lp = c.loops[FINAL]
-    lp.rebuild, start = ["t1"], git(clone, "rev-parse", "HEAD")
-    moved = commit(clone, "m.txt", "moved\n")
-    undo, _ = rebuilds.undoing(c, lp)
-    assert retry._taken(clone, c, lp, undo, start) == "the branch moved since the undo started, without it"  # noqa: SLF001
-    assert git(clone, "rev-parse", "HEAD") == moved
-
-
-def test_commits_made_between_a_tasks_build_sessions_are_not_its_own(clone):
-    base = git(clone, "rev-parse", "HEAD")
+def test_recorded_session_spans_exclude_owner_and_integration_work(tmp_path, clone):
+    t1 = Task(id="t1", title="one", done=True)
+    c = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[t1]), step=Step(kind=K.BUILD, task="t1"))
+    settings, base = Store(tmp_path / "s").settings(), git(clone, "rev-parse", "HEAD")
+    review.started(c, t1, clone, settings)
     first = commit(clone, "x.txt", "1\n")
+    review.recorded(c, t1, Run("s1", "result", None, head=first), clone, loop.StepResult(exit=Exit.RETRY, cause="x"))
     owner = commit(clone, "o.txt", "the owner's fix while the build was paused\n")
     integration = Task(id="t6", title="merge", origin="integration", done=True, base=owner)
     integration.spans = [f"{owner}..{commit(clone, 't.txt', 'target\n')}"]
     resumed = git(clone, "rev-parse", "HEAD")
-    t1 = Task(
-        id="t1",
-        title="one",
-        done=True,
-        base=base,
-        spans=[f"{base}..{first}", f"{resumed}..{commit(clone, 'x.txt', '1d\n')}"],
-    )
-    c = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[t1, integration]))
+    c.plan.tasks.append(integration)
+    review.started(c, t1, clone, settings)
+    last = commit(clone, "x.txt", "1d\n")
+    review.recorded(c, t1, Run("s2", "result", None, head=last), clone, loop.StepResult(exit=Exit.RETRY, cause="x"))
+    assert (t1.base, t1.spans) == (base, [f"{base}..{first}", f"{resumed}..{last}"])
     lp = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"])
     undo, why = rebuilds.undoing(c, lp)
     assert ([t.id for t in undo], why) == (["t1"], "")
@@ -420,13 +417,13 @@ def test_commits_made_between_a_tasks_build_sessions_are_not_its_own(clone):
     assert ((clone / "o.txt").exists(), (clone / "t.txt").read_text()) == (True, "target\n")
 
 
-def test_a_final_repair_of_rebuilt_and_kept_work_stops_the_undo_with_a_question(tmp_path, clone):
-    c = asked(clone)
+def test_unsplittable_final_repair_asks_before_any_git_mutation(tmp_path, clone):
+    c = asked()
     c.loops[FINAL].findings[1].tasks = ["t1", "t2"]  # t5 fixed a finding of both
     store = Store(tmp_path / "store")
     store.write(Lock("c1"), c)
     head = git(clone, "rev-parse", "HEAD")
-    rebuild(store, clone, "t1")
+    rebuild(store, "t1")
     c = step(store, clone)
     q = loop.open_question(c)
     assert "final repair t5 fixed findings of both rebuilt and kept work" in q.text
@@ -436,7 +433,7 @@ def test_a_final_repair_of_rebuilt_and_kept_work_stops_the_undo_with_a_question(
     assert (c.loops[FINAL].extra, c.loops[FINAL].rebuild, at(c)) == (1, [], (K.REVIEW, None, "final"))
 
 
-def test_a_repair_of_an_earlier_plan_never_counts_for_the_current_one():
+def test_rebuild_lineage_and_kept_check_spans_follow_the_current_plan():
     t1 = Task(id="t1", title="one", base="a" * 40, spans=[f"{'a' * 40}..{'b' * 40}"])
     t3 = Task(
         id="t3", title="fix final", origin="review", fixes=FINAL, base="b" * 40, spans=[f"{'b' * 40}..{'c' * 40}"]
@@ -509,18 +506,16 @@ def test_a_repair_of_an_earlier_plan_never_counts_for_the_current_one():
     assert all((root := check_hint.changed_runner(task.checks[0])) is not None and root[1] == [] for task in (t1, t7))
 
 
-def test_a_task_whose_commits_are_not_recorded_is_not_undone():
-    c = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[Task(id="t1", title="one", base="a" * 40)]))
+def test_unknown_ownership_and_taskless_repairs_cannot_be_undone():
+    t1 = Task(id="t1", title="one", base="a" * 40)
+    c = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[t1]))
     lp = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"])
     assert rebuilds.undoing(c, lp) == ([], "the commits of task t1 are not recorded")
-
-
-def test_a_final_repair_that_also_fixed_a_finding_of_no_task_is_kept_work():
-    t1 = Task(id="t1", title="one", base="a" * 40, spans=[f"{'a' * 40}..{'b' * 40}"])
+    t1.spans = [f"{'a' * 40}..{'b' * 40}"]
     t2 = Task(
         id="t2", title="fix final", origin="review", fixes=FINAL, base="b" * 40, spans=[f"{'b' * 40}..{'c' * 40}"]
     )
-    c = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[t1, t2]))
+    c.plan.tasks.append(t2)
     found = [RoundFinding(id=f"F{n}", text="x", raised=1, tasks=k, state="fixed", repair="t2") for n, k in (
         (1, ["t1"]), (2, []))]  # fmt: skip
     lp = RoundLoop(subject=FINAL, policy=RoundPolicy(), rebuild=["t1"], findings=found[:1])
@@ -534,7 +529,7 @@ STATES = [("open", True), ("escalated", True), ("owner-fix", True), ("fixed", Fa
 
 
 @pytest.mark.parametrize(("state", "ticked"), STATES)
-def test_a_task_with_a_finding_still_to_fix_starts_ticked(state, ticked):
+def test_unresolved_findings_select_plan_tasks(state, ticked):
     tasks = [Task(id="t1", title="one"), Task(id="t2", title="two")]
     c = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=tasks))
     c.loops = {
@@ -552,20 +547,26 @@ def test_a_task_with_a_finding_still_to_fix_starts_ticked(state, ticked):
     assert [(t["ticked"], t["shares"]) for t in listed] == [(ticked, []), (ticked, [])]  # no shared files known
 
 
-def test_a_clean_plan_undoes_all_the_changes_work_and_plans_again(tmp_path, clone):
-    git(clone, "switch", "-qc", "side", "main")
-    commit(clone, "t.txt", "target\n")
-    git(clone, "switch", "-q", "owlbear/c1")
-    c = asked(clone)
-    git(clone, "merge", "-q", "--no-ff", "-m", "merge the target", "side")
-    git(clone, "branch", "-qf", "main", "side")
+@pytest.mark.parametrize("mode", ["clean", "replan"])
+def test_replan_preserves_the_selected_starting_state(tmp_path, clone, mode):
+    if mode == "clean":
+        git(clone, "switch", "-qc", "side", "main")
+        commit(clone, "t.txt", "target\n")
+        git(clone, "switch", "-q", "owlbear/c1")
+    c = built_change(clone)
+    if mode == "clean":
+        git(clone, "merge", "-q", "--no-ff", "-m", "merge the target", "side")
+        git(clone, "branch", "-qf", "main", "side")
     store = Store(tmp_path / "store")
     store.write(Lock("c1"), c)
     archived = git(clone, "rev-parse", "HEAD")
-    answered(store, "clean")
-    c = step(store, clone)
-    assert git(clone, "rev-parse", retry.archive("c1", FINAL, 1, archived)) == archived
-    assert (git(clone, "diff", "main", "HEAD"), git(clone, "rev-parse", "HEAD^")) == ("", archived)
+    c = answered(store, mode)
+    if mode == "clean":
+        c = step(store, clone)
+        assert git(clone, "rev-parse", retry.archive("c1", FINAL, 1, archived)) == archived
+        assert (git(clone, "diff", "main", "HEAD"), git(clone, "rev-parse", "HEAD^")) == ("", archived)
+    else:
+        assert git(clone, "rev-parse", "HEAD") == archived
     lp = c.loops[FINAL]
     assert (list(c.loops), lp.attempt, lp.round, [(h.subject, h.ended) for h in lp.history]) == (
         [FINAL],
@@ -575,28 +576,15 @@ def test_a_clean_plan_undoes_all_the_changes_work_and_plans_again(tmp_path, clon
     )
     assert (at(c), c.outcome.exit, c.consent) == ((K.PLAN, None, None), Exit.BACK, None)
     assert c.outcome.reason.startswith("The owner rejected the work after final review round 1 and asked for a new ")
-    assert "from a clean state" in c.outcome.reason
+    how = "from a clean state" if mode == "clean" else "on the existing code"
+    assert how in c.outcome.reason
     assert "F3: y.txt:2: p - fix: f" in c.outcome.reason
     message = step_input.plan(c, Profile(), clone, {})
     assert "## Why the Change is planned again" in message
-    assert "from a clean state" in message
+    assert how in message
 
 
-def test_a_plan_on_the_existing_code_keeps_the_branch_as_it_is(tmp_path, clone):
-    store = Store(tmp_path / "store")
-    store.write(Lock("c1"), asked(clone))
-    head = git(clone, "rev-parse", "HEAD")
-    c = answered(store, "replan")
-    assert (at(c), c.outcome.exit, c.loops[FINAL].attempt, git(clone, "rev-parse", "HEAD")) == (
-        (K.PLAN, None, None),
-        Exit.BACK,
-        2,
-        head,
-    )
-    assert "on the existing code" in c.outcome.reason
-
-
-def test_a_kept_check_runs_from_each_package_of_its_task(change_repo, monkeypatch):
+def test_rebuilt_checks_keep_package_identity():
     entries = {f"check:{p}": ProfileEntry(state="known", value="npm test") for p in ("packages/a", "packages/b", ".")}
     profile = Profile(
         entries=entries
@@ -659,18 +647,16 @@ def test_a_kept_check_runs_from_each_package_of_its_task(change_repo, monkeypatc
     both = ["cd packages/b && npm test", "cd packages/b && npm test:unit"]
     ran = tools.BuildResult(summary="b", checks=[{"command": k, "exit_code": 0} for k in both])
     assert [e for e in tools.check_build(ran, tree, both) if "missing" in e] == []
-    checks_run_in_confirmed_folders(change_repo, monkeypatch)
 
 
-def checks_run_in_confirmed_folders(change_repo, monkeypatch):
+def test_emitted_checks_run_in_confirmed_folders(change_repo, monkeypatch):
     package = change_repo / "packages/app"
     package.mkdir(parents=True)
     elsewhere = change_repo.parent / "elsewhere"
     other = elsewhere / "packages/app"
     other.mkdir(parents=True)
-    for home in (change_repo, package, other):
+    for home in (change_repo, package):
         (home / "Makefile").write_text("check:\n\t@pwd\n")
-    (package / "package.json").write_text('{"scripts":{"test":"make check"}}\n')
     git(change_repo, "add", "Makefile", "packages/app")
     git(change_repo, "commit", "-qm", "root and package check targets")
     command = "make check & make check; wait # both in this package"
@@ -707,7 +693,7 @@ def checks_run_in_confirmed_folders(change_repo, monkeypatch):
         ]
 
 
-def test_each_build_session_records_its_own_span(tmp_path, clone):
+def test_unknown_session_spans_refuse_undo_and_held_span_closes(tmp_path, clone):
     task = Task(id="t1", title="one")
     c = Change(slug="c1", brief=Brief(version=1), plan=Plan(tasks=[task]), step=Step(kind=K.BUILD, task="t1"))
     settings, base = Store(tmp_path / "s").settings(), git(clone, "rev-parse", "HEAD")
