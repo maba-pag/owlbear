@@ -21,6 +21,7 @@ pytestmark = pytest.mark.browser
 def maintenance(tmp_path, pds):
     state = {"curation": 200, "tests": 200, "post": 409, "detail": "refused by host", "reads": 0}
     with opened(tmp_path, pds, startup=10) as (page, base):
+
         def curation(route):
             if route.request.method == "POST":
                 code = state["post"]
