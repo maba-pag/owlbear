@@ -15,7 +15,7 @@ from owlbear_delivery_next.state_store import prefs_import, profile_share
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import SharedError, Store
 
-from .test_prefs_recovery import clone_profile, remote_config_bytes
+from .test_prefs_recovery import clone_profile, refuse_completion_once, remote_config_bytes
 
 
 def confirmed(value: str) -> ProfileEntry:
@@ -144,15 +144,8 @@ def test_a_refused_completion_is_reported_at_start_and_published_by_the_next_sta
     root, remote = shared_repo
     store = Store(tmp_path / "store", DataRepo(root), "shop-site")
     store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
-    real, refused = DataRepo.publish, []
-
-    def publish(self, path, message, until=None):
-        if path == profile_share.path(store) and message.endswith("import done") and not refused:
-            refused.append(message)
-            return "remote refused"
-        return real(self, path, message, until)
-
-    monkeypatch.setattr(DataRepo, "publish", publish)
+    real = DataRepo.publish
+    refused = refuse_completion_once(monkeypatch, store)
 
     first = readiness.ready(store, root, carry=True)
     assert refused
@@ -193,15 +186,8 @@ def test_a_raised_config_refusal_keeps_the_shared_evidence_so_a_fresh_start_cann
     root, remote = shared_repo
     store = Store(tmp_path / "store", DataRepo(root), "shop-site")
     store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
-    real, refused = DataRepo.publish, []
-
-    def refuse_done(self, path, message, until=None):
-        if path == profile_share.path(store) and message.endswith("import done") and not refused:
-            refused.append(message)
-            return "remote refused"
-        return real(self, path, message, until)
-
-    monkeypatch.setattr(DataRepo, "publish", refuse_done)
+    real = DataRepo.publish
+    refused = refuse_completion_once(monkeypatch, store)
     readiness.ready(store, root, carry=True)  # the config is published; the done marker is refused in A
     assert refused
 
@@ -210,7 +196,7 @@ def test_a_raised_config_refusal_keeps_the_shared_evidence_so_a_fresh_start_cann
             raised.append(message)
             msg = "remote unavailable"
             raise DataRepoError(msg)
-        return refuse_done(self, path, message, until)
+        return real(self, path, message, until)
 
     raised: list[str] = []
     monkeypatch.setattr(DataRepo, "publish", raise_config)
