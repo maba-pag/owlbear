@@ -68,7 +68,6 @@ def said(monkeypatch):
 def world(tmp_path, monkeypatch):
     """A real project and native historical findings, without publication setup."""
     clone = tmp_path / "alpha"
-    clone.mkdir()
     projects = {"p1": (SimpleNamespace(name="alpha-folder", root=clone), clone)}
     places = {"p1": targets.Place("alpha-folder", clone)}
     folders = []
