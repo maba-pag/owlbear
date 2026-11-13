@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import contextlib
 import sqlite3
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,8 +16,7 @@ from owlbear_delivery_next.state_store import database, watch_reports
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.state_store.watch_reports import Report
 
-from .test_approval_view import Host, served
-from .test_approval_view import opened as approval_opened
+from .test_approval_view import Host, opened, served
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -101,17 +99,11 @@ def page_url(store) -> Iterator[str]:
         yield base
 
 
-@contextlib.contextmanager
-def opened(base: str, slug: str, pds: Any) -> Iterator[Any]:
-    with approval_opened(base, slug, pds, details=True) as page:
-        yield page
-
-
 @pytest.mark.browser
 def test_the_watcher_list_shows_observed_writes_and_unclassified_calls_apart_and_the_row_counts(page_url, pds):
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    with opened(page_url, "flip", pds) as page:
+    with opened(page_url, "flip", pds, details=True) as page:
         expect(page.locator("#changes").get_by_text("2 outside writes observed")).to_be_visible()
         section = page.locator("section.info").filter(has=page.get_by_role("heading", name="Watcher"))
         expect(section.get_by_text("Report only: nothing is judged or stopped yet.")).to_be_visible()
