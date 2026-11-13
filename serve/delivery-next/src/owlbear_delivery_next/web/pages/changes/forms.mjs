@@ -343,7 +343,7 @@ export function stopNotice(d) {
   const wait = !r?.unset ? "" : r.settings.reason ? r.unset : `${settingsWait(r.settings.count)} to run the step again`;
   const held = !r || wait;  // no stop he may clear, or its rerun waits on the settings: no action
   // a reason in paragraphs (#1220) keeps what to do apart from its details
-  const said = [`${reason}.`, action ? `What to do: ${action}.` : "", held && r ? `${wait}.` : ""].filter(Boolean)
+  const said = [`${reason}.`, action ? `What to do: ${action}.` : "", wait ? `${wait}.` : ""].filter(Boolean)
     .join(reason.includes("\n\n") ? "\n\n" : " ");
   const clear = async () => {
     const again = "If the cause is still there, it stops again with the same message.";
