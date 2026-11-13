@@ -15,7 +15,7 @@ from owlbear_delivery_next.change_contracts.amend_tools import (
     CandidateResult,
     VerdictResult,
 )
-from owlbear_delivery_next.change_contracts.amendment_records import AmendedItem, Amendment
+from owlbear_delivery_next.change_contracts.amendment_records import AmendedItem
 from owlbear_delivery_next.change_contracts.decision_records import BriefDecision, DecisionBaseline
 from owlbear_delivery_next.change_contracts.env_records import Environment
 from owlbear_delivery_next.change_contracts.evidence import next_check, review_valid, visual_valid
@@ -30,7 +30,6 @@ from owlbear_delivery_next.change_contracts.models import (
     Inputs,
     PersonCheck,
     Plan,
-    Question,
     Review,
     Step,
     StepKind,
@@ -108,22 +107,6 @@ def answer(c: Change, option: str, text: str = "") -> list:
     return dropped
 
 
-def test_a_qualifying_replacement_of_a_generated_criterion_applies_alone_and_keeps_the_reference():
-    c = change()
-    a = through(c)
-
-    assert (a.state, a.level, a.version, c.brief.version, c.brief.approved_version) == (
-        "applied",
-        "autonomous",
-        4,
-        4,
-        4,
-    )
-    assert ([k.text for k in c.brief.criteria], c.brief.specified) == (["greet() trims spaces", AC2], ["AC-2"])
-    assert (c.brief.reference, amend_apply.reference(c), [b.version for b in c.brief.approved]) == (None, 3, [3, 4])
-    assert (c.amending, c.step.kind, c.step.task, c.outcome) == (None, K.BUILD, "t1", None)  # the task runs again
-
-
 @pytest.mark.parametrize(
     "said",
     [
@@ -131,10 +114,12 @@ def test_a_qualifying_replacement_of_a_generated_criterion_applies_alone_and_kee
         verdict(build_only=True),  # only the failing build motivates it
         verdict(tightening="AC-1 now also trims tabs: one more test"),
         verdict(widens=True),
+        verdict("weaker", qualifies=False),
+        verdict("unsure", qualifies=False),
     ],
-    ids=["said0", "said1", "said3", "said4"],
+    ids=["unproven", "build-only", "tightening", "widening", "weaker", "unsure"],
 )
-def test_an_equivalent_candidate_that_does_not_qualify_asks_the_owner(said):
+def test_a_candidate_that_does_not_qualify_asks_the_owner(said):
     c = change()
     a = through(c, said=said)
 
@@ -156,35 +141,6 @@ def test_an_owner_specified_item_an_addition_or_another_field_never_applies_alon
     through(c, candidate)
 
     assert (c.brief.version, options(c)) == (3, ASKS)
-
-
-def test_a_sum_of_equivalent_amendments_is_judged_together_and_the_second_asks():
-    c = change()
-    through(c)  # A1 applies alone
-    a2 = amending.start(c, "worker", reason="AC-2 is too strict", now=NOW)
-    amending.prepared(c, CandidateResult(items=[item(key="AC-1", text="greet() keeps the name")]), RoundPolicy(), NOW)
-
-    told = amendments.challenge(c, a2, Path(), recheck=False)
-
-    assert "## The reference version v3" in told
-    assert (
-        f"- A1 (v4, autonomous): criterion:AC-1 '{AC1}' -> 'greet() trims spaces'" in told
-    )  # the challenger judges A2 together with A1
-    amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge-2", NOW)
-    assert (amend_apply.reference(c), c.brief.version, options(c)) == (3, 4, ASKS)
-
-
-@pytest.mark.parametrize("said", ["weaker", "unsure"])
-def test_a_weaker_or_unsure_candidate_applies_only_with_his_yes_and_then_moves_the_reference(said):
-    c = change()
-    through(c)  # A1 applies alone, so it counts toward a later candidate's weakening
-    a2 = through(c, item(key="AC-1", text="greet() keeps the name"), said=verdict(said, qualifies=False))
-    assert (a2.state, c.brief.version, [x.id for x in amend_apply.since(c)]) == ("proposed", 4, ["A1"])
-
-    answer(c, "yes")
-
-    assert (a2.state, a2.level, a2.choice, c.brief.version, c.brief.reference) == ("applied", "approved", "yes", 5, 5)
-    assert (amend_apply.since(c), "AC-1" in c.brief.specified) == ([], True)  # his wording is now his own
 
 
 @pytest.mark.parametrize(
@@ -350,7 +306,8 @@ def test_a_changed_criterion_redoes_only_the_checks_that_cover_it_and_a_removed_
             said=verdict("weaker", qualifies=False))  # fmt: skip
     answer(c, "yes")
 
-    assert ([p.criteria for p in c.checks], [p.answer is not None for p in c.checks]) == ([["AC-1"], []], [True, True])
+    assert [p.criteria for p in c.checks] == [p.criteria for p in c.brief.approved[-1].checks] == [["AC-1"], []]
+    assert [p.answer is not None for p in c.checks] == [True, True]
     held = [evidence.check_valid(p.answer.inputs, evidence.check_inputs(c, p, {})) for p in c.checks]
     assert (held, next_check(c, {}).id) == ([False, True], "check-1")  # its recorded AC-1 is an earlier version
 
@@ -374,20 +331,6 @@ def test_a_declined_candidate_stays_listed_with_his_reason_and_work_goes_his_way
 
     assert (c.amendments, a.state, a.choice, c.amending, c.brief.version) == ([a], "declined", how, None, 3)
     assert (a.declined, then(c)) == ("Not this way" if how != "stop" else "", True)
-
-
-def test_an_answer_source_declined_within_the_brief_reopens_his_question():
-    c = change()
-    asked = loop.apply(c, loop.StepResult(exit=Exit.ASK, question=Question(step=K.BUILD, text="Which language?")), NOW)
-    q = loop.open_question(asked)
-    q.answer = Answer(option=None, text="greet in French too", at=NOW, kind="brief_change")
-    asked.outcome = None
-    a = through(asked, item("scope", "packages/app", "packages/fr"), source="answer", question=q.id,
-                said=verdict("weaker", beyond="it adds a package"))  # fmt: skip
-
-    answer(asked, "within", "English only after all")
-
-    assert (a.state, loop.open_question(asked).id, q.answer) == ("declined", q.id, None)
 
 
 def test_an_objection_names_only_the_tasks_built_on_the_amendment():
@@ -443,35 +386,60 @@ def test_an_objection_pauses_dependent_work_and_a_revert_is_a_new_version():
 
 def test_a_revert_brings_back_what_was_removed_or_changed_as_it_was():
     c = change()
+    c.brief.criteria[0].version = 2
+    c.checks[0].answer = passed(**{"AC-1": 2})
     c.brief.visual[1].steps = [VisualStep(do="click", target="Team")]
     c.checks[1].visual = True
     c.brief.approved = [
         c.brief.model_copy(deep=True, update={"approved": [], "checks": [p.model_copy(deep=True) for p in c.checks]})
     ]
-    shape = lambda b, checks: (  # noqa: E731
-        sorted((k.id, k.text) for k in b.criteria), sorted((s.name, s.path, s.expect, str(s.steps)) for s in b.visual),
-        sorted((p.id, tuple(p.criteria), tuple(p.steps), p.expect, p.visual) for p in checks),
-    )  # fmt: skip
-    was = shape(c.brief, c.checks)
-    exact = amend_apply.exact
-    a1 = amending.start(c, "revert", reason="the owner's wording", now=NOW, items=[
-        exact(c, "visual", "home", "shows Hi", path="/hi"),
-        exact(c, "check", "check-1", "it says hi", steps=["open /hi"]),
-        exact(c, "check", "check-2", "", remove=True), exact(c, "visual", "about", "", remove=True),
-        exact(c, "criterion", "AC-2", "", remove=True),
-    ])  # fmt: skip
-    amending.opened(c, a1, RoundPolicy())
+    old = c.brief.approved[0].model_dump()
+    a1 = amending.start(c, "worker", reason="the home page greets after a click", now=NOW)
+    swapped = [item("check", "check-1", "it says hi", actions=[]), item("visual", "home", "Hi", visual=True)]
+    assert amendments.check(CandidateResult(items=swapped), amendments.amendable(c)) == [
+        "items: actions are only for a visual state", "items: visual is only for a check"
+    ]  # fmt: skip
+    clicks = [Action(do="type", target="Name", text="Ada"), Action(do="click", target="Greet")]
+    candidate = [
+        item("visual", "home", "shows Hello Ada", path="/hi", actions=clicks),
+        item("check", "check-1", "it says hi", steps=["open /hi"], visual=True),
+        item("check", "check-2", "", remove=True),
+        item("visual", "about", "", remove=True),
+        item("criterion", "AC-1", "", remove=True),
+    ]
+    amending.prepared(c, CandidateResult(items=candidate), RoundPolicy(), NOW)
     amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge", NOW)
-    assert (a1.state, shape(c.brief, c.checks) != was) == ("applied", True)
+    text = loop.open_question(c).text
+    assert 'actions: type "Ada" into "Name"; click "Greet"' in text
+    assert "(judged by look)" in text
+    answer(c, "yes")
+    assert (a1.state, [k.id for k in c.brief.criteria], [p.id for p in c.checks]) == ("applied", ["AC-2"], ["check-1"])
+    assert [(s.name, s.path, s.expect, s.steps) for s in c.brief.visual] == [
+        (
+            "home",
+            "/hi",
+            "shows Hello Ada",
+            [VisualStep(do="type", target="Name", text="Ada"), VisualStep(do="click", target="Greet")],
+        )
+    ]
+    assert (c.checks[0].criteria, c.checks[0].steps, c.checks[0].visual) == ([], ["open /hi"], True)
 
     amending.objected(c, ObjectionItem(amendment=a1.id, at=NOW), NOW)
     answer(c, "revert")
     amending.opened(c, amending.current(c), RoundPolicy())
     amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge-2", NOW)
 
-    assert shape(c.brief, c.checks) == was
-    assert [(k.id, k.version) for k in c.brief.criteria] == [("AC-1", 1), ("AC-2", 3)]  # its evidence is stale
+    assert sorted((k.id, k.text, k.version) for k in c.brief.criteria) == [("AC-1", AC1, 3), ("AC-2", AC2, 2)]
+    assert sorted((s.name, s.path, s.expect, [(x.do, x.target) for x in s.steps]) for s in c.brief.visual) == [
+        ("about", "/about", "shows the team", [("click", "Team")]),
+        ("home", "/", "shows Hallo", []),
+    ]
+    assert [(p.id, p.criteria, p.steps, p.expect, p.visual) for p in c.checks] == [
+        ("check-1", ["AC-1"], ["open /"], "it greets", False),
+        ("check-2", ["AC-2"], ["open /about"], "it shows the team", True),
+    ]
     assert [(p.id, p.procedure, p.answer) for p in c.checks] == [("check-1", 3, None), ("check-2", 2, None)]
+    assert (next_check(c, {}).id, c.brief.approved[0].model_dump()) == ("check-1", old)
 
 
 @pytest.mark.parametrize(("how", "then"), [("keep", (None, False)), ("reshape", ("AC-1 needs reshaping", True))])
@@ -486,27 +454,6 @@ def test_keeping_or_reshaping_after_an_objection_leads_where_it_says(how, then):
     assert (c.intent.words or None, c.intent.hold) == then
 
 
-def test_the_chat_reads_back_only_a_candidate_left_for_him_to_adopt():
-    c = change()
-    through(c)  # applied: already in the brief
-    kept = c.amendments[0].model_copy(deep=True, update={"id": "A2", "state": "recorded"})  # a follow-up's candidate
-    c.amendments.append(kept)
-
-    (said,) = chat_routes.brief(c)["proposed_wording"]
-
-    assert (said["field"], said["key"], said["old"], said["new"]) == ("criterion", "AC-1", AC1, "greet() trims spaces")
-
-
-def test_an_objection_at_the_merge_step_takes_a_queued_merge_out():
-    c = change(K.MERGE, None)
-    through(c)
-    before = c.model_copy(deep=True)
-
-    amending.objected(c, ObjectionItem(amendment="A1", at=NOW), NOW)
-
-    assert (queue.leaving(before, before), queue.leaving(before, c)) == (False, True)
-
-
 class Records:
     """What a finished Change's record needs of the store: the shared repository and the project's folder in it."""
 
@@ -514,14 +461,41 @@ class Records:
         self.shared, self.name = DataRepo(root), "shop-site"
 
 
-def test_levels_survive_a_reload_and_the_finished_record_carries_every_version_and_amendment(tmp_path, shared_repo):
+def test_amendment_authority_reference_and_history_survive_reload(tmp_path, shared_repo):
     c = change()
     for b in (c.brief, *c.brief.approved):
         b.decisions = []  # an archived decision needs a minted id
     alone = through(c)  # a qualifying replacement of the generated AC-1
-    approved = through(c, item("check", "check-2", "it shows the whole team"), said=verdict("weaker", qualifies=False))
+    assert (alone.state, alone.level, alone.version, c.brief.version, c.brief.approved_version) == (
+        "applied",
+        "autonomous",
+        4,
+        4,
+        4,
+    )
+    assert ([k.text for k in c.brief.criteria], c.brief.specified) == (["greet() trims spaces", AC2], ["AC-2"])
+    assert (c.brief.reference, amend_apply.reference(c), [b.version for b in c.brief.approved]) == (None, 3, [3, 4])
+    assert (c.amending, c.step.kind, c.step.task, c.outcome) == (None, K.BUILD, "t1", None)
+
+    approved = amending.start(c, "worker", reason="AC-1 is too strict", now=NOW)
+    amending.prepared(c, CandidateResult(items=[item(text="greet() keeps the name")]), RoundPolicy(), NOW)
+    told = amendments.challenge(c, approved, Path(), recheck=False)
+    assert "## The reference version v3" in told
+    assert f"- A1 (v4, autonomous): criterion:AC-1 '{AC1}' -> 'greet() trims spaces'" in told
+    amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge-2", NOW)
+    assert (approved.state, amend_apply.reference(c), c.brief.version, options(c)) == ("proposed", 3, 4, ASKS)
+    assert [a.id for a in amend_apply.since(c)] == ["A1"]
     answer(c, "yes")
+    assert (approved.state, approved.level, approved.choice, c.brief.version, c.brief.reference) == (
+        "applied",
+        "approved",
+        "yes",
+        5,
+        5,
+    )
+    assert (amend_apply.since(c), "AC-1" in c.brief.specified) == ([], True)
     decided = through(c, item("scope", "packages/app", "packages/app only"), source="answer")
+    assert (decided.state, decided.level, options(c), c.brief.reference) == ("applied", "decided", [], 6)
     store = Store(tmp_path / "store")
     store.write(Lock("c1"), c)
 
@@ -557,14 +531,14 @@ def test_a_removed_criterion_brought_back_is_covered_again_by_its_checks():
     c = change()
     through(c, item(key="AC-1", text="", remove=True), said=verdict("weaker", qualifies=False))
     answer(c, "yes")
-    assert c.checks[0].criteria == []  # check-1 kept its pass, covering nothing
+    assert (c.checks[0].criteria, c.checks[0].answer is not None) == ([], True)
 
     amending.objected(c, ObjectionItem(amendment="A1", at=NOW), NOW)
     answer(c, "revert")
     amending.opened(c, amending.current(c), RoundPolicy())
     amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge-2", NOW)
 
-    assert (c.checks[0].criteria, next_check(c, {}).id) == (["AC-1"], "check-1")  # it reruns
+    assert (c.checks[0].criteria, next_check(c, {}).id) == (["AC-1"], "check-1")
 
 
 def test_a_check_states_the_criteria_it_covers_and_every_shape_is_shown_where_it_is_judged():
@@ -620,33 +594,6 @@ def test_a_qualifying_replacement_of_a_generated_visual_state_or_person_check_ap
     assert (c.brief.version, options(c)) == (3, ASKS)  # the owner's own asks him
 
 
-def test_a_candidate_sets_a_states_actions_and_whether_a_check_is_judged_by_look_and_a_revert_undoes_them():
-    c = change()
-    a = amending.start(c, "worker", reason="the home page greets after a click", now=NOW)
-    swapped = [item("check", "check-1", "it greets", actions=[]), item("visual", "home", "Hi", visual=True)]
-    assert amendments.check(CandidateResult(items=swapped), amendments.amendable(c)) == [
-        "items: actions are only for a visual state", "items: visual is only for a check"
-    ]  # fmt: skip
-    clicks = [Action(do="type", target="Name", text="Ada"), Action(do="click", target="Greet")]
-    candidate = [item("visual", "home", "shows Hello Ada", actions=clicks), item("check", "check-1", visual=True)]
-    amending.prepared(c, CandidateResult(items=candidate), RoundPolicy(), NOW)
-    amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge", NOW)
-    text = loop.open_question(c).text
-    assert 'actions: type "Ada" into "Name"; click "Greet"' in text
-    assert "(judged by look)" in text
-    answer(c, "yes")
-
-    assert ([(x.do, x.target, x.text) for x in c.brief.visual[0].steps], c.checks[0].visual) == (
-        [("type", "Name", "Ada"), ("click", "Greet", "")], True
-    )  # fmt: skip
-    amending.objected(c, ObjectionItem(amendment=a.id, at=NOW), NOW)
-    answer(c, "revert")
-    amending.opened(c, amending.current(c), RoundPolicy())
-    amending.judged(c, verdict("weaker", qualifies=False), "c1-challenge-2", NOW)
-
-    assert (c.brief.visual[0].steps, c.checks[0].visual) == ([], False)
-
-
 def test_the_challenger_names_affected_evidence_the_way_the_brief_does():
     c = change()
     named = lambda *x: verdict(affected=[Affected(item=i, reason="it reads the home page") for i in x])  # noqa: E731
@@ -675,14 +622,6 @@ def test_removing_the_person_check_that_stopped_goes_on_to_the_next_check():
     answer(c, "yes")
 
     assert ([p.id for p in c.checks], c.step.kind) == (["check-2"], K.FOLLOW)
-
-
-def test_the_kept_version_holds_its_checks_without_a_criterion_it_removed():
-    c = change()
-    through(c, item(key="AC-2", text="", remove=True), said=verdict("weaker", qualifies=False))
-    answer(c, "yes")
-
-    assert [p.criteria for p in c.brief.approved[-1].checks] == [["AC-1"], []]
 
 
 @pytest.mark.parametrize("intent", ["change", "abandon"])
@@ -739,9 +678,10 @@ def test_an_item_added_after_a_removal_never_takes_its_id_so_reverting_the_remov
 @pytest.mark.parametrize("objection", [False, True])
 def test_reshaping_an_amendment_at_the_merge_step_leaves_it_so_the_pr_never_merges(objection):
     c = change(K.MERGE, None)
-    through(c, said=verdict("weaker", qualifies=objection))
+    through(c, said=verdict() if objection else verdict("weaker", qualifies=False))
     if objection:
         amending.objected(c, ObjectionItem(amendment="A1", at=NOW), NOW)
+        assert amending.owned(loop.open_question(c)) == ("A1", "objection")
     before, q = c.model_copy(deep=True), loop.open_question(c)
 
     c, _ = loop.schedule(c, [AnswerItem(question=q.id, option="reshape", text="greet in French", at=NOW)], NOW)
@@ -762,10 +702,12 @@ def test_a_yes_folded_after_reshaping_or_stopping_in_the_same_batch_approves_not
     assert (c.amendments[0].state, c.amending, c.brief.version) == ("declined", None, 3)
 
 
-def test_a_second_objection_to_a_kept_amendment_takes_a_queued_merge_out_again():
+def test_repeated_objections_remove_a_queued_merge_each_time():
     c = change(K.MERGE, None)
     through(c)
+    before = c.model_copy(deep=True)
     amending.objected(c, ObjectionItem(amendment="A1", at=NOW), NOW)
+    assert (queue.leaving(before, before), queue.leaving(before, c)) == (False, True)
     answer(c, "keep")
     before = c.model_copy(deep=True)
 
@@ -790,17 +732,26 @@ def test_a_version_approved_before_checks_were_kept_with_it_still_reverts_a_chec
     assert [(p.id, p.steps, p.expect, p.criteria) for p in c.checks] == was
 
 
-def test_the_chat_reads_back_a_left_candidate_with_its_whole_shape():
+def test_recorded_candidates_read_back_their_complete_shape():
     c = change()
+    through(c)
+    recorded = c.amendments[0].model_copy(deep=True, update={"id": "A2", "state": "recorded"})
     steps = [VisualStep(do="click", target="Team")]
-    c.amendments = [Amendment(id="A1", at=NOW, step="merge", source="worker", base=3, state="recorded", items=[
+    recorded.items += [
         AmendedItem(field="visual", new="shows the team", path="/team", actions=steps),
         AmendedItem(field="check", new="it greets", steps=["open /"], covers=["AC-1"], visual=True),
         AmendedItem(field="decision", new="SQLite", question="Which store?"),
-    ])]  # fmt: skip
+    ]
+    c.amendments.append(recorded)
 
-    said = chat_routes.brief(c)["proposed_wording"]
+    criterion, *said = chat_routes.brief(c)["proposed_wording"]
 
+    assert (criterion["field"], criterion["key"], criterion["old"], criterion["new"]) == (
+        "criterion",
+        "AC-1",
+        AC1,
+        "greet() trims spaces",
+    )
     assert [(x["path"], x["actions"], x["steps"], x["covers"], x["visual"], x["question"]) for x in said] == [
         ("/team", [{"do": "click", "target": "Team", "text": ""}], [], [], None, ""),
         ("", None, ["open /"], ["AC-1"], True, ""),
@@ -881,18 +832,6 @@ def test_a_criterion_added_after_an_amendment_removed_one_never_takes_an_id_an_a
 
     assert (code, code_more) == (200, 200)
     assert [k.id for k in store.read(out["slug"]).brief.criteria] == ["AC-1", "AC-3"]  # a revert brings AC-2 back
-
-
-def test_the_shaper_and_the_challenger_of_an_answers_amendment_read_the_question_it_answers():
-    c = change()
-    asked = loop.apply(c, loop.StepResult(exit=Exit.ASK, question=Question(step=K.BUILD, text="Which language?")), NOW)
-    q = loop.open_question(asked)
-    q.answer = Answer(option=None, text="French too", at=NOW, kind="brief_change")
-    a = amending.start(asked, "answer", reason="French too", now=NOW, question=q.id)
-    amending.prepared(asked, CandidateResult(items=[item()]), RoundPolicy(), NOW)
-
-    for told in (amendments.prepare(asked, a, Path()), amendments.challenge(asked, a, Path(), recheck=False)):
-        assert "The question it answers: Which language?\nThe owner's answer: French too" in told
 
 
 def test_a_scope_amendment_binds_every_person_check_to_the_new_scope():

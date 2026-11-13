@@ -112,26 +112,6 @@ def inbox(picking) -> int:
         return db.execute("SELECT count(*) FROM inbox").fetchone()[0]
 
 
-def test_an_event_is_delivered_as_before_with_its_class_in_the_history(picking, monkeypatch):
-    run = Asking(
-        picking,
-        monkeypatch,
-        options=(
-            Option(id="en", label="English", action="continue"),
-            Option(id="again", label="Retry", next="retry", action="retry"),
-        ),
-    )
-    assert run.answer(kind="event", option=None, text=WORDS).json() == {"accepted": "answer"}
-
-    c = run.step()
-
-    [(_, delivered)] = run.held
-    assert (delivered.id, delivered.answer.kind, delivered.answer.text) == (run.qid, "event", WORDS)
-    assert (c.decisions, len(picking.pickers())) == ([], 1)  # no decision, no check
-    said = [e for e in picking.store.events(picking.slug) if e.get("event") == "answer"]
-    assert [(e["question"], e["class"]) for e in said] == [(run.qid, "event")]
-
-
 def test_an_admitted_all_retry_menu_delivers_free_text_to_its_original_author(picking, monkeypatch):
     run = Asking(
         picking,
@@ -290,11 +270,11 @@ def test_a_clarification_the_check_finds_changing_the_brief_starts_its_amendment
     ]
 
     run.step()
-    assert "It greets in French too." in picking.told[-1].message
+    assert f"The question it answers: {ASKED}\nThe owner's answer: It greets in French too." in picking.told[-1].message
     assert WORDS not in picking.told[-1].message
 
     run.step()
-    assert "It greets in French too." in picking.told[-1].message
+    assert f"The question it answers: {ASKED}\nThe owner's answer: It greets in French too." in picking.told[-1].message
     assert WORDS not in picking.told[-1].message
 
 
@@ -332,6 +312,8 @@ def amended(run: Asking) -> Question:
 
 def test_a_brief_change_runs_its_amendment_and_declining_it_within_the_brief_reopens_the_question(picking, monkeypatch):
     run = Asking(picking, monkeypatch)
+    dropped = {"event": "answer-not-applied", "at": AT.isoformat(), "question": run.qid, "reason": "it was settled"}
+    picking.store.log(Lock(picking.slug), picking.slug, dropped)
 
     q = amended(run)
 
@@ -341,6 +323,9 @@ def test_a_brief_change_runs_its_amendment_and_declining_it_within_the_brief_reo
         True,
     )
     assert [cfg.role for cfg in picking.told[-2:]] == ["shaper", "challenger"]
+    assert all(
+        f"The question it answers: {ASKED}\nThe owner's answer: {WORDS}" in cfg.message for cfg in picking.told[-2:]
+    )
     assert (run.held, answer_kinds.delivered_next(picking.change())) == ([], None)  # no worker, nothing delivered
     assert run.answer(q.id, kind="event", option="within").json()["detail"] == "only a worker's question takes a kind"
     assert run.answer(q.id).status_code == 422  # one of its options
@@ -352,25 +337,14 @@ def test_a_brief_change_runs_its_amendment_and_declining_it_within_the_brief_reo
 
     reopened = loop.open_question(c)
     assert (reopened.id, reopened.answer, loop.ordinary(reopened)) == (run.qid, None, True)
+    detail = picking.http.get(f"/api/next/changes/{picking.slug}").json()
+    assert (detail["question"]["id"], detail["question"]["dropped"]) == (run.qid, None)
     assert (c.amendments[0].state, c.amendments[0].declined, c.brief.version) == ("declined", "English only", 1)
     assert any("English only" in line for line in step_answers.answered(c))  # his reason goes to the work
     assert run.answer(kind="event", text="English").status_code == 200
     run.step()
     [(_, delivered)] = run.held
     assert delivered.answer.text == "English"
-
-
-def test_a_reopened_question_does_not_show_an_answer_dropped_before_a_later_one_applied(picking, monkeypatch):
-    """#791's notice stays beside a question only until an answer to it applies, even when it opens again."""
-    run = Asking(picking, monkeypatch)
-    dropped = {"event": "answer-not-applied", "at": AT.isoformat(), "question": run.qid, "reason": "it was settled"}
-    picking.store.log(Lock(picking.slug), picking.slug, dropped)
-    assert run.answer(amended(run).id, option="within", text="English only").status_code == 200
-
-    run.fold()
-
-    detail = picking.http.get(f"/api/next/changes/{picking.slug}").json()
-    assert (detail["question"]["id"], detail["question"]["dropped"]) == (run.qid, None)
 
 
 def test_stopping_the_change_over_a_brief_change_abandons_it(picking, monkeypatch):
@@ -396,10 +370,11 @@ def test_a_brief_change_that_says_no_more_than_his_answer_applies_without_anothe
     assert run.answer(kind="brief_change", option="fr").status_code == 200
     picking.verdicts += [FRENCH, amend_tools.VerdictResult(verdict="weaker", reasons="French is what he asked for")]
     run.step()
-    assert french in picking.told[-1].message
+    assert f"The question it answers: {ASKED}\nThe owner's answer: {french}" in picking.told[-1].message
 
     c = run.step()
 
+    assert f"The question it answers: {ASKED}\nThe owner's answer: {french}" in picking.told[-1].message
     (a,) = c.amendments
     assert (a.state, a.level, loop.open_question(c), c.brief.version) == ("applied", "decided", None, 2)
     assert (c.step.kind, run.held) == (StepKind.PLAN, [])  # his amendment replans the task on the new version
@@ -426,24 +401,36 @@ class Loopback:
         return Reply(r.content, r.status_code)
 
 
+def chat_answer(run: Asking, monkeypatch):
+    chat = chat_client.Chat.__new__(chat_client.Chat)
+    chat.repo, chat.home = run.p.repo, run.p.store.root
+    monkeypatch.setattr(chat_client.Chat, "record", lambda _self: RECORD)
+    monkeypatch.setattr(chat_client, "_LOCAL", Loopback(run.p.http))
+    monkeypatch.setitem(mcp_server._STATE, "chat", chat)  # noqa: SLF001 - the server's one chat
+
+    def said(**args: object):
+        return asyncio.run(mcp_server.mcp.call_tool("answer_question", {"question": f"c1.{run.qid}", **args}))
+
+    return said
+
+
 def test_the_chat_tool_takes_the_kind_and_passes_only_a_confirmed_statement(picking, monkeypatch):
     run = Asking(picking, monkeypatch)
-    chat = chat_client.Chat.__new__(chat_client.Chat)
-    chat.repo, chat.home = picking.repo, picking.store.root
-    monkeypatch.setattr(chat_client.Chat, "record", lambda _self: RECORD)
-    monkeypatch.setattr(chat_client, "_LOCAL", Loopback(picking.http))
-    monkeypatch.setitem(mcp_server._STATE, "chat", chat)  # noqa: SLF001 - the server's one chat
+    said = chat_answer(run, monkeypatch)
     [tool] = [t for t in asyncio.run(mcp_server.mcp.list_tools()) if t.name == "answer_question"]
     assert sorted(tool.input_schema["required"]) == ["kind", "question"]
     assert {"statement", "confirmed"} <= set(tool.input_schema["properties"])
-
-    def said(**args: object) -> dict:
-        return asyncio.run(mcp_server.mcp.call_tool("answer_question", {"question": f"c1.{run.qid}", **args}))
 
     unread = said(kind="clarification", text=WORDS, statement=SAID).structured_content
     assert (unread["answered"], unread["detail"], inbox(picking)) == (False, answers.UNCONFIRMED, 0)
     done = said(kind="clarification", text=WORDS, statement=SAID, confirmed=True).structured_content
     assert done == {"answered": True, "accepted": "answer"}
+    duplicate = said(kind="event", text="again").structured_content
+    assert (duplicate["answered"], duplicate.get("error"), inbox(picking)) == (
+        False,
+        f"question {run.qid} {WAITING}",
+        1,
+    )
 
     c, _ = run.fold()
 
@@ -537,7 +524,17 @@ def test_a_worker_receives_a_checked_clarification_as_the_confirmed_statement_ne
 
 @pytest.mark.parametrize("session", ["c1-build-t1-asked", ""])
 def test_a_worker_receives_a_long_answer_whole_with_its_line_breaks(picking, monkeypatch, session):
-    run, told = Asking(picking, monkeypatch, session=session, stub=False), first_messages(picking, monkeypatch)
+    run = Asking(
+        picking,
+        monkeypatch,
+        session=session,
+        stub=False,
+        options=(
+            Option(id="en", label="English", action="continue"),
+            Option(id="again", label="Retry", next="retry", action="retry"),
+        ),
+    )
+    told = first_messages(picking, monkeypatch)
     said = [
         "    greet(name) stays as it is",
         "",
@@ -545,13 +542,18 @@ def test_a_worker_receives_a_long_answer_whole_with_its_line_breaks(picking, mon
         "Essential: end with an exclamation mark.",
     ]
     assert len("\n".join(said[:3])) > 400  # the essential line comes after the old cut
-    assert run.answer(kind="event", option=None, text="\n".join(said)).status_code == 200
+    assert run.answer(kind="event", option=None, text="\n".join(said)).json() == {"accepted": "answer"}
 
-    run.step()
+    c = run.step()
 
     cfg = told[0]
     assert cfg.resume == bool(session)
     assert (quoted(said) if session else listed(said)) in cfg.message
+    delivered = run.asked(c)
+    assert (delivered.id, delivered.answer.kind, delivered.answer.text) == (run.qid, "event", "\n".join(said))
+    assert (c.decisions, len(picking.pickers())) == ([], 1)
+    events = [e for e in picking.store.events(picking.slug) if e.get("event") == "answer"]
+    assert [(e["question"], e["class"]) for e in events] == [(run.qid, "event")]
 
 
 def test_the_check_reads_the_approved_brief_decisions_and_catches_a_clarification_against_one(picking, monkeypatch):
@@ -576,8 +578,8 @@ def test_the_check_reads_the_approved_brief_decisions_and_catches_a_clarificatio
     assert all(x in said for x in ("Changes what a page shows: no", "UI states:", "Person checks:"))
 
 
-def test_the_cli_answer_needs_the_class_and_a_clarification_its_confirmed_statement(picking, monkeypatch, capsys):
-    run = Asking(picking, monkeypatch)
+def test_the_cli_validates_class_selection_and_single_queued_answer(picking, monkeypatch, capsys):
+    run = Asking(picking, monkeypatch, options=(Option(id="en", label="English"),))
     monkeypatch.setattr(cli.Store, "open", lambda *_a, **_k: picking.store)
 
     def said(*args: str) -> int:
@@ -587,34 +589,25 @@ def test_the_cli_answer_needs_the_class_and_a_clarification_its_confirmed_statem
     clarified = ("--kind", "clarification", "--statement", SAID)
     assert (said(), said(*clarified), inbox(picking)) == (1, 1, 0)
     assert answers.UNCLASSED in capsys.readouterr().err
-    assert said(*clarified, "--confirmed") == 0
-
-    a = run.asked(run.fold()[0]).answer
-    assert (a.kind, a.statement, a.text) == ("clarification", SAID, WORDS)
-
-
-def test_the_cli_refuses_an_option_the_question_does_not_offer_and_queues_nothing(picking, monkeypatch, capsys):
-    """#676: the console runs the Changes page's checks before it writes; a refused answer leaves the inbox empty."""
-    run = Asking(picking, monkeypatch, options=(Option(id="en", label="English"),))
-    monkeypatch.setattr(cli.Store, "open", lambda *_a, **_k: picking.store)
-
-    def said(option: str) -> int:
-        return cli.main(["--repo", str(picking.repo), "answer", picking.slug, "--question", run.qid,
-                         "--option", option, "--kind", "event"])  # fmt: skip
-
-    assert (said("de"), inbox(picking)) == (1, 0)
+    assert (said("--kind", "event", "--option", "de"), inbox(picking)) == (1, 0)
     assert "option de is not one of ['en']" in capsys.readouterr().err
-    assert (said("en"), inbox(picking)) == (0, 1)
+    assert (said(*clarified, "--confirmed", "--option", "en"), inbox(picking)) == (0, 1)
     shown = capsys.readouterr().out
     assert (ASKED in shown, f"{run.qid} option en: English" in shown) == (True, True)
+    assert (said("--kind", "event"), inbox(picking)) == (1, 1)
+    assert f"not answered: question {run.qid} {WAITING}" in capsys.readouterr().err
+
+    a = run.asked(run.fold()[0]).answer
+    assert (a.kind, a.statement, a.text, a.option) == ("clarification", SAID, WORDS, "en")
 
 
 WAITING = "already has an answer waiting to be applied; this one was not queued"
 
 
-def test_a_second_answer_before_the_fold_is_refused_and_the_first_one_holds(picking, monkeypatch):
+def test_the_answer_queue_rechecks_authority_before_and_after_fold(picking, monkeypatch):
     """#791: two answers to one question sent before the runner folds; the second is refused, never dropped silently."""
     run = Asking(picking, monkeypatch, options=(Option(id="en", label="English"), Option(id="de", label="German")))
+    before = picking.change()
     assert run.answer(option="en", kind="event").status_code == 200
 
     second = run.answer(option="de", kind="event")
@@ -625,48 +618,11 @@ def test_a_second_answer_before_the_fold_is_refused_and_the_first_one_holds(pick
     assert (run.asked(c).answer.option, inbox(picking)) == ("en", 0)
     said = [e for e in picking.store.events(picking.slug) if e.get("event") in {"answer", "answer-not-applied"}]
     assert [(e["event"], e["question"]) for e in said] == [("answer", run.qid)]
+    item = answers.answer_item(picking.store, before, answers.AnswerBody(question=run.qid, kind="event", text="again"))
+    assert isinstance(item, AnswerItem)
+    assert (picking.store.put_answer(picking.slug, item), inbox(picking)) == (f"question {run.qid} is not open", 0)
     late = run.answer(option="de", kind="event")
     assert (late.status_code, late.json()["detail"]) == (409, f"question {run.qid} is not open")
-
-
-def test_the_cli_refuses_a_second_answer_while_one_waits_and_queues_nothing(picking, monkeypatch, capsys):
-    run = Asking(picking, monkeypatch)
-    monkeypatch.setattr(cli.Store, "open", lambda *_a, **_k: picking.store)
-    assert run.answer(kind="event", text=WORDS).status_code == 200
-
-    code = cli.main(["--repo", str(picking.repo), "answer", picking.slug, "--question", run.qid, "--text", "again",
-                     "--kind", "event"])  # fmt: skip
-
-    assert (code, inbox(picking)) == (1, 1)
-    assert f"not answered: question {run.qid} {WAITING}" in capsys.readouterr().err
-
-
-def test_the_chat_tool_reports_a_second_answer_as_not_answered(picking, monkeypatch):
-    run = Asking(picking, monkeypatch)
-    chat = chat_client.Chat.__new__(chat_client.Chat)
-    chat.repo, chat.home = picking.repo, picking.store.root
-    monkeypatch.setattr(chat_client.Chat, "record", lambda _self: RECORD)
-    monkeypatch.setattr(chat_client, "_LOCAL", Loopback(picking.http))
-    monkeypatch.setitem(mcp_server._STATE, "chat", chat)  # noqa: SLF001 - the server's one chat
-    assert run.answer(kind="event", text=WORDS).status_code == 200
-
-    args = {"question": f"c1.{run.qid}", "kind": "event", "text": "again"}
-    out = asyncio.run(mcp_server.mcp.call_tool("answer_question", args)).structured_content
-
-    assert (out["answered"], out.get("error"), inbox(picking)) == (False, f"question {run.qid} {WAITING}", 1)
-
-
-def test_an_answer_checked_against_an_older_read_is_refused_once_another_was_applied(picking, monkeypatch):
-    """The queue checks the stored question again, not the copy its caller read before another answer was applied."""
-    run = Asking(picking, monkeypatch)
-    before = picking.change()
-    assert run.answer(kind="event", text=WORDS).status_code == 200
-    run.fold()
-
-    item = answers.answer_item(picking.store, before, answers.AnswerBody(question=run.qid, kind="event", text="again"))
-
-    assert isinstance(item, AnswerItem)  # the older read still shows the question open
-    assert (picking.store.put_answer(picking.slug, item), inbox(picking)) == (f"question {run.qid} is not open", 0)
 
 
 @pytest.mark.parametrize(
@@ -757,15 +713,10 @@ def test_the_cli_refuses_an_answer_the_change_no_longer_waits_on(picking, monkey
 
 def test_the_chat_tool_reports_an_answer_the_change_no_longer_waits_on_as_not_answered(picking, monkeypatch):
     run = Asking(picking, monkeypatch)
-    chat = chat_client.Chat.__new__(chat_client.Chat)
-    chat.repo, chat.home = picking.repo, picking.store.root
-    monkeypatch.setattr(chat_client.Chat, "record", lambda _self: RECORD)
-    monkeypatch.setattr(chat_client, "_LOCAL", Loopback(picking.http))
-    monkeypatch.setitem(mcp_server._STATE, "chat", chat)  # noqa: SLF001 - the server's one chat
+    said = chat_answer(run, monkeypatch)
     why = moved_on(run, "change")
 
-    args = {"question": f"c1.{run.qid}", "kind": "event", "text": WORDS}
-    out = asyncio.run(mcp_server.mcp.call_tool("answer_question", args)).structured_content
+    out = said(kind="event", text=WORDS).structured_content
 
     assert (out["answered"], out.get("error"), inbox(picking)) == (False, why, 0)
 
