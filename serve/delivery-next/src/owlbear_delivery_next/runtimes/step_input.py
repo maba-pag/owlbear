@@ -496,5 +496,5 @@ def session(
         return Parts(message, write=True, checks=(), submit=tools.RECIPE, task=task)
     checks = wt.build_checks(project_profile.vouched(profile), change, task, path)
     message = build(change, task.model_copy(update={"checks": checks}), path, pairs)
-    submit = tools.MERGED if task.origin == "integration" else tools.SUBMIT
+    submit = tools.MERGED if task.origin == "integration" or s.kind == StepKind.INTEGRATE else tools.SUBMIT
     return Parts(message, write=True, checks=tuple(checks), submit=submit, task=task)
