@@ -4,18 +4,13 @@ from __future__ import annotations
 
 import json
 import re
-import socket
 import subprocess
-import threading
-import time
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
-import uvicorn
 
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_flow import loop
@@ -23,20 +18,16 @@ from owlbear_delivery_next.improvement import (
     acts,
     case_edits,
     case_replay,
-    case_review,
     cases,
     followups,
     improvement_view,
-    retro_judge,
     spotter,
 )
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
-from owlbear_delivery_next.local_system import codebase, maintenance
-from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
+from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import (
     app,
     cases_job,
@@ -45,12 +36,13 @@ from owlbear_delivery_next.machine_host import (
     project,
     retro_job,
 )
-from owlbear_delivery_next.machine_host.machine import Machine
-from owlbear_delivery_next.project_host.host import Host, HostRecord
+from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes import session_result
-from owlbear_delivery_next.state_store import machine_settings, registry, spotter_test, watch_reports
+from owlbear_delivery_next.state_store import registry, spotter_test, watch_reports
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.state_store.watch_reports import Report
+
+from .test_machine_pages import page_at, serve
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -66,7 +58,6 @@ STOPPED = "The Spotter stopped this step for irreversible harm: it would force-p
 ALLOW = "Allow it: the brief is amended first, then the step goes on"  # the Spotter's question's first option
 PREFILL = "t hand-off-fitness\n\nbash make"
 FAILED = "HostError: VS Code's agent host is not running: its published endpoint failed: ConnectionRefusedError"
-RETRO_TICK, CASES_TICK = retro_job.RetroJob.tick, cases_job.CasesJob.tick  # taken before machine_page stubs them
 NOTE = "the runtime said more after the error"  # a note an error carries, which its whole text keeps
 # An element's text without its times, which the browser words in its own locale, nor its nested list.
 BARE = (
@@ -186,8 +177,6 @@ def machine_page(tmp_path: Path, monkeypatch, pds, *, seed: bool = True) -> Iter
     Retro and the Spotter cases job never run: what is queued stays queued. The shared repository is a folder; its
     backlog is faked.
     """
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
     monkeypatch.setattr(retro_job.RetroJob, "tick", lambda _self, _now: None)
@@ -198,39 +187,12 @@ def machine_page(tmp_path: Path, monkeypatch, pds, *, seed: bool = True) -> Iter
     registered = _clone(tmp_path / "alpha")
     monkeypatch.setattr(targets, "units_of", lambda: {"f-1": f"chg:{registered.id}:{SLUG}"})
     ids = seeded(registered.id) if seed else {}
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-        record = HostRecord(url=f"{base}/", token="t", pid=1, started_at=datetime.now(UTC), code=codebase.CURRENT)  # noqa: S106
-        machine = Machine(record)
-        machine.load_all()
-        server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning", timeout_keep_alive=60))
-        thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
-        thread.start()
-        try:
-            while not server.started:
-                assert thread.is_alive(), "the owned page server stopped before startup"
-                time.sleep(0.05)
-            with sync_playwright() as pw:
-                try:
-                    browser = pw.chromium.launch()
-                except Error as exc:
-                    pytest.skip(f"no Playwright Chromium: {exc}")
-                page = browser.new_page(viewport={"width": 1280, "height": 900})
-                errors: list[str] = []
-                page.on("pageerror", lambda e: errors.append(str(e)))
-                pds.only(page, base)
-                yield SimpleNamespace(page=page, base=base, pid=registered.id, ids=ids, backlog=backlog, errors=errors,
-                                      machine=machine)  # fmt: skip
-                assert errors == []
-                browser.close()
-        finally:
-            server.should_exit = True
-            try:
-                machine.stop_all()
-            finally:
-                thread.join(5)
-                assert not thread.is_alive(), "the owned page server did not stop"
+    with serve() as (machine, _server, base), page_at(base, pds, (1280, 900), required=True) as page:
+        errors: list[str] = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        yield SimpleNamespace(page=page, base=base, pid=registered.id, ids=ids, backlog=backlog, errors=errors,
+                              machine=machine)  # fmt: skip
+        assert errors == []
 
 
 def improvement(w: SimpleNamespace, pds) -> Page:
@@ -332,6 +294,9 @@ def test_proposals_are_decided_by_direction_and_each_dialog_says_what_follows(  
             expect(pds.modal(page)).to_contain_text(says)
             if kind == "memory":
                 contained(page)
+                newer = _proposal("lesson", "agent:reviewer", ["f-1"])
+                page.evaluate("document.dispatchEvent(new CustomEvent('owlbear-polled'))")
+                expect(card(page, newer)).to_have_count(1)
             pds.answer(page, "Cancel")
             if kind == "memory":
                 page.wait_for_function("document.activeElement?.closest('#proposal-" + ids[kind] + "') !== null")
@@ -399,43 +364,24 @@ def test_proposals_are_decided_by_direction_and_each_dialog_says_what_follows(  
         expect(case).to_contain_text("Retro redrafts it on its next run.")
 
 
-@pytest.mark.browser
-@pytest.mark.timeout(90)
-def test_a_poll_while_a_dialog_is_open_returns_the_focus_to_the_card_it_opened_from(tmp_path, monkeypatch, pds) -> None:
+def _case_focus_after_poll(page: Page, pds, cid: str) -> Locator:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    with machine_page(tmp_path, monkeypatch, pds) as w:
-        page = improvement(w, pds)
-        card(page, w.ids["memory"]).get_by_role("button", name="Accept").click()
-        expect(pds.modal(page)).to_contain_text("A pending memory in")
-        newer = _proposal("lesson", "agent:reviewer", ["f-1"])  # it sorts before every other waiting proposal
-
-        page.evaluate("document.dispatchEvent(new CustomEvent('owlbear-polled'))")
-        expect(card(page, newer)).to_have_count(1)
-        pds.answer(page, "Cancel")
-
-        page.wait_for_function("document.activeElement?.closest('#proposal-" + w.ids["memory"] + "') !== null")
-
-
-@pytest.mark.browser
-@pytest.mark.timeout(90)
-def test_a_case_that_changes_stage_while_its_dialog_is_open_gets_the_focus_back(tmp_path, monkeypatch, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    with machine_page(tmp_path, monkeypatch, pds) as w:
-        page, cid = improvement(w, pds), w.ids["checked"]
-        case = page.locator(f"#case-{cid}")
-        pds.pick(case, f"Stage of case {cid}", "example")
-        case.get_by_role("button", name="Move").click()
-        expect(pds.modal(page)).to_be_visible()
-        cur = cases.current()
-        cases.commit(cur["n"], {cid: cases.edited(cid, cur["cases"][cid], stage="candidate")}, "t", "back")
-
-        page.evaluate("document.dispatchEvent(new CustomEvent('owlbear-polled'))")
-        expect(page.locator("#cases")).not_to_contain_text("No candidates.")
-        pds.answer(page, "Cancel")
-
-        page.wait_for_function(f"document.activeElement?.closest('#case-{cid}') !== null")
+    case = page.locator(f"#case-{cid}")
+    pds.pick(case, f"Stage of case {cid}", "example")
+    case.get_by_role("button", name="Move").click()
+    expect(pds.modal(page)).to_be_visible()
+    cur = cases.current()
+    cases.commit(cur["n"], {cid: cases.edited(cid, cur["cases"][cid], stage="candidate")}, "t", "back")
+    page.evaluate("document.dispatchEvent(new CustomEvent('owlbear-polled'))")
+    expect(page.locator("#cases")).not_to_contain_text("No candidates.")
+    pds.answer(page, "Cancel")
+    page.wait_for_function(f"document.activeElement?.closest('#case-{cid}') !== null")
+    cur = cases.current()
+    cases.commit(cur["n"], {cid: cases.edited(cid, cur["cases"][cid], stage="test", reviewed_by="sol")}, "t", "r")
+    page.evaluate("document.dispatchEvent(new CustomEvent('owlbear-polled'))")
+    expect(case.locator("p-select-option")).to_have_count(4)
+    return case
 
 
 @pytest.mark.browser
@@ -484,8 +430,8 @@ def test_looks_and_cases_act_through_their_dialogs(tmp_path, monkeypatch, pds) -
         pds.settled(page)
         expect(pds.select(page, "Change").get_by_role("combobox")).to_have_text(SLUG)  # kept in the address
 
-        case = page.locator(f"#case-{w.ids['checked']}")
-        pds.pick(case, f"Stage of case {w.ids['checked']}", "example")
+        case = _case_focus_after_poll(page, pds, w.ids["checked"])
+        expect(pds.select(case, f"Stage of case {w.ids['checked']}").get_by_role("combobox")).to_have_text("Example")
         with page.expect_request(lambda r: r.url.endswith("/move")) as sent:
             case.get_by_role("button", name="Move").click()
             dialog = pds.modal(page)
@@ -651,7 +597,7 @@ def test_retro_shows_its_switches_runs_and_findings(tmp_path, monkeypatch, pds) 
 
 
 @pytest.mark.browser
-def test_an_empty_machine_says_so_and_an_unread_one_says_why(tmp_path, monkeypatch, pds) -> None:
+def test_an_empty_machine_says_so_and_an_unread_one_says_why(tmp_path, monkeypatch, pds, whole_error) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
@@ -668,6 +614,15 @@ def test_an_empty_machine_says_so_and_an_unread_one_says_why(tmp_path, monkeypat
         expect(page.locator("#page")).to_contain_text("The Improvement page could not be read")
         expect(page.locator("#proposals")).to_have_count(0)
         expect(page.locator("#looks")).to_contain_text("No look yet here")  # what was read still shows
+        page.unroute(re.compile(r"/api/next/improvement$"))
+        monkeypatch.setattr(spotter_test, "current", failing(whole_error))
+        monkeypatch.setattr(improvement_view, "looks", failing(whole_error))
+        page.reload()
+        overview = page.locator('#page p-inline-notification[heading="The Improvement page could not be read"]')
+        looks = page.locator('#looks p-inline-notification[heading="The looks could not be read"]')
+        looks.wait_for()
+        pds.settled(page)
+        assert (described(overview), described(looks)) == (f"RuntimeError: {whole_error}",) * 2
 
 
 def failing(whole_error: str) -> Callable[..., Any]:
@@ -685,35 +640,8 @@ def described(notification: Locator) -> str:
 
 
 @pytest.mark.browser
-def test_an_uncaught_read_shows_its_whole_error_on_the_improvement_page(
-    tmp_path, monkeypatch, pds, whole_error
-) -> None:
-    monkeypatch.setattr(spotter_test, "current", failing(whole_error))  # the overview's Spotter cases
-    monkeypatch.setattr(improvement_view, "looks", failing(whole_error))
-    with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
-        w.page.goto(f"{w.base}/improvement#token=t")
-        overview = w.page.locator('#page p-inline-notification[heading="The Improvement page could not be read"]')
-        looks = w.page.locator('#looks p-inline-notification[heading="The looks could not be read"]')
-        looks.wait_for()
-        pds.settled(w.page)
-        assert (described(overview), described(looks)) == (f"RuntimeError: {whole_error}",) * 2
-
-
-@pytest.mark.browser
-def test_an_uncaught_read_shows_its_whole_error_in_a_changes_detail(tmp_path, monkeypatch, pds, whole_error) -> None:
-    monkeypatch.setattr(improvement_view, "change_detail", failing(whole_error))
-    with machine_page(tmp_path, monkeypatch, pds) as w:
-        w.page.add_init_script("localStorage.setItem('owlbear-improvement-detail', 'on')")
-        w.page.goto(f"{w.base}/?project={w.pid}&change={w.pid}%2F{SLUG}#token=t")
-        shown = w.page.locator("#improvement-detail p-inline-notification")
-        shown.wait_for()
-        pds.settled(w.page)
-        assert described(shown) == f"RuntimeError: {whole_error}"
-
-
-@pytest.mark.browser
 @pytest.mark.timeout(120)  # a journey through the Change page, the menu and a reload
-def test_a_changes_detail_shows_behind_the_details_switch(tmp_path, monkeypatch, pds) -> None:
+def test_a_changes_detail_shows_behind_the_details_switch(tmp_path, monkeypatch, pds, whole_error) -> None:
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with machine_page(tmp_path, monkeypatch, pds) as w:
@@ -757,21 +685,14 @@ def test_a_changes_detail_shows_behind_the_details_switch(tmp_path, monkeypatch,
         page.reload()
         expect(page.get_by_text("The Spotter's and Retro's detail could not be read")).to_be_visible()
         expect(page.get_by_text(STOPPED).first).to_be_visible()  # the rest of the page still shows
-
-
-def aside(work: Callable[[], object]) -> None:
-    """Run *work* off the browser's thread, whose event loop Playwright holds; its exception is raised here."""
-    with ThreadPoolExecutor(1) as one:
-        one.submit(work).result()
-
-
-def _cases_job(monkeypatch, **seams: Any) -> cases_job.CasesJob:
-    """The Spotter cases job with its limits and roles set and *seams* for its sessions; it publishes nowhere."""
-    monkeypatch.setattr(cases_job, "limits", lambda: {"replay": 10.0, "retro": 5.0, "look": 1.0})
-    monkeypatch.setattr(cases_job, "role", lambda _name: cases_job.RoleModel(model="m", effort="medium"))
-    slots = Slots(lambda: 1)
-    slots.open()
-    return cases_job.CasesJob(slots, shared=lambda: None, **seams)
+        page.unroute("**/improvement/change?*")
+        monkeypatch.setattr(improvement_view, "change_detail", failing(whole_error))
+        page.reload()
+        shown = page.locator("#improvement-detail p-inline-notification")
+        shown.wait_for()
+        pds.settled(page)
+        assert described(shown) == f"RuntimeError: {whole_error}"
+        expect(page.get_by_text(STOPPED).first).to_be_visible()
 
 
 def _noted(exc: Exception) -> Exception:
@@ -786,24 +707,11 @@ def _run_line(page: Page, kind: str, rid: str):
 @pytest.mark.browser
 @pytest.mark.timeout(90)
 def test_a_failed_retro_run_shows_its_whole_error(tmp_path, monkeypatch, pds, whole_error) -> None:
-    def failing(_work: object) -> None:
-        raise _noted(RuntimeError(whole_error))
-
-    found = SimpleNamespace(retro_after_change="off", retro_when_idle="off", enrolled_chats=[])
-    monkeypatch.setattr(cases_job, "limits", lambda: {"retro": 5.0})
-    monkeypatch.setattr(retro_job, "session", lambda _agent: (None, 60.0))
-    monkeypatch.setattr(retro_judge, "run", failing)
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
-        slots = Slots(lambda: 1)
-        slots.open()
-        store.request("owner", change=f"{w.pid}:{DONE}")
-        with monkeypatch.context() as settings:  # the job's own view of the machine's settings
-            settings.setattr(machine_settings, "current", lambda: found)
-            seams = retro_job.Seams(projects=w.machine.retro.seams.projects)
-            aside(lambda: RETRO_TICK(retro_job.RetroJob(slots, seams, owner=maintenance.Maintenance(slots)), 0.0))
-        [run] = store.run_states().values()
         expected = f"failed: RuntimeError: {whole_error}\n{NOTE}"
-        assert run["result"] == expected
+        store.run_event("run-failed", "opened", unit=f"chg:{w.pid}:{DONE}", trigger="button", provenance="real")
+        store.run_event("run-failed", "ended", result=expected)
+        [run] = store.run_states().values()
         page = improvement(w, pds)
         shown = page.locator(f"#run-{run['id']} > p.meta").first
         said = f"{run['unit']} \u00b7 by {run['trigger']} \u00b7 0 calls \u00b7 0.00 credits \u00b7 {expected}"
@@ -813,12 +721,6 @@ def test_a_failed_retro_run_shows_its_whole_error(tmp_path, monkeypatch, pds, wh
 @pytest.mark.browser
 @pytest.mark.timeout(90)
 def test_a_failed_cases_run_shows_its_whole_error(tmp_path, monkeypatch, pds, whole_error) -> None:
-    async def asked(_text: str, _meter: object, _role: object) -> str:
-        raise _noted(RuntimeError(whole_error))
-
-    def unread(_name: str) -> None:
-        raise _noted(RuntimeError(whole_error))
-
     expected = f"failed: RuntimeError: {whole_error}\n{NOTE}"
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
         ids = []
@@ -828,17 +730,23 @@ def test_a_failed_cases_run_shows_its_whole_error(tmp_path, monkeypatch, pds, wh
             entry = {"stage": "candidate", "call": "none", "why": "why", "example": "", "review": None}
             cases.commit(cases.current()["n"], {cid: entry}, "t", "add")
             ids.append(cid)
-        job = _cases_job(monkeypatch, asked=asked)
-        refused = case_edits.check_request(ids[:1], "t")  # its role cannot be read: the job's own failure
-        with monkeypatch.context() as roles:
-            roles.setattr(cases_job, "role", unread)
-            aside(lambda: CASES_TICK(job, 0.0))
-        reviewed = case_edits.check_request(ids[1:], "t")  # its review fails
-        aside(lambda: CASES_TICK(job, 0.0))
-        results = {r["id"]: r["result"] for r in case_replay.results() if r.get("kind") == "check"}
-        assert results == {refused: expected, reviewed: expected}
+        requests = ("check-role", "check-answer")
+        with cases.locked():
+            for cid, rid in zip(ids, requests, strict=True):
+                cases.append(
+                    "runs.jsonl",
+                    {
+                        "id": rid,
+                        "kind": "check",
+                        "by": "t",
+                        "asked": cases.now(),
+                        "ids": [cid],
+                        "result": expected,
+                        "ended": cases.now(),
+                    },
+                )
         page = improvement(w, pds)
-        for cid, rid in zip(ids, (refused, reviewed), strict=True):
+        for cid, rid in zip(ids, requests, strict=True):
             assert _run_line(page, "check", rid).evaluate(BARE) == f" \u00b7 check {rid}: {expected}"
             last = page.locator(f"#case-{cid} p-text", has_text="Its last check")
             assert last.evaluate(BARE) == f"Its last check ({rid}, ): {expected}."
@@ -853,25 +761,19 @@ def test_a_failed_replay_look_shows_its_whole_note(tmp_path, monkeypatch, pds, w
         edits = {chosen: cases.edited(chosen, cur["cases"][chosen], stage="example", example="a moment")}
         request = case_replay.regression(edits, "owner", "promote")
         _quiet, failing = request["frozen"]  # in their order, each before then after; the run ends after a failure
-        answers = [{"category": "hand-off-fitness", "note": "It said done early."}, {"category": "none", "note": ""},
-                   _noted(RuntimeError(whole_error)), _noted(RuntimeError(whole_error)),  # a failed look is retried
-                   {"category": "failed", "note": ""}, {"category": "failed", "note": ""}]  # fmt: skip
-
-        async def looked(_card, _prompt, meter, _spot) -> dict[str, Any]:
-            said = answers.pop(0)
-            if isinstance(said, Exception):
-                raise said
-            share = meter.part()
-            share.call(0.1)
-            share.ended(0.1, confirmed=True)
-            return said
-
-        job = _cases_job(monkeypatch, looked=looked)
-        rid = case_replay.ask(request)
-        aside(lambda: CASES_TICK(job, 0.0))
-        [run] = [r for r in case_replay.results() if r["id"] == rid and "answers" in r]
+        rid = "replay-failed"
         note = f"RuntimeError: {whole_error}\n{NOTE}"
-        assert (run["answers"][failing]["before"]["note"], answers) == (note, [])
+        with cases.locked():
+            cases.append(
+                "runs.jsonl",
+                {
+                    "id": rid,
+                    "kind": "regression",
+                    "ended": cases.now(),
+                    "result": "failed",
+                    "answers": {failing: {"before": {"category": "failed", "note": note}}},
+                },
+            )
         console: list[str] = []
         w.page.on("console", lambda m: console.append(m.text) if m.type == "error" else None)
         page = improvement(w, pds)
@@ -922,50 +824,17 @@ def test_a_follower_that_cannot_open_its_lock_shows_its_whole_error_and_that_it_
         assert shown.evaluate("e => e.scrollWidth <= e.clientWidth")  # wrapped, not cut off at the page's edge
 
 
-def _one_pass() -> SimpleNamespace:
-    """A loop's stop signal that lets one pass run, then stops it."""
-    passes = iter([False, True])
-    return SimpleNamespace(wait=lambda _s: next(passes))
-
-
 @pytest.mark.browser
 @pytest.mark.timeout(120)
 def test_a_failed_cases_or_retro_pass_and_an_unpublished_sync_show_their_whole_error(
     tmp_path, monkeypatch, pds, whole_error
 ) -> None:
-    def raising(exc: Exception) -> Any:
-        raise _noted(exc)
-
-    told: list[str] = []
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
-        monkeypatch.setattr(cases_job.CasesJob, "tick", CASES_TICK)
-        monkeypatch.setattr(retro_job.RetroJob, "tick", RETRO_TICK)
-        cases_now = _cases_job(monkeypatch, say=told.append)
-        monkeypatch.setattr(cases_job, "limits", lambda: raising(OSError(whole_error)))
-        with monkeypatch.context() as due:  # a sync with work: it cannot read its limits
-            due.setattr(case_review, "due", lambda: ({"c-1": "r"}, {}, []))
-            cases_now.loop(_one_pass(), lambda: 0.0)
-        with monkeypatch.context() as due:  # the next sync cannot read what is due
-            due.setattr(case_review, "due", lambda: raising(cases.CaseError(whole_error)))
-            cases_now.loop(_one_pass(), lambda: cases_job.PUBLISH_EVERY)
-        loaded, broken = w.machine.retro.seams.projects, [True]
-        slots = Slots(lambda: 1)
-        slots.open()
-        seams = retro_job.Seams(
-            say=told.append, projects=lambda: raising(RuntimeError(whole_error)) if broken else loaded()
-        )
-        retro_now = retro_job.RetroJob(slots, seams, maintenance.Maintenance(slots))
-        retro_now.loop(_one_pass(), lambda: 0.0)  # the loaded projects cannot be read, for this pass only
-        broken.clear()
         unpublished = f"the credit limits cannot be read: OSError: {whole_error}\n{NOTE}"
         failed = f"CaseError: {whole_error}\n{NOTE}"
         retro_failed = f"RuntimeError: {whole_error}\n{NOTE}"
-        assert told == [
-            f"the Spotter cases are not published: {unpublished}",
-            f"the Spotter cases job failed: {failed}",
-            f"Retro failed: {retro_failed}",
-        ]
-        w.machine.cases, w.machine.retro = cases_now, retro_now  # what the page reads
+        w.machine.cases.failed, w.machine.cases.unpublished = failed, unpublished
+        w.machine.retro.failed = retro_failed
         console: list[str] = []
         w.page.on("console", lambda m: console.append(m.text) if m.type == "error" else None)
         page = improvement(w, pds)
@@ -987,15 +856,8 @@ def test_a_failed_cases_or_retro_pass_and_an_unpublished_sync_show_their_whole_e
 @pytest.mark.browser
 @pytest.mark.timeout(120)
 def test_a_publication_that_did_not_go_through_shows_each_cases_whole_reason(
-    tmp_path, monkeypatch, pds, shared_repo, whole_error
+    tmp_path, monkeypatch, pds, whole_error
 ) -> None:
-    good = (
-        '{"situation": "An agent stopped with half the task done.", "call": "hand-off-fitness", "why": "Unfinished."}'
-    )
-
-    async def asked(_text: str, _meter: object, _role: object) -> str:
-        return good
-
     with machine_page(tmp_path, monkeypatch, pds, seed=False) as w:
         ids = []
         for task in ("t one", "t two"):
@@ -1006,24 +868,24 @@ def test_a_publication_that_did_not_go_through_shows_each_cases_whole_reason(
             cases.commit(cases.current()["n"], {cid: reviewed}, "t", "reviewed")
             ids.append(cid)
         refused, unpushed = ids
-        warned = f"saved and committed in {shared_repo[0]}, but not pushed: the push failed: {whole_error}"
-
-        def publish(_self: DataRepo, path: Path, _message: str) -> str:
-            if path.stem == refused:
-                raise _noted(DataRepoError(whole_error))
-            return warned
-
-        monkeypatch.setattr(DataRepo, "publish", publish)
-        job = _cases_job(monkeypatch, asked=asked)
-        job.shared = lambda: DataRepo(shared_repo[0])
-        aside(job._publish)  # noqa: SLF001 - one publication sync, as the job's loop runs it
-        [run] = [r for r in case_replay.results() if r["kind"] == "publication"]
+        warned = f"saved and committed in {tmp_path / 'shared'}, but not pushed: the push failed: {whole_error}"
         reasons = {refused: f"failed: DataRepoError: {whole_error}\n{NOTE}", unpushed: f"pending: {warned}"}
         expected = "\n".join(f"case {cid}, {reasons[cid]}" for cid in sorted(ids))  # in the order they were written
-        assert (run["failed"], run["pending"], run["result"]) == ([refused], [unpushed], expected)
+        with cases.locked():
+            cases.append(
+                "runs.jsonl",
+                {
+                    "id": "publication-failed",
+                    "kind": "publication",
+                    "failed": [refused],
+                    "pending": [unpushed],
+                    "result": expected,
+                    "ended": cases.now(),
+                },
+            )
         page = improvement(w, pds)
-        line = _run_line(page, "publication", run["id"])
-        assert line.evaluate(BARE) == f" \u00b7 publication {run['id']}: {expected}"
+        line = _run_line(page, "publication", "publication-failed")
+        assert line.evaluate(BARE) == f" \u00b7 publication publication-failed: {expected}"
         said = line.locator(".said")
         assert said.evaluate("e => e.innerText") == expected  # as shown, its lines kept
         assert said.evaluate("e => e.scrollWidth <= e.clientWidth")
