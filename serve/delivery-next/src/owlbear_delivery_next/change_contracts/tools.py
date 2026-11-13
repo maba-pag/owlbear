@@ -90,6 +90,26 @@ class BuildResult(Args):
     )
 
 
+class MergeReport(Args):
+    """Whether combining this Change with the merged-in work left a behaviour only one side can have."""
+
+    this: str = Field(max_length=300, examples=["On a day without values, the Metrics page shows an empty chart."],
+        description="Empty when no difference is left for the owner: both sides' behaviour is kept whole, or his "
+        "answers in this task settled it. Else one situation where both cannot hold: what the product does there "
+        "with this Change's side, a full sentence in plain words, no file or code names. Keep this side for now; he "
+        "decides, never you. Ask about each further situation with ask_question before you submit")  # fmt: skip
+    other: str = Field(max_length=300, examples=["On a day without values, the Metrics page hides the chart."],
+        description="Empty when this is empty. Else what the product does in that same situation with the "
+        "merged-in side, a full sentence in plain words")  # fmt: skip
+
+
+class MergedResult(BuildResult):
+    """``submit_result`` for a task that merges another branch in."""
+
+    merge: MergeReport = Field(description="What combining the two sides did to behaviour a person can notice",
+                               examples=[{"this": "", "other": ""}])  # fmt: skip
+
+
 class AskOption(Args):
     """One answer, its exact promise and the existing engine action that carries it."""
 
@@ -336,6 +356,8 @@ SUBMIT = Spec(
     BuildResult,
     "result",
 )
+MERGED = Spec("submit_result", f"{SUBMIT.description} This task merges another branch in: commit the merge only "
+              "with this result, and say in `merge` what it did to behaviour.", MergedResult, "result")  # fmt: skip
 ASK = Spec(
     "ask_question",
     "Propose one owner question with exact executable actions: a product choice (what he gets), or one proposal "
