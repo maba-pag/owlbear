@@ -422,6 +422,53 @@ def _exercise_saved_preparation(store, c, repo, proposal):
         worktree.git(repo, "worktree", "remove", "--force", str(before))
 
 
+def _reject_ignored_preparation(store, asked, proposal, repo, monkeypatch):
+    dirty = asked.model_copy(deep=True)
+    dirty.questions = []
+    dirty.repairs.current.phase = "running"
+    assert (
+        store.save(
+            store.config_path,
+            Layer,
+            lambda cur: cur.model_copy(update={"preparations": None}),
+            "reset the isolated fixture",
+            owner=True,
+        )
+        == ""
+    )
+
+    def ignored_model_result(_store, cfg):
+        helper = cfg.worktree / ".owlbear/scratch/verify.py"
+        helper.parent.mkdir(parents=True)
+        helper.write_text("print('only the model copy has this helper')\n")
+        contaminated = proposal.model_copy(
+            update={"verify": shlex.join([sys.executable, ".owlbear/scratch/verify.py"])}
+        )
+        return Run(
+            cfg.session_id,
+            "result",
+            repair_tools.PreparationResult(
+                cause="The model left an ignored helper outside its source diff.",
+                tried=[repair_tools.Try(fix="Use an ignored verification helper", outcome="Exists in the model copy")],
+                fix="preparation",
+                preparation=contaminated,
+            ),
+            model_check="verified",
+            usage={"credits": 0.0, "models": {}},
+            termination=Termination(confirmed=True),
+        )
+
+    monkeypatch.setattr(sessions, "run", ignored_model_result)
+    step_repair.run(store, Lock(dirty.slug), dirty, repo)
+    rejected = store.read(dirty.slug)
+    assert loop.open_question(rejected) is None
+    assert rejected.repairs.current is None
+    assert rejected.repairs.done[-1].witness.exit != 0
+    assert "verify.py" in rejected.stop.reason
+    assert "No such file" in rejected.stop.reason
+    assert store.read_config().preparations is None
+
+
 def test_missing_visual_preparation_requires_owner_approval_before_project_settings_write(
     repo, tmp_path, shared_repo, monkeypatch
 ) -> None:
@@ -496,50 +543,7 @@ def test_missing_visual_preparation_requires_owner_approval_before_project_setti
     assert (store.config_path.read_bytes(), worktree.git(store.shared.root, "rev-parse", "HEAD")) == (current, head)
     assert store.read_config().preparations == [proposal.option, other]
     assert len(calls) == 1
-    dirty = asked.model_copy(deep=True)
-    dirty.questions = []
-    dirty.repairs.current.phase = "running"
-    assert (
-        store.save(
-            store.config_path,
-            Layer,
-            lambda cur: cur.model_copy(update={"preparations": None}),
-            "reset the isolated fixture",
-            owner=True,
-        )
-        == ""
-    )
-
-    def ignored_model_result(_store, cfg):
-        helper = cfg.worktree / ".owlbear/scratch/verify.py"
-        helper.parent.mkdir(parents=True)
-        helper.write_text("print('only the model copy has this helper')\n")
-        contaminated = proposal.model_copy(
-            update={"verify": shlex.join([sys.executable, ".owlbear/scratch/verify.py"])}
-        )
-        return Run(
-            cfg.session_id,
-            "result",
-            repair_tools.PreparationResult(
-                cause="The model left an ignored helper outside its source diff.",
-                tried=[repair_tools.Try(fix="Use an ignored verification helper", outcome="Exists in the model copy")],
-                fix="preparation",
-                preparation=contaminated,
-            ),
-            model_check="verified",
-            usage={"credits": 0.0, "models": {}},
-            termination=Termination(confirmed=True),
-        )
-
-    monkeypatch.setattr(sessions, "run", ignored_model_result)
-    step_repair.run(store, Lock(dirty.slug), dirty, repo)
-    rejected = store.read(dirty.slug)
-    assert loop.open_question(rejected) is None
-    assert rejected.repairs.current is None
-    assert rejected.repairs.done[-1].witness.exit != 0
-    assert "verify.py" in rejected.stop.reason
-    assert "No such file" in rejected.stop.reason
-    assert store.read_config().preparations is None
+    _reject_ignored_preparation(store, asked, proposal, repo, monkeypatch)
     assert (store.shared.global_path.read_bytes() if store.shared.global_path.exists() else None) == global_before
     assert not store.machine_path.exists()
     assert sentinel.read_bytes() == b'{"private": "owner ledger must stay unchanged"}\n'
