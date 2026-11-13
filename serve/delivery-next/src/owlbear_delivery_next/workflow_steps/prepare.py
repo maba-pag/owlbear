@@ -243,6 +243,8 @@ def isolated(rec: Prepared, root: Path | None = None) -> dict[str, str]:
         at = (root / home).resolve()
         if not at.is_relative_to(root.resolve()):
             raise PrepareError(check.failed(f"preparation HOME {root / home} resolves outside {root} to {at}"))
+        if at != root.resolve() / home:
+            raise PrepareError(check.failed(f"preparation HOME {root / home} redirects to source directory {at}"))
         env["HOME"] = str(at)
     return env
 

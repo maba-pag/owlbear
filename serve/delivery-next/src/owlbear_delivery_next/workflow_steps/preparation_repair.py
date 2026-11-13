@@ -113,8 +113,9 @@ def prove(
     repair_copy.drop(source, root)
     rec = None
     try:
-        if not (clean / p.option.isolation["HOME"]).resolve().is_relative_to(clean.resolve()):
-            msg = "the preparation HOME resolves outside its execution worktree"
+        home = clean.resolve() / p.option.isolation["HOME"]
+        if home.resolve() != home:
+            msg = "the preparation HOME redirects from its declared worktree directory"
             raise repair_copy.RepairError(msg)
         rec = prepared.Prepared(
             check=f"repair-trial-{len(change.repairs.done) + 1}",

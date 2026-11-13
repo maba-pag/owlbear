@@ -508,6 +508,25 @@ def _reject_escaping_home(store, c, repo, owner_home):
         assert (owner_home / "metrics.json").read_bytes() == b'{"private": "owner ledger must stay unchanged"}\n'
     finally:
         home.unlink()
+    source = root / "app"
+    unfinished = source / "unfinished.txt"
+    unfinished.write_text("unfinished source must survive preparation")
+    home.symlink_to(source, target_is_directory=True)
+    c.env = Environment(check="visual", command="true", directory="app", ready_url="http://127.0.0.1:{port}/")
+    try:
+        result = prepare.launch(store, c, store.settings(), events.append)
+        assert result.exit == Exit.RETRY
+        assert "redirects to source directory" in result.reason
+        with pytest.raises(prepare.PrepareError, match="redirects to source directory"):
+            prepare.environ(store, c)
+        c.env = None
+        assert prepare.end(store, c, repo, store.settings(), events.append) is None
+        assert "redirects to source directory" in events[-1]["cleanup"]
+        assert unfinished.read_text() == "unfinished source must survive preparation"
+        assert (source / "fixture.py").is_file()
+    finally:
+        home.unlink()
+        unfinished.unlink()
     home.mkdir()
     assert prepare.end(store, c, repo, store.settings(), events.append) is None
     assert not prepare.read(store, c.slug, "visual").open
