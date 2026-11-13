@@ -9,8 +9,10 @@ from owlbear_delivery_next.change_contracts.preparation import Preparation
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
+    from datetime import datetime
     from pathlib import Path
 
+    from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.state_store.store import Store
 
 
@@ -52,6 +54,18 @@ def records(store: Store, slug: str) -> list[Prepared]:
     """All preparation records, including cleanup obligations left by an interrupted runner."""
     at = folder(store, slug)
     return [Prepared.model_validate_json(p.read_text()) for p in sorted(at.glob("*.json"))] if at.is_dir() else []
+
+
+def left(store: Store, c: Change) -> list[Prepared]:
+    """Cleanup or trial disposal still owed after the owning check environment ended."""
+    current = c.env.check if c.env else None
+    return [r for r in records(store, c.slug) if (r.open or (r.trial and r.home)) and r.check != current]
+
+
+def cleanup_records(store: Store, c: Change, now: datetime) -> list[Prepared]:
+    """Ordinary cleanup and disposal are immediate; failed trial cleanup keeps its retry deadline."""
+    wake = c.outcome.wake_at if c.outcome else None
+    return [r for r in left(store, c) if not r.trial or not r.open or wake is None or wake <= now]
 
 
 def write(store: Store, slug: str, rec: Prepared, patch: bytes | None = None) -> None:

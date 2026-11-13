@@ -574,11 +574,17 @@ def _retain_failed_trial(store, asked, proposal, repo, monkeypatch):
     clean = Path(owed[0].home)
     assert (clean / "app/fixture.py").is_file()
     assert "synthetic cleanup temporarily unavailable" in held.outcome.reason
+    before_retry = len(store.events(held.slug))
+    assert prepare.cleanup_records(store, held, datetime.now(UTC)) == []
+    assert prepare.ran(store, Lock(held.slug), held, repo, runnable=True)
+    assert len(store.events(held.slug)) == before_retry
+    held.outcome.wake_at = NOW
     assert prepare.ran(store, Lock(held.slug), held, repo, runnable=True)
     assert prepare.left(store, held)[0].open
     assert clean.is_dir()
     assert len(calls) == 1
     control.unlink()
+    held.outcome.wake_at = NOW
     drop = repair_copy.drop
 
     def interrupted_drop(source, at):

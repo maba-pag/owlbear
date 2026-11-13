@@ -323,7 +323,7 @@ class Host:
             self.store.write(lock, c)
             shape_dispatch(self, lock, c)
             self.wants[slug] = session_slots.wanted(c, step)
-            return step is not None or bool(not c.stop and prepare.left(self.store, c))  # a gone check's end
+            return step is not None or bool(not c.stop and prepare.cleanup_records(self.store, c, now))
 
     def _folded(self, lock: Lock, slug: str, rec: RunnerRecord | None, now: datetime, *, paused: bool) -> Change:
         """Fold the inbox with the PR's state, run an asked Pull, charge a runner gone.

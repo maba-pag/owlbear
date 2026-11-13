@@ -38,6 +38,8 @@ from owlbear_delivery_next.change_flow.worktree import failure
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.state_store.prepared import (
     Prepared,
+    cleanup_records,
+    left,
     read,
 )
 from owlbear_delivery_next.state_store.prepared import (
@@ -45,9 +47,6 @@ from owlbear_delivery_next.state_store.prepared import (
 )
 from owlbear_delivery_next.state_store.prepared import (
     folder as _dir,
-)
-from owlbear_delivery_next.state_store.prepared import (
-    records as _records,
 )
 from owlbear_delivery_next.state_store.prepared import (
     write as _write,
@@ -381,12 +380,6 @@ def launch(store: Store, c: Change, settings: Settings, log: Log) -> loop.StepRe
     return loop.StepResult(exit=Exit.PENDING, waiting=Waiting.CHECK_START, reason=reason)
 
 
-def left(store: Store, c: Change) -> list[Prepared]:
-    """Runs whose check environment is gone: the end of their check is still to run."""
-    current = c.env.check if c.env else None
-    return [r for r in _records(store, c.slug) if (r.open or (r.trial and r.home)) and r.check != current]
-
-
 def _reapply(store: Store, c: Change, rec: Prepared, home: Path) -> None:
     """Apply the setup patch again for a cleanup that runs without it, unless the worktree edited its paths since."""
     patch = _file(store, c.slug, rec.check, ".patch")
@@ -429,7 +422,7 @@ def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> lo
     Cleanup and deletion always run. A patch that cannot be discarded stops the Change, so no setup edit can
     reach a commit (TD-107). A failed cleanup or deletion leaves the run outstanding: the next runner ends it again.
     """
-    for rec in left(store, c):
+    for rec in cleanup_records(store, c, datetime.now(UTC)):
         if _dispose_trial(store, c.slug, rec, repo):
             continue
         stuck = note = ""
@@ -473,6 +466,8 @@ def ran(store: Store, lock: Lock, c: Change, repo: Path, *, runnable: bool) -> b
     """What preparation owes before any step: a gone check's end, then a due test copy; whether it decided the run."""
     log = partial(store.log, lock, c.slug)
     stray(store, c.slug, log)
+    if left(store, c) and not cleanup_records(store, c, datetime.now(UTC)):
+        return True
     if left(store, c) and (stop := end(store, c, repo, store.settings(), log)):
         store.write(lock, loop.apply(c, stop, datetime.now(UTC)))
         return True
