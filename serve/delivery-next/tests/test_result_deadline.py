@@ -61,7 +61,8 @@ def configured(root, limit=0.05):
     )
 
 
-def test_a_real_valid_result_during_snapshot_is_accepted_only_before_the_cutoff(tmp_path, clock):
+@pytest.mark.usefixtures("clock")
+def test_a_real_valid_result_during_snapshot_is_accepted_only_before_the_cutoff(tmp_path):
     async def scenario():
         cfg = configured(tmp_path)
         step = STEP(cfg, asyncio.get_running_loop())
