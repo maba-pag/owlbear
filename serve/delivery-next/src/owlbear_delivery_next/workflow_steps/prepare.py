@@ -28,6 +28,7 @@ from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     ErrorKind,
     Exit,
+    Outcome,
     StepKind,
     Stop,
     Waiting,
@@ -52,6 +53,7 @@ from owlbear_delivery_next.state_store.prepared import (
     write as _write,
 )
 from owlbear_delivery_next.workflow_steps import before, check, engine, preparer, repair_copy, snapshot_files
+from owlbear_delivery_next.workflow_steps.snapshot_files import snapshots
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -71,11 +73,6 @@ class PrepareError(Exception):
     def __init__(self, result: loop.StepResult) -> None:
         super().__init__(result.reason)
         self.result = result
-
-
-def snapshots() -> Path:
-    """Delivery's snapshot folder, beside its worktrees and outside every repository."""
-    return worktree.data_root().parent / "snapshots"
 
 
 def _git(root: Path, *args: str, env: Mapping[str, str] | None = None) -> bytes:
@@ -341,6 +338,17 @@ def merge_base(store: Store, c: Change, settings: Settings, log: Log) -> Callabl
     def go(root: Path) -> dict[str, str]:
         if rec is None:
             raise PrepareError(check.failed("the check has no test preparation; nothing launches without one"))
+        _write(
+            store,
+            c.slug,
+            Prepared(
+                check=f"before-{VISUAL}",
+                option=rec.option,
+                home=str(root),
+                open=True,
+                trial=True,
+            ),
+        )
         if note := _into(store, c, rec, root, settings=settings, log=log, keep=False):
             raise PrepareError(check.failed(note))
         return isolated(rec, root)
@@ -357,7 +365,7 @@ def shaping(store: Store, c: Change, settings: Settings, log: Log) -> Callable[[
             asked = unsafe(settings)
             said = asked.reason if asked else f"the preparation option {c.brief.preparation} is not declared"
             raise PrepareError(check.failed(said))
-        rec = Prepared(check=SHAPING, option=option, home=str(root))
+        rec = Prepared(check=SHAPING, option=option, home=str(root), trial=True)
         _write(store, c.slug, rec)  # before the export: the next runner ends even a cut-short copy
         if note := _into(store, c, rec, root, settings=settings, log=log, keep=False, home=root):
             raise PrepareError(check.failed(note))
@@ -452,7 +460,8 @@ def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> lo
                     stuck = f"the check's setup edits ({', '.join(rec.paths)}) could not be discarded: {failure(exc)}"
         at = datetime.now(UTC)
         log({"event": "prepared-end", "at": at.isoformat(), "check": rec.check, "cleanup": note or "ok"}
-            | ({"outstanding": True} if note else {}) | ({"stuck": stuck} if stuck else {}))  # fmt: skip
+            | ({"outstanding": True} if note else {}) | ({"reason": note} if rec.trial and note else {})
+            | ({"stuck": stuck} if stuck else {}))  # fmt: skip
         if stuck:
             stop = Stop(kind=ErrorKind.STATE, reason=stuck, action=f"Discard those edits in {rec.applied}",
                         resume="The worktree holds none of them", at=at)  # fmt: skip
@@ -474,9 +483,11 @@ def ran(store: Store, lock: Lock, c: Change, repo: Path, *, runnable: bool) -> b
         store.write(lock, loop.apply(c, stop, datetime.now(UTC)))
         return True
     if any(rec.trial for rec in left(store, c)):
-        if c.outcome is not None:
-            c.outcome.wake_at = datetime.now(UTC) + budgets.PAUSE
-            store.write(lock, c)
+        if c.outcome is None or c.outcome.exit == Exit.PENDING:
+            c.outcome = Outcome(exit=Exit.RETRY, reason="test-copy cleanup is pending; see its recorded error",
+                                at=datetime.now(UTC))  # fmt: skip
+        c.outcome.wake_at = datetime.now(UTC) + budgets.PAUSE
+        store.write(lock, c)
         return True
     if not runnable or before.due(c) or not due(store, c):  # the "before" capture exports and restores first
         return False

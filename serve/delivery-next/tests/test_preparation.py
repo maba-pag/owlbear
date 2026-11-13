@@ -347,17 +347,21 @@ def test_one_frozen_snapshot_is_restored_separately_before_each_capture_and_ende
     c, s, events = change(repo), settings(option(tmp)), []
     prepare._write(store, "c1", prepare.Prepared(check="visual", option=option(tmp)))  # noqa: SLF001 - as accepted
     before_root = tmp / "merge-base"
-    before_root.mkdir()
+    git(repo, "worktree", "add", "--detach", str(before_root), "HEAD")
 
     launched = prepare.merge_base(store, c, s, events.append)(before_root)
     assert launched["TEST_DB"] == str(tmp / "test.db")  # the "before" launch runs isolated
     assert (tmp / "test.db").read_text() == "user-1+seeded"  # masked before it was frozen, then seeded
     (tmp / "test.db").write_text("changed by the before capture")
+    snapshot = Path(prepare.read(store, "c1", "visual").snapshot)
+    assert prepare.end(store, c, repo, s, events.append) is None
+    assert not before_root.exists()
+    assert snapshot.is_dir()  # the before copy's cleanup never discards the frozen source for the after copy
     assert prepare.due(store, c)
     result = prepare.launch(store, c, s, events.append)
     assert (result.exit, result.waiting) == (Exit.PENDING, Waiting.CHECK_START)
     assert (tmp / "test.db").read_text() == "user-1+seeded"  # the same snapshot, restored again
-    assert lines(log) == ["export", "mask", "restore", "seed", "restore", "seed"]
+    assert lines(log) == ["export", "mask", "restore", "seed", "cleanup", "restore", "seed"]
     assert all(line.endswith(str(tmp / "test.db")) for line in log.read_text().splitlines()[2:])
     rec = prepare.read(store, "c1", "visual")
     snapshot = Path(rec.snapshot)
@@ -371,7 +375,7 @@ def test_one_frozen_snapshot_is_restored_separately_before_each_capture_and_ende
     assert prepare.left(store, c) == []
 
     target = tmp / "target"  # the shaping capture's own checkout (D-01M6Q56RXK85C5T4AG7R051X6N)
-    target.mkdir()
+    git(repo, "worktree", "add", "--detach", str(target), "HEAD")
     where = f"{sys.executable} -c \"import os; open(os.environ['TEST_LOG'], 'a').write('cleanup ' + os.getcwd())\""
     kept = settings(option(tmp, cleanup=where), retention="keep")
     c.brief.preparation = "copy"

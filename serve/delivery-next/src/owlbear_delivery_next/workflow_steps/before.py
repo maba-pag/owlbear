@@ -77,7 +77,7 @@ def _remove(repo: Path, tmp: Path) -> None:
 
 
 type Prepare = Callable[[Path], dict[str, str]]
-type Inside = Callable[[Path, list[str]], None]
+type Inside = Callable[[Path, list[str]], bool | None]
 
 
 def _serve(  # noqa: PLR0913, PLR0917 - the recipe, its states and where they render; widths from the settings
@@ -145,6 +145,7 @@ def _render(  # noqa: PLR0913, PLR0917 - what is rendered where, and the hooks a
     where: str,
     prepare: Prepare | None = None,
     inside: Inside | None = None,
+    finish: Inside | None = None,
     pack: Installed | None = None,
 ) -> tuple[list[visual.Shot], list[str]]:
     """Render *states* at *base* in a throwaway worktree; *inside* runs in it, even after a failure, before removal."""
@@ -167,12 +168,17 @@ def _render(  # noqa: PLR0913, PLR0917 - what is rendered where, and the hooks a
         notes.append(worktree.failure(exc))
     finally:
         if tmp is not None:
-            if inside is not None:
+            remove = True
+            for action in (inside, finish):
+                if action is None:
+                    continue
                 try:
-                    inside(tmp, notes)
+                    remove = action(tmp, notes) is not False and remove
                 except Exception as exc:  # noqa: BLE001 - its error is the capture's note, whole
                     notes.append(worktree.failure(exc))
-            _remove(repo, tmp)
+                    remove = remove and action is not finish
+            if remove:
+                _remove(repo, tmp)
     return shots, notes + [f"{s.state} at {s.width}px: {s.error}" for s in shots if s.error]
 
 
@@ -202,6 +208,7 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
     *,
     widths: Sequence[int],
     prepare: Prepare | None = None,
+    finish: Inside | None = None,
 ) -> VisualResult:
     """Render the brief's states at the merge-base; the findings say why any state is missing (B25).
 
@@ -229,7 +236,7 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
     states = [s for s in c.brief.visual if old is None or old.states.get(s.name) != s.version]
     shots, notes = _render(
         repo, base, c.brief.recipe or e, states, out_for(base), log, installs=worktree.installs(profile, scope),
-        widths=widths, where="the merge-base", prepare=prepare, inside=scan, pack=design.pack(),
+        widths=widths, where="the merge-base", prepare=prepare, inside=scan, finish=finish, pack=design.pack(),
     )  # fmt: skip
     new = _result(c, base, tree, shots, notes, widths, scans=sources, at=now)
     if old is None:
@@ -271,6 +278,6 @@ def at_target(  # noqa: PLR0913 - the capture's widths come from the settings, i
         )
     shots, notes = _render(
         repo, base, r, c.brief.visual, out, log, installs=worktree.installs(profile, sorted(c.brief.scope)),
-        widths=widths, where="the target", prepare=prepare, inside=finish,
+        widths=widths, where="the target", prepare=prepare, finish=finish,
     )  # fmt: skip
     return _result(c, base, tree, shots, notes, widths, at=now)

@@ -31,7 +31,7 @@ class Prepared(BaseModel):
     ready: bool = False
     open: bool = False
     home: str = ""
-    trial: bool = False
+    trial: bool = False  # owns a temporary proof or capture checkout until cleanup and disposal finish
 
 
 def folder(store: Store, slug: str) -> Path:

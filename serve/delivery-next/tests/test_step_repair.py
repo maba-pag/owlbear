@@ -402,6 +402,8 @@ def _exercise_saved_preparation(store, c, repo, proposal):
         before_env = prepare.merge_base(store, c, settings, events.append)(before)
         assert before_env["HOME"] == str(before / ".fixture-home")
         assert json.loads((before / ".fixture-home/metrics.json").read_text())["authenticated"] is True
+        assert prepare.end(store, c, repo, settings, events.append) is None
+        assert not before.exists()
         result = prepare.launch(store, c, settings, events.append)
         assert (result.exit, result.waiting) == (Exit.PENDING, Waiting.CHECK_START)
         env = prepare.environ(store, c)
@@ -428,7 +430,8 @@ def _exercise_saved_preparation(store, c, repo, proposal):
         assert prepare.left(store, c) == []
         assert any(e.get("event") == "prepared-end" and e.get("cleanup") == "ok" for e in events)
     finally:
-        worktree.git(repo, "worktree", "remove", "--force", str(before))
+        if before.exists():
+            worktree.git(repo, "worktree", "remove", "--force", str(before))
 
 
 def _reject_ignored_preparation(store, asked, proposal, repo, monkeypatch):

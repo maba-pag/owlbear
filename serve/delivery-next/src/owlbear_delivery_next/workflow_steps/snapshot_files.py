@@ -8,12 +8,18 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.workflow_steps import check
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from owlbear_delivery_next.workflow_steps.prepare import Prepared
+
+
+def snapshots() -> Path:
+    """The snapshot folder beside Delivery's worktrees, outside every repository."""
+    return worktree.data_root().parent / "snapshots"
 
 
 def plain(folder: Path) -> str:

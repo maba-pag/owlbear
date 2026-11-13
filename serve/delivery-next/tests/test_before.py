@@ -16,6 +16,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Brief,
     Change,
     Environment,
+    Exit,
     Names,
     Plan,
     Step,
@@ -257,7 +258,18 @@ def test_an_install_over_time_is_stopped_with_its_whole_group(ui, tmp_path, monk
 def test_the_runner_records_the_before_capture_and_the_page_serves_it(ui, tmp_path):
     store = Store(tmp_path / "store")
     store.write(Lock("c1"), ui)
-    none = Preparation(id="none", kind="data-only", seed="true", cleanup="true", isolation={"APP_ENV": "test"})
+    resources, held = tmp_path / "resources", tmp_path / "cleanup-held"
+    resources.mkdir()
+    prefix = "from pathlib import Path;import os;p=Path(os.environ['RESOURCES'])/Path.home().parent.name;"
+    seed = shlex.join([sys.executable, "-c", prefix + "p.write_text('synthetic resource')"])
+    cleanup = shlex.join([sys.executable, "-c", prefix + "assert not Path(os.environ['HELD']).exists();p.unlink()"])
+    none = Preparation(
+        id="none",
+        kind="data-only",
+        seed=seed,
+        cleanup=cleanup,
+        isolation={"HOME": ".fixture-home", "RESOURCES": str(resources), "HELD": str(held)},
+    )
     assert (
         store.save(
             store.config_path,
@@ -284,6 +296,29 @@ def test_the_runner_records_the_before_capture_and_the_page_serves_it(ui, tmp_pa
     assert client.get("/api/next/changes/c1").json()["before"]["head"] == c.before.head
     for name in ("other-1280.png", "..%2Fhome-1280.png"):
         assert client.get(f"/api/next/changes/c1/before/{name}").status_code == 404
+    assert list(resources.iterdir()) == []
+    held.touch()
+    c.before = None
+    captures.at_merge_base(store, Lock("c1"), c, Path(c.names.worktree))
+    c = store.read("c1")
+    owed = prepare.left(store, c)
+    assert len(owed) == 1
+    retained = Path(owed[0].home)
+    assert retained.is_dir()
+    assert len(list(resources.iterdir())) == 1
+    assert any("cleanup did not finish" in note for note in c.before.findings)
+    assert c.outcome.exit == Exit.RETRY
+    held.unlink()
+    c.outcome.wake_at = None
+    assert not prepare.ran(store, Lock("c1"), c, Path(c.names.worktree), runnable=False)
+    assert not retained.exists()
+    assert list(resources.iterdir()) == []
+    assert prepare.launch(store, c, store.settings(), lambda _event: None).exit == Exit.PENDING
+    assert len(list(resources.iterdir())) == 1
+    c.env = None
+    assert prepare.end(store, c, Path(c.names.worktree), store.settings(), lambda _event: None) is None
+    assert list(resources.iterdir()) == []
+    assert Path(c.names.worktree).is_dir()
 
 
 @pytest.mark.parametrize("site", ["merge-base", "test-copy", "capture"])
