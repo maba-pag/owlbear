@@ -152,11 +152,6 @@ def test_a_challenged_plan_comes_back_with_the_flag_and_a_display_reason():
     )
 
 
-def built_run(session: str, head: str) -> Run:
-    payload = tools.BuildResult(summary="Fixed b.", checks=[])
-    return Run(session, "result", payload, head=head, termination=Termination(confirmed=True), usage={"models": {}})
-
-
 def save(work: Path, name: str, text: str) -> None:
     (work / name).write_text(text)
     git(work, "add", "-A")
@@ -217,7 +212,9 @@ def test_a_missing_repair_producer_falls_back_free_even_after_an_answer(tmp_path
     async def build(cfg):
         seen.append(cfg)
         fresh = cfg.journal.replaced()
-        return built_run(fresh, git(clone, "rev-parse", "HEAD"))
+        payload = tools.BuildResult(summary="Fixed b.", checks=[])
+        head = git(clone, "rev-parse", "HEAD")
+        return Run(fresh, "result", payload, head=head, termination=Termination(confirmed=True), usage={"models": {}})
 
     monkeypatch.setattr(runner.sdk_adapter, "run", build)
     runner._step(store, Lock("c1"), c, c.step, clone)  # noqa: SLF001
