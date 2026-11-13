@@ -218,7 +218,8 @@ def test_a_live_copy_must_point_every_declared_live_resource_elsewhere(env):
     prepare._write(store, "c1", prepare.Prepared(check="visual", option=copy))  # noqa: SLF001 - as accepted
     result = prepare.launch(store, change(repo), settings(copy, isolation=[]), lambda _e: None)
     assert_setup_repair(change(repo), result, "project-env:check:preparation-unsafe")
-    assert "copy: its isolation TEST_DB points at the live TEST_DB" in result.reason
+    assert "copy: its isolation TEST_DB equals the live value" in result.reason
+    assert "its isolation TEST_DB points at the live TEST_DB" in result.reason
     assert lines(log) == []  # nothing exported
 
 
@@ -832,13 +833,15 @@ def test_a_live_copy_pointing_at_live_is_refused_and_never_exported(env):
     repo, store, log, tmp = env
     rules = DataPermissions(data_classes=["customers"], isolation=["TEST_DB"])
     copy = option(tmp, isolation={"TEST_DB": "postgres://live:5432/app"})
-    why = ["its isolation TEST_DB points at the live TEST_DB"]
+    why = ["its isolation TEST_DB equals the live value", "its isolation TEST_DB points at the live TEST_DB"]
     assert preparation.refusals(copy, rules, LIVE) == why
+    synthetic = option(tmp, "data-only", isolation={"TEST_DB": "postgres://LIVE/app"})
+    assert preparation.refusals(synthetic, rules, LIVE) == ["its isolation TEST_DB equals the live value"]
     data = option(tmp, "data-only", id="fixtures")
     head = git(repo, "rev-parse", "HEAD").strip()
     ctx = Preparing((copy, data), rules, head, live=LIVE)
     refused = preparation.check(recipe(), tools.Worktree(head, head), repo, ctx)
-    assert refused[0] == f"preparation: copy is not permitted ({why[0]}) - pick another or ask"
+    assert refused[0] == f"preparation: copy is not permitted ({'; '.join(why)}) - pick another or ask"
     assert preparation.check(recipe("fixtures"), tools.Worktree(head, head), repo, ctx) == []
 
     prepare._write(store, "c1", prepare.Prepared(check="visual", option=copy))  # noqa: SLF001 - as accepted

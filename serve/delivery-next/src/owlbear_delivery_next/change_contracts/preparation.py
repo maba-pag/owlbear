@@ -150,7 +150,7 @@ def refusals(option: Preparation, rules: DataPermissions, live: Mapping[str, str
     for name, value in sorted(option.isolation.items()):
         if not value.strip():
             why.append(f"its isolation {name} is empty")
-        elif value == live.get(name):
+        elif (actual := live.get(name)) is not None and same(value, actual):
             why.append(f"its isolation {name} equals the live value")
         why += [
             f"its isolation {name} points at the live {n}" for n, v in sorted(option.live.items()) if same(value, v)
