@@ -123,18 +123,32 @@ def test_help_styles_semantic_anchors_and_capability_symbols(monkeypatch: object
     assert "\033[31m✚\033[0m" in rendered
     assert "\033[33m⚠\033[0m" in rendered
 
+    monkeypatch.setenv("NO_COLOR", "1")
+    output.seek(0)
+    output.truncate()
+    help_main()
+    assert "\033[" not in output.getvalue()
+    assert "ˢ" in output.getvalue()
+    assert command_footer(output) == "\N{INFORMATION SOURCE} More commands and options: uv run help"
+
 
 def test_help_aligns_capabilities_without_iconless_rows(monkeypatch: object, capsys: object) -> None:
     terminal_size = type("TerminalSize", (), {"columns": 80})()
+
+    def get_terminal_size(fallback: tuple[int, int] = (80, 24)) -> object:
+        assert fallback in {(80, 24), (120, 24)}
+        return terminal_size
+
     monkeypatch.setattr(sys, "argv", ["help", "quality"])
     monkeypatch.setenv("NO_COLOR", "1")
-    monkeypatch.setattr("owlbear_tools.commands.shutil.get_terminal_size", lambda **_kwargs: terminal_size)
+    monkeypatch.setattr("owlbear_tools.commands.shutil.get_terminal_size", get_terminal_size)
 
     help_main()
 
     lines = capsys.readouterr().out.splitlines()
     options_index = next(index for index, line in enumerate(lines) if line.startswith("  Available options:"))
     tree_lines = lines[:options_index]
+    _assert_rows_in_order("\n".join(tree_lines), _QUALITY_TREE)
     capability_lines = [line for line in tree_lines if any(symbol in line for symbol in ("ˢ", "✚", "⚠"))]
     assert {line.find("ˢ") for line in capability_lines if "ˢ" in line} == {55}
     assert {line.find("✚") for line in capability_lines if "✚" in line} == {57}
@@ -160,36 +174,3 @@ def test_help_keeps_options_legend_on_one_line_when_it_fits(monkeypatch: object,
     lines = capsys.readouterr().out.splitlines()
     assert "  Available options:  ˢ staged files only (-s)  ✚ disable safe fixes (-n)  ⚠ unsafe fixes (-u)" in lines
     assert all(len(line) <= 120 for line in lines)
-
-
-def test_help_and_footer_stay_plain_when_color_is_disabled(monkeypatch: object) -> None:
-    output = _TerminalBuffer()
-    monkeypatch.setattr(sys, "argv", ["help", "quality"])
-    monkeypatch.setattr(sys, "stdout", output)
-    monkeypatch.setenv("NO_COLOR", "1")
-
-    help_main()
-
-    assert "\033[" not in output.getvalue()
-    assert "ˢ" in output.getvalue()
-    assert command_footer(output) == "\N{INFORMATION SOURCE} More commands and options: uv run help"
-
-
-def test_help_preserves_tree_on_narrow_terminals(monkeypatch: object) -> None:
-    output = _TerminalBuffer()
-    terminal_size = type("TerminalSize", (), {"columns": 80})()
-
-    def get_terminal_size(fallback: tuple[int, int] = (80, 24)) -> object:
-        assert fallback in {(80, 24), (120, 24)}
-        return terminal_size
-
-    monkeypatch.setattr(sys, "argv", ["help", "quality"])
-    monkeypatch.setattr(sys, "stdout", output)
-    monkeypatch.setenv("NO_COLOR", "1")
-    monkeypatch.setattr("owlbear_tools.commands.shutil.get_terminal_size", get_terminal_size)
-
-    help_main()
-
-    assert "    lint" in output.getvalue()
-    assert "      lint" in output.getvalue()
-    assert "      lint-python" in output.getvalue()
