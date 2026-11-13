@@ -338,14 +338,14 @@ def test_a_conversation_task_repairs_setup_and_keeps_window_tools_reserved() -> 
     ref = ItemRef(id="t1", kind="thread", version="v", task="pr-t1-v", url="https://x/pull/7#r1")
     task = Task(id="pr-t1-v", title="answer", item=ref, detail="boecht: add a docker test\n\nhttps://x/pull/7#r1")
     p = report("matlab", "matlab: license server unknown")
-    result = conversation.disputed(task, p, to_result(run(p), K.BUILD, NOW))
+    result = conversation.disputed(change(), task, p, to_result(run(p), K.BUILD, NOW))
     assert (result.exit, result.setup, result.question) == (Exit.RETRY, True, None)
     c = change(task=task.id)
     c.plan.tasks = [task]
     repaired = loop.apply(c, result, NOW)
     assert (repaired.repairs.current.task, repaired.step.task, repaired.questions) == (task.id, task.id, [])
     other = report("browser", "no browser tool in this session")
-    window = conversation.disputed(task, other, to_result(run(other), K.BUILD, NOW))
+    window = conversation.disputed(change(), task, other, to_result(run(other), K.BUILD, NOW))
     assert options(window) == [("decline", K.BUILD), ("pause", "pause")]
 
 
@@ -369,7 +369,7 @@ def repo(tmp_path, monkeypatch) -> Path:
 def test_planning_starts_on_a_clean_tree_whatever_step_left_edits(repo, monkeypatch) -> None:
     events: list[dict] = []
     store = SimpleNamespace(log=lambda _lock, _slug, e: events.append(e))
-    monkeypatch.setattr(worker_input.plan_round, "scopes", lambda *_: {"c2": ["b"]})
+    monkeypatch.setattr(worker_input.overlap, "scopes", lambda *_: {"c2": ["b"]})
     assert worker_input.planning(store, None, "c1", repo) == {"c2": ["b"]}
     assert (events, worktree.git(repo, "stash", "list")) == ([], "")
     (repo / "a.txt").write_text("edited\n")

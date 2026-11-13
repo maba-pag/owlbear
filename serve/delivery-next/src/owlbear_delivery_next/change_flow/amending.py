@@ -121,8 +121,9 @@ def prepared(c: Change, r: CandidateResult, policy: RoundPolicy, now: datetime) 
 def _refused(c: Change, a: Amendment, why: str, now: datetime) -> None:
     a.state, a.refused = "refused", " ".join(why.split())[:1000]
     text = (
-        f"The amendment {a.id} ({a.reason[:300]}) needs the brief's outcome or non-goals, so it was refused for "
-        f"reshaping: {a.refused}. Work on within the approved brief, reshape the brief, or stop the Change?"
+        f"{a.reason[:300]}\n\nTo take this, the brief's outcome or non-goals must change, which only reshaping can "
+        f"do: {a.refused}. Work on within the approved brief, reshape it, or stop the Change?\n\n"
+        f"Details: amendment {a.id}"
     )
     _ask(c, a, "decide", text, WITHIN, RESHAPE, STOP, now=now)
 
@@ -244,17 +245,20 @@ def decide(c: Change, now: datetime) -> None:
 
 
 def question_text(a: Amendment) -> str:
-    """The owner's question: old and new, the reason, the verdict, a tightening's cost and the evidence redone."""
+    """The owner's question: the reason first, then old and new with what is his to settle, then the record."""
     items = "; ".join(_item_line(i) for i in a.items)
-    parts = [f"Amend the approved brief v{a.base} ({a.id}, from {_SOURCES[a.source]})? {items}.",
-             f"Reason: {a.reason[:500]}", f"Challenger: {a.verdict or 'unsure'} - {a.judged[:800]}"]  # fmt: skip
-    parts += [f"Tightening, its scope and cost: {a.tightening}"] if a.tightening else []
-    parts += [f"Beyond your answer: {a.beyond}"] if a.beyond else []
-    parts += [f"Open doubt: {a.doubts}"] if a.doubts else []
-    parts += ["Its final wording was revised after the last challenge round: no round reviewed it."] * a.unreviewed
+    ask = [f"Change the approved brief like this? {items}."]
+    ask += [f"Tightening, its scope and cost: {a.tightening}"] if a.tightening else []
+    ask += [f"Beyond your answer: {a.beyond}"] if a.beyond else []
+    ask += [f"Open doubt: {a.doubts}"] if a.doubts else []
+    ask += ["Its final wording was revised after the last challenge round: no round reviewed it."] * a.unreviewed
     redo = ["the final review", *a.affected, *(f"{i.field}:{i.key}" for i in a.items if i.field in {"visual", "check"})]
-    parts.append(f"Redone after it: {', '.join(dict.fromkeys(redo))}.")
-    return " ".join(parts)
+    details = (
+        f"Details: brief v{a.base}, amendment {a.id}, from {_SOURCES[a.source]}. "
+        f"Challenger: {a.verdict or 'unsure'} - {a.judged[:800].rstrip('.')}. "
+        f"Redone after it: {', '.join(dict.fromkeys(redo))}."
+    )
+    return "\n\n".join([a.reason[:500], " ".join(ask), details])
 
 
 _SOURCES = {"worker": "a worker", "answer": "your answer", "allow": "your Allow it", "revert": "your revert"}

@@ -45,11 +45,6 @@ FINISH = (
 )
 
 
-def scopes(store: Store, slug: str) -> dict[str, list[str]]:
-    """Scopes of the other open Changes of this clone: their plan's task scopes, else their brief's."""
-    return {n.handle: n.scope for n in overlap.neighbours(store, slug, datetime.now(UTC)) if not n.merged}
-
-
 def planned(  # noqa: PLR0913, PLR0917 - the planner's session, its result and what its challenge reads
     store: Store | held_writes.Deferred,
     lock: Lock,
@@ -170,7 +165,7 @@ def continued(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
         profile = vouched(store.read_profile() or Profile())  # the planner's packages (#968)
         if s.mode == plan_rounds.RECONSIDER:
             return _reconsider(store, lock, change, path)
-        others = scopes(store, change.slug)
+        others = overlap.scopes(store, change.slug)
         result = challenge(store, lock, change, path, profile, others, events)
         overlap.record(change, result, others, path)
     end = datetime.now(UTC)
