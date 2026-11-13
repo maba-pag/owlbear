@@ -17,7 +17,9 @@ _SCRIPT = Path(__file__).parents[1] / "scripts" / "extract_transcript.py"
 _EXPECTED_TURNS = 2
 
 
-def _load() -> types.ModuleType:
+@pytest.fixture
+def extractor() -> types.ModuleType:
+    """Load the direct-run extractor."""
     spec = importlib.util.spec_from_file_location("extract_transcript", _SCRIPT)
     assert spec is not None
     assert spec.loader is not None
@@ -27,206 +29,129 @@ def _load() -> types.ModuleType:
     return module
 
 
-@pytest.fixture
-def extractor() -> types.ModuleType:
-    """Load the direct-run extractor as a test module."""
-    return _load()
+def _transcript(tmp_path: Path, name: str, events: list[tuple[str, dict[str, object]]]) -> Path:
+    path = tmp_path / name
+    records = [
+        {
+            "type": kind,
+            "id": f"event-{index + 1}",
+            "timestamp": f"2026-08-05T10:00:{index:02}Z",
+            "parentId": f"event-{index}" if index else None,
+            "data": data,
+        }
+        for index, (kind, data) in enumerate(events)
+    ]
+    path.write_text("".join(f"{json.dumps(event)}\n" for event in records), encoding="utf-8")
+    return path
 
 
 @pytest.fixture
 def transcript(tmp_path: Path) -> Path:
-    """Create a representative transcript fixture."""
-    path = tmp_path / "session.jsonl"
-    events = (
-        {
-            "type": "session.start",
-            "id": "event-1",
-            "timestamp": "2026-08-05T10:00:00Z",
-            "parentId": None,
-            "data": {"sessionId": "11111111-1111-4111-8111-111111111111", "producer": "copilot"},
-        },
-        {
-            "type": "user.message",
-            "id": "event-2",
-            "timestamp": "2026-08-05T10:01:00Z",
-            "parentId": "event-1",
-            "data": {"content": "first request token=visible-secret", "attachments": []},
-        },
-        {
-            "type": "assistant.message",
-            "id": "event-3",
-            "timestamp": "2026-08-05T10:01:01Z",
-            "parentId": "event-2",
-            "data": {
-                "content": "checking the workspace",
-                "reasoningText": "private chain of thought",
-                "toolRequests": [
-                    {
-                        "toolCallId": "call-1",
-                        "name": "read_file",
-                        "arguments": {"filePath": "README.md", "api_key": "visible-secret"},
-                        "type": "function",
-                    }
-                ],
-            },
-        },
-        {
-            "type": "tool.execution_start",
-            "id": "event-4",
-            "timestamp": "2026-08-05T10:01:02Z",
-            "parentId": "event-3",
-            "data": {
-                "toolCallId": "call-1",
-                "toolName": "read_file",
-                "arguments": {"filePath": "README.md", "api_key": "visible-secret"},
-            },
-        },
-        {
-            "type": "tool.execution_complete",
-            "id": "event-5",
-            "timestamp": "2026-08-05T10:01:03Z",
-            "parentId": "event-4",
-            "data": {"toolCallId": "call-1", "success": True},
-        },
-        {
-            "type": "user.message",
-            "id": "event-6",
-            "timestamp": "2026-08-05T10:02:00Z",
-            "parentId": "event-5",
-            "data": {"content": "second request with marker lifecycle-proof", "attachments": []},
-        },
-        {
-            "type": "assistant.message",
-            "id": "event-7",
-            "timestamp": "2026-08-05T10:02:01Z",
-            "parentId": "event-6",
-            "data": {"content": "a long response", "reasoningText": "do not emit", "toolRequests": []},
-        },
+    """Two top-level turns with sensitive content and tool arguments."""
+    request = {
+        "toolCallId": "call-1",
+        "name": "read_file",
+        "arguments": {"filePath": "README.md", "api_key": "visible-secret"},
+        "type": "function",
+    }
+    return _transcript(
+        tmp_path,
+        "session.jsonl",
+        [
+            ("session.start", {"sessionId": "11111111-1111-4111-8111-111111111111", "producer": "copilot"}),
+            ("user.message", {"content": "first request token=visible-secret", "attachments": []}),
+            (
+                "assistant.message",
+                {
+                    "content": "checking the workspace",
+                    "reasoningText": "private chain of thought",
+                    "toolRequests": [request],
+                },
+            ),
+            (
+                "tool.execution_start",
+                {
+                    "toolCallId": "call-1",
+                    "toolName": "read_file",
+                    "arguments": request["arguments"],
+                },
+            ),
+            ("tool.execution_complete", {"toolCallId": "call-1", "success": True}),
+            ("user.message", {"content": "second request with marker lifecycle-proof", "attachments": []}),
+            ("assistant.message", {"content": "a long response", "reasoningText": "do not emit", "toolRequests": []}),
+        ],
     )
-    path.write_text("".join(f"{json.dumps(event)}\n" for event in events), encoding="utf-8")
-    return path
 
 
 @pytest.fixture
 def nested_transcript(tmp_path: Path) -> Path:
-    """Create a transcript with one parent turn and one nested agent invocation."""
-    path = tmp_path / "nested-session.jsonl"
-    events = (
-        {
-            "type": "session.start",
-            "id": "event-1",
-            "timestamp": "2026-08-05T10:00:00Z",
-            "parentId": None,
-            "data": {"sessionId": "22222222-2222-4222-8222-222222222222", "producer": "copilot"},
-        },
-        {
-            "type": "assistant.message",
-            "id": "event-2",
-            "timestamp": "2026-08-05T10:00:01Z",
-            "parentId": "event-1",
-            "data": {
-                "content": "parent preamble",
-                "toolRequests": [
-                    {
-                        "toolCallId": "call-agent",
-                        "name": "runSubagent",
-                        "arguments": {"agentName": "builder", "prompt": "nested prompt"},
-                    }
-                ],
-            },
-        },
-        {
-            "type": "tool.execution_start",
-            "id": "event-3",
-            "timestamp": "2026-08-05T10:00:02Z",
-            "parentId": "event-2",
-            "data": {
-                "toolCallId": "call-agent",
-                "toolName": "runSubagent",
-                "arguments": {"agentName": "builder", "prompt": "nested prompt"},
-            },
-        },
-        {
-            "type": "user.message",
-            "id": "event-4",
-            "timestamp": "2026-08-05T10:00:03Z",
-            "parentId": "event-3",
-            "data": {"content": "nested prompt", "attachments": []},
-        },
-        {
-            "type": "assistant.message",
-            "id": "event-5",
-            "timestamp": "2026-08-05T10:00:04Z",
-            "parentId": "event-4",
-            "data": {
-                "content": "nested response",
-                "toolRequests": [
-                    {
-                        "toolCallId": "call-read",
-                        "name": "read_file",
-                        "arguments": {"filePath": "README.md"},
-                    }
-                ],
-            },
-        },
-        {
-            "type": "tool.execution_start",
-            "id": "event-6",
-            "timestamp": "2026-08-05T10:00:05Z",
-            "parentId": "event-5",
-            "data": {
-                "toolCallId": "call-read",
-                "toolName": "read_file",
-                "arguments": {"filePath": "README.md"},
-            },
-        },
-        {
-            "type": "tool.execution_complete",
-            "id": "event-7",
-            "timestamp": "2026-08-05T10:00:06Z",
-            "parentId": "event-6",
-            "data": {"toolCallId": "call-read", "success": True},
-        },
-        {
-            "type": "tool.execution_complete",
-            "id": "event-8",
-            "timestamp": "2026-08-05T10:00:07Z",
-            "parentId": "event-7",
-            "data": {"toolCallId": "call-agent", "success": True},
-        },
-        {
-            "type": "assistant.message",
-            "id": "event-9",
-            "timestamp": "2026-08-05T10:00:08Z",
-            "parentId": "event-8",
-            "data": {
-                "content": "parent resumes",
-                "toolRequests": [
-                    {
-                        "toolCallId": "call-integrate",
-                        "name": "integrate_ready_change",
-                        "arguments": {"change_id": "example"},
-                    }
-                ],
-            },
-        },
-        {
-            "type": "assistant.turn_start",
-            "id": "event-10",
-            "timestamp": "2026-08-05T10:00:09Z",
-            "parentId": "event-9",
-            "data": {"turnId": "9"},
-        },
+    """A synthetic parent turn containing a nested agent and an incomplete tail."""
+    return _transcript(
+        tmp_path,
+        "nested-session.jsonl",
+        [
+            ("session.start", {"sessionId": "22222222-2222-4222-8222-222222222222", "producer": "copilot"}),
+            (
+                "assistant.message",
+                {
+                    "content": "parent preamble",
+                    "toolRequests": [
+                        {
+                            "toolCallId": "call-agent",
+                            "name": "runSubagent",
+                            "arguments": {"agentName": "builder", "prompt": "nested prompt"},
+                        }
+                    ],
+                },
+            ),
+            (
+                "tool.execution_start",
+                {
+                    "toolCallId": "call-agent",
+                    "toolName": "runSubagent",
+                    "arguments": {"agentName": "builder", "prompt": "nested prompt"},
+                },
+            ),
+            ("user.message", {"content": "nested prompt", "attachments": []}),
+            (
+                "assistant.message",
+                {
+                    "content": "nested response",
+                    "toolRequests": [
+                        {"toolCallId": "call-read", "name": "read_file", "arguments": {"filePath": "README.md"}}
+                    ],
+                },
+            ),
+            (
+                "tool.execution_start",
+                {
+                    "toolCallId": "call-read",
+                    "toolName": "read_file",
+                    "arguments": {"filePath": "README.md"},
+                },
+            ),
+            ("tool.execution_complete", {"toolCallId": "call-read", "success": True}),
+            ("tool.execution_complete", {"toolCallId": "call-agent", "success": True}),
+            (
+                "assistant.message",
+                {
+                    "content": "parent resumes",
+                    "toolRequests": [
+                        {
+                            "toolCallId": "call-integrate",
+                            "name": "integrate_ready_change",
+                            "arguments": {"change_id": "example"},
+                        }
+                    ],
+                },
+            ),
+            ("assistant.turn_start", {"turnId": "9"}),
+        ],
     )
-    path.write_text("".join(f"{json.dumps(event)}\n" for event in events), encoding="utf-8")
-    return path
 
 
-def test_extracts_turns_tools_and_redacts_sensitive_values(
-    extractor: types.ModuleType,
-    transcript: Path,
-) -> None:
-    """Extract messages and tool evidence without leaking private fields."""
+def test_extracts_turns_tools_and_redacts_sensitive_values(extractor: types.ModuleType, transcript: Path) -> None:
+    """Extract evidence without leaking private fields."""
     config = extractor.ExtractConfig(max_content_chars=100, include_tools=True, include_tool_arguments=True)
 
     metadata, turns = extractor.extract_turns(transcript, config)
@@ -244,29 +169,22 @@ def test_extracts_turns_tools_and_redacts_sensitive_values(
 
 
 def test_selects_matching_turn_with_context(extractor: types.ModuleType, transcript: Path) -> None:
-    """Include a matching turn and the requested neighboring context."""
+    """Retain the matching turn and its requested neighbor."""
     config = extractor.ExtractConfig(max_content_chars=100, include_tools=False, include_tool_arguments=False)
     _, turns = extractor.extract_turns(transcript, config)
 
     selected = extractor.select_turns(
         turns,
         extractor.TurnSelection(
-            from_turn=None,
-            to_turn=None,
-            last_turns=None,
-            around="LIFECYCLE-PROOF",
-            context_turns=1,
+            from_turn=None, to_turn=None, last_turns=None, around="LIFECYCLE-PROOF", context_turns=1
         ),
     )
 
     assert [turn.index for turn in selected] == [1, 2]
 
 
-def test_selects_matching_events_inside_one_nested_turn(
-    extractor: types.ModuleType,
-    nested_transcript: Path,
-) -> None:
-    """Narrow a large nested turn without emitting unrelated messages and tools."""
+def test_selects_matching_events_inside_one_nested_turn(extractor: types.ModuleType, nested_transcript: Path) -> None:
+    """Narrow nested evidence without unrelated messages or tools."""
     config = extractor.ExtractConfig(max_content_chars=100, include_tools=True, include_tool_arguments=True)
     _, turns = extractor.extract_turns(nested_transcript, config)
 
@@ -284,7 +202,7 @@ def test_cli_narrows_events_inside_one_turn(
     nested_transcript: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Expose event narrowing through the bundled command interface."""
+    """Expose event selection through the bundled command."""
     exit_code = extractor.main(
         (
             "--transcript",
@@ -305,7 +223,7 @@ def test_cli_narrows_events_inside_one_turn(
 
 
 def test_bounds_content_and_omits_tools_by_default(extractor: types.ModuleType, transcript: Path) -> None:
-    """Bound message content and keep tool evidence opt-in."""
+    """Bound messages while keeping tool evidence opt-in."""
     config = extractor.ExtractConfig(max_content_chars=8, include_tools=False, include_tool_arguments=False)
 
     _, turns = extractor.extract_turns(transcript, config)
@@ -315,11 +233,8 @@ def test_bounds_content_and_omits_tools_by_default(extractor: types.ModuleType, 
     assert turns[0].tools == []
 
 
-def test_retains_only_bounded_tail_while_preserving_total_count(
-    extractor: types.ModuleType,
-    transcript: Path,
-) -> None:
-    """Retain a bounded tail without losing the total turn count."""
+def test_retains_only_bounded_tail_while_preserving_total_count(extractor: types.ModuleType, transcript: Path) -> None:
+    """Retain a bounded tail without losing the total."""
     config = extractor.ExtractConfig(max_content_chars=100, include_tools=False, include_tool_arguments=False)
 
     metadata, turns = extractor.extract_turns(transcript, config, retain_last=1)
@@ -332,7 +247,7 @@ def test_preserves_parent_turn_across_nested_agent_invocation(
     extractor: types.ModuleType,
     nested_transcript: Path,
 ) -> None:
-    """Keep nested prompts and events inside their owning top-level turn."""
+    """Keep nested evidence with its parent and report unresolved raw-tail tools."""
     config = extractor.ExtractConfig(max_content_chars=100, include_tools=True, include_tool_arguments=False)
 
     metadata, turns = extractor.extract_turns(nested_transcript, config)
@@ -348,25 +263,10 @@ def test_preserves_parent_turn_across_nested_agent_invocation(
         ("read_file", True, True),
         ("integrate_ready_change", False, None),
     ]
-
-
-def test_reports_unresolved_tool_request_at_raw_transcript_tail(
-    extractor: types.ModuleType,
-    nested_transcript: Path,
-) -> None:
-    """Expose raw-tail loss instead of implying that requested tools completed."""
-    config = extractor.ExtractConfig(max_content_chars=100, include_tools=True, include_tool_arguments=False)
-
-    metadata, turns = extractor.extract_turns(nested_transcript, config)
-
     assert metadata["last_event_type"] == "assistant.turn_start"
     assert metadata["last_event_timestamp"] == "2026-08-05T10:00:09Z"
     assert metadata["incomplete_tool_calls"] == [
-        {
-            "name": "integrate_ready_change",
-            "tool_call_id": "call-integrate",
-            "state": "requested",
-        }
+        {"name": "integrate_ready_change", "tool_call_id": "call-integrate", "state": "requested"},
     ]
     rendered = extractor.render_markdown(metadata, turns)
     assert "not result bodies or command/domain success" in rendered
@@ -374,7 +274,7 @@ def test_reports_unresolved_tool_request_at_raw_transcript_tail(
 
 
 def test_bounds_tool_arguments_after_redaction(extractor: types.ModuleType, transcript: Path) -> None:
-    """Redact and cap tool arguments before rendering them."""
+    """Redact tool arguments before bounding their rendered size."""
     config = extractor.ExtractConfig(max_content_chars=20, include_tools=True, include_tool_arguments=True)
 
     _, turns = extractor.extract_turns(transcript, config)
@@ -386,7 +286,7 @@ def test_bounds_tool_arguments_after_redaction(extractor: types.ModuleType, tran
 
 
 def test_locates_exact_session_without_recursive_scan(extractor: types.ModuleType, tmp_path: Path) -> None:
-    """Locate a transcript through the stable workspace-storage shape."""
+    """Resolve the stable workspace-storage path directly."""
     session_id = "11111111-1111-4111-8111-111111111111"
     transcript = tmp_path / "workspace" / "GitHub.copilot-chat" / "transcripts" / f"{session_id}.jsonl"
     transcript.parent.mkdir(parents=True)
@@ -396,7 +296,7 @@ def test_locates_exact_session_without_recursive_scan(extractor: types.ModuleTyp
 
 
 def test_rejects_malformed_json(extractor: types.ModuleType, tmp_path: Path) -> None:
-    """Fail with bounded location evidence for malformed records."""
+    """Refuse malformed event records."""
     transcript = tmp_path / "broken.jsonl"
     transcript.write_text('{"type": "user.message"}\nnot-json\n', encoding="utf-8")
     config = extractor.ExtractConfig(max_content_chars=100, include_tools=False, include_tool_arguments=False)
