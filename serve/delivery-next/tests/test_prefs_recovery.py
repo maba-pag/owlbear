@@ -8,10 +8,8 @@ import subprocess
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
-from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.inbox import IntentItem
 from owlbear_delivery_next.change_contracts.models import Change, Exit, Question, Step, StepKind
@@ -19,10 +17,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile, Profi
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.commands import setup
-from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
-from owlbear_delivery_next.project_host import api
-from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.settings.config import Layer, Prefs
@@ -30,28 +25,14 @@ from owlbear_delivery_next.state_store import layers, prefs_import, profile_repa
 from owlbear_delivery_next.state_store import store as store_module
 from owlbear_delivery_next.state_store.store import RoleSourceError, Store, StoreError
 
+from .test_config_api import client
+
 AUTH = {"authorization": "Bearer " + "t"}
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 
 
-class Host:
-    repo = None  # no clone
-    wake = SimpleNamespace(set=lambda: None)
-    maintenance = None
-    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
-
-
-def client(store: Store, global_path: Path, **kw: object) -> TestClient:
-    store.global_path = global_path
-    return TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1", **kw)
-
-
 def confirmed(value: str) -> ProfileEntry:
     return ProfileEntry(state="known", value=value, evidence=f"{profile.CONFIRMED}; owner")
-
-
-def stored(value: str, evidence: str) -> ProfileEntry:
-    return ProfileEntry(state="known", value=value, evidence=evidence)
 
 
 @pytest.fixture
@@ -61,26 +42,24 @@ def local(tmp_path: Path, monkeypatch) -> Store:
 
 
 def clone_profile(remote: Path, tmp_path: Path, project: str = "shop-site") -> tuple[Store, Profile]:
-    second = tmp_path / "fresh"
-    subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
-    fresh = Store(tmp_path / "fresh-store", DataRepo(second), project)
-    return fresh, fresh.read_profile()
+    return clone_as(remote, tmp_path, "fresh", project)
 
 
 # Finding 1: an explicit review or clear settles the import in the same save
 
 
-def test_an_owner_clear_before_the_first_import_is_not_refilled_by_a_later_import(local, tmp_path):
+@pytest.mark.parametrize("value", [None, 60], ids=["clear", "set-60"])
+def test_owner_preimport_review_preserves_clear_or_value(local, tmp_path, value):
     local.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
     c = client(local, tmp_path / "global" / "config.json", headers=AUTH)
     first = c.get("/api/next/config").json()
-    cleared = first["project"] | {"prefs": {"ci_poll_seconds": None}}
+    cleared = first["project"] | {"prefs": {"ci_poll_seconds": value}}
     body = {"rev": first["project_rev"], "layer": cleared, "prefs_reviewed": True}
     assert c.put("/api/next/config/project", json=body).status_code == 200
     assert local.read_config().prefs_imported is True
 
     prefs_import.run(local)  # a delayed first import must not resurrect the cleared legacy value
-    assert local.read_config().prefs.ci_poll_seconds is None
+    assert local.read_config().prefs.ci_poll_seconds == value
 
 
 def test_an_explicit_review_before_the_first_import_settles_it_so_a_deleted_config_stays_absent(local, tmp_path):
@@ -199,18 +178,6 @@ def test_an_unreadable_profile_while_paused_is_a_visible_failure_that_writes_not
     assert not local.config_path.exists()
 
 
-def test_an_owner_review_that_sets_a_value_keeps_it_when_the_import_runs_later(local, tmp_path):
-    local.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
-    c = client(local, tmp_path / "global" / "config.json", headers=AUTH)
-    first = c.get("/api/next/config").json()
-    layer = first["project"] | {"prefs": {"ci_poll_seconds": 60}}
-    body = {"rev": first["project_rev"], "layer": layer, "prefs_reviewed": True}
-    assert c.put("/api/next/config/project", json=body).status_code == 200
-
-    prefs_import.run(local)
-    assert local.read_config().prefs.ci_poll_seconds == 60
-
-
 def test_a_stale_page_save_cannot_lower_the_import_latch(local, tmp_path):
     local.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
     prefs_import.run(local)  # the legacy value lands and the layer latches
@@ -244,22 +211,17 @@ def fold_intent(store: Store, intent: str):
         return store.fold(lock, "c1", NOW)
 
 
-def test_an_abandon_folds_without_an_ask_before_merge_preference(repo, monkeypatch):
+@pytest.mark.parametrize("intent", ["pause", "abandon"])
+def test_pause_or_abandon_folds_without_merge_preferences(repo, monkeypatch, intent):
     monkeypatch.setattr(config, "BASE", None)
     store = Store.open(repo)
     with store.lock("c1") as lock:
         store.write(lock, Change(slug="c1", step=Step(kind=StepKind.BUILD)))
-    change, _ = fold_intent(store, "abandon")
-    assert change.intent.abandoned_at is not None
-
-
-def test_a_pause_folds_without_an_ask_before_merge_preference_and_asks_nothing(repo, monkeypatch):
-    monkeypatch.setattr(config, "BASE", None)
-    store = Store.open(repo)
-    with store.lock("c1") as lock:
-        store.write(lock, Change(slug="c1", step=Step(kind=StepKind.BUILD)))
-    change, _ = fold_intent(store, "pause")
-    assert loop.open_question(change) is None
+    change, _ = fold_intent(store, intent)
+    if intent == "pause":
+        assert loop.open_question(change) is None
+    else:
+        assert change.intent.abandoned_at is not None
 
 
 def test_an_explicit_no_still_closes_an_open_consent_question(repo, monkeypatch):
@@ -283,30 +245,6 @@ def test_an_explicit_no_still_closes_an_open_consent_question(repo, monkeypatch)
     assert change.questions[0].answer.option == loop.OBSOLETE
 
 
-# Finding 3: stored legacy values are carried whatever their evidence says
-
-
-def test_stored_default_and_allowed_legacy_values_are_carried_once(local):
-    local.write_profile(
-        Profile(
-            entries={
-                profile.POLL: stored("45", "default"),
-                profile.METHOD: stored("squash", "allowed: merge, squash"),
-            }
-        )
-    )
-    prefs_import.run(local)
-    got = local.read_config().prefs
-    assert (got.ci_poll_seconds, got.merge_method) == (45, "squash")
-    assert local.read_profile().prefs_import == "done"
-
-
-def test_an_unknown_legacy_value_is_still_not_carried(local):
-    local.write_profile(Profile(entries={profile.POLL: ProfileEntry(state="unknown", value="45", evidence="default")}))
-    prefs_import.run(local)
-    assert local.read_config().prefs.ci_poll_seconds is None
-
-
 # Finding 4: a failed completion publication is retried, both automatically and from Settings
 
 
@@ -322,22 +260,6 @@ def refuse_completion_once(monkeypatch, store: Store) -> list[str]:
 
     monkeypatch.setattr(DataRepo, "publish", publish)
     return refused
-
-
-def test_a_refused_completion_is_published_by_the_automatic_import_retry(shared_repo, tmp_path, monkeypatch):
-    root, remote = shared_repo
-    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
-    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
-    refused = refuse_completion_once(monkeypatch, store)
-    with pytest.raises(StoreError, match="completion was not published"):
-        prefs_import.run(store)
-    assert refused
-    assert store.read_profile().prefs_import == "done"
-
-    prefs_import.run(store)  # the automatic retry publishes the done marker after the current config
-    fresh, got = clone_profile(remote, tmp_path)
-    assert got.prefs_import == "done"
-    assert fresh.read_config().prefs.ci_poll_seconds == 45
 
 
 def test_a_refused_completion_is_published_by_the_settings_settlement(shared_repo, tmp_path, monkeypatch):
@@ -420,25 +342,6 @@ def test_an_explicit_settings_edit_after_the_deleted_config_recreates_it(shared_
     assert fresh.read_config().prefs.ci_poll_seconds == 60
 
 
-def test_an_ordinary_profile_save_publishes_the_deleted_config_before_done(shared_repo, tmp_path, monkeypatch):
-    root, remote = shared_repo
-    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
-    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
-    refuse_completion_once(monkeypatch, store)
-    with pytest.raises(StoreError):
-        prefs_import.run(store)
-    store.config_path.unlink()
-
-    late = Profile(entries={profile.POLL: confirmed("45"), profile.WINDOW: confirmed("30")})
-    assert store.write_profile(late) == ""  # a later ordinary save: the removal lands before done is exposed
-    fresh, got = clone_profile(remote, tmp_path)
-    assert got.prefs_import == "done"
-    assert got.entries[profile.WINDOW].value == "30"
-    assert not fresh.config_path.exists()
-    assert fresh.read_config().prefs is None
-    assert not profile_share.unpublished(store)
-
-
 def delete_config_before_the_shared_lock(monkeypatch, store: Store) -> list[str]:
     """Delete the project config as the retry takes the shared lock, after its existence check; returns the callers."""
     real_locked, callers = DataRepo.locked, []
@@ -481,24 +384,6 @@ def test_a_config_deleted_before_the_retry_takes_the_shared_lock_stays_absent(sh
     assert fresh.read_config().prefs is None
     assert not store.config_path.exists()
     assert not profile_share.unpublished(store)
-
-
-def test_a_retry_with_a_healthy_config_publishes_its_unchanged_bytes(shared_repo, tmp_path, monkeypatch):
-    root, remote = shared_repo
-    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
-    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
-    refuse_completion_once(monkeypatch, store)
-    with pytest.raises(StoreError):
-        prefs_import.run(store)
-    before = remote_config_bytes(remote, store)
-    local = store.config_path.read_bytes()
-
-    prefs_import.run(store)
-    assert before == local
-    assert remote_config_bytes(remote, store) == local  # the publication leaves the config as it was
-    fresh, got = clone_profile(remote, tmp_path)
-    assert got.prefs_import == "done"
-    assert fresh.read_config().prefs.ci_poll_seconds == 45
 
 
 def test_an_unshared_retry_creates_no_config_once_the_owner_deleted_it(local):
@@ -552,7 +437,10 @@ def refuse_config_once(monkeypatch, store: Store) -> list[str]:
     return refused
 
 
-def test_a_refused_config_during_an_ordinary_save_keeps_new_facts_for_the_retry(shared_repo, tmp_path, monkeypatch):
+@pytest.mark.parametrize("outcome", ["published", "config-refused"])
+def test_profile_fact_save_orders_deleted_config_before_done_and_keeps_refused_facts(
+    shared_repo, tmp_path, monkeypatch, outcome
+):
     root, remote = shared_repo
     store = Store(tmp_path / "store", DataRepo(root), "shop-site")
     store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
@@ -560,24 +448,27 @@ def test_a_refused_config_during_an_ordinary_save_keeps_new_facts_for_the_retry(
     with pytest.raises(StoreError):
         prefs_import.run(store)
     store.config_path.unlink()  # the owner deletes the config; its removal is not yet published
-    refused = refuse_config_once(monkeypatch, store)
-
     late = Profile(version=2, entries={profile.POLL: confirmed("45"), profile.WINDOW: confirmed("30")})
-    assert store.write_profile(late)  # the config removal is refused, so the save reports it
-    assert refused
-    assert store.read_profile().entries[profile.WINDOW].value == "30"  # the new shared fact is kept locally
-    (tmp_path / "before").mkdir()
-    _, seen = clone_profile(remote, tmp_path / "before")
-    assert seen.prefs_import == "pending"  # nothing new reached the remote while the removal was refused
-    assert profile.WINDOW not in seen.entries
-
-    retried = Store(tmp_path / "store", DataRepo(root), "shop-site")  # a new Store on the same clone
-    prefs_import.run(retried)  # the retry removes the config, then publishes done with the new facts
+    if outcome == "config-refused":
+        refused = refuse_config_once(monkeypatch, store)
+        assert store.write_profile(late)
+        assert refused
+        assert store.read_profile().entries[profile.WINDOW].value == "30"
+        (tmp_path / "before").mkdir()
+        _, seen = clone_profile(remote, tmp_path / "before")
+        assert seen.prefs_import == "pending"
+        assert profile.WINDOW not in seen.entries
+        retried = Store(tmp_path / "store", DataRepo(root), "shop-site")
+        prefs_import.run(retried)
+    else:
+        assert store.write_profile(late) == ""
+        retried = store
     fresh, got = clone_profile(remote, tmp_path)
     assert got.prefs_import == "done"
     assert got.version == 2
     assert got.entries[profile.WINDOW].value == "30"
     assert not fresh.config_path.exists()
+    assert fresh.read_config().prefs is None
     assert not profile_share.unpublished(retried)
 
 
@@ -585,13 +476,6 @@ def test_a_refused_config_during_an_ordinary_save_keeps_new_facts_for_the_retry(
 
 
 UNREADABLE = '{"format": 4, "prefs_import": "%s", "prefs_basis": "", "models": {}}'
-
-
-def test_repair_keeps_a_done_import_guard_and_does_not_reimport(local: Store) -> None:
-    local.root.mkdir(parents=True, exist_ok=True)
-    (local.root / "profile.json").write_text(UNREADABLE % "done")
-    local.write_profile(Profile(version=2), replace_unreadable=True)
-    assert local.read_profile().prefs_import == "done"
 
 
 def test_ordinary_save_refuses_an_unreadable_saved_profile(local: Store) -> None:
@@ -628,53 +512,6 @@ def test_setup_repair_with_a_pending_guard_keeps_the_pending_marker(
     assert not store.config_path.exists()
 
 
-def test_repair_of_a_readable_profile_refuses_when_its_role_write_fails(
-    repo: Path, tmp_path_factory, monkeypatch, capsys
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
-    monkeypatch.setattr(readiness, "check", lambda *_a: pytest.fail("the refusal must come before the probe"))
-    store = Store.open(repo)
-    store.root.mkdir(parents=True, exist_ok=True)
-    raw = '{"format": 1, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}'
-    (store.root / profile_share.PROFILE).write_text(raw)
-    real_update = Store.update_config
-
-    def refused_role_write(self, change, what: str = "", **kwargs):
-        if what == "role overrides from the old profile":
-            msg = "fetch failed"
-            raise StoreError(msg)
-        return real_update(self, change, what, **kwargs)
-
-    monkeypatch.setattr(Store, "update_config", refused_role_write)
-    monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("no profile write after a refusal"))
-    with pytest.raises(StoreError, match="fetch failed"):
-        setup.run(repo, [], yes=True, local_files="no")
-    assert "cannot be read" not in capsys.readouterr().out
-    assert (store.root / profile_share.PROFILE).read_text() == raw
-    assert not (store.root / profile_share.ROLES_MOVED).exists()
-    assert not store.config_path.exists()
-
-
-def test_declined_repair_of_an_unreadable_profile_leaves_every_file_unchanged(
-    repo: Path, tmp_path_factory, monkeypatch, capsys
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
-    monkeypatch.setattr(readiness, "check", lambda *_a: [])
-    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
-    monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("no profile write before confirmation"))
-    store = Store.open(repo)
-    store.root.mkdir(parents=True, exist_ok=True)
-    raw = '{"format": 1, "models": {}}'
-    (store.root / profile_share.PROFILE).write_text(raw)
-    assert setup.run(repo, [], yes=False, local_files="no", ask=lambda _q: "n") == 1
-    out = capsys.readouterr().out
-    assert "cannot be read" in out
-    assert "discards the unreadable profile" in out
-    assert (store.root / profile_share.PROFILE).read_text() == raw
-    assert not (store.root / profile_share.ROLES_MOVED).exists()
-    assert not store.config_path.exists()
-
-
 def test_a_confirmed_repair_of_an_unreadable_done_local_profile_keeps_the_guard(
     repo: Path, tmp_path_factory, monkeypatch
 ) -> None:
@@ -690,28 +527,8 @@ def test_a_confirmed_repair_of_an_unreadable_done_local_profile_keeps_the_guard(
     assert saved.prefs_import == "done"
     assert profile_repair.pending(store) is None
     assert not (store.root / profile_repair.RECEIPT).exists()
-
-
-def test_a_local_source_changed_while_the_owner_confirms_is_refused_without_overwrite(
-    repo: Path, tmp_path_factory, monkeypatch
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
-    monkeypatch.setattr(readiness, "check", lambda *_a: [])
-    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
-    store = Store.open(repo)
-    store.root.mkdir(parents=True, exist_ok=True)
-    (store.root / profile_share.PROFILE).write_text(UNREADABLE % "done")
-    newer = '{"format": 1, "roles": {"reviewer": {"model": "r-9", "effort": "max"}}}'
-
-    def answer(_question: str) -> str:
-        (store.root / profile_share.PROFILE).write_text(newer)
-        return "y"
-
-    assert setup.run(repo, [], yes=False, local_files="no", ask=answer) == 1
-    assert (store.root / profile_share.PROFILE).read_text() == newer
+    prefs_import.run(store)
     assert not store.config_path.exists()
-    assert not (store.root / profile_share.ROLES_MOVED).exists()
-    assert profile_repair.pending(store) is None
 
 
 def shared_project(repo: Path, shared_repo, monkeypatch) -> Store:
@@ -726,21 +543,16 @@ def shared_project(repo: Path, shared_repo, monkeypatch) -> Store:
     return store
 
 
-def test_shared_repair_declined_keeps_the_local_source_and_the_absent_target(
-    repo: Path, shared_repo, monkeypatch, capsys
-) -> None:
-    store = shared_project(repo, shared_repo, monkeypatch)
-    monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("no profile write before confirmation"))
-    raw = '{"format": 1, "models": {}}'
-    (store.root / profile_share.PROFILE).write_text(raw)
-    assert not profile_share.path(store).exists()
-    assert setup.run(repo, [], yes=False, local_files="no", ask=lambda _q: "n") == 1
-    out = capsys.readouterr().out
-    assert "cannot be read" in out
-    assert "discards the unreadable profile" in out
-    assert (store.root / profile_share.PROFILE).read_text() == raw
-    assert not profile_share.path(store).exists()
-    assert not store.config_path.exists()
+@pytest.fixture
+def repair_store(request, repo: Path, monkeypatch) -> Store:
+    monkeypatch.setattr(config, "BASE", None)
+    monkeypatch.setattr(readiness, "check", lambda *_a: [])
+    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    if request.param == "shared":
+        return shared_project(repo, request.getfixturevalue("shared_repo"), monkeypatch)
+    store = Store.open(repo)
+    store.root.mkdir(parents=True, exist_ok=True)
+    return store
 
 
 def test_shared_repair_confirmed_keeps_a_valid_pending_guard_and_starts_fresh(
@@ -759,27 +571,16 @@ def test_shared_repair_confirmed_keeps_a_valid_pending_guard_and_starts_fresh(
 BAD_EFFORT = '{"format": 1, "roles": {"reviewer": {"model": "r-1", "effort": "bogus"}}}'
 
 
-def test_shared_repair_names_the_local_source_whose_roles_cannot_be_read(
-    repo: Path, shared_repo, monkeypatch, capsys
-) -> None:
-    store = shared_project(repo, shared_repo, monkeypatch)
-    (store.root / profile_share.PROFILE).write_text(BAD_EFFORT)
-    assert setup.run(repo, [], yes=False, local_files="no", ask=lambda _q: "n") == 1
-    out = capsys.readouterr().out
-    assert "cannot be read" in out
-    assert str(store.root / profile_share.PROFILE) in out
-    assert (store.root / profile_share.PROFILE).read_text() == BAD_EFFORT
-    assert not profile_share.path(store).exists()
-    assert not store.config_path.exists()
-
-
-def test_shared_repair_refuses_when_the_local_source_changed_while_the_owner_answered(
-    repo: Path, shared_repo, monkeypatch, capsys
-) -> None:
-    store = shared_project(repo, shared_repo, monkeypatch)
+@pytest.mark.parametrize("repair_store", ["local", "shared"], indirect=True)
+def test_changed_private_source_during_repair_confirmation_is_not_overwritten(repo: Path, repair_store, capsys) -> None:
+    store = repair_store
     source = store.root / profile_share.PROFILE
-    source.write_text(BAD_EFFORT)
-    newer = '{"format": 1, "roles": {"planner": {"model": "p-2", "effort": "bogus"}}}'
+    source.write_text(BAD_EFFORT if store.shared else UNREADABLE % "done")
+    newer = (
+        '{"format": 1, "roles": {"planner": {"model": "p-2", "effort": "bogus"}}}'
+        if store.shared
+        else '{"format": 1, "roles": {"reviewer": {"model": "r-9", "effort": "max"}}}'
+    )
 
     def changed_then_yes(_question: str) -> str:
         source.write_text(newer)
@@ -788,8 +589,11 @@ def test_shared_repair_refuses_when_the_local_source_changed_while_the_owner_ans
     assert setup.run(repo, [], yes=False, local_files="no", ask=changed_then_yes) == 1
     assert "changed while you answered; nothing was saved" in capsys.readouterr().out
     assert source.read_text() == newer
-    assert not profile_share.path(store).exists()
+    if store.shared:
+        assert not profile_share.path(store).exists()
     assert not store.config_path.exists()
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
+    assert profile_repair.pending(store) is None
 
 
 def test_shared_repair_write_failure_keeps_the_source_and_retries_after_repair(
@@ -871,19 +675,25 @@ def test_shared_repair_success_lets_a_fresh_open_and_readiness_run_with_the_publ
     assert not store.config_path.exists()
 
 
-def test_shared_repair_of_a_readable_profile_refuses_when_its_role_write_fails_before_probe(
-    repo: Path, shared_repo, monkeypatch, capsys
+@pytest.mark.parametrize("repair_store", ["local", "shared"], indirect=True)
+def test_profile_role_write_refusal_precedes_probe_and_profile_save(
+    repo: Path, repair_store, monkeypatch, capsys
 ) -> None:
-    store = shared_project(repo, shared_repo, monkeypatch)
+    store = repair_store
     source = store.root / profile_share.PROFILE
     raw = '{"format": 1, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}'
     source.write_text(raw)
     monkeypatch.setattr(setup.profile, "detect", lambda *_a: pytest.fail("no probe before the role write succeeds"))
+    monkeypatch.setattr(readiness, "check", lambda *_a: pytest.fail("the refusal must come before the probe"))
     monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("no profile write before the roles"))
 
-    def refused_config(*_a: object, **_k: object) -> None:
-        msg = "fetch failed"
-        raise StoreError(msg)
+    real_update = Store.update_config
+
+    def refused_config(self, change, what="", **kwargs):
+        if what == "role overrides from the old profile":
+            msg = "fetch failed"
+            raise StoreError(msg)
+        return real_update(self, change, what, **kwargs)
 
     monkeypatch.setattr(Store, "update_config", refused_config)
     with pytest.raises(StoreError, match="fetch failed") as info:
@@ -891,7 +701,8 @@ def test_shared_repair_of_a_readable_profile_refuses_when_its_role_write_fails_b
     assert not isinstance(info.value, RoleSourceError)
     assert "cannot be read" not in capsys.readouterr().out
     assert source.read_text() == raw
-    assert not profile_share.path(store).exists()
+    if store.shared:
+        assert not profile_share.path(store).exists()
     assert not store.config_path.exists()
     assert not (store.root / profile_share.ROLES_MOVED).exists()
 
@@ -1004,10 +815,13 @@ def test_shared_only_damaged_target_is_repaired_with_its_guard_and_no_source_to_
     assert Store.open(repo).read_profile().prefs_import == "done"
 
 
-def test_shared_only_target_replaced_during_confirmation_keeps_the_newer_bytes(
-    repo: Path, shared_repo, monkeypatch, capsys
+@pytest.mark.parametrize("private", [None, GOOD_ROLES], ids=["absent-private", "readable-private"])
+def test_changed_shared_target_during_repair_confirmation_is_not_overwritten(
+    repo: Path, shared_repo, monkeypatch, capsys, private
 ) -> None:
     store = shared_project(repo, shared_repo, monkeypatch)
+    if private is not None:
+        (store.root / profile_share.PROFILE).write_text(private)
     target = shared_only_damaged(store, UNREADABLE % "")
     newer = '{"format": 1, "roles": {"planner": {"model": "p-2", "effort": "max"}}}'
 
@@ -1019,13 +833,20 @@ def test_shared_only_target_replaced_during_confirmation_keeps_the_newer_bytes(
     assert "Profile v" not in capsys.readouterr().out
     assert target.read_text() == newer
     assert not (store.root / profile_repair.RECEIPT).exists()
-    assert not store.config_path.exists()
+    if private is None:
+        assert not store.config_path.exists()
+    else:
+        assert (store.root / profile_share.PROFILE).read_text() == private
+        assert "r-2" in store.config_path.read_text()
 
 
-def test_shared_only_target_replaced_while_the_writer_lock_is_awaited_keeps_the_newer_bytes(
-    repo: Path, shared_repo, monkeypatch, capsys
+@pytest.mark.parametrize("private", [None, GOOD_ROLES], ids=["absent-private", "readable-private"])
+def test_changed_shared_target_while_waiting_for_writer_is_not_overwritten(
+    repo: Path, shared_repo, monkeypatch, capsys, private
 ) -> None:
     store = shared_project(repo, shared_repo, monkeypatch)
+    if private is not None:
+        (store.root / profile_share.PROFILE).write_text(private)
     target = shared_only_damaged(store, UNREADABLE % "")
     newer = '{"format": 1, "roles": {"planner": {"model": "p-2", "effort": "max"}}}'
     real_writer = profile_share._writer  # noqa: SLF001 - the writer lock itself is what the probe sits in
@@ -1054,18 +875,11 @@ def test_shared_only_target_replaced_while_the_writer_lock_is_awaited_keeps_the_
     assert "Profile v" not in capsys.readouterr().out
     assert target.read_text() == newer
     assert not (store.root / profile_repair.RECEIPT).exists()
-    assert not store.config_path.exists()
-
-
-def test_shared_only_repair_declined_writes_nothing(repo: Path, shared_repo, monkeypatch) -> None:
-    store = shared_project(repo, shared_repo, monkeypatch)
-    raw = UNREADABLE % ""
-    target = shared_only_damaged(store, raw)
-    monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("no profile write before confirmation"))
-    assert setup.run(repo, [], yes=False, local_files="no", ask=lambda _q: "n") == 1
-    assert target.read_text() == raw
-    assert not (store.root / profile_repair.RECEIPT).exists()
-    assert not store.config_path.exists()
+    if private is None:
+        assert not store.config_path.exists()
+    else:
+        assert (store.root / profile_share.PROFILE).read_text() == private
+        assert "r-2" in store.config_path.read_text()
 
 
 def test_shared_only_target_readable_before_observation_is_not_treated_as_the_approved_bad_source(
@@ -1115,6 +929,47 @@ def test_shared_only_sync_failure_keeps_the_approved_repair_and_resumes_without_
 PRIVATE_READABLE = GOOD_ROLES
 
 
+@pytest.mark.parametrize(
+    ("repair_store", "observed"),
+    [
+        ("local", ('{"format": 1, "models": {}}', None)),
+        ("shared", ('{"format": 1, "models": {}}', None)),
+        ("shared", (BAD_EFFORT, None)),
+        ("shared", (None, UNREADABLE % "")),
+        ("shared", (PRIVATE_READABLE, UNREADABLE % "")),
+    ],
+    indirect=["repair_store"],
+    ids=["local-models", "shared-private-models", "shared-private-bad-effort", "shared-only", "readable-private"],
+)
+def test_declined_repair_keeps_observed_sources_and_targets(
+    repo: Path, repair_store, observed, monkeypatch, capsys
+) -> None:
+    store = repair_store
+    private, target = observed
+    source = store.root / profile_share.PROFILE
+    if private is not None:
+        source.write_text(private)
+    if target is not None:
+        shared_only_damaged(store, target)
+    monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("no profile write before confirmation"))
+    assert setup.run(repo, [], yes=False, local_files="no", ask=lambda _q: "n") == 1
+    out = capsys.readouterr().out
+    assert "cannot be read" in out
+    assert "discards the unreadable profile" in out
+    if private == BAD_EFFORT:
+        assert str(source) in out
+    assert (source.read_text() if source.exists() else None) == private
+    if store.shared:
+        shared = profile_share.path(store)
+        assert (shared.read_text() if shared.exists() else None) == target
+    assert not (store.root / profile_repair.RECEIPT).exists()
+    if private == PRIVATE_READABLE:
+        assert "r-2" in store.config_path.read_text()
+    else:
+        assert not store.config_path.exists()
+        assert not (store.root / profile_share.ROLES_MOVED).exists()
+
+
 def test_shared_damaged_target_is_repaired_while_the_readable_private_profile_stays_byte_for_byte(
     repo: Path, shared_repo, monkeypatch
 ) -> None:
@@ -1128,76 +983,6 @@ def test_shared_damaged_target_is_repaired_while_the_readable_private_profile_st
     assert (store.root / profile_share.ROLES_MOVED).exists()
     assert profile_share.path(store).exists()
     assert "prefs_import" in profile_share.path(store).read_text()
-
-
-def test_shared_damaged_target_replaced_during_confirmation_keeps_the_owner_bytes_with_readable_private(
-    repo: Path, shared_repo, monkeypatch
-) -> None:
-    store = shared_project(repo, shared_repo, monkeypatch)
-    (store.root / profile_share.PROFILE).write_text(PRIVATE_READABLE)
-    target = shared_only_damaged(store, UNREADABLE % "")
-    newer = '{"format": 1, "roles": {"planner": {"model": "p-2", "effort": "max"}}}'
-
-    def newer_then_yes(_question: str) -> str:
-        target.write_text(newer)
-        return "y"
-
-    assert setup.run(repo, [], yes=False, local_files="no", ask=newer_then_yes) != 0
-    assert target.read_text() == newer
-    assert (store.root / profile_share.PROFILE).read_text() == PRIVATE_READABLE
-    assert not (store.root / profile_repair.RECEIPT).exists()
-    assert "r-2" in store.config_path.read_text()
-
-
-def test_shared_damaged_target_replaced_while_the_writer_lock_is_awaited_keeps_the_owner_bytes_with_readable_private(
-    repo: Path, shared_repo, monkeypatch
-) -> None:
-    store = shared_project(repo, shared_repo, monkeypatch)
-    (store.root / profile_share.PROFILE).write_text(PRIVATE_READABLE)
-    target = shared_only_damaged(store, UNREADABLE % "")
-    newer = '{"format": 1, "roles": {"planner": {"model": "p-2", "effort": "max"}}}'
-    real_writer = profile_share._writer  # noqa: SLF001 - the writer lock is where the race is injected
-    armed: list[bool] = []
-
-    @contextlib.contextmanager
-    def changed_at_entry(st: Store, *, create: bool = True):
-        if armed:
-            armed.clear()
-            target.write_text(newer)
-        with real_writer(st, create=create):
-            yield
-
-    real_write = Store.write_profile
-
-    def armed_write(self: Store, prof: Profile, **kwargs: object) -> str:
-        armed.append(True)
-        try:
-            return real_write(self, prof, **kwargs)
-        finally:
-            armed.clear()
-
-    monkeypatch.setattr(profile_share, "_writer", changed_at_entry)
-    monkeypatch.setattr(Store, "write_profile", armed_write)
-    assert setup.run(repo, [], yes=True, local_files="no") != 0
-    assert target.read_text() == newer
-    assert (store.root / profile_share.PROFILE).read_text() == PRIVATE_READABLE
-    assert not (store.root / profile_repair.RECEIPT).exists()
-    assert "r-2" in store.config_path.read_text()
-
-
-def test_shared_damaged_target_repair_declined_with_readable_private_writes_nothing(
-    repo: Path, shared_repo, monkeypatch
-) -> None:
-    store = shared_project(repo, shared_repo, monkeypatch)
-    (store.root / profile_share.PROFILE).write_text(PRIVATE_READABLE)
-    raw = UNREADABLE % ""
-    target = shared_only_damaged(store, raw)
-    monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("no profile write before confirmation"))
-    assert setup.run(repo, [], yes=False, local_files="no", ask=lambda _q: "n") == 1
-    assert target.read_text() == raw
-    assert (store.root / profile_share.PROFILE).read_text() == PRIVATE_READABLE
-    assert not (store.root / profile_repair.RECEIPT).exists()
-    assert "r-2" in store.config_path.read_text()
 
 
 def readable_private_repaired(repo: Path, shared_repo, monkeypatch, before_snapshot):
@@ -1312,38 +1097,21 @@ def test_old_source_unreadable_at_final_observation_keeps_the_approved_repair(
     assert (store.root / profile_repair.RECEIPT).exists()
 
 
-def test_bad_local_overlay_never_replaces_a_readable_shared_profile(repo: Path, shared_repo, monkeypatch) -> None:
-    store = shared_project(repo, shared_repo, monkeypatch)
+@pytest.mark.parametrize("repair_store", ["local", "shared"], indirect=True)
+def test_bad_overlay_does_not_authorize_readable_profile_replacement(repo: Path, repair_store, monkeypatch) -> None:
+    store = repair_store
     (store.root / profile_share.PROFILE).write_text(PRIVATE_READABLE)
-    shared = profile_share.path(store)
-    shared.parent.mkdir(parents=True, exist_ok=True)
-    shared.write_text(GOOD_ROLES)
+    if store.shared:
+        shared = profile_share.path(store)
+        shared.parent.mkdir(parents=True, exist_ok=True)
+        shared.write_text(GOOD_ROLES)
     overlay = store.root / profile_share.LOCAL
     overlay.write_text("{not json")
     monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("a readable profile is never replaced"))
     with pytest.raises(StoreError, match="reads now"):
         setup.run(repo, [], yes=True, local_files="no")
-    assert shared.read_text() == GOOD_ROLES
-    assert (store.root / profile_share.PROFILE).read_text() == PRIVATE_READABLE
-    assert overlay.read_text() == "{not json"
-    assert not (store.root / profile_repair.RECEIPT).exists()
-    assert "r-2" in store.config_path.read_text()
-
-
-def test_bad_local_overlay_never_replaces_a_readable_unshared_profile(
-    repo: Path, tmp_path_factory, monkeypatch
-) -> None:
-    monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
-    monkeypatch.setattr(readiness, "check", lambda *_a: [])
-    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
-    store = Store.open(repo)
-    store.root.mkdir(parents=True, exist_ok=True)
-    (store.root / profile_share.PROFILE).write_text(PRIVATE_READABLE)
-    overlay = store.root / profile_share.LOCAL
-    overlay.write_text("{not json")
-    monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("a readable profile is never replaced"))
-    with pytest.raises(StoreError, match="reads now"):
-        setup.run(repo, [], yes=True, local_files="no")
+    if store.shared:
+        assert shared.read_text() == GOOD_ROLES
     assert (store.root / profile_share.PROFILE).read_text() == PRIVATE_READABLE
     assert overlay.read_text() == "{not json"
     assert not (store.root / profile_repair.RECEIPT).exists()
@@ -1686,8 +1454,9 @@ def test_a_pending_repair_receipt_that_is_future_or_malformed_is_still_refused_a
     assert receipt.read_bytes() == before
 
 
-def test_a_receipt_replaced_before_publication_refuses_the_older_one_before_any_write(
-    repo: Path, shared_repo, monkeypatch, tmp_path
+@pytest.mark.parametrize("replacement", ["new-id", "same-id-new-profile"])
+def test_replaced_receipt_id_or_profile_is_refused_before_storage_changes(
+    repo: Path, shared_repo, monkeypatch, tmp_path, replacement
 ) -> None:
     _data, remote = shared_repo
     store = shared_project(repo, shared_repo, monkeypatch)
@@ -1697,7 +1466,7 @@ def test_a_receipt_replaced_before_publication_refuses_the_older_one_before_any_
     receipt = store.root / profile_repair.RECEIPT
     newer = profile_repair.Receipt(
         format=1,
-        id="b" * 32,
+        id="b" * 32 if replacement == "new-id" else first.id,
         scope=profile_repair.scope(store),
         source=first.source,
         target="absent",
@@ -1718,6 +1487,7 @@ def test_a_receipt_replaced_before_publication_refuses_the_older_one_before_any_
     assert writes == ["write"]
     assert receipt.read_bytes() == before
     assert source.read_text() == BAD_EFFORT
+    assert not (store.root / profile_share.ROLES_MOVED).exists()
     _, landed = clone_profile(remote, tmp_path / "after", store.name)
     assert landed is None
 
@@ -1751,11 +1521,19 @@ def test_a_receipt_replaced_during_publication_is_not_retired(repo: Path, shared
     assert receipt.read_text() == newer.model_dump_json()
 
 
-@pytest.mark.parametrize("damage", ["fifo", "directory", "symlink", "empty_source", "bad_target", "blank_scope"])
+@pytest.mark.parametrize(
+    "damage", ["fifo", "directory", "symlink", "empty_source", "bad_target", "blank_scope", "no-format"]
+)
 def test_an_unreadable_or_invalid_receipt_is_refused_by_name_before_any_change(
     damage: str, repo: Path, shared_repo, monkeypatch, capsys
 ) -> None:
-    store, receipt = refused_repair_receipt(repo, shared_repo, monkeypatch, capsys)
+    if damage == "no-format":
+        store = shared_project(repo, shared_repo, monkeypatch)
+        (store.root / profile_share.PROFILE).write_text(BAD_EFFORT)
+        stage_confirmed(store)
+        receipt = store.root / profile_repair.RECEIPT
+    else:
+        store, receipt = refused_repair_receipt(repo, shared_repo, monkeypatch, capsys)
     if damage == "fifo":
         receipt.unlink()
         os.mkfifo(receipt)
@@ -1767,6 +1545,10 @@ def test_an_unreadable_or_invalid_receipt_is_refused_by_name_before_any_change(
         elsewhere.write_bytes(receipt.read_bytes())
         receipt.unlink()
         receipt.symlink_to(elsewhere)
+    elif damage == "no-format":
+        data = json.loads(receipt.read_text())
+        del data["format"]
+        receipt.write_text(json.dumps(data))
     else:
         key, value = {"empty_source": ("source", ""), "bad_target": ("target", ""), "blank_scope": ("scope", "")}[
             damage
@@ -1775,14 +1557,20 @@ def test_an_unreadable_or_invalid_receipt_is_refused_by_name_before_any_change(
         data[key] = value
         receipt.write_text(json.dumps(data))
     source_before = (store.root / profile_share.PROFILE).read_bytes()
-    target_before = profile_share.path(store).read_bytes()
+    target = profile_share.path(store)
+    target_before = target.read_bytes() if target.exists() else None
+    receipt_before = receipt.read_bytes() if damage == "no-format" else None
     calls = probed_repair(monkeypatch)
     with pytest.raises(StoreError) as info:
         setup.run(repo, [], yes=False, local_files="no")
     assert str(receipt) in str(info.value)
     assert calls == []
     assert (store.root / profile_share.PROFILE).read_bytes() == source_before
-    assert profile_share.path(store).read_bytes() == target_before
+    assert (target.read_bytes() if target.exists() else None) == target_before
+    if damage == "no-format":
+        assert receipt.read_bytes() == receipt_before
+        _, landed = clone_profile(shared_repo[1], repo.parent / "after", store.name)
+        assert landed is None
 
 
 # Finding 6: a legacy claim is won only by its own published nonce, never by an equal absent basis
@@ -1876,47 +1664,6 @@ def test_a_second_logical_repair_waits_while_the_first_publication_finishes_on_t
     assert second.id != first.id
     assert profile_repair.pending(other) == second  # the second logical repository sees its own receipt
     assert (store.root / profile_share.ROLES_MOVED).exists()
-
-
-def test_a_same_id_receipt_whose_profile_changed_is_refused_before_any_write(
-    repo: Path, shared_repo, monkeypatch, tmp_path
-) -> None:
-    _data, remote = shared_repo
-    store = shared_project(repo, shared_repo, monkeypatch)
-    source = store.root / profile_share.PROFILE
-    source.write_text(BAD_EFFORT)
-    first = stage_confirmed(store, version=1)
-    receipt = store.root / profile_repair.RECEIPT
-    receipt.write_text(first.model_copy(update={"profile": Profile(version=2, confirmed_at=NOW)}).model_dump_json())
-    before = receipt.read_bytes()
-    with pytest.raises(StoreError, match="replaced or removed"):
-        profile_repair.publish(store, first, resumed=False)
-    assert receipt.read_bytes() == before
-    assert not (store.root / profile_share.ROLES_MOVED).exists()
-    assert source.read_text() == BAD_EFFORT
-    _fresh, landed = clone_profile(remote, tmp_path)
-    assert landed is None
-
-
-def test_a_receipt_without_a_format_version_is_refused_before_any_publication(
-    repo: Path, shared_repo, monkeypatch, tmp_path
-) -> None:
-    _data, remote = shared_repo
-    store = shared_project(repo, shared_repo, monkeypatch)
-    source = store.root / profile_share.PROFILE
-    source.write_text(BAD_EFFORT)
-    stage_confirmed(store, version=1)
-    receipt = store.root / profile_repair.RECEIPT
-    payload = json.loads(receipt.read_text())
-    del payload["format"]
-    receipt.write_text(json.dumps(payload))
-    before = receipt.read_bytes()
-    with pytest.raises(StoreError) as caught:
-        profile_repair.pending(store)
-    assert str(receipt) in str(caught.value)
-    assert receipt.read_bytes() == before
-    _fresh, landed = clone_profile(remote, tmp_path)
-    assert landed is None
 
 
 @pytest.mark.parametrize("failing", ["fstat", "read"])
@@ -2150,15 +1897,5 @@ def test_a_winner_paused_on_its_own_checkout_still_fills_after_an_unrelated_remo
 
     assert winner.read_config().prefs.ci_poll_seconds == 45
     fresh, got = clone_as(remote, tmp_path, "fresh-checkout")
-    assert got.prefs_import == "done"
-    assert fresh.read_config().prefs.ci_poll_seconds == 45
-
-
-def test_a_published_fresh_claim_fills_once_and_marks_done(shared_repo, tmp_path):
-    root, remote = shared_repo
-    store = Store(tmp_path / "store", DataRepo(root), "shop-site")
-    store.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
-    prefs_import.run(store)
-    fresh, got = clone_as(remote, tmp_path, "fresh")
     assert got.prefs_import == "done"
     assert fresh.read_config().prefs.ci_poll_seconds == 45

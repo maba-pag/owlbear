@@ -2,9 +2,7 @@
 
 import json
 import subprocess
-import tempfile
 from datetime import UTC, datetime
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -26,223 +24,103 @@ from owlbear_delivery_next.state_store.store import (
 )
 
 
-class FakeStore:
-    """The store calls the import makes over a real config file; a publication notice is returned, a failure raised.
-
-    Assigning ``layer`` is an owner edit: it rewrites the file, so the claim's digest no longer matches.
-    """
-
-    def __init__(self, marker: str = "", layer: Layer | None = None, *, exists: bool = True) -> None:
-        self.root = Path(tempfile.mkdtemp())
-        self.shared = None  # an unshared clone: its profile lives in its own root under the private lock
-        self.name = ""
-        self.config_path = self.root / "config.json"
-        self.prof = Profile(
-            entries={profile.POLL: ProfileEntry(state="known", value="45", evidence=f"{profile.CONFIRMED}; owner")},
-            prefs_import=marker,
-        )
-        self._layer = Layer()
-        if exists or layer is not None:
-            self.layer = layer if layer is not None else Layer()
-        self.fills = 0
-        self.publishes = 0
-        self.stale_layer: Layer | None = None  # what a read taken before the owner's clear returns
-        self.notices: list[str] = []  # queued publication notices, one per call
-        self.raise_next = False
-
-    @property
-    def layer(self) -> Layer:
-        return self._layer
-
-    @layer.setter
-    def layer(self, value: Layer) -> None:
-        self._layer = value
-        self.config_path.write_text(value.model_dump_json(indent=1))
-
-    def delete_config(self) -> None:
-        self.config_path.unlink(missing_ok=True)
-        self._layer = Layer()
-
-    @property
-    def prof(self) -> Profile:
-        """The profile as the store reads it from its root file (the claim check reads the same file)."""
-        return profile_share._read_unlocked(self)  # noqa: SLF001 - the fake keeps the store's file layout
-
-    @prof.setter
-    def prof(self, prof: Profile) -> None:
-        profile_share._stage(self, prof)  # noqa: SLF001 - writes the root profile file as the store does
-
-    def read_profile(self) -> Profile:
-        return self.prof
-
-    def write_profile(self, prof: Profile) -> str:
-        self.prof = prof
-        return self.notices.pop(0) if self.notices else ""
-
-    def mark_prefs_import(self, expect: str, to: str, basis: str = "", claim: str = "") -> tuple[str, str, bool]:
-        with profile_share._writer(self, create=False):  # noqa: SLF001 - the marker is read and saved under the lock
-            current = profile_share._read_unlocked(self)  # noqa: SLF001
-            if current is None or current.prefs_import != expect:
-                return (current.prefs_import if current else "", "", False)
-            update = {"prefs_import": to, "prefs_basis": basis if to == "pending" else ""}
-            if to == "pending":
-                update["prefs_claim"] = claim
-            self.prof = current.model_copy(update=update)
-        return to, self.notices.pop(0) if self.notices else "", True
-
-    def read_config(self) -> Layer:
-        return self.stale_layer if self.stale_layer is not None else self.layer
-
-    def update_config(self, change, what: str = "") -> str:  # noqa: ARG002 - the store's signature
-        if self.raise_next:
-            self.raise_next = False
-            msg = "publish failed"
-            raise OSError(msg)
-        self.layer = change(self.layer)
-        self.fills += 1
-        self.publishes += 1
-        return self.notices.pop(0) if self.notices else ""
-
-
 @pytest.fixture(autouse=True)
 def no_base(monkeypatch):
     monkeypatch.setattr(config, "BASE", None)
 
 
-def test_the_import_runs_once_and_marks_the_profile_done():
-    store = FakeStore()
-    prefs_import.run(store)
-    assert store.layer.prefs.ci_poll_seconds == 45
-    assert store.layer.prefs_imported is True
-    assert store.prof.prefs_import == "done"
-    assert profile.POLL in store.prof.entries  # the source entry is kept, not moved
-    prefs_import.run(store)
-    assert store.fills == 1
+@pytest.fixture
+def legacy_store(tmp_path):
+    store = Store(tmp_path / "store")
+    entry = ProfileEntry(state="known", value="45", evidence=f"{profile.CONFIRMED}; owner")
+    store.write_profile(Profile(entries={profile.POLL: entry}))
+    store.save(store.config_path, Layer, lambda _cur: Layer(), "owner", owner=True)
+    return store
 
 
-def test_a_claim_is_durable_before_the_fill_so_a_config_deletion_cannot_refill():
-    store = FakeStore()
+def test_a_claim_is_durable_before_the_fill_so_a_config_deletion_cannot_refill(legacy_store, monkeypatch):
+    store = legacy_store
     seen: list[str] = []
     original = store.update_config
 
-    def fill_then_delete(change, what=""):
-        seen.append(store.prof.prefs_import)  # the claim must already be on disk
-        out = original(change, what)
-        store.layer = Layer()  # the owner deletes the config between fill and completion
+    def fill_then_delete(change, what="project layer", on_written=None):
+        seen.append(store.read_profile().prefs_import)
+        out = original(change, what, on_written)
+        store.save(store.config_path, Layer, lambda _cur: Layer(), "owner", owner=True)
         return out
 
-    store.update_config = fill_then_delete
+    monkeypatch.setattr(store, "update_config", fill_then_delete)
     prefs_import.run(store)
     assert seen == ["pending"]
-    assert store.prof.prefs_import == "done"
-    assert store.layer.prefs is None  # the deleted config is not refilled on the next run
-    prefs_import.run(store)
-    assert store.layer.prefs is None
+    assert store.read_profile().prefs_import == "done"
+    assert store.read_config().prefs is None
+    fresh = Store(store.root)
+    prefs_import.run(fresh)
+    assert fresh.read_config().prefs is None
 
 
-def test_a_failed_publication_notice_raises_and_a_retry_publishes_without_refilling_clears():
-    store = FakeStore()
-    store.notices = ["", "remote refused"]  # the claim publishes; the fill's publication is refused
-    with pytest.raises(StoreError, match="not published"):
+@pytest.mark.parametrize("failure", [OSError("publish failed"), KeyboardInterrupt()], ids=["os-error", "interrupt"])
+def test_durable_claim_restarts_before_fill_with_unchanged_config(legacy_store, monkeypatch, failure):
+    store = legacy_store
+    before = store.config_path.read_bytes()
+    basis = profile_share.config_digest(store.config_path)
+
+    def fail(*_args, **_kwargs):
+        raise failure
+
+    monkeypatch.setattr(store, "update_config", fail)
+    with pytest.raises(type(failure)) as caught:
         prefs_import.run(store)
-    assert store.prof.prefs_import == "pending"  # the local fill stays; the retry must not refill it
-    store.layer = store.layer.model_copy(update={"prefs": Prefs(ci_poll_seconds=None), "prefs_imported": True})
-    prefs_import.run(store)  # the owner cleared the value before the retry
-    assert store.layer.prefs.ci_poll_seconds is None
-    assert store.prof.prefs_import == "done"
+    if isinstance(failure, OSError):
+        assert str(caught.value) == "publish failed"
+    claimed = store.read_profile()
+    assert (claimed.prefs_import, claimed.prefs_basis) == ("pending", basis)
+    assert claimed.prefs_claim
+    assert store.config_path.read_bytes() == before
+    fresh = Store(store.root)
+    prefs_import.run(fresh)
+    assert fresh.read_config().prefs.ci_poll_seconds == 45
+    assert fresh.read_profile().prefs_import == "done"
 
 
-def test_a_raised_fill_failure_keeps_the_claim_so_a_retry_fills_only_the_unchanged_config():
-    store = FakeStore()
-    store.raise_next = True
-    with pytest.raises(OSError, match="publish failed"):
-        prefs_import.run(store)
-    assert store.prof.prefs_import == "pending"
-    assert store.prof.prefs_basis != ""
-    prefs_import.run(store)
-    assert store.layer.prefs.ci_poll_seconds == 45
-    assert store.prof.prefs_import == "done"
-
-
-def test_a_crash_after_the_claim_and_before_the_fill_resumes_when_the_config_is_unchanged():
-    store = FakeStore()
-    store.update_config = _crash
-    with pytest.raises(KeyboardInterrupt):
-        prefs_import.run(store)
-    assert store.prof.prefs_import == "pending"
-    assert store.prof.prefs_basis != ""
-    del store.update_config  # the next process has the real store again
-    prefs_import.run(store)
-    assert store.layer.prefs.ci_poll_seconds == 45
-    assert store.prof.prefs_import == "done"
-
-
-def _crash(*_args, **_kwargs):
-    raise KeyboardInterrupt  # stands in for the process dying mid-step
-
-
-def test_a_crash_after_the_claim_with_an_owner_edit_stays_pending_and_is_not_refilled():
-    store = FakeStore()
-    store.update_config = _crash
-    with pytest.raises(KeyboardInterrupt):
-        prefs_import.run(store)
-    del store.update_config
-    store.layer = Layer(prefs=Prefs(ci_poll_seconds=30))  # the owner edited the project layer before the resume
-    with pytest.raises(StoreError, match="incomplete"):
-        prefs_import.run(store)
-    assert store.prof.prefs_import == "pending"
-    assert store.layer.prefs.ci_poll_seconds == 30
-    assert store.layer.prefs_imported is False
-
-
-def test_a_crash_after_the_claim_with_no_config_at_claim_stays_pending_and_creates_nothing():
-    store = FakeStore(exists=False)
-    store.update_config = _crash
-    with pytest.raises(KeyboardInterrupt):
-        prefs_import.run(store)
-    del store.update_config
-    with pytest.raises(StoreError, match="incomplete"):
-        prefs_import.run(store)
-    assert store.prof.prefs_import == "pending"
-    assert not store.config_path.exists()
-
-
-def test_a_config_deleted_between_the_claim_and_the_fill_is_not_recreated_and_stays_pending():
-    store = FakeStore()
+@pytest.mark.parametrize("action", ["set-30", "clear", "delete"])
+def test_changed_or_deleted_claim_basis_is_not_filled(legacy_store, monkeypatch, action):
+    store = legacy_store
     original = store.update_config
+    before: list[bytes | None] = []
 
-    def delete_then_fill(change, what=""):
-        store.delete_config()  # the owner deletes the config in the claim-to-fill window
-        return original(change, what)
+    def changed_then_fill(change, what="project layer", on_written=None):
+        if action == "delete":
+            store.config_path.unlink()
+            before.append(None)
+        else:
+            value = 30 if action == "set-30" else None
+            store.save(
+                store.config_path,
+                Layer,
+                lambda _cur: Layer(prefs=Prefs(ci_poll_seconds=value)),
+                "owner",
+                owner=True,
+            )
+            before.append(store.config_path.read_bytes())
+        return original(change, what, on_written)
 
-    store.update_config = delete_then_fill
+    monkeypatch.setattr(store, "update_config", changed_then_fill)
     with pytest.raises(StoreError, match="incomplete"):
         prefs_import.run(store)
-    assert not store.config_path.exists()
-    assert store.prof.prefs_import == "pending"
-    del store.update_config
+    fresh = Store(store.root)
     with pytest.raises(StoreError, match="incomplete"):
-        prefs_import.run(store)
-    assert not store.config_path.exists()
+        prefs_import.run(fresh)
+    assert fresh.read_profile().prefs_import == "pending"
+    assert (fresh.config_path.read_bytes() if fresh.config_path.exists() else None) == before[0]
+    assert fresh.read_config().prefs_imported is False
+    if action != "delete":
+        assert fresh.read_config().prefs.ci_poll_seconds == (30 if action == "set-30" else None)
 
 
-def test_an_owner_clear_between_the_claim_and_the_fill_is_not_refilled():
-    store = FakeStore()
-    original = store.update_config
-
-    def clear_then_fill(change, what=""):
-        store.layer = Layer(prefs=Prefs(ci_poll_seconds=None))  # the owner clears it before the fill
-        return original(change, what)
-
-    store.update_config = clear_then_fill
-    with pytest.raises(StoreError, match="incomplete"):
-        prefs_import.run(store)
-    assert store.layer.prefs.ci_poll_seconds is None
-    assert store.prof.prefs_import == "pending"
-
-
-def test_a_crash_after_the_fill_landed_completes_without_refilling_an_owner_clear():
-    store = FakeStore()
+@pytest.mark.parametrize("action", ["clear", "delete"])
+def test_pending_latched_fill_keeps_owner_clear_or_refuses_deletion(legacy_store, monkeypatch, action):
+    store = legacy_store
     original_mark = store.mark_prefs_import
 
     def crash_before_done(expect, to, basis="", claim=""):
@@ -250,50 +128,65 @@ def test_a_crash_after_the_fill_landed_completes_without_refilling_an_owner_clea
             raise KeyboardInterrupt
         return original_mark(expect, to, basis, claim)
 
-    store.mark_prefs_import = crash_before_done
+    monkeypatch.setattr(store, "mark_prefs_import", crash_before_done)
     with pytest.raises(KeyboardInterrupt):
         prefs_import.run(store)
-    assert store.prof.prefs_import == "pending"
-    assert store.layer.prefs_imported is True
-    del store.mark_prefs_import
-    store.layer = Layer(prefs=Prefs(ci_poll_seconds=None), prefs_imported=True)  # the owner clear survives
-    prefs_import.run(store)
-    assert store.layer.prefs.ci_poll_seconds is None
-    assert store.prof.prefs_import == "done"
+    assert store.read_profile().prefs_import == "pending"
+    assert store.read_config().prefs_imported is True
+    if action == "delete":
+        store.config_path.unlink()
+    else:
+        store.save(
+            store.config_path,
+            Layer,
+            lambda _cur: Layer(prefs=Prefs(ci_poll_seconds=None), prefs_imported=True),
+            "owner",
+            owner=True,
+        )
+    fresh = Store(store.root)
+    if action == "delete":
+        with pytest.raises(StoreError, match="incomplete"):
+            prefs_import.run(fresh)
+        assert not fresh.config_path.exists()
+        assert fresh.read_profile().prefs_import == "pending"
+    else:
+        prefs_import.run(fresh)
+        assert fresh.read_config().prefs.ci_poll_seconds is None
+        assert fresh.read_profile().prefs_import == "done"
 
 
-def test_a_profile_format_three_claim_without_a_basis_does_not_fill_on_resume():
-    store = FakeStore(marker="pending")
+def test_a_profile_format_three_claim_without_a_basis_does_not_fill_on_resume(legacy_store):
+    store = legacy_store
+    profile_share.path(store).write_text(json.dumps({"format": 3, "prefs_import": "pending"}))
     with pytest.raises(StoreError, match="incomplete"):
         prefs_import.run(store)
-    assert store.layer.prefs is None
-    assert store.prof.prefs_import == "pending"
+    assert store.read_config().prefs is None
+    assert store.read_profile().prefs_import == "pending"
 
 
-def test_a_cloned_repo_whose_config_already_carries_the_import_is_not_refilled():
-    store = FakeStore(layer=Layer(prefs=Prefs(ci_poll_seconds=None), prefs_imported=True))
+def test_a_cloned_repo_whose_config_already_carries_the_import_is_not_refilled(legacy_store):
+    store = legacy_store
+    store.save(
+        store.config_path,
+        Layer,
+        lambda _cur: Layer(prefs=Prefs(ci_poll_seconds=None), prefs_imported=True),
+        "owner",
+        owner=True,
+    )
     prefs_import.run(store)
-    assert store.layer.prefs.ci_poll_seconds is None  # the cleared value stays cleared
-    assert store.prof.prefs_import == "done"
+    assert store.read_config().prefs.ci_poll_seconds is None
+    assert store.read_profile().prefs_import == "done"
 
 
-def test_an_older_profile_migrates_forward_unmarked():
-    import json  # noqa: PLC0415
-
-    from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT  # noqa: PLC0415
-    from owlbear_delivery_next.settings import migrations  # noqa: PLC0415
-    from owlbear_delivery_next.state_store.store import _parse  # noqa: PLC0415
-
-    got = _parse(json.dumps({"format": PROFILE_FORMAT - 1}), "profile", Profile, PROFILE_FORMAT, migrations.PROFILE)
-    assert got.prefs_import == ""
-
-
-def test_a_format_three_claim_migrates_without_a_basis_and_a_newer_profile_is_refused():
-    raw = json.dumps({"format": 3, "prefs_import": "pending"})
+@pytest.mark.parametrize(
+    ("raw", "marker"),
+    [({"format": 3, "prefs_import": "pending"}, "pending"), ({"format": PROFILE_FORMAT - 1}, "")],
+    ids=["format-3-pending", "previous-format-empty"],
+)
+def test_old_profile_import_markers_migrate_without_inventing_a_basis(raw, marker):
+    raw = json.dumps(raw)
     old = _parse(raw, "profile", Profile, PROFILE_FORMAT, migrations.PROFILE)
-    assert (old.prefs_import, old.prefs_basis) == ("pending", "")
-    with pytest.raises(FormatTooNewError):
-        _parse(json.dumps({"format": PROFILE_FORMAT + 1}), "profile", Profile, PROFILE_FORMAT, migrations.PROFILE)
+    assert (old.prefs_import, old.prefs_basis) == (marker, "")
 
 
 @pytest.mark.parametrize("method", list(MergeMethod))
@@ -301,29 +194,6 @@ def test_every_merge_method_round_trips_through_the_real_writer_and_reader(tmp_p
     path = tmp_path / "config.json"
     update_layer(path, Layer, lambda cur: cur.model_copy(update={"prefs": Prefs(merge_method=method)}))
     assert read_layer(path, Layer).prefs.merge_method is method
-
-
-def test_a_retry_after_a_failed_config_publication_publishes_the_current_config():
-    store = FakeStore()
-    store.notices = ["", "remote refused", ""]  # claim published; config publication refused, then accepted
-    with pytest.raises(StoreError, match="not published"):
-        prefs_import.run(store)
-    assert store.layer.prefs.ci_poll_seconds == 45  # applied locally
-    prefs_import.run(store)
-    assert store.publishes == 2  # the retry publishes the config again, not only the marker
-    assert store.prof.prefs_import == "done"
-
-
-def test_a_config_deleted_after_a_pending_fill_is_not_refilled_on_retry():
-    store = FakeStore()
-    store.notices = ["", "remote refused"]
-    with pytest.raises(StoreError, match="not published"):
-        prefs_import.run(store)
-    store.delete_config()  # the owner deletes the settings file before the retry
-    with pytest.raises(StoreError, match="incomplete"):
-        prefs_import.run(store)
-    assert store.layer.prefs is None
-    assert store.prof.prefs_import == "pending"
 
 
 def test_a_marker_write_keeps_the_latest_profile_version_and_entries(tmp_path):
@@ -351,16 +221,6 @@ def test_the_marker_changes_only_when_the_expected_state_is_current(tmp_path):
     assert profile_share.read(store).version == 3
 
 
-def test_a_moved_preference_cannot_be_confirmed_on_the_command_line(tmp_path, monkeypatch):
-    monkeypatch.setattr(cli.profile, "detect", lambda _r, _g, prev: prev or Profile())
-    monkeypatch.setattr(cli.profile, "provider", lambda *_a: SimpleNamespace())
-    store = Store(tmp_path)
-    with pytest.raises(ValueError, match="Settings page"):
-        cli.show_profile(store, tmp_path, [(profile.POLL, "99")])
-    with pytest.raises(ValueError, match="Settings page"):
-        profile.confirm(Profile(), profile.WINDOW, "30", datetime.now(UTC))
-
-
 def test_a_command_line_role_override_publishes_and_a_fresh_clone_reads_it(shared_repo, tmp_path, monkeypatch):
     root, remote = shared_repo
     monkeypatch.setattr(cli.profile, "detect", lambda _r, _g, prev: prev or Profile())
@@ -381,15 +241,28 @@ def test_the_profile_command_refuses_a_moved_preference_cleanly_and_records_noth
     args = SimpleNamespace(command="profile", runtime=None, repo=tmp_path, confirm=[(profile.POLL, "99")], role=None)
     assert cli.report(store, args) == 1
     assert "Settings page" in capsys.readouterr().err
+    with pytest.raises(ValueError, match="Settings page"):
+        cli.show_profile(store, tmp_path, [(profile.POLL, "99")])
+    with pytest.raises(ValueError, match="Settings page"):
+        profile.confirm(Profile(), profile.WINDOW, "30", datetime.now(UTC))
     assert store.read_profile() is None
 
 
-def test_a_newer_settings_or_profile_format_is_refused_by_the_previous_reader():
-    raw = Layer(prefs=Prefs(ci_poll_seconds=20)).model_dump_json()
+@pytest.mark.parametrize(
+    ("model", "producer", "reader", "forward"),
+    [
+        (Layer, 24, 23, migrations.CONFIG),
+        (Layer, 23, 22, migrations.CONFIG),
+        (Profile, 6, 5, migrations.PROFILE),
+        (Profile, 5, 4, migrations.PROFILE),
+    ],
+    ids=["config-24-reader-23", "config-23-reader-22", "profile-6-reader-5", "profile-5-reader-4"],
+)
+def test_newer_config_or_profile_payload_is_refused_by_version_gate(model, producer, reader, forward):
+    data = Layer(prefs=Prefs(ci_poll_seconds=20)) if model is Layer else Profile()
+    raw = data.model_copy(update={"format": producer}).model_dump_json()
     with pytest.raises(FormatTooNewError):
-        _parse(raw, "config", Layer, CONFIG_FORMAT - 1, migrations.CONFIG)
-    with pytest.raises(FormatTooNewError):
-        _parse(Profile().model_dump_json(), "profile", Profile, PROFILE_FORMAT - 1, migrations.PROFILE)
+        _parse(raw, model.__name__, model, reader, forward)
 
 
 def test_an_older_settings_file_keeps_its_data_when_it_migrates_forward():
@@ -401,9 +274,8 @@ def test_an_older_settings_file_keeps_its_data_when_it_migrates_forward():
     assert got.prefs_imported is False
 
 
-def test_a_refused_config_publication_is_published_on_retry_so_a_fresh_clone_gets_the_import(
-    shared_repo, tmp_path, monkeypatch
-):
+@pytest.mark.parametrize("action", ["unchanged", "owner-clear"])
+def test_refused_import_config_publishes_current_bytes_on_native_retry(shared_repo, tmp_path, monkeypatch, action):
     root, remote = shared_repo
     shared = DataRepo(root)
     store = Store(tmp_path / "store", shared, "shop-site")
@@ -420,51 +292,56 @@ def test_a_refused_config_publication_is_published_on_retry_so_a_fresh_clone_get
     monkeypatch.setattr(DataRepo, "publish", refuse_the_config_once)
     with pytest.raises(StoreError, match="not published"):
         prefs_import.run(store)
-    prefs_import.run(store)  # the retry republishes the config the claim left local
+    assert refused
+    assert store.read_profile().prefs_import == "pending"
+    assert store.read_config().prefs.ci_poll_seconds == 45
+    assert store.read_config().prefs_imported is True
+    if action == "owner-clear":
+        assert (
+            store.save(
+                store.config_path,
+                Layer,
+                lambda cur: cur.model_copy(update={"prefs": Prefs(ci_poll_seconds=None), "prefs_imported": True}),
+                "owner",
+                owner=True,
+            )
+            == ""
+        )
+    current = store.config_path.read_bytes()
+    retried = Store(store.root, DataRepo(root), store.name)
+    prefs_import.run(retried)
     second = tmp_path / "fresh"
     subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
     fresh = Store(tmp_path / "fresh-store", DataRepo(second), "shop-site")
-    assert fresh.read_config().prefs.ci_poll_seconds == 45
+    assert fresh.config_path.read_bytes() == current
+    assert fresh.read_config().prefs.ci_poll_seconds == (45 if action == "unchanged" else None)
     assert fresh.read_profile().prefs_import == "done"
 
 
-def test_a_losing_importer_whose_digest_predates_a_delete_and_recreate_resumes_only_from_the_winning_claim(monkeypatch):
-    store = FakeStore(layer=Layer())
+@pytest.mark.parametrize("action", ["blank-delete-recreate", "initially-absent"])
+def test_losing_importer_uses_winning_claim_after_absent_or_recreated_config(legacy_store, monkeypatch, action):
+    store = legacy_store
+    if action == "initially-absent":
+        store.config_path.unlink()
     real, interleaved = prefs_import.profile_share.config_digest, []  # the race needs the real digest in between
 
     def digest_then_a_rival_claims(path):
         seen = real(path)
         if not interleaved:
             interleaved.append(seen)
-            store.delete_config()
-            store.mark_prefs_import("", "pending", prefs_import.ABSENT)  # the rival claims, then crashes
-            store.layer = Layer()  # the owner recreates a blank config
+            store.config_path.unlink(missing_ok=True)
+            store.mark_prefs_import("", "pending", prefs_import.ABSENT, "rival")
+            if action == "blank-delete-recreate":
+                store.config_path.write_text(Layer().model_dump_json(indent=1))
         return seen
 
     monkeypatch.setattr(prefs_import.profile_share, "config_digest", digest_then_a_rival_claims)
     with pytest.raises(StoreError, match="is incomplete"):
         prefs_import.run(store)
     assert interleaved
-    assert store.read_profile().prefs_import == "pending"
-    assert store.fills == 0
-    assert store.layer.prefs is None
-
-
-def test_two_importers_on_an_absent_config_the_loser_leaves_it_pending_and_never_creates_it(monkeypatch):
-    store = FakeStore(exists=False)
-    real, interleaved = prefs_import.profile_share.config_digest, []  # the race needs the real digest in between
-
-    def digest_then_the_winner_claims_and_crashes(path):
-        seen = real(path)
-        if not interleaved:
-            interleaved.append(seen)
-            store.mark_prefs_import("", "pending", prefs_import.ABSENT)  # the winner claims, then crashes before fill
-        return seen
-
-    monkeypatch.setattr(prefs_import.profile_share, "config_digest", digest_then_the_winner_claims_and_crashes)
-    with pytest.raises(StoreError, match="is incomplete"):
-        prefs_import.run(store)
-    assert interleaved == [prefs_import.ABSENT]
-    assert store.read_profile().prefs_import == "pending"
-    assert not store.config_path.exists()
-    assert store.fills == 0
+    assert (store.read_profile().prefs_import, store.read_profile().prefs_claim) == ("pending", "rival")
+    assert store.read_config().prefs is None
+    assert store.read_config().prefs_imported is False
+    if action == "initially-absent":
+        assert interleaved == [prefs_import.ABSENT]
+        assert not store.config_path.exists()

@@ -56,9 +56,13 @@ def test_project_over_machine_over_global_per_preference():
 
 def test_legacy_import_takes_every_usable_stored_value_whatever_its_evidence():
     prof = _legacy(merge_method="squash", ci_poll_seconds="45")
+    prof.entries[profile.POLL] = ProfileEntry(state="known", value="45", evidence="default")
+    prof.entries[profile.METHOD] = ProfileEntry(state="known", value="squash", evidence="allowed: merge, squash")
     prof.entries[profile.DELETE] = ProfileEntry(state="known", value="no", evidence="default")
     got = legacy_values(prof)
     assert got == Prefs(merge_method=MergeMethod.SQUASH, ci_poll_seconds=45, delete_remote_branch=False)
+    prof.entries[profile.POLL] = ProfileEntry(state="unknown", value="45", evidence="default")
+    assert legacy_values(prof) == Prefs(merge_method=MergeMethod.SQUASH, delete_remote_branch=False)
 
 
 def test_legacy_import_rejects_unusable_values():
