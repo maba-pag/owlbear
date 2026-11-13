@@ -18,8 +18,10 @@ def written() -> list[dict]:
 
 def test_a_run_writes_its_start_and_end_with_where_it_ran_and_the_sessions_own_job() -> None:
     async def inside() -> tuple[str, str]:
-        task = await asyncio.create_task(asyncio.sleep(0, spend_ledger.where().change))
-        return task, await asyncio.to_thread(lambda: spend_ledger.where().change)
+        async def read_change() -> str:
+            return spend_ledger.where().change
+
+        return await asyncio.create_task(read_change()), await asyncio.to_thread(lambda: spend_ledger.where().change)
 
     place = Where(project="owlbear", name="owlbear", clone="c1", change="fix-it", step="build", job="chat lookup")
     with spend_ledger.at(place):

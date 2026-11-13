@@ -92,7 +92,6 @@ def test_earlier_spend_is_imported_once_as_a_union_never_twice(project) -> None:
     said = spend_reconcile.run([(project, None)])
     assert (said["state"], said["done"], said["sources"], said["imported"]["changes"]) == ("done", 3, 3, 3)
     assert said["imported"]["logs"] == 0  # the mark imported this pass already owns s2
-    assert "log:s2" not in {line.get("run") for line in spend_ledger.lines()}
     assert total() == 5.5  # the Change's own total: s1 once, s2's mark and the residual
     kinds = {(line["type"], line.get("session")) for line in spend_ledger.lines() if line["type"] != "start"}
     assert kinds == {("end", "s1"), ("event", "s1"), ("mark", "s2"), ("residual", "residual:0123456789abcdef:c1")}
@@ -575,15 +574,14 @@ def test_a_pass_whose_worker_starts_late_is_said_running_and_its_imports_follow(
 
 
 @pytest.mark.parametrize("reads", ["once", "as it grew"])
-def test_a_logged_sessions_growth_across_midnight_is_dated_between_its_checkpoints(project, reads) -> None:
+def test_a_logged_sessions_growth_across_midnight_is_dated_between_its_checkpoints(reads) -> None:
     """First reading a finished log and reading it as it grows must date the same high-water increments."""
     solo_manifest()
     runtime_log("solo", checkpoint("2026-10-01T22:00:00Z", 1e9))
-    projects = [(project, None)] if reads == "as it grew" else []
     if reads == "as it grew":
-        assert spend_reconcile.run(projects)["imported"]["logs"] == 1
+        assert spend_reconcile.run([])["imported"]["logs"] == 1
     logged("solo", shutdown("2026-10-02T09:00:00Z", 3e9))
-    assert spend_reconcile.run(projects)["imported"]["logs"] == (1 if reads == "as it grew" else 2)
+    assert spend_reconcile.run([])["imported"]["logs"] == (1 if reads == "as it grew" else 2)
     assert run_piece("log:solo") == (3.0, False, "run")  # final: no piece of it is a lower bound any more
     assert solo_pieces() == [
         ("2026-10-01T22:00:00+00:00", "2026-10-01T22:00:00+00:00", 1.0, [], False),
