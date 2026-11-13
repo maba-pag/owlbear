@@ -51,7 +51,7 @@ def version(tag: str) -> Path:
     return folder
 
 
-def test_the_first_update_swaps_the_legacy_runtime_for_a_link_and_puts_it_away():
+def test_alias_migrates_legacy_then_advances_without_lowering_the_mark():
     runtime, folder = legacy(), version("v0.2")
     commit = git(runtime, "rev-parse", "--short=12", "HEAD")
 
@@ -63,6 +63,11 @@ def test_the_first_update_swaps_the_legacy_runtime_for_a_link_and_puts_it_away()
     assert (kept / "f.txt").read_text() == "legacy\n"
     assert not (local_home.root() / alias.NEW).exists()
     assert registry.load().active == "v0.2"
+    alias.activate(version("v0.3"), "v0.3")
+    assert runtime.resolve().name == "v0.3"
+    assert registry.load().active == "v0.3"
+    alias._marked("v0.2")  # noqa: SLF001 - what a start of an older alias would try
+    assert registry.load().active == "v0.3"
 
 
 def test_the_first_update_refuses_to_put_away_a_legacy_runtime_holding_the_shared_data():
@@ -75,17 +80,6 @@ def test_the_first_update_refuses_to_put_away_a_legacy_runtime_holding_the_share
         alias.activate(folder, "v0.2")
     assert (runtime.is_symlink(), (inside / ".git").is_dir()) == (False, True)
     assert not (local_home.root() / alias.NEW).exists()
-
-
-def test_a_later_update_renames_a_new_link_over_the_alias_and_the_mark_never_goes_down():
-    legacy()
-    alias.activate(version("v0.2"), "v0.2")
-    alias.activate(version("v0.3"), "v0.3")
-
-    assert (local_home.root() / local_home.RUNTIME).resolve().name == "v0.3"
-    assert registry.load().active == "v0.3"
-    alias._marked("v0.2")  # noqa: SLF001 - what a start of an older alias would try
-    assert registry.load().active == "v0.3"
 
 
 def test_every_start_completes_a_first_migration_a_crash_interrupted():
@@ -235,20 +229,6 @@ def updating(monkeypatch) -> SimpleNamespace:
     return said
 
 
-def test_an_update_with_nothing_running_activates_the_version_and_hands_over(updating):
-    m = updating.machine
-
-    m.updater._update()  # noqa: SLF001 - the thread's work, run here
-
-    assert updating.activated == [(updating.folder, "v0.2")]
-    assert updating.stopped == 1
-    standby, given = m.handover
-    assert (standby.tag, standby.python) == ("v0.2", updating.folder / ".venv" / "bin" / "python")
-    assert given == handover.Handover(port=4321, token=TOKEN, paused=False, ending=False, version="v0.2", loaded=[])
-    assert m.updater.read()["phase"] == "handing over"
-    assert m.updating == update.FENCED
-
-
 def test_an_update_waits_for_running_work_then_goes_on_and_lifts_its_fence_for_work_that_slipped_in(
     updating, monkeypatch
 ):
@@ -271,7 +251,12 @@ def test_an_update_waits_for_running_work_then_goes_on_and_lifts_its_fence_for_w
     assert FakeStandby.made[0].stopped
     assert not FakeStandby.made[1].stopped
     assert updating.activated == [(updating.folder, "v0.2")]
+    assert updating.stopped == 1
+    standby, given = m.handover
+    assert (standby.tag, standby.python) == ("v0.2", updating.folder / ".venv" / "bin" / "python")
+    assert given == handover.Handover(port=4321, token=TOKEN, paused=False, ending=False, version="v0.2", loaded=[])
     assert m.updater.read()["phase"] == "handing over"
+    assert m.updating == update.FENCED
 
 
 def test_a_stop_when_idle_asked_for_while_an_update_waits_cancels_it(updating, monkeypatch):
@@ -289,14 +274,6 @@ def test_a_stop_when_idle_asked_for_while_an_update_waits_cancels_it(updating, m
     state = m.updater.read()
     assert (state["phase"], state["detail"]) == ("refused", "OwlBear stops once the running steps end")
     assert (m.updating, m.handover, updating.activated) == ("", None, [])
-
-
-def test_a_project_is_neither_registered_adopted_nor_removed_while_the_fence_holds(updating, tmp_path):
-    m = updating.machine
-    m.updating = update.FENCED
-
-    with pytest.raises(MachineError, match="OwlBear is updating"):
-        m.register(tmp_path)
 
 
 def test_a_standby_that_never_answers_keeps_the_running_version_and_counts_an_attempt(updating):
@@ -483,7 +460,7 @@ def test_run_updates_now_is_refused_while_owlbear_stops_when_idle(updating):
     assert m.updater.run_now()["phase"] == "refused"
 
 
-def test_the_fence_refuses_every_change_to_a_project_and_lets_reads_through(updating):
+def test_the_fence_refuses_every_change_to_a_project_and_lets_reads_through(updating, tmp_path):
     m = updating.machine
     m.updating = update.FENCED
     client = TestClient(app.create(m), base_url="http://127.0.0.1")
@@ -494,6 +471,8 @@ def test_the_fence_refuses_every_change_to_a_project_and_lets_reads_through(upda
 
     assert (said.status_code, said.json()) == (503, {"detail": update.FENCED})
     assert read.status_code == 404  # past the fence: no such project here
+    with pytest.raises(MachineError, match="OwlBear is updating"):
+        m.register(tmp_path)
 
 
 def test_a_handover_file_is_read_once():
@@ -684,7 +663,7 @@ def test_an_unreadable_pointer_removes_nothing():
     assert (home / local_home.VERSIONS / "v0.1").is_dir()
 
 
-def test_the_old_runtime_is_removed_only_on_the_owners_word():
+def test_legacy_cleanup_preserves_refusals_until_owner_removes_it(monkeypatch, whole_error):
     runtime = legacy()
     alias.activate(version("v0.3"), "v0.3")
     record = HostRecord(url="http://127.0.0.1:4321/", token=TOKEN, pid=1, started_at=datetime.now(UTC), code="c")
@@ -693,49 +672,31 @@ def test_the_old_runtime_is_removed_only_on_the_owners_word():
     kept = versions.legacy()
     assert len(kept) == 1
     assert client.get("/api/next/machine", headers=auth).json()["legacy"] == [str(kept[0])]
-
-    said = client.post("/api/next/machine/legacy/remove", headers=auth)
-
-    assert (said.status_code, said.json()["legacy"]) == (200, [])
-    assert not kept[0].exists()
-    assert runtime.resolve().name == "v0.3"
-
-
-def test_the_old_runtime_stays_and_says_why_whole_when_its_data_cannot_be_ruled_out(monkeypatch, whole_error):
-    """#971: removing the old runtime refused because it may hold the shared data says why whole, notes included."""
-    legacy()
-    alias.activate(version("v0.3"), "v0.3")
-    monkeypatch.setattr(leases, "unpinned", list)
     error = versions.VersionError(whole_error)
     error.add_note("a note on the failure")
 
     def refusing(_path):
         raise error
 
-    monkeypatch.setattr(versions, "keep_data", refusing)
-    record = HostRecord(url="http://127.0.0.1:4321/", token=TOKEN, pid=1, started_at=datetime.now(UTC), code="c")
-    client = TestClient(app.create(Machine(record)), base_url="http://127.0.0.1")
-
-    said = client.post("/api/next/machine/legacy/remove", headers={"authorization": f"Bearer {TOKEN}"})
-
+    with monkeypatch.context() as patch:
+        patch.setattr(leases, "unpinned", list)
+        patch.setattr(versions, "keep_data", refusing)
+        said = client.post("/api/next/machine/legacy/remove", headers=auth)
     assert (said.status_code, said.json()) == (409, {"detail": f"VersionError: {whole_error}\na note on the failure"})
-    assert len(versions.legacy()) == 1
-
-
-def test_the_old_runtime_stays_while_a_process_still_runs_it(monkeypatch):
-    legacy()
-    alias.activate(version("v0.3"), "v0.3")
-    monkeypatch.setattr(leases, "unpinned", lambda: [4242])
-    record = HostRecord(url="http://127.0.0.1:4321/", token=TOKEN, pid=1, started_at=datetime.now(UTC), code="c")
-    client = TestClient(app.create(Machine(record)), base_url="http://127.0.0.1")
-
-    said = client.post("/api/next/machine/legacy/remove", headers={"authorization": f"Bearer {TOKEN}"})
-
+    assert versions.legacy() == kept
+    with monkeypatch.context() as patch:
+        patch.setattr(leases, "unpinned", lambda: [4242])
+        said = client.post("/api/next/machine/legacy/remove", headers=auth)
     assert said.status_code == 409
     assert "processes 4242 still run it" in said.json()["detail"]
     assert "Stop Server" in said.json()["detail"]
     assert "reload the VS Code" not in said.json()["detail"]
-    assert len(versions.legacy()) == 1
+    assert versions.legacy() == kept
+    monkeypatch.setattr(leases, "unpinned", list)
+    said = client.post("/api/next/machine/legacy/remove", headers=auth)
+    assert (said.status_code, said.json()["legacy"]) == (200, [])
+    assert not kept[0].exists()
+    assert runtime.resolve().name == "v0.3"
 
 
 def test_a_process_started_through_the_alias_and_never_pinned_is_found():

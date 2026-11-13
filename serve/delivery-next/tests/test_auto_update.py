@@ -56,6 +56,9 @@ def test_after_15_minutes_without_use_the_update_is_announced_for_2_minutes_then
     idle.clock.step(1)
     idle.auto.tick()
     assert idle.auto.read() == {"version": "v0.2", "left": 120}
+    client = TestClient(app.create(idle.machine), base_url="http://127.0.0.1")
+    listed = client.get("/api/next/projects", headers={"authorization": f"Bearer {TOKEN}"}).json()
+    assert listed["announce"] == {"version": "v0.2", "left": 120}
 
     idle.clock.step(auto_update.ANNOUNCE - 1)
     idle.auto.tick()
@@ -152,16 +155,6 @@ def test_reads_never_count_as_use_but_changes_page_words_and_chat_calls_do(idle)
     idle.clock.step(10)
     client.get("/p/0123456789abcdef/api/next/changes", headers=auth | {"x-owlbear-use": "chat"})
     assert idle.auto.last_use == idle.clock.mono
-
-
-def test_the_machines_answer_carries_the_announcement(idle):
-    idle.clock.step(auto_update.IDLE_FOR)
-    idle.auto.tick()
-    client = TestClient(app.create(idle.machine), base_url="http://127.0.0.1")
-
-    listed = client.get("/api/next/projects", headers={"authorization": f"Bearer {TOKEN}"}).json()
-
-    assert listed["announce"] == {"version": "v0.2", "left": 120}
 
 
 def test_a_version_that_failed_its_tries_is_not_announced_again(idle):
