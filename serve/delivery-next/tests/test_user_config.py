@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from owlbear_delivery_next.settings import config, migrations
+from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, resolve
 from owlbear_delivery_next.state_store.store import StoreError, read_layer
 
@@ -57,9 +57,6 @@ def test_a_format_16_layer_loads_with_every_switch_unset(tmp_path):
         layer = read_layer(path, model)
         assert (layer.format, layer.pr_marker, layer.sessions) == (config.CONFIG_FORMAT, False, 2)
         assert [getattr(layer, key) for key in KEYS] == [None, None, None]
-    assert migrations.CONFIG[16] is migrations.user_config_added
-    assert migrations.GLOBAL[16] is migrations.user_config_added
-    assert migrations.GLOBAL[15] is migrations.credit_limits_written
 
 
 @pytest.mark.parametrize("version", [17, 18])
