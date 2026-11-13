@@ -549,7 +549,7 @@ def test_the_versions_command_says_versions_it_could_not_read_or_install_whole(
         assert capsys.readouterr().out == f"{running}the versions could not be read: {whole}\n"
 
 
-def registered(tmp_path: Path, marker: int | None = None, config: int | None = None) -> Path:
+def registered(tmp_path: Path, marker: int | None = None) -> Path:
     clone = tmp_path / "clone"
     git(tmp_path, "init", "-q", str(clone))
     entry = registry.register(clone)
@@ -557,8 +557,6 @@ def registered(tmp_path: Path, marker: int | None = None, config: int | None = N
     store.mkdir(parents=True, exist_ok=True)
     if marker is not None:
         (store / "format").write_text(f"{marker}\n")
-    if config is not None:
-        (store / "config.json").write_text(json.dumps({"format": config}))
     return clone
 
 
