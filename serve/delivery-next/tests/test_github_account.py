@@ -301,18 +301,10 @@ def test_https_and_local_push_destinations_pass(repo, tmp_path):
     assert chosen.destinations(repo, "origin", 10) == ["/nonexistent/offline-in-tests/boecht/sandbox.git"]
 
 
-GIT_CASES = {  # the setting, the origin's owner, the active account, whose token Git gets
-    # the resolver's owner and fallback choices are its own test's; a launch carries whichever login it chose
-    "the setting names boecht": ("boecht", "acme", "maba-pag", "boecht"),
-}
-
-
-@pytest.mark.parametrize("case", GIT_CASES)
-def test_each_remote_git_launch_answers_git_with_the_chosen_accounts_token(case, fake_gh, git_launches, repo):
-    setting, owner, active, login = GIT_CASES[case]
-    fake_gh.set(BOTH, {"github.com": active})
-    _git(repo, "remote", "add", "origin", f"https://github.com/{owner}/sandbox.git")
-    chosen = Writer(setting, repo).access()
+def test_each_remote_git_launch_answers_git_with_the_chosen_accounts_token(fake_gh, git_launches, repo):
+    fake_gh.set(BOTH, {"github.com": "maba-pag"})
+    _git(repo, "remote", "add", "origin", "https://github.com/acme/sandbox.git")
+    chosen = Writer("boecht", repo).access()
     remote_git.run_remote_git(repo, ("fetch", "--quiet", "origin", "main"), kind="read", access=chosen)
     with pytest.raises(RemoteGitWriteUnknown):  # the tests' offline rewrite of github.com leaves nowhere to push
         remote_git.run_remote_git(repo, ("push", "--quiet", "origin", "HEAD:refs/heads/x"), kind="write", access=chosen)
@@ -320,7 +312,7 @@ def test_each_remote_git_launch_answers_git_with_the_chosen_accounts_token(case,
     for argv, environment in git_launches.seen:
         options = git_launches.options(argv)
         assert options[:2] == ("-c", "credential.helper=")  # HOME's helper, answering tok-active, is reset
-        assert _fill(repo, options, environment) == f"tok-{login}"
+        assert _fill(repo, options, environment) == "tok-boecht"
     assert not [c for c in fake_gh.calls() if c["argv"][:2] == ["auth", "switch"]]
 
 
@@ -375,17 +367,11 @@ WRITES = {
 
 
 @pytest.mark.parametrize("write", WRITES)
-@pytest.mark.parametrize(
-    ("setting", "owner", "active", "login"),
-    [("boecht", "acme", "maba-pag", "boecht")],  # each write, not each resolver choice, is this test's subject
-)
-def test_each_gh_write_is_launched_with_only_the_chosen_accounts_token(  # noqa: PLR0913, PLR0917 - one case
-    fake_gh, monkeypatch, write, setting, owner, active, login
-):
+def test_each_gh_write_is_launched_with_only_the_chosen_accounts_token(fake_gh, monkeypatch, write):
     for each in access_module.TOKENS:
         monkeypatch.setenv(each, "tok-inherited")
-    fake_gh.set(BOTH, {"github.com": active}, [RETIRED] if write == "branch deletion" else None)
-    gh = GhProvider(Path(), writer=Writer(setting, Origin("github.com", owner, "x")))
+    fake_gh.set(BOTH, {"github.com": "maba-pag"}, [RETIRED] if write == "branch deletion" else None)
+    gh = GhProvider(Path(), writer=Writer("boecht", Origin("github.com", "acme", "x")))
     with contextlib.suppress(ProviderError):  # the fake answers ``{}``; the launch is what is checked
         done = WRITES[write](gh)
     launches = [c for c in fake_gh.calls() if c["argv"][0] != "auth"]
@@ -393,10 +379,10 @@ def test_each_gh_write_is_launched_with_only_the_chosen_accounts_token(  # noqa:
     if write == "branch deletion":  # D-01M6GFGACQEM915P1NT39GXQ79: the deletion itself launched, not only its read
         assert (done.state, len(launches)) == (BranchState.DELETED, 2)
     assert {(c["GH_TOKEN"], c["GITHUB_TOKEN"], c["GH_ENTERPRISE_TOKEN"]) for c in launches} == {
-        (f"tok-{login}", None, None)
+        ("tok-boecht", None, None)
     }
     assert all(os.environ[k] == "tok-inherited" for k in access_module.TOKENS)
-    assert not any(f"tok-{login}" in " ".join(c["argv"]) for c in fake_gh.calls())
+    assert not any("tok-boecht" in " ".join(c["argv"]) for c in fake_gh.calls())
 
 
 def test_an_enterprise_gh_write_gets_the_enterprise_token_alone(fake_gh, monkeypatch):
