@@ -18,10 +18,9 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Literal
 from urllib.parse import urlsplit
 
-from pydantic import ConfigDict, Field, ValidationInfo, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 from owlbear_delivery_next.change_contracts import tools
-from owlbear_delivery_next.change_contracts.models import Record
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -42,7 +41,7 @@ def _command(v: str, name: str) -> str:
     return v
 
 
-class Preparation(Record):
+class Preparation(BaseModel):
     """One declared way to prepare a check's test copy; every command runs without a shell in the worktree root."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -101,7 +100,7 @@ class Preparation(Record):
         return self
 
 
-class DataPermissions(Record):
+class DataPermissions(BaseModel):
     """The owner's standing permissions for this project's test copies; the defaults permit no live data."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -151,7 +150,7 @@ def refusals(option: Preparation, rules: DataPermissions, live: Mapping[str, str
     for name, value in sorted(option.isolation.items()):
         if not value.strip():
             why.append(f"its isolation {name} is empty")
-        elif value == live.get(name):
+        elif (actual := live.get(name)) is not None and same(value, actual):
             why.append(f"its isolation {name} equals the live value")
         why += [
             f"its isolation {name} points at the live {n}" for n, v in sorted(option.live.items()) if same(value, v)

@@ -35,6 +35,13 @@ on without it.
   diagnostic is not recovery and `retry` is refused.
 - **The smallest fix that makes the checks pass.** Change only what the cause needs. Try one fix at
   a time; after each, run the checks and note the fix and what happened.
+- **Missing or unsafe test preparation.** Return `fix=preparation` with one synthetic `data-only` option and
+  a command verifying the seeded state this check needs. Inspect its actual data reads and existing committed
+  fixtures; an empty-state no-op does not prove a populated state. Describe the data's source, what is seeded,
+  cleanup and isolation. Declare `HOME` as a directory relative to the worktree root; Delivery anchors it there
+  for seed, preview and cleanup. Copy no live data, change no permissions or settings, and leave no source edits:
+  the exact option must work with existing code. Delivery independently tries it here, then asks yes/no before
+  saving it. When a preview seeds its own dataset, explain that rather than claiming it reads the preparation's.
 - **Never weaken a check.** Never delete, skip or loosen a test, an assertion, a lint rule or a
   timeout to get green. Lint and format configuration, CI workflows, Git hooks and security
   configuration are the owner's: change them only when no other fix works, and say why.
@@ -78,6 +85,9 @@ Call `submit_result` once, with:
   remedies were tried and none worked.
 - `defect`, only when the cause is in OwlBear's code: a title, what is wrong for any project, and the
   OwlBear paths.
+- `preparation`, only for `fix=preparation`: `option` (the exact preparation), `description` (source, seeded data,
+  cleanup and isolation) and `verify` (one command checking the seeded state). Reuse an existing option's id to
+  replace it, or choose a new id to append; Delivery preserves all other options and data permissions.
 
 If it is rejected, each error names a field and what to do: fix it and call again. Never end a turn
 without `submit_result`.

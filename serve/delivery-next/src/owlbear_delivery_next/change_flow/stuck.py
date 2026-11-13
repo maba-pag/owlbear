@@ -68,9 +68,13 @@ def asked(c: Change, text: str, now: datetime) -> None:
         Option(id="yes", label=f"{YES[r.fix == 'profile-check']} and run the step again", next=APPLY),
         Option(id="no", label="Don't apply it; stop with what was tried", next=DECLINE),
     ]
+    if r.fix == "preparation":
+        options[0].label = "Save this preparation and run the step again"
     q = Question(step=c.step.kind, text=text, options=options, cause=r.cause, subject="reserved", follows=r.root)
     if (asked := ask(c, q, now)) is not None:  # the gate stops a cause's third question (#1064)
         r.phase, r.question = "asked", asked.id
+        if r.fix == "preparation" and c.outcome is not None:
+            c.outcome.reason = "Approve the proposed test preparation"
 
 
 def owned(c: Change, question: str) -> bool:
@@ -144,6 +148,9 @@ def stopped(c: Change, why: str, now: datetime) -> None:
     said = (
         f"Delivery's repair: {why}. The step reported: {r.evidence.rstrip('.')}.{found} Tried: {tried}. Spent {spent}."
     )
+    if r.fix == "preparation" and r.diff:
+        proof = f"\n\nDelivery's trial:\n{r.witness.output}" if r.witness else ""
+        said += f"\n\nThe preparation proposal kept (not applied):\n{r.diff}{proof}"
     _stop(c, r.cause, said, now)
 
 

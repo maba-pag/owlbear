@@ -1,13 +1,42 @@
 """A stuck step's repair as the Change keeps it (#1066, D-01M6RT5QHXFM58C9BPQXEK3QFB)."""
 
+import shlex
 from datetime import datetime
+from pathlib import PurePosixPath
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from owlbear_delivery_next.change_contracts.preparation import Preparation
 
 type Phase = Literal["running", "asked", "approved", "applied", "unchanged", "stopped"]
-type Fix = Literal["none", "patch", "profile-check", "retry"]
+type Fix = Literal["none", "patch", "profile-check", "retry", "preparation"]
 KEPT = "refs/owlbear/repair/"  # + the Change's slug: a fix waiting for the owner's yes stays reachable
+
+
+class PreparationProposal(BaseModel):
+    """One synthetic setup, its data source and consequences, and a command checking the seeded state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    option: Preparation
+    description: str = Field(min_length=1, max_length=3000)
+    verify: str = Field(min_length=1, max_length=300)
+
+    @model_validator(mode="after")
+    def _synthetic(self) -> PreparationProposal:
+        option = self.option
+        if option.kind != "data-only" or option.data_classes or option.live:
+            msg = "option: propose synthetic data-only setup, without copying live data or changing permissions"
+            raise ValueError(msg)
+        home = PurePosixPath(option.isolation.get("HOME", ""))
+        if not option.isolation.get("HOME", "").strip() or home.is_absolute() or ".." in home.parts or str(home) == ".":
+            msg = "option.isolation.HOME: name a directory inside the execution worktree, relative to its root"
+            raise ValueError(msg)
+        if not self.description.strip() or not shlex.split(self.verify):
+            msg = "description and verify: describe source, seeded data, cleanup and isolation; verify the seeded state"
+            raise ValueError(msg)
+        return self
 
 
 class Tried(BaseModel):
@@ -62,6 +91,8 @@ class Repair(BaseModel):
     credits: float | None = None  # the repair session's spend; None when it could not be read
     stopped: str = ""  # why it stopped
     root: str = ""  # the owner-question cause it repairs, so its own question counts with them (#1064)
+    preparation: PreparationProposal | None = None
+    preparations_before: list[Preparation] | None = None
 
 
 class Repairs(BaseModel):

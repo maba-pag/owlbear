@@ -22,24 +22,41 @@ from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pydantic import Field
-
 from owlbear_delivery_next.change_contracts import preparation, tools
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     ErrorKind,
     Exit,
-    Record,
+    Outcome,
     StepKind,
     Stop,
     Waiting,
 )
-from owlbear_delivery_next.change_contracts.preparation import LIVE, SNAPSHOT, Preparation, Preparing
-from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.change_contracts.preparation import LIVE, SNAPSHOT, Preparing
+from owlbear_delivery_next.change_flow import budgets, loop, worktree
 from owlbear_delivery_next.change_flow.worktree import failure
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.workflow_steps import before, check, engine, preparer, snapshot_files
+from owlbear_delivery_next.state_store.prepared import (
+    Prepared,
+    cleanup_record,
+    cleanup_records,
+    left,
+    read,
+    snapshot_owner,
+)
+from owlbear_delivery_next.state_store.prepared import (
+    file as _file,
+)
+from owlbear_delivery_next.state_store.prepared import (
+    folder as _dir,
+)
+from owlbear_delivery_next.state_store.prepared import (
+    write as _write,
+)
+from owlbear_delivery_next.workflow_steps import before, check, engine, preparer, repair_copy, snapshot_files
+from owlbear_delivery_next.workflow_steps.check import PrepareError
+from owlbear_delivery_next.workflow_steps.snapshot_files import snapshots
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -51,63 +68,6 @@ if TYPE_CHECKING:
 type Log = Callable[[dict[str, Any]], None]
 SESSION = "session.open"  # a running preparer session's root and the edits it found (JSON)
 SHAPING = "shaping"  # the shaping capture's own test copy (D-01M6Q56RXK85C5T4AG7R051X6N)
-
-
-class Prepared(Record):
-    """One check's chosen preparation and the preparer's setup edits, kept with its recipe; and its current run."""
-
-    check: str
-    option: Preparation  # as validated when chosen; it runs as chosen while it is still declared so
-    reason: str = ""
-    paths: list[str] = Field(default_factory=list)  # the setup files the patch changes (TD-107)
-    snapshot: str = ""  # this run's frozen snapshot, outside the repository
-    digest: str = ""  # the snapshot's content once masked; every restore checks it
-    applied: str = ""  # the worktree the patch is applied to now
-    ready: bool = False  # restored into the Change worktree for this launch
-    open: bool = False  # this run may have left what the end of the check removes
-    home: str = ""  # the shaping capture's throwaway checkout: its cleanup runs there, never elsewhere
-
-
-class PrepareError(Exception):
-    """The check cannot start on a test copy; its result says why."""
-
-    def __init__(self, result: loop.StepResult) -> None:
-        super().__init__(result.reason)
-        self.result = result
-
-
-def snapshots() -> Path:
-    """Delivery's snapshot folder, beside its worktrees and outside every repository."""
-    return worktree.data_root().parent / "snapshots"
-
-
-def _dir(store: Store, slug: str) -> Path:
-    return store.root / "changes" / slug / "prepare"
-
-
-def _file(store: Store, slug: str, check_id: str, suffix: str) -> Path:
-    return _dir(store, slug) / f"{hashlib.sha256(check_id.encode()).hexdigest()[:16]}{suffix}"
-
-
-def read(store: Store, slug: str, check_id: str) -> Prepared | None:
-    """The preparation the check *check_id* last chose, if any."""
-    path = _file(store, slug, check_id, ".json")
-    return Prepared.model_validate_json(path.read_text()) if path.is_file() else None
-
-
-def _records(store: Store, slug: str) -> list[Prepared]:
-    folder = _dir(store, slug)
-    found = sorted(folder.glob("*.json")) if folder.is_dir() else []
-    return [Prepared.model_validate_json(p.read_text()) for p in found]
-
-
-def _write(store: Store, slug: str, rec: Prepared, patch: bytes | None = None) -> None:
-    _dir(store, slug).mkdir(mode=0o700, parents=True, exist_ok=True)
-    if patch is not None:
-        path = _file(store, slug, rec.check, ".patch")
-        path.with_suffix(".tmp").write_bytes(patch)
-        path.with_suffix(".tmp").replace(path)
-    atomic_write(_file(store, slug, rec.check, ".json"), rec.model_dump_json())
 
 
 def _git(root: Path, *args: str, env: Mapping[str, str] | None = None) -> bytes:
@@ -217,28 +177,23 @@ def chosen(  # noqa: PLR0913, PLR0917 - the session's end, its worktree and what
 
 
 def unsafe(settings: Settings, live: Mapping[str, str] | None = None) -> loop.StepResult | None:
-    """No option is declared, or none is permitted, so a check would run on live data: the step stops."""
+    """A missing or refused test copy goes to repair before any check or preparer starts."""
     live = dict(os.environ) if live is None else live
     lead = "Checks cannot run: this project has no safe test copy set up, and Delivery never runs a check on live data"
-    how = (
-        "A test preparation is declared under `preparations` in the project's settings file "
-        "(`<project folder>/config.json` in the shared settings repository), which an agent in a chat can write; "
-        "a project without data can declare a data-only option whose seed and cleanup are `true`"
-    )
     if not settings.preparations:
         cause = cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, "preparation-missing")
-        said = f"{lead}. Have one declared for this project, then run the step again"
-        return engine.blocked(cause, said, f"No test preparation option is declared (TD-96). {how}")
+        said = f"{lead}. No test preparation option is declared (TD-96). Delivery will propose one for your approval"
+        return loop.StepResult(exit=Exit.RETRY, cause=cause, reason=said, setup=True, operational=True)
     if preparation.safe(settings.preparations, settings.data, live):
         return None
     why = "; ".join(f"{o.id}: {', '.join(preparation.refusals(o, settings.data, live))}" for o in settings.preparations)
     cause = cause_key(ErrorKind.PROJECT_ENV, StepKind.CHECK, "preparation-unsafe")
-    said = f"{lead}. Have a permitted one declared, or its data permissions changed, then run the step again"
-    return engine.blocked(cause, said, f"No declared test preparation is permitted ({why}) (TD-96). {how}")
+    said = f"{lead}. No declared test preparation is permitted ({why}) (TD-96). Delivery will propose a permitted one"
+    return loop.StepResult(exit=Exit.RETRY, cause=cause, reason=said, setup=True, operational=True)
 
 
 def refused(store: Store, lock: Lock, c: Change) -> bool:
-    """A check step with no permitted preparation stops instead of starting a preparer."""
+    """A check with no permitted preparation enters repair instead of starting a preparer."""
     asked = unsafe(store.settings()) if c.step.kind == StepKind.CHECK else None
     if asked:
         store.write(lock, loop.apply(c, asked, datetime.now(UTC)))
@@ -272,16 +227,24 @@ def reusable(store: Store, c: Change, settings: Settings, live: Mapping[str, str
     return now == rec.option and not preparation.refusals(rec.option, settings.data, live)
 
 
-def isolated(rec: Prepared) -> dict[str, str]:
+def isolated(rec: Prepared, root: Path | None = None) -> dict[str, str]:
     """The explicit environment of restore, seed, cleanup and the launch: the essentials, isolation and snapshot."""
     base = {k: v for k in preparation.BASE if (v := os.environ.get(k)) is not None}
-    return base | rec.option.isolation | ({SNAPSHOT: rec.snapshot} if rec.snapshot else {})
+    env = base | rec.option.isolation | ({SNAPSHOT: rec.snapshot} if rec.snapshot else {})
+    if root is not None and (home := rec.option.isolation.get("HOME")) and not Path(home).is_absolute():
+        at = (root / home).resolve()
+        if not at.is_relative_to(root.resolve()):
+            raise PrepareError(check.failed(f"preparation HOME {root / home} resolves outside {root} to {at}"))
+        if at != root.resolve() / home:
+            raise PrepareError(check.failed(f"preparation HOME {root / home} redirects to source directory {at}"))
+        env["HOME"] = str(at)
+    return env
 
 
 def environ(store: Store, c: Change) -> dict[str, str] | None:
     """The launch environment of the check's test copy; None when it runs without a preparation."""
     rec = read(store, c.slug, c.env.check) if c.env else None
-    return isolated(rec) if rec else None
+    return isolated(rec, Path(c.names.worktree)) if rec else None
 
 
 def due(store: Store, c: Change) -> bool:
@@ -344,14 +307,15 @@ def _into(  # noqa: PLR0913 - the run, its two worktrees and the permissions in 
         raise PrepareError(asked)
     if why:
         raise PrepareError(check.failed(f"the preparation option {rec.option.id} is no longer permitted"))
-    rec.open = True
+    rec.open, rec.snapshot_only = True, True
     _write(store, c.slug, rec)
-    if note := _snapshot(store, c.slug, rec, home or Path(c.names.worktree), log):
+    source = snapshot_owner(store, c.slug, rec)
+    if note := _snapshot(store, c.slug, source, home or Path(c.names.worktree), log):
         return note
-    if rec.snapshot and snapshot_files.digest(Path(rec.snapshot)) != rec.digest:
+    if source.snapshot and snapshot_files.digest(Path(source.snapshot)) != source.digest:
         return "the snapshot changed after it was frozen"
-    patch = _file(store, c.slug, rec.check, ".patch")
-    if rec.paths and patch.is_file():
+    patch = _file(store, c.slug, source.check, ".patch")
+    if source.paths and patch.is_file():
         if keep:
             rec.applied = str(root)
             _write(store, c.slug, rec)  # before applying: the end of the check discards even a partial patch
@@ -359,7 +323,9 @@ def _into(  # noqa: PLR0913 - the run, its two worktrees and the permissions in 
             _git(root, "apply", "--binary", str(patch))
         except subprocess.CalledProcessError as exc:
             return f"the setup patch did not apply: {exc.stderr.decode(errors='replace').strip()}"
-    env = isolated(rec)
+    env = isolated(source, root)
+    rec.snapshot_only = False
+    _write(store, c.slug, rec)
     return snapshot_files.command(rec, "restore", root, log, env) or snapshot_files.command(rec, "seed", root, log, env)
 
 
@@ -370,9 +336,19 @@ def merge_base(store: Store, c: Change, settings: Settings, log: Log) -> Callabl
     def go(root: Path) -> dict[str, str]:
         if rec is None:
             raise PrepareError(check.failed("the check has no test preparation; nothing launches without one"))
-        if note := _into(store, c, rec, root, settings=settings, log=log, keep=False):
+        owned = Prepared(
+            check=f"before-{VISUAL}",
+            option=rec.option,
+            home=str(root),
+            open=True,
+            trial=True,
+            snapshot_from=rec.check,
+            snapshot_only=True,
+        )
+        _write(store, c.slug, owned)
+        if note := _into(store, c, owned, root, settings=settings, log=log, keep=False):
             raise PrepareError(check.failed(note))
-        return isolated(rec)
+        return isolated(cleanup_record(store, c.slug, owned), root)
 
     return go
 
@@ -386,11 +362,11 @@ def shaping(store: Store, c: Change, settings: Settings, log: Log) -> Callable[[
             asked = unsafe(settings)
             said = asked.reason if asked else f"the preparation option {c.brief.preparation} is not declared"
             raise PrepareError(check.failed(said))
-        rec = Prepared(check=SHAPING, option=option, home=str(root))
+        rec = Prepared(check=SHAPING, option=option, home=str(root), trial=True)
         _write(store, c.slug, rec)  # before the export: the next runner ends even a cut-short copy
         if note := _into(store, c, rec, root, settings=settings, log=log, keep=False, home=root):
             raise PrepareError(check.failed(note))
-        return isolated(rec)
+        return isolated(rec, root)
 
     return go
 
@@ -411,12 +387,6 @@ def launch(store: Store, c: Change, settings: Settings, log: Log) -> loop.StepRe
     return loop.StepResult(exit=Exit.PENDING, waiting=Waiting.CHECK_START, reason=reason)
 
 
-def left(store: Store, c: Change) -> list[Prepared]:
-    """Runs whose check environment is gone: the end of their check is still to run."""
-    current = c.env.check if c.env else None
-    return [r for r in _records(store, c.slug) if r.open and r.check != current]
-
-
 def _reapply(store: Store, c: Change, rec: Prepared, home: Path) -> None:
     """Apply the setup patch again for a cleanup that runs without it, unless the worktree edited its paths since."""
     patch = _file(store, c.slug, rec.check, ".patch")
@@ -433,15 +403,40 @@ def _reapply(store: Store, c: Change, rec: Prepared, home: Path) -> None:
         _write(store, c.slug, rec)
 
 
-def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> loop.StepResult | None:
-    """End every check whose environment is gone: clean up with its patch applied, discard it, delete its snapshot.
+def _cleanup(store: Store, slug: str, rec: Prepared, home: Path, log: Log) -> str:
+    environment = cleanup_record(store, slug, rec)
+    try:
+        note = snapshot_files.command(environment, "cleanup", home, log, isolated(environment, home))
+    except PrepareError as exc:
+        return exc.result.reason
+    if not note:
+        rec.snapshot_only = True
+        _write(store, slug, rec)
+    return note
 
-    Cleanup and deletion always run. A patch that cannot be discarded stops the Change, so no setup edit can
-    reach a commit (TD-107). A failed cleanup or deletion leaves the run outstanding: the next runner ends it again.
+
+def _dispose_trial(store: Store, slug: str, rec: Prepared, repo: Path) -> bool:
+    if not (rec.trial and not rec.open and rec.home):
+        return False
+    home = Path(rec.home)
+    repair_copy.drop(repo, home)
+    if home.exists():
+        msg = f"the cleaned preparation trial checkout {home} could not be removed"
+        raise OSError(msg)
+    _write(store, slug, rec.model_copy(update={"home": ""}))
+    return True
+
+
+def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> loop.StepResult | None:
+    """Clean ended copies with patches applied; snapshots remain until cleanup succeeds.
+
+    An undiscardable patch stops the Change (TD-107); failed cleanup/deletion remains owed.
     """
-    for rec in left(store, c):
+    for rec in cleanup_records(store, c, datetime.now(UTC)):
+        if _dispose_trial(store, c.slug, rec, repo):
+            continue
         stuck = note = ""
-        if rec.home and not Path(rec.home).is_dir():  # a shaping copy's checkout is gone: its cleanup cannot run
+        if rec.home and not Path(rec.home).is_dir() and not rec.trial:
             note = f"its checkout {rec.home} is gone, so its cleanup did not run"
             if not (gone := snapshot_files.gone(rec.snapshot)):  # outstanding: the next end deletes it again
                 note += f"; the snapshot {rec.snapshot} could not be deleted"
@@ -454,8 +449,9 @@ def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> lo
         keep = settings.data.retention == "keep" and bool(rec.digest) and rec.check != SHAPING  # never a shaping copy
         try:
             _reapply(store, c, rec, home)
-            note = snapshot_files.command(rec, "cleanup", home, log, isolated(rec))
-            if not (gone := keep or snapshot_files.gone(rec.snapshot)):
+            note = "" if rec.snapshot_only else _cleanup(store, c.slug, rec, home, log)
+            gone = keep or (not note and snapshot_files.gone(rec.snapshot))
+            if not note and not gone:
                 note = "; ".join(filter(None, [note, f"the snapshot {rec.snapshot} could not be deleted"]))
         finally:
             if rec.applied and Path(rec.applied).is_dir():
@@ -465,13 +461,16 @@ def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> lo
                     stuck = f"the check's setup edits ({', '.join(rec.paths)}) could not be discarded: {failure(exc)}"
         at = datetime.now(UTC)
         log({"event": "prepared-end", "at": at.isoformat(), "check": rec.check, "cleanup": note or "ok"}
-            | ({"outstanding": True} if note else {}) | ({"stuck": stuck} if stuck else {}))  # fmt: skip
+            | ({"outstanding": True} if note else {}) | ({"reason": note} if rec.trial and note else {})
+            | ({"stuck": stuck} if stuck else {}))  # fmt: skip
         if stuck:
             stop = Stop(kind=ErrorKind.STATE, reason=stuck, action=f"Discard those edits in {rec.applied}",
                         resume="The worktree holds none of them", at=at)  # fmt: skip
             return loop.StepResult(exit=Exit.STOP, reason=stuck, stop=stop)
         update = {"snapshot": rec.snapshot if keep or not gone else "", "applied": "", "ready": False}
-        _write(store, c.slug, rec.model_copy(update=update | ({} if note else {"digest": "", "open": False})))
+        ended = rec.model_copy(update=update | ({} if note else {"digest": "", "open": False}))
+        _write(store, c.slug, ended)
+        _dispose_trial(store, c.slug, ended, repo)
     return None
 
 
@@ -479,8 +478,17 @@ def ran(store: Store, lock: Lock, c: Change, repo: Path, *, runnable: bool) -> b
     """What preparation owes before any step: a gone check's end, then a due test copy; whether it decided the run."""
     log = partial(store.log, lock, c.slug)
     stray(store, c.slug, log)
+    if left(store, c) and not cleanup_records(store, c, datetime.now(UTC)):
+        return True
     if left(store, c) and (stop := end(store, c, repo, store.settings(), log)):
         store.write(lock, loop.apply(c, stop, datetime.now(UTC)))
+        return True
+    if any(rec.trial or rec.snapshot_only for rec in left(store, c)):
+        if c.outcome is None or c.outcome.exit == Exit.PENDING:
+            c.outcome = Outcome(exit=Exit.RETRY, reason="test-copy cleanup is pending; see its recorded error",
+                                at=datetime.now(UTC))  # fmt: skip
+        c.outcome.wake_at = datetime.now(UTC) + budgets.PAUSE
+        store.write(lock, c)
         return True
     if not runnable or before.due(c) or not due(store, c):  # the "before" capture exports and restores first
         return False

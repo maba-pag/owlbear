@@ -1,11 +1,10 @@
 """The repairer's result: why the step stopped, every fix it tried, and what it proved (#1066)."""
 
-from __future__ import annotations
-
 from typing import Literal
 
 from pydantic import Field, model_validator
 
+from owlbear_delivery_next.change_contracts.repair_records import PreparationProposal
 from owlbear_delivery_next.change_contracts.tools import Args, Spec, bounded
 
 
@@ -35,7 +34,7 @@ class RepairResult(Args):
         max_length=20, description="Every attempted remedy in order; empty only for retry, never invent a fix",
         examples=[[{"fix": "Route web/vendor/ like pages", "outcome": "passed in 212 s"}]],
     )  # fmt: skip
-    fix: Literal["none", "patch", "profile-check", "retry"] = Field(
+    fix: Literal["none", "patch", "profile-check", "retry", "preparation"] = Field(
         description="patch: your edits in this copy make the checks pass; profile-check: the step needs a project "
         "check the profile lacks, proven here; retry: the cause no longer reproduces, no change needed; "
         "none: you tried remedies but none worked",
@@ -46,6 +45,9 @@ class RepairResult(Args):
         default="", max_length=500, description="profile-check only: its command", examples=["uv run pytest -q"]
     )
     defect: Defect | None = Field(default=None, description="Only when the cause is in OwlBear's own code")
+    preparation: PreparationProposal | None = Field(
+        default=None, description="preparation only: exact option, source, cleanup, isolation and seeded-state check"
+    )
 
     @model_validator(mode="after")
     def _check(self) -> RepairResult:
@@ -55,15 +57,24 @@ class RepairResult(Args):
         if self.fix == "profile-check" and not (self.package.strip() and self.command.strip()):
             msg = "package and command: a profile-check needs both, e.g. package '.' and command 'uv run pytest -q'"
             raise ValueError(msg)
+        if (self.fix == "preparation") != isinstance(self.preparation, PreparationProposal):
+            msg = "preparation: supply exactly one proposal with fix=preparation, and none for other fixes"
+            raise ValueError(msg)
         return self
+
+
+class PreparationResult(RepairResult):
+    """A missing or unsafe test copy needs a synthetic setup proposal, not an unrelated code patch."""
+
+    fix: Literal["none", "preparation"]
 
 
 class AttemptResult(RepairResult):
     """The diagnostic or real rerun failed: reproduce that operation and try remedies, not another no-change retry."""
 
-    fix: Literal["none", "patch", "profile-check", "retry"] = Field(
+    fix: Literal["none", "patch", "profile-check", "retry", "preparation"] = Field(
         description="patch: a proven edit; profile-check: a proven missing project check; none: remedies failed",
-        json_schema_extra={"enum": ["none", "patch", "profile-check"]},
+        json_schema_extra={"enum": ["none", "patch", "profile-check", "preparation"]},
     )
     tried: list[Try] = Field(min_length=1, max_length=20, description="Actual attempted remedies, never diagnostics")
 
@@ -78,4 +89,10 @@ class AttemptResult(RepairResult):
 SUBMIT = Spec("submit_result", "Submit once, after trying fixes in this copy.", RepairResult, "result")
 ATTEMPT = Spec(
     "submit_result", "Submit after trying remedies; another no-change retry is not recovery.", AttemptResult, "result"
+)
+PREPARATION = Spec(
+    "submit_result",
+    "Propose one proven synthetic preparation; Delivery asks before saving it.",
+    PreparationResult,
+    "result",
 )

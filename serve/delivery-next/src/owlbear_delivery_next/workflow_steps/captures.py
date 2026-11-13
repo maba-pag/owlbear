@@ -10,11 +10,13 @@ are deleted.
 from __future__ import annotations
 
 import shutil
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.change_contracts.models import Exit, Outcome
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.visual_records import ShapingCapture
-from owlbear_delivery_next.change_flow import shaping_capture
+from owlbear_delivery_next.change_flow import budgets, shaping_capture
 from owlbear_delivery_next.state_store import github_writer
 from owlbear_delivery_next.workflow_steps import before, engine, prepare
 
@@ -30,6 +32,26 @@ def folder(store: Store, slug: str, s: ShapingCapture) -> Path:
     return store.root / "changes" / slug / "shaped" / f"{s.key[:16]}-{s.result.at:%Y%m%dT%H%M%S%f}"
 
 
+def _finish(store: Store, lock: Lock, change: Change, repo: Path, notes: list[str]) -> bool:
+    errors = []
+
+    def told(event: dict[str, Any]) -> None:
+        store.log(lock, change.slug, event)
+        if event.get("event") == "prepared-end" and event.get("outstanding"):
+            errors.append(f"the test copy's cleanup did not finish: {event['cleanup']}")
+
+    if (result := prepare.end(store, change, repo, store.settings(), told)) is not None:
+        errors.append(result.reason)
+    notes.extend(errors)
+    if prepare.left(store, change):
+        now = datetime.now(UTC)
+        if change.outcome is None or change.outcome.exit != Exit.ASK:
+            change.outcome = Outcome(exit=Exit.RETRY, reason="\n".join(errors), at=now)
+        change.outcome.wake_at = now + budgets.PAUSE
+        return False
+    return True
+
+
 def at_merge_base(store: Store, lock: Lock, change: Change, repo: Path) -> str:
     """TD-24: render the brief's states at the merge-base once, before the visual check's own preview starts."""
     settings, log = store.settings(), lambda e: store.log(lock, change.slug, e)
@@ -42,6 +64,7 @@ def at_merge_base(store: Store, lock: Lock, change: Change, repo: Path) -> str:
         log,
         widths=settings.widths,
         prepare=prepare.merge_base(store, change, settings, log),
+        finish=lambda _root, notes: _finish(store, lock, change, repo, notes),
     )
     store.write(lock, change)
     return "; ".join([f"before: {len(shots.files)} screenshots at {shots.head[:7]}", *shots.findings])
@@ -53,27 +76,13 @@ def at_target(store: Store, lock: Lock, change: Change, repo: Path) -> str:
     settings.need("widths")
     writer = github_writer.of(store, repo)
 
-    def finish(_tmp: Path, notes: list[str]) -> None:
-        """End the test copy in its checkout; a cleanup that failed is the capture's finding, whole.
-
-        Its checkout goes with the capture, so it is not run again: the next test copy of the option runs it on the
-        same resources.
-        """
-
-        def told(e: dict[str, Any]) -> None:
-            log(e)
-            if e.get("event") == "prepared-end" and e.get("outstanding"):
-                notes.append(f"the test copy's cleanup did not finish: {e['cleanup']}")
-
-        if (r := prepare.end(store, change, repo, settings, told)) is not None:
-            notes.append(r.reason)
-
     out = store.root / "changes" / change.slug / "shaped" / f".capturing-{key[:16]}"
     shutil.rmtree(out, ignore_errors=True)  # a killed attempt's leftovers
     result = before.at_target(
         change, repo, out, store.read_profile() or Profile(), log, widths=settings.widths,
         fetch=lambda path, target: engine.fetch(path, target, writer.access()),
-        prepare=prepare.shaping(store, change, settings, log), finish=finish,
+        prepare=prepare.shaping(store, change, settings, log),
+        finish=lambda _root, notes: _finish(store, lock, change, repo, notes),
     )  # fmt: skip
     change.shaped = ShapingCapture(key=key, result=result)
     if out.is_dir():  # a failed fetch made none

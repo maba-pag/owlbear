@@ -343,6 +343,24 @@ def _repairing(c: Change, s: str) -> Status | None:
     return Status(f"{s} · {doing}: {stuck.obstruction(r.evidence)}", None, "delivery", error=True)
 
 
+def _stopped(c: Change, s: str) -> Status | None:
+    if not (c.outcome and c.outcome.exit == Exit.STOP and c.stop):
+        return None
+    kept = c.repairs.done[-1] if c.repairs.done else None
+    reason = (
+        stuck.obstruction(c.stop.reason)
+        if (
+            kept
+            and kept.fix == "preparation"
+            and kept.phase == "stopped"
+            and kept.cause == c.outcome.cause
+            and kept.diff
+        )
+        else c.stop.reason
+    )
+    return Status(f"{s} · stopped: {reason}", c.stop.action, c.stop.actor, error=True, stopped=True)
+
+
 def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
     c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | None = None
 ) -> Status:
@@ -381,8 +399,8 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
             "you",
             error=o.cause in c.budgets.causes or _direct_error(o.cause),
         )
-    if o and o.exit == Exit.STOP and c.stop:
-        return Status(f"{s} · stopped: {c.stop.reason}", c.stop.action, c.stop.actor, error=True, stopped=True)
+    if (stopped := _stopped(c, s)) is not None:
+        return stopped
     if (repairing := _repairing(c, s)) is not None:
         return repairing
     if o and o.exit == Exit.PENDING:
