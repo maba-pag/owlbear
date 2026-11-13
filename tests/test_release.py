@@ -75,6 +75,18 @@ def walked(gh: Fake, floor: str) -> list[tuple[str, str, str]]:
     return [(s.sha, s.action, s.tag) for s in release.plan(gh, floor, "HEAD")]
 
 
+@pytest.fixture
+def release_environment(repo: Path, monkeypatch, tmp_path):
+    floor, gh = git(repo, "rev-parse", "HEAD"), Fake()
+    monkeypatch.setattr(release, "FLOOR", floor)
+    monkeypatch.setattr(release, "Api", lambda *_a: gh)
+    for name, value in (("GITHUB_REPOSITORY", "o/r"), ("GH_TOKEN", "t")):
+        monkeypatch.setenv(name, value)
+    for name in ("RELEASE_TAGS", "RELEASE_TOKEN", "GITHUB_STEP_SUMMARY"):
+        monkeypatch.delenv(name, raising=False)
+    return floor, gh, tmp_path / "summary.md"
+
+
 def test_labelled_merges_become_versions_in_order_and_the_walk_waits_at_one_whose_ci_has_not_passed(repo: Path):
     floor, gh = git(repo, "rev-parse", "HEAD"), Fake()
     a, b, c = merge(repo, "a"), merge(repo, "b"), merge(repo, "c")
@@ -120,17 +132,13 @@ def test_a_tag_name_taken_meanwhile_fails_the_run_instead_of_moving(repo: Path, 
     assert git(repo, "rev-parse", "v0.2^{commit}") == git(repo, "rev-parse", "HEAD~1")
 
 
-def test_a_major_missing_its_partner_gets_it_on_the_same_commit(repo: Path, monkeypatch):
+def test_a_major_missing_its_partner_gets_it_on_the_same_commit(repo: Path, release_environment, monkeypatch):
     """TD-392: tags are made one by one through the API, so a run that stopped between them is completed later."""
-    floor, gh = git(repo, "rev-parse", "HEAD"), Fake()
+    _, gh, _ = release_environment
     a = merge(repo, "a")
     gh.create("v1.0", a, "v1.0")
-    monkeypatch.setattr(release, "FLOOR", floor)
-    monkeypatch.setattr(release, "Api", lambda *_a: gh)
-    env = (("GITHUB_REPOSITORY", "o/r"), ("GH_TOKEN", "t"), ("RELEASE_TAGS", "on"), ("RELEASE_TOKEN", "w"))
-    for name, value in env:
-        monkeypatch.setenv(name, value)
-    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    monkeypatch.setenv("RELEASE_TAGS", "on")
+    monkeypatch.setenv("RELEASE_TOKEN", "w")
     assert release.unpaired() == [("v1", a)]
     assert release.main() == 0
     assert (git(repo, "rev-parse", "v1^{commit}"), release.unpaired()) == (a, [])
@@ -162,17 +170,12 @@ def test_the_api_makes_the_annotated_tag_object_then_its_ref_with_the_owners_tok
     assert 'POST git/tags: 422 {"message": "Reference already exists"}' in capsys.readouterr().err
 
 
-def test_without_the_switch_the_run_only_reports_and_with_it_tags(repo: Path, monkeypatch, tmp_path):
+def test_without_the_switch_the_run_only_reports_and_with_it_tags(repo: Path, release_environment, monkeypatch):
     """TD-315: dry run until the owner sets the repository variable RELEASE_TAGS to on."""
-    floor, gh = git(repo, "rev-parse", "HEAD"), Fake()
+    _, gh, summary = release_environment
     a = merge(repo, "a")
     gh.prs, gh.runs = {a: pr(1, "release:minor")}, {a: "success"}
-    summary = tmp_path / "summary.md"
-    monkeypatch.setattr(release, "FLOOR", floor)
-    monkeypatch.setattr(release, "Api", lambda *_a: gh)
-    for name, value in (("GITHUB_REPOSITORY", "o/r"), ("GH_TOKEN", "t"), ("GITHUB_STEP_SUMMARY", str(summary))):
-        monkeypatch.setenv(name, value)
-    monkeypatch.delenv("RELEASE_TAGS", raising=False)
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
     assert release.main() == 0
     assert (f"would tag {a[:9]} as v0.2: #1 change 1" in summary.read_text(), git(repo, "tag", "-l", "v0.2")) == (
         True, ""
@@ -183,6 +186,25 @@ def test_without_the_switch_the_run_only_reports_and_with_it_tags(repo: Path, mo
     monkeypatch.setenv("RELEASE_TOKEN", "owner")
     release.main()
     assert (f"tagged {a[:9]} as v0.2" in summary.read_text(), git(repo, "rev-parse", "v0.2^{commit}")) == (True, a)
+
+
+def test_the_api_reads_the_pr_merged_into_main_at_the_exact_commit(monkeypatch):
+    answers = {
+        "https://api.test/repos/o/r/commits/s/pulls": [
+            {"number": 6, "merge_commit_sha": "other", "base": {"ref": "main"}},
+            {"number": 8, "merge_commit_sha": "s", "base": {"ref": "release"}},
+            {"number": 7, "merge_commit_sha": "s", "base": {"ref": "main"}},
+        ],
+    }
+    asked = []
+
+    def urlopen(request, timeout):
+        asked.append((request.full_url, request.get_header("Authorization"), timeout))
+        return io.BytesIO(json.dumps(answers[request.full_url]).encode())
+
+    monkeypatch.setattr(release.urllib.request, "urlopen", urlopen)
+    assert release.Api("o/r", "tok", "https://api.test").pull("s")["number"] == 7
+    assert asked == [("https://api.test/repos/o/r/commits/s/pulls", "Bearer tok", 30)]
 
 
 @pytest.mark.parametrize(
@@ -197,13 +219,8 @@ def test_without_the_switch_the_run_only_reports_and_with_it_tags(repo: Path, mo
      ([{"id": 7, "path": release.CI, "status": "completed", "conclusion": "success"},
        {"id": 8, "path": release.CI, "status": "queued", "conclusion": None}], "pending")],
 )  # fmt: skip
-def test_the_api_takes_the_pull_request_merged_with_this_commit_and_its_newest_push_ci(monkeypatch, runs, said):
+def test_the_api_reads_the_newest_own_push_ci(monkeypatch, runs, said):
     answers = {
-        "https://api.test/repos/o/r/commits/s/pulls": [
-            {"number": 6, "merge_commit_sha": "other", "base": {"ref": "main"}},
-            {"number": 8, "merge_commit_sha": "s", "base": {"ref": "release"}},
-            {"number": 7, "merge_commit_sha": "s", "base": {"ref": "main"}},
-        ],
         "https://api.test/repos/o/r/actions/runs?head_sha=s&event=push&branch=main&per_page=100": {
             "workflow_runs": runs
         },
@@ -215,8 +232,7 @@ def test_the_api_takes_the_pull_request_merged_with_this_commit_and_its_newest_p
         return io.BytesIO(json.dumps(answers[request.full_url]).encode())
 
     monkeypatch.setattr(release.urllib.request, "urlopen", urlopen)
-    api = release.Api("o/r", "tok", "https://api.test")
-    assert (api.pull("s")["number"], api.ci("s")) == (7, said)
+    assert release.Api("o/r", "tok", "https://api.test").ci("s") == said
     assert asked[0][1:] == ("Bearer tok", 30)
 
 
