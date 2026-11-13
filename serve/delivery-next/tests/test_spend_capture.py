@@ -575,15 +575,14 @@ def test_a_pass_whose_worker_starts_late_is_said_running_and_its_imports_follow(
 
 
 @pytest.mark.parametrize("reads", ["once", "as it grew"])
-def test_a_logged_sessions_growth_across_midnight_is_dated_between_its_checkpoints(project, reads) -> None:
+def test_a_logged_sessions_growth_across_midnight_is_dated_between_its_checkpoints(reads) -> None:
     """First reading a finished log and reading it as it grows must date the same high-water increments."""
     solo_manifest()
     runtime_log("solo", checkpoint("2026-10-01T22:00:00Z", 1e9))
-    projects = [(project, None)] if reads == "as it grew" else []
     if reads == "as it grew":
-        assert spend_reconcile.run(projects)["imported"]["logs"] == 1
+        assert spend_reconcile.run([])["imported"]["logs"] == 1
     logged("solo", shutdown("2026-10-02T09:00:00Z", 3e9))
-    assert spend_reconcile.run(projects)["imported"]["logs"] == (1 if reads == "as it grew" else 2)
+    assert spend_reconcile.run([])["imported"]["logs"] == (1 if reads == "as it grew" else 2)
     assert run_piece("log:solo") == (3.0, False, "run")  # final: no piece of it is a lower bound any more
     assert solo_pieces() == [
         ("2026-10-01T22:00:00+00:00", "2026-10-01T22:00:00+00:00", 1.0, [], False),
