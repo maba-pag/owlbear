@@ -12,7 +12,7 @@ from owlbear_delivery_next.change_flow import asking, repairs
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from owlbear_delivery_next.change_contracts.models import Change, Question, Task
+    from owlbear_delivery_next.change_contracts.models import Change, Plan, Question, Task
     from owlbear_delivery_next.change_contracts.round_records import RoundLoop
     from owlbear_delivery_next.change_flow.loop import StepResult
 
@@ -61,6 +61,22 @@ def subject_of(c: Change, task: Task) -> str:
         task = tasks[task.fixes]
         seen.add(task.id)
     return FINAL if task.fixes == FINAL else task.id
+
+
+def integration_of(c: Change, task: Task | None) -> Task | None:
+    """The integration task a build or its transitive review repair belongs to."""
+    subject = subject_of(c, task) if task else None
+    return next((t for t in c.plan.tasks if t.id == subject and t.origin == "integration"), None) if c.plan else None
+
+
+def carry_integrations(c: Change, plan: Plan) -> Plan:
+    """Keep unfinished integrations and their repair families when replacing a plan (#1203)."""
+    tasks = c.plan.tasks if c.plan else []
+    roots = {root.id for t in tasks if not t.done and (root := integration_of(c, t))}
+    kept = [t for t in tasks if (root := integration_of(c, t)) and root.id in roots]
+    ids = {t.id: f"t{len(plan.tasks) + i}" for i, t in enumerate(kept, 1)}
+    carried = [t.model_copy(deep=True, update={"id": ids[t.id], "fixes": ids.get(t.fixes)}) for t in kept]
+    return plan.model_copy(update={"tasks": [*plan.tasks, *carried]})
 
 
 def loop_of(c: Change, task: Task | None) -> RoundLoop | None:

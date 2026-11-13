@@ -21,9 +21,11 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import FINAL, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import loop, round_flow
 from owlbear_delivery_next.change_flow.loop import StepResult
+from owlbear_delivery_next.change_flow.moves import carry_integrations
 from owlbear_delivery_next.change_flow.status import Activity, card
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.runtimes import step_input
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import overlap, plan_round
@@ -75,8 +77,9 @@ def replace_plan(c, store, path, monkeypatch):
         store.write(lock, c)
     assert events == []  # accepted unchallenged: no paid challenge ran
     c.plan.tasks[0].done = True
-    c.plan.tasks.append(Task(id="t2", title="new integration", scope=["src"], origin="integration"))
-    c.step = Step(kind=K.BUILD, task="t2")
+    task = Task(id=f"t{len(c.plan.tasks) + 1}", title="new integration", scope=["src"], origin="integration")
+    c.plan.tasks.append(task)
+    c.step = Step(kind=K.BUILD, task=task.id)
     with store.lock(c.slug) as lock:
         store.write(lock, c)
     return store.read(c.slug)
@@ -198,6 +201,103 @@ def test_an_integration_result_without_its_merge_report_stops(merged_cleanly, tm
     )
     assert (stopped.exit, stopped.stop.kind) == (Exit.STOP, ErrorKind.STATE)
     assert "does not say what the merge did to behaviour" in stopped.reason
+
+    c = building()
+    root = c.plan.tasks[1]
+    root.base, root.done = start, True
+    head = git(repo, "rev-parse", "HEAD")
+    c.plan.tasks += [
+        Task(id="t3", title="repair integration", origin="review", fixes="t2", done=True, base=head),
+        Task(id="t4", title="repair again", origin="review", fixes="t3", base=head, scope=["src"]),
+    ]
+    c.plan = carry_integrations(c, plan("src"))
+    assert [(t.id, t.fixes, t.done) for t in c.plan.tasks] == [
+        ("t1", None, False),
+        ("t2", None, True),
+        ("t3", "t2", True),
+        ("t4", "t3", False),
+    ]
+    c.step = Step(kind=K.BUILD, task="t4")
+    parts = step_input.session(c, Profile(), repo, {})
+    assert parts.submit is tools.MERGED
+    assert start in parts.message
+    stopped = overlap.integrated(Store(tmp_path / "store"), C1, c, repo, head, StepResult(exit=Exit.DONE), old)
+    assert stopped.exit == Exit.STOP
+    report = told()
+    asked = overlap.integrated(Store(tmp_path / "store"), C1, c, repo, head, StepResult(exit=Exit.DONE), report)
+    assert asked.cause == overlap.collision(c, report.merge, overlap._merges(repo, start)).cause  # noqa: SLF001
+    root = c.plan.tasks[1]
+    root.base = None
+    assert overlap.starting(c, c.plan.tasks[-1]).exit == Exit.STOP
+    assert (
+        overlap.integrated(Store(tmp_path / "store"), C1, c, repo, head, StepResult(exit=Exit.DONE), report).exit
+        == Exit.STOP
+    )
+
+
+def test_a_committed_merge_survives_replanning_until_its_report_is_accepted(
+    merged_cleanly, tmp_path, monkeypatch, checks_settled
+):
+    repo, start = merged_cleanly
+    merge = git(repo, "rev-parse", "HEAD")
+    store, c = Store(tmp_path / "store"), building()
+    checks_settled(store)
+    c.names.branch, c.names.target, c.names.worktree = "change", "main", str(repo)
+    c.plan.tasks[1].base = start
+    store.write(C1, c)
+    monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: repo)
+    seen = []
+    premise = tools.WrongPremise(stage="plan", reason="the merged API needs another task", evidence=["src/app.ts"])
+    revised = tools.PlanResult(
+        tasks=[{"title": "fix the premise", "goal": "AC-1", "scope": ["src"], "checks": ["true"]}]
+    )
+    reviewed = tools.ReviewResult(verdict="pass", covered_paths=["src/app.ts"])
+    replies = iter(
+        [
+            (tools.MERGED, "premise", premise),
+            (tools.PLAN, "result", revised),
+            (tools.REVIEW, "result", reviewed),
+            (tools.SUBMIT, "result", tools.BuildResult(summary="premise fixed", checks=[])),
+            (tools.REVIEW, "result", reviewed),
+            (tools.MERGED, "result", told()),
+            (tools.MERGED, "result", told()),
+            (tools.REVIEW, "result", reviewed),
+        ]
+    )
+
+    async def session(cfg):
+        expected, ending, payload = next(replies)
+        assert cfg.submit is expected
+        seen.append((cfg.kind, cfg.submit))
+        if cfg.submit is tools.REVIEW and seen[-2][0] == K.PLAN:
+            checkpoint = store.read("c1")
+            assert [(t.id, t.origin) for t in checkpoint.plan.tasks] == [("t1", "plan"), ("t2", "integration")]
+            assert checkpoint.plan.tasks[1].base == start
+        return Run(cfg.session_id, ending, payload, head=merge, termination=Termination(confirmed=True))
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", session)
+
+    def run():
+        change = store.read("c1")
+        runner._agent(store, C1, change, repo)  # noqa: SLF001
+        return store.read("c1")
+
+    assert run().step.kind == K.PLAN
+    c = run()
+    assert (c.plan.version, c.step.kind, c.step.task) == (2, K.BUILD, "t1")
+    assert run().step.kind == K.REVIEW
+    assert run().step.task == "t2"
+    c = run()
+    assert (c.outcome.exit, c.step.kind, c.plan.tasks[1].done) == (Exit.ASK, K.BUILD, False)
+    question = loop.open_question(c)
+    assert question.subject == "product"
+    c = loop.schedule(c, [AnswerItem(at=NOW, question=question.id, option="keep")], NOW)[0]
+    store.write(C1, c)
+    assert run().step.kind == K.REVIEW
+    c = run()
+    assert c.step.kind == K.PUBLISH
+    assert all(t.done for t in c.plan.tasks)
+    assert git(repo, "rev-parse", "HEAD") == merge
 
 
 def test_an_integration_build_without_its_start_head_stops_instead_of_passing(tmp_path):
