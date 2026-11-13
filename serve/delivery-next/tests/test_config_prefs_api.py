@@ -1,4 +1,3 @@
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -10,6 +9,7 @@ from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.state_store.store import Store
 
 from .test_config_api import client
+from .test_prefs_recovery import clone_profile, refuse_config_once
 
 AUTH = {"authorization": "Bearer " + "t"}
 
@@ -50,24 +50,6 @@ def test_the_five_preferences_save_resolve_and_clear_to_unset_through_the_api(st
     assert store.read_profile().prefs_import == "done"
 
 
-def _refuse_config_publication_once(monkeypatch, config_path):
-    real, refused = data_repo.DataRepo.publish, []
-
-    def refuse(self, path, message, until=None):
-        if path == config_path and not refused:
-            refused.append(message)
-            return "remote refused"
-        return real(self, path, message, until)
-
-    monkeypatch.setattr(data_repo.DataRepo, "publish", refuse)
-
-
-def _fresh_store(tmp_path: Path, remote: Path) -> Store:
-    second = tmp_path / "fresh"
-    subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
-    return Store(tmp_path / "fresh-store", data_repo.DataRepo(second), "shop-site")
-
-
 def test_a_width_only_save_leaves_a_pending_import_pending_with_the_review_diagnostic(store, tmp_path, monkeypatch):
     monkeypatch.setattr(config, "BASE", None)
     store.write_profile(Profile())
@@ -101,7 +83,7 @@ def test_a_refused_publication_of_an_edited_preference_stays_pending_until_publi
         assert response.status_code == 200
         first = response.json()
     store.mark_prefs_import("", "pending", "absent")
-    _refuse_config_publication_once(monkeypatch, store.config_path)
+    refuse_config_once(monkeypatch, store)
     poll = None if clearing else 30
     layer = first["project"] | {"prefs": {"ci_poll_seconds": poll}}
     refused = c.put(
@@ -118,6 +100,6 @@ def test_a_refused_publication_of_an_edited_preference_stays_pending_until_publi
     assert retry.status_code == 200
     assert not retry.json()["notice"]
     assert store.read_profile().prefs_import == "done"
-    fresh = _fresh_store(tmp_path, remote)
+    fresh, _ = clone_profile(remote, tmp_path)
     assert fresh.read_config().prefs.ci_poll_seconds == poll
     assert fresh.read_profile().prefs_import == "done"

@@ -34,7 +34,7 @@ def crash_before_fill(monkeypatch) -> None:
     monkeypatch.setattr(prefs_import, "_fill", boom)
 
 
-def test_a_stale_clones_ordinary_save_keeps_the_published_claim(shared_repo, tmp_path, monkeypatch):
+def test_absent_basis_owner_retry_stays_pending_after_a_stale_save(shared_repo, tmp_path, monkeypatch):
     root, remote = shared_repo
     a = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
     a.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
@@ -51,23 +51,11 @@ def test_a_stale_clones_ordinary_save_keeps_the_published_claim(shared_repo, tmp
 
     b.write_profile(stale.model_copy(update={"entries": {profile.POLL: confirmed("30")}}))  # stale ordinary fact save
 
-    shared, got = clone_as(remote, tmp_path, "shared")
+    shared, got = clone_as(remote, tmp_path, "before-retry")
     assert (got.prefs_import, got.prefs_basis, got.prefs_claim) == ("pending", "absent", published.prefs_claim)
     assert got.entries[profile.POLL].value == "30"
     assert not shared.config_path.exists()
     assert not b.config_path.exists()
-
-
-def test_absent_basis_owner_retry_stays_pending_after_a_stale_save(shared_repo, tmp_path, monkeypatch):
-    root, remote = shared_repo
-    a = Store(tmp_path / "a-store", DataRepo(root), "shop-site")
-    a.write_profile(Profile(entries={profile.POLL: confirmed("45")}))
-    b, stale = clone_as(remote, tmp_path, "b")
-    with monkeypatch.context() as m:
-        crash_before_fill(m)
-        with pytest.raises(RuntimeError, match="crash before the fill"):
-            prefs_import.run(a)
-    b.write_profile(stale.model_copy(update={"entries": {profile.POLL: confirmed("30")}}))
 
     with pytest.raises(StoreError, match="legacy preference import is incomplete"):
         prefs_import.run(b)  # B cannot take A's published claim, so it does not fill or mark done
