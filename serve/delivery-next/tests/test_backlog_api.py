@@ -22,6 +22,8 @@ from owlbear_delivery_next.state_store import backlog_issues
 from owlbear_delivery_next.state_store.backlog import Backlog
 from owlbear_delivery_next.state_store.store import Store
 
+from .test_machine_pages import page_at
+
 AUTH = {"authorization": "Bearer t"}
 
 
@@ -101,10 +103,8 @@ def test_the_owner_adds_an_idea_and_the_list_puts_the_inbox_first(store):
     assert c.post("/api/next/backlog", json={"title": ""}).status_code == 422
     assert c.post("/api/next/backlog", json={"title": "x", "source": "watcher"}).status_code == 422
 
-
-def test_the_owner_classifies_notes_links_drops_and_names_the_change_an_entry_went_into(store):
-    c = client(store)
-    a, b = (c.post("/api/next/backlog", json={"title": t}).json()["entry"]["id"] for t in ("a", "b"))
+    a = entry["id"]
+    b = c.post("/api/next/backlog", json={"title": "b"}).json()["entry"]["id"]
     with store.lock("show-build-date") as lock:
         store.write(lock, Change(slug="show-build-date"))
 
@@ -115,6 +115,7 @@ def test_the_owner_classifies_notes_links_drops_and_names_the_change_an_entry_we
     assert (patched["kind"], patched["status"], patched["notes"], patched["links"]) == ("idea", "open", "small", [b])
     assert (dropped["status"], dropped["links"]) == ("dropped", [a])
     assert linked["change"] == "show-build-date"
+    assert Backlog.of(store).read()[0][b].links == [a]
     refused = [
         c.patch(f"/api/next/backlog/{a}", json={"kind": "bug"}),
         c.patch(f"/api/next/backlog/{a}", json={"change": "no-such-change"}),
@@ -130,33 +131,6 @@ def settled(c, launch):
     while (state := c.get(f"/api/next/new-change/{launch}").json())["state"] == "opening" and time.monotonic() < end:
         time.sleep(0.01)
     return state
-
-
-def test_create_change_opens_the_shaping_chat_with_the_entries_as_starting_material(store):
-    launch = Launch()
-    c = client(store, launch)
-    backlog = Backlog.of(store)
-    a = backlog.add("Status line hides the step", "it cuts at 80 columns", "watcher", ["c3 build", "s-17"])[0]
-    b = backlog.add("Wider status line", source="assistant")[0]
-    backlog.update(a.id, {"notes": "only on narrow terminals", "links": [b.id]})
-
-    started = c.post("/api/next/backlog/change", json={"ids": [a.id, b.id]}).json()
-
-    assert (started["started"], started["ids"]) == (True, [a.id, b.id])
-    assert launch.done.wait(5)
-    [prompt] = launch.prompts
-    assert prompt.startswith("Start a new Delivery Change from these backlog entries")
-    for said in ("> Status line hides the step", "> it cuts at 80 columns", "> only on narrow terminals",
-                 "> c3 build\n> s-17", f"> Wider status line (#{b.id})", f"Backlog entry #{a.id}",
-                 "seen 1 times"):  # fmt: skip
-        assert said in prompt
-    state = settled(c, started["launch"])
-    assert (state["state"], shlex.split(state["command"])) == (
-        "open",
-        ["cd", str(store.root), "&&", "code", "chat", "-m", "owlbear-shaper", prompt],
-    )
-    entries = {e["id"]: e for e in c.get("/api/next/backlog").json()["entries"]}
-    assert {(e["status"], e["launch"]) for e in entries.values()} == {("in-change", started["launch"])}
 
 
 def test_entries_enter_the_shaping_prompt_only_as_quoted_data(store):
@@ -182,9 +156,10 @@ class Gate:
     """A launch that stays opening until the test lets it end the way it was told."""
 
     def __init__(self, end: str) -> None:
-        self.end, self.go = end, threading.Event()
+        self.end, self.go, self.prompts = end, threading.Event(), []
 
-    def __call__(self, _repo, _role, _prompt):
+    def __call__(self, _repo, _role, prompt):
+        self.prompts.append(prompt)
         assert self.go.wait(5)
         return {"state": self.end} | ({"reason": "the chat did not start"} if self.end == "failed" else {})
 
@@ -193,22 +168,55 @@ class Gate:
 def test_entries_are_pending_while_the_chat_opens_and_move_only_when_it_opened(store, end):
     gate = Gate(end)
     c = client(store, gate)
-    a = Backlog.of(store).add("Wider status line")[0]
+    backlog = Backlog.of(store)
+    if end == "open":
+        a = backlog.add("Status line hides the step", "it cuts at 80 columns", "watcher", ["c3 build", "s-17"])[0]
+        b = backlog.add("Wider status line", source="assistant")[0]
+        a = backlog.update(a.id, {"notes": "only on narrow terminals", "links": [b.id]})
+        chosen = [a, backlog.read()[0][b.id]]
+    else:
+        a = backlog.add("Wider status line")[0]
+        chosen = [a]
 
-    started = c.post("/api/next/backlog/change", json={"ids": [a.id]}).json()
-    [opening] = c.get("/api/next/backlog").json()["entries"]
-    gate.go.set()
+    try:
+        started = c.post("/api/next/backlog/change", json={"ids": [e.id for e in chosen]}).json()
+        assert (started["started"], started["ids"]) == (True, [e.id for e in chosen])
+        opening = {e["id"]: e for e in c.get("/api/next/backlog").json()["entries"]}
+        for entry in chosen:
+            assert (opening[entry.id]["status"], opening[entry.id]["launch"], opening[entry.id]["opening"]) == (
+                entry.status,
+                "",
+                started["launch"],
+            )
+    finally:
+        gate.go.set()
     state = settled(c, started["launch"])
-    [after] = c.get("/api/next/backlog").json()["entries"]
+    after = c.get("/api/next/backlog").json()["entries"]
 
-    assert (opening["status"], opening["launch"], opening["opening"]) == ("inbox", "", started["launch"])
     assert state["state"] == end
-    assert "opening" not in after
+    assert all("opening" not in e for e in after)
     if end == "failed":
-        assert (after["status"], after["launch"]) == ("inbox", "")
+        assert [(e["status"], e["launch"]) for e in after] == [("inbox", "")]
         assert Backlog.of(store).read()[0][a.id] == a
     else:
-        assert (after["status"], after["launch"]) == ("in-change", started["launch"])
+        [prompt] = gate.prompts
+        assert prompt.startswith("Start a new Delivery Change from these backlog entries")
+        for said in ("> Status line hides the step", "> it cuts at 80 columns", "> only on narrow terminals",
+                     "> c3 build\n> s-17", f"> Wider status line (#{b.id})", f"Backlog entry #{a.id}",
+                     "seen 1 times"):  # fmt: skip
+            assert said in prompt
+        assert shlex.split(state["command"]) == [
+            "cd",
+            str(store.root),
+            "&&",
+            "code",
+            "chat",
+            "-m",
+            "owlbear-shaper",
+            prompt,
+        ]
+        assert {e["id"] for e in after} == {a.id, b.id}
+        assert {(e["status"], e["launch"]) for e in after} == {("in-change", started["launch"])}
 
 
 def test_create_change_without_code_gives_the_command_and_leaves_the_entries(store):
@@ -265,8 +273,6 @@ def test_the_page_shows_why_github_could_not_be_reached_and_nothing_is_saved(sto
 def backlog_page(store: Store, pds: Any, logged: list[str] | None = None) -> Iterator[Any]:
     """The Backlog page in a real browser: only the test host and the PDS CDN answer; *logged* gets its console and
     page errors from before it loads."""
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         app = api.create_app(store, "tok", Host(), launch=Launch(), which=lambda _n: "/bin/code")
@@ -278,22 +284,15 @@ def backlog_page(store: Store, pds: Any, logged: list[str] | None = None) -> Ite
                 assert thread.is_alive(), "the owned page server stopped before startup"
                 time.sleep(0.05)
             base = f"http://127.0.0.1:{sock.getsockname()[1]}"
-            with sync_playwright() as pw:
-                try:
-                    browser = pw.chromium.launch()
-                except Error as exc:
-                    pytest.skip(f"no Playwright Chromium: {exc}")
-                page = browser.new_page()
+            with page_at(base, pds, required=True) as page:
                 if logged is not None:
                     page.on(
                         "console",
                         lambda m: logged.append(f"{m.text} {m.location['url']}") if m.type == "error" else None,
                     )
                     page.on("pageerror", lambda e: logged.append(str(e)))
-                pds.only(page, base)
                 page.goto(f"{base}/backlog#token=tok")
                 yield page
-                browser.close()
         finally:
             server.should_exit = True
             thread.join(5)
