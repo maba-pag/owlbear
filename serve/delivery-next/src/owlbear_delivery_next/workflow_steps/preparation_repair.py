@@ -120,6 +120,8 @@ def prove(store: Store, lock: Lock, change: Change, root: Path, trial: tuple[flo
     finally:
         if rec is None or not rec.open:
             repair_copy.drop(root, clean)
+            if rec is not None and not clean.exists():
+                prepared.write(store, change.slug, rec.model_copy(update={"home": ""}))
     store.write(lock, change)
     if r.witness.exit != 0:
         msg = f"the preparation trial failed in {clean}:\n{r.witness.output}"

@@ -384,7 +384,7 @@ def launch(store: Store, c: Change, settings: Settings, log: Log) -> loop.StepRe
 def left(store: Store, c: Change) -> list[Prepared]:
     """Runs whose check environment is gone: the end of their check is still to run."""
     current = c.env.check if c.env else None
-    return [r for r in _records(store, c.slug) if r.open and r.check != current]
+    return [r for r in _records(store, c.slug) if (r.open or (r.trial and r.home)) and r.check != current]
 
 
 def _reapply(store: Store, c: Change, rec: Prepared, home: Path) -> None:
@@ -403,14 +403,24 @@ def _reapply(store: Store, c: Change, rec: Prepared, home: Path) -> None:
         _write(store, c.slug, rec)
 
 
-def _cleanup(rec: Prepared, home: Path, repo: Path, log: Log) -> str:
+def _cleanup(rec: Prepared, home: Path, log: Log) -> str:
     try:
         note = snapshot_files.command(rec, "cleanup", home, log, isolated(rec, home))
     except PrepareError as exc:
         return exc.result.reason
-    if rec.trial and not note:
-        repair_copy.drop(repo, home)
     return note
+
+
+def _dispose_trial(store: Store, slug: str, rec: Prepared, repo: Path) -> bool:
+    if not (rec.trial and not rec.open and rec.home):
+        return False
+    home = Path(rec.home)
+    repair_copy.drop(repo, home)
+    if home.exists():
+        msg = f"the cleaned preparation trial checkout {home} could not be removed"
+        raise OSError(msg)
+    _write(store, slug, rec.model_copy(update={"home": ""}))
+    return True
 
 
 def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> loop.StepResult | None:
@@ -420,13 +430,11 @@ def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> lo
     reach a commit (TD-107). A failed cleanup or deletion leaves the run outstanding: the next runner ends it again.
     """
     for rec in left(store, c):
+        if _dispose_trial(store, c.slug, rec, repo):
+            continue
         stuck = note = ""
-        if rec.home and not Path(rec.home).is_dir():  # a shaping copy's checkout is gone: its cleanup cannot run
+        if rec.home and not Path(rec.home).is_dir() and not rec.trial:
             note = f"its checkout {rec.home} is gone, so its cleanup did not run"
-            if rec.trial:
-                log({"event": "prepared-end", "at": datetime.now(UTC).isoformat(), "check": rec.check,
-                     "cleanup": note, "outstanding": True})  # fmt: skip
-                continue
             if not (gone := snapshot_files.gone(rec.snapshot)):  # outstanding: the next end deletes it again
                 note += f"; the snapshot {rec.snapshot} could not be deleted"
             log({"event": "prepared-end", "at": datetime.now(UTC).isoformat(), "check": rec.check, "cleanup": note}
@@ -438,7 +446,7 @@ def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> lo
         keep = settings.data.retention == "keep" and bool(rec.digest) and rec.check != SHAPING  # never a shaping copy
         try:
             _reapply(store, c, rec, home)
-            note = _cleanup(rec, home, repo, log)
+            note = _cleanup(rec, home, log)
             if not (gone := keep or snapshot_files.gone(rec.snapshot)):
                 note = "; ".join(filter(None, [note, f"the snapshot {rec.snapshot} could not be deleted"]))
         finally:
@@ -455,7 +463,9 @@ def end(store: Store, c: Change, repo: Path, settings: Settings, log: Log) -> lo
                         resume="The worktree holds none of them", at=at)  # fmt: skip
             return loop.StepResult(exit=Exit.STOP, reason=stuck, stop=stop)
         update = {"snapshot": rec.snapshot if keep or not gone else "", "applied": "", "ready": False}
-        _write(store, c.slug, rec.model_copy(update=update | ({} if note else {"digest": "", "open": False})))
+        ended = rec.model_copy(update=update | ({} if note else {"digest": "", "open": False}))
+        _write(store, c.slug, ended)
+        _dispose_trial(store, c.slug, ended, repo)
     return None
 
 

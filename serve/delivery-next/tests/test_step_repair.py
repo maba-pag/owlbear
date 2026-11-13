@@ -569,6 +569,21 @@ def _retain_failed_trial(store, asked, proposal, repo, monkeypatch):
     assert clean.is_dir()
     assert len(calls) == 1
     control.unlink()
+    drop = repair_copy.drop
+
+    def interrupted_drop(source, at):
+        if at == clean:
+            msg = "interrupted before cleaned trial disposal"
+            raise OSError(msg)
+        drop(source, at)
+
+    with monkeypatch.context() as interrupted:
+        interrupted.setattr(repair_copy, "drop", interrupted_drop)
+        with pytest.raises(OSError, match="interrupted before cleaned trial disposal"):
+            prepare.ran(store, Lock(held.slug), held, repo, runnable=False)
+    assert not prepare.left(store, held)[0].open
+    assert clean.is_dir()
+    assert not (clean / ".fixture-home").exists()
     assert not prepare.ran(store, Lock(held.slug), held, repo, runnable=False)
     assert prepare.left(store, held) == []
     assert not clean.exists()
