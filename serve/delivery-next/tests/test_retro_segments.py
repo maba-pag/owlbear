@@ -33,7 +33,7 @@ def _turn(ask, call_id, saved, answer):
     ]
 
 
-def test_a_kept_outputs_decisive_result_and_a_later_recovery_reach_the_judge_and_a_missing_one_is_marked(tmp_path):
+def test_saved_output_course_journey(tmp_path):
     kept, gone = str(tmp_path / "copilot-tool-output-1.txt"), str(tmp_path / "copilot-tool-output-2.txt")
     events = [
         *_turn("make the tests pass", "c1", kept, "all green, done"),
@@ -54,13 +54,11 @@ def test_a_kept_outputs_decisive_result_and_a_later_recovery_reach_the_judge_and
         {"refs": ["s2.e7"], "quotes": ["copilot-tool-output-2.txt: missing"], "rests_on_gap": True}, got.parts
     )
     assert rests["status"] == "unknown"
-
-
-def test_a_later_turns_kept_test_result_reaches_an_earlier_turns_later_course(tmp_path):
-    early, late = str(tmp_path / "copilot-tool-output-1.txt"), str(tmp_path / "copilot-tool-output-2.txt")
-    events = [*_turn("make the tests pass", "c1", early, "done"), *_turn("ship it", "c2", late, "shipped")]
-    outputs = [{"path": early, "state": "kept"}, {"path": late, "state": "kept"}]
-    bodies = {"copilot-tool-output-1.txt": "12 passed\n", "copilot-tool-output-2.txt": "...\n5 failed, 400 passed\n"}
+    outputs[1]["state"] = "kept"
+    bodies = {
+        "copilot-tool-output-1.txt": "...\n3 failed, 9 passed\n",
+        "copilot-tool-output-2.txt": "...\n5 failed, 400 passed\n",
+    }
     _captured("s1", events, outputs, **bodies)
 
     first, _ = seg.prepare(["s1"], "the chat ended", per_turn=True).parts
