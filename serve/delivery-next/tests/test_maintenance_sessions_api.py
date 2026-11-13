@@ -29,8 +29,15 @@ def failed_session(root):
     return ident
 
 
-def test_the_listing_shows_the_captured_session_and_whether_a_reboot_recovers_it(tmp_path):
+def test_only_the_owner_after_a_confirmed_reboot_recovers_the_listed_session_once(tmp_path):
     ident = failed_session(tmp_path)
+    same_boot = maintenance.Maintenance(Slots(lambda: 1, closed=True), boot=lambda: 10.0)
+    same_boot.slots.open()
+    http = client(same_boot)
+    assert http.post(f"/maintenance/sessions/{ident}/recover", json={"rebooted": True}).status_code == 409
+    assert http.post("/maintenance/sessions/missing/recover", json={"rebooted": True}).status_code == 409
+    assert same_boot.slots.counts("p") == (1, 1, 1)
+
     rebooted = maintenance.Maintenance(Slots(lambda: 1, closed=True), boot=lambda: 20.0)
     rebooted.slots.open()
     http = client(rebooted)
@@ -41,22 +48,19 @@ def test_the_listing_shows_the_captured_session_and_whether_a_reboot_recovers_it
     assert session["recoverable"] is True
     assert session["workspace"] == str(tmp_path)
 
-
-def test_an_unconfirmed_recovery_is_refused_with_400_and_keeps_the_reservation(tmp_path):
-    ident = failed_session(tmp_path)
-    rebooted = maintenance.Maintenance(Slots(lambda: 1, closed=True), boot=lambda: 20.0)
-    rebooted.slots.open()
-    http = client(rebooted)
+    chat = http.post(
+        f"/maintenance/sessions/{ident}/recover", json={"rebooted": True}, headers={"x-owlbear-use": "chat"}
+    )
+    assert chat.status_code == 403
+    assert rebooted.slots.counts("p") == (1, 1, 1)
+    assert http.get("/maintenance/sessions").json()["sessions"][0]["state"] == "held"
+    response = http.post(f"/maintenance/sessions/{ident}/recover", json={"rebooted": True, "id": "other"})
+    assert response.status_code == 422
+    assert rebooted.slots.counts("p") == (1, 1, 1)
     response = http.post(f"/maintenance/sessions/{ident}/recover", json={"rebooted": False})
     assert response.status_code == 400
     assert rebooted.slots.counts("p") == (1, 1, 1)
 
-
-def test_a_confirmed_reboot_recovers_the_captured_session_once(tmp_path):
-    ident = failed_session(tmp_path)
-    rebooted = maintenance.Maintenance(Slots(lambda: 1, closed=True), boot=lambda: 20.0)
-    rebooted.slots.open()
-    http = client(rebooted)
     response = http.post(f"/maintenance/sessions/{ident}/recover", json={"rebooted": True})
     assert response.status_code == 200
     (session,) = response.json()["sessions"]
@@ -67,39 +71,7 @@ def test_a_confirmed_reboot_recovers_the_captured_session_once(tmp_path):
     assert again.status_code == 409
 
 
-def test_a_recovery_without_a_rebooted_boot_or_an_unknown_id_is_refused_with_409(tmp_path):
-    ident = failed_session(tmp_path)
-    same_boot = maintenance.Maintenance(Slots(lambda: 1, closed=True), boot=lambda: 10.0)
-    same_boot.slots.open()
-    http = client(same_boot)
-    assert http.post(f"/maintenance/sessions/{ident}/recover", json={"rebooted": True}).status_code == 409
-    assert http.post("/maintenance/sessions/missing/recover", json={"rebooted": True}).status_code == 409
-
-
 def test_an_unbound_host_has_no_sessions_to_read_or_recover():
     http = client(None)
     assert http.get("/maintenance/sessions").status_code == 503
     assert http.post("/maintenance/sessions/x/recover", json={"rebooted": True}).status_code == 503
-
-
-def test_the_recovery_body_accepts_only_the_rebooted_confirmation(tmp_path):
-    ident = failed_session(tmp_path)
-    rebooted = maintenance.Maintenance(Slots(lambda: 1, closed=True), boot=lambda: 20.0)
-    rebooted.slots.open()
-    http = client(rebooted)
-    response = http.post(f"/maintenance/sessions/{ident}/recover", json={"rebooted": True, "id": "other"})
-    assert response.status_code == 422
-    assert rebooted.slots.counts("p") == (1, 1, 1)
-
-
-def test_a_chat_tool_cannot_recover_a_held_session_even_with_a_valid_confirmation(tmp_path):
-    ident = failed_session(tmp_path)
-    rebooted = maintenance.Maintenance(Slots(lambda: 1, closed=True), boot=lambda: 20.0)
-    rebooted.slots.open()
-    http = client(rebooted)
-    chat = http.post(
-        f"/maintenance/sessions/{ident}/recover", json={"rebooted": True}, headers={"x-owlbear-use": "chat"}
-    )
-    assert chat.status_code == 403
-    assert rebooted.slots.counts("p") == (1, 1, 1)
-    assert http.get("/maintenance/sessions").json()["sessions"][0]["state"] == "held"
