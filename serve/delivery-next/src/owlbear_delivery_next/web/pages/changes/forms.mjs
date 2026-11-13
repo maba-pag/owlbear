@@ -47,7 +47,7 @@ export function questionForm(q, d) {
   };
   const clarifying = q.ordinary && mine.kind === "clarification";
   const confirm = (on) => { mine.confirmed = on; show(); };
-  return panel(`Question ${q.id}`, key, text(questionText(q), { weight: "semibold" }), droppedLine(q),
+  return panel(`Question ${q.id}`, key, text(questionText(q), { weight: "semibold", cls: "recorded" }), droppedLine(q),
     q.options.length ? choice(key, "option", "Choose an option", q.options) : nothing,
     field(key, "text", "Your answer in words"),
     q.ordinary ? choice(key, "kind", "How your answer bears on the brief", CLASSES) : nothing,
@@ -116,7 +116,7 @@ export function retryForm(q, r, d) {
       instead: "The question stays open.",
     })) send("/answers", { question: q.id, option }, d, key);
   };
-  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }), droppedLine(q),
+  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold", cls: "recorded" }), droppedLine(q),
     hd(4, "Plan tasks to rebuild", "sm"),
     r.tasks.map((t) => html`${tick(`${t.id}: ${t.title}`, mine.ticked.includes(t.id), flip(t.id))}
       ${taskRounds(t.id, d, " (rebuild list)")}
