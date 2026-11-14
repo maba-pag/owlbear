@@ -396,6 +396,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                     for h in c.handled
                 ],
                 "question": shown,
+                "retained_repair": stop_routes.retained(c),
                 "retry": rebuilds.shown(c, q),  # TD-217: the plan tasks beside the final review's retry question
                 "rounds": round_marks.shown(c),  # TD-217: each loop's round markers, details and what is left
                 "checks": checks,
