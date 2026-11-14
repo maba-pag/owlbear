@@ -151,6 +151,8 @@ def stopped(c: Change, why: str, now: datetime) -> None:
     if r.fix == "preparation" and r.diff:
         proof = f"\n\nDelivery's trial:\n{r.witness.output}" if r.witness else ""
         said += f"\n\nThe preparation proposal kept (not applied):\n{r.diff}{proof}"
+    elif r.fix == "patch" and r.diff:
+        said += f"\n\nThe fix kept (not applied):\n{r.diff}"
     _stop(c, r.cause, said, now)
 
 

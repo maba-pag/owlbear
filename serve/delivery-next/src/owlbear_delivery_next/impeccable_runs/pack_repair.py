@@ -3,7 +3,8 @@
 The owner starts it from the CI stop of the run's own pull request. A bounded updater session edits a copy of the failed
 head with the failed checks' logs; it never pushes. Delivery commits what it changed and gates the diff: lint, format,
 CI workflow, hook or security configuration stops and asks the owner with the diff, pushing nothing; a weakened test (a
-deleted test file, an added skip, suppression or early return, a removed assertion or test) is never pushed, and any
+deleted test file, an added skip or early return, a removed assertion or test) is never pushed; a new suppression needs
+the owner's yes/no with its exact lines, reason and complete patch. Any
 other edit of an existing test file waits for the owner's review of its diff, since those patterns are no proof that a
 test still checks as much. A change to the pack's protected content is checked again before it is pushed, as the update
 was (``pack_run``): the detector's glue, golden pages and pinned skills, whole as the repair's commit holds them, are
@@ -47,7 +48,7 @@ from owlbear_delivery_next.impeccable_runs.pack_repair_edits import held as _hel
 from owlbear_delivery_next.impeccable_runs.pack_repair_edits import staged as _staged
 from owlbear_delivery_next.runtimes import sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
-from owlbear_delivery_next.workflow_steps import follow, sessions
+from owlbear_delivery_next.workflow_steps import check_weakening, follow, sessions
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.github.provider import Provider, PullRequest
@@ -96,6 +97,8 @@ class Repair(BaseModel):
     held: list[str] = Field(default_factory=list)  # its configuration changes, which the owner may let through
     refused: list[str] = Field(default_factory=list)  # never pushed: a weakened check, or what only an update changes
     reviewed: list[str] = Field(default_factory=list)  # its other edits of existing tests, for the owner's review
+    suppressions: list[str] = Field(default_factory=list)  # new directives with exact source lines
+    patch: str = ""  # the whole binary-capable patch, kept even when the displayed diff is incomplete
     diff: str = ""  # the diff of the paths it is held for, as the owner is shown it
     diff_cut: bool = False  # that diff is too long or binary to show whole: never pushed from his question
     diff_binary: bool = False  # it holds a binary change, which Git does not render
@@ -297,6 +300,7 @@ def _made(job: Job, ctx: Context, src: pack_git.Source, gh: Provider) -> Outcome
     assert pub is not None  # noqa: S101 - a repair follows publication
     r.phase, r.attempts, r.summary, r.commit = "running", r.attempts + 1, "", ""
     r.paths, r.held, r.refused, r.reviewed, r.diff, r.laid, r.checked = [], [], [], [], "", "", ""
+    r.suppressions, r.patch = [], ""
     r.diff_cut = r.diff_binary = False
     job.keep(ctx)  # before the session: a host stop now reports, and pushes nothing
     kind, at = job.REPAIR, job.store.root / job.RUNS / f"{job.state['run']}-ci-repair"
@@ -311,6 +315,8 @@ def _made(job: Job, ctx: Context, src: pack_git.Source, gh: Provider) -> Outcome
         r.paths = [p for p, _ in paths]
         package, skills = _package(job, src), kind.pinned(ctx)
         r.held, r.refused, r.reviewed = _held(run, at, r.stop.head, paths, package=package, skills=skills, kind=kind)
+        r.suppressions = [line for p in r.paths for line in check_weakening.suppressions(run, at, r.stop.head, p)]
+        r.patch = run(at, ["diff", "--cached", "--binary", r.stop.head])
         if asked := _asked(r):  # the diff of what he is asked about, whole, or no push from his question
             changed = ["--cached", r.stop.head, "--", *asked]
             diff, r.diff_binary = run(at, ["diff", *changed]), _binary(run, at, changed)
@@ -320,6 +326,7 @@ def _made(job: Job, ctx: Context, src: pack_git.Source, gh: Provider) -> Outcome
                    "Repaired by an agent; pushed by Delivery.")  # fmt: skip
         run(at, ["commit", "--quiet", "-m", message])
         r.commit = run(at, ["rev-parse", "HEAD"])
+        job.keep(ctx)
     except (pack_files.PackError, ProviderError, OSError) as exc:
         return Outcome("failed", f"the agent's repair did not finish: {failure(exc)}")
     finally:

@@ -2,10 +2,11 @@
 
 A Repairer session (D-01M6SY11CY5SN5ZKYJNM0K6BDM) works in a throwaway copy of the step worktree's whole state. Delivery
 then reruns the step's own checks there itself, with the confirmed install commands first: only exit 0 is proof. A
-fix that weakens a check is never applied. One inside the brief's scope that touches no configuration reserved for the
-owner (lint, format, CI, hooks, security) is applied and the step runs again; any other proven fix, and every new
-project check, is his yes or no with the proof and the diff. Unchanged checks independently verified rerun the real
-step; a failed diagnosis keeps repairing. Exhausted remedies stop listing their tries and spend; OwlBear defects get
+fix that weakens a test is never applied; a new suppression needs the owner. One inside the brief's scope that touches
+no configuration reserved for the owner (lint, format, CI, hooks, security) is applied and the step runs again; any
+other proven fix, and every new project check, is his yes or no with the proof and the diff. Unchanged checks
+independently verified rerun the real step; a failed diagnosis keeps repairing. Exhausted remedies stop listing their
+tries and spend; OwlBear defects get
 an issue (``defect_issue``).
 """
 
@@ -211,32 +212,34 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
     if not changed:
         _stopped(store, lock, change, "it reported a fix but changed nothing")
         return
-    weak = [
-        f"{p} ({w})" for p, how in changed if (w := check_weakening.weakened(repair_copy.git, at, r.base, p, how)[0])
-    ]
+    r.paths = [p for p, _ in changed]
+    said = f"fix: {stuck.obstruction(r.found)}\n\nRepaired by an agent; committed by Delivery."
+    r.commit = repair_copy.commit(at, said)
+    repair_copy.git(path, ["update-ref", f"{KEPT}{change.slug}", r.commit])
+    r.diff = repair_copy.git(path, ["diff", "--binary", r.base, r.commit, "--", *r.paths])
+    store.write(lock, change)
+    found = {p: check_weakening.weakened(repair_copy.git, at, r.base, p, how) for p, how in changed}
+    weak = [f"{p} ({found[p][0]})" for p in r.paths if found[p][0]]
     if weak:
         _stopped(store, lock, change, f"its fix weakens a check, which Delivery never applies: {', '.join(weak)}")
         return
     if why := _witnessed(store, lock, change, at, (witness, within, prof)):
         _stopped(store, lock, change, why)
         return
-    r.paths = [p for p, _ in changed]
-    said = f"fix: {stuck.obstruction(r.found)}\n\nRepaired by an agent; committed by Delivery."
-    r.commit = repair_copy.commit(at, said)
-    repair_copy.git(path, ["update-ref", f"{KEPT}{change.slug}", r.commit])
     r.held = [f"changes {p}, configuration that is yours" for p in r.paths if check_weakening.configured(p)]
     r.held += [f"makes {p} a link or submodule" for p, how in changed if how.split()[0] in check_weakening.LINKS]
     r.held += [
-        f"{edit} the test {p}"
-        for p, how in changed
-        if (edit := check_weakening.weakened(repair_copy.git, at, r.base, p, how)[1])
+        f"adds a suppression that is yours to approve: {line}"
+        for p in r.paths
+        for line in check_weakening.suppressions(repair_copy.git, at, r.base, p)
     ]
+    r.held += [f"{found[p][1]} the test {p}" for p in r.paths if found[p][1]]
     r.held += [reason for p in r.paths if (reason := _check_hold(p, witness, path))]
     r.held += [f"changes {p}, outside the brief's scope" for p in r.paths if not _in_scope(change, p)]
     if not r.held:
         _apply(store, lock, change, path, prof)
         return
-    r.diff, cut = repair_copy.shown(path, r.base, r.commit, r.paths)
+    _, cut = repair_copy.shown(path, r.base, r.commit, r.paths)
     if cut:
         _stopped(store, lock, change, "its proven fix is too long or binary to show you whole: not applied")
         return

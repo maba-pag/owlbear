@@ -33,7 +33,9 @@ REGULAR = frozenset({"100644", "100755"})
 CHECKS = (
     "The folder is a copy of the whole repository at the pull request's head. Change what makes the failed checks "
     "fail, and only that. Never weaken a check: do not skip, xfail or delete a test, loosen an assertion, lower a "
-    "threshold or add a suppression (`noqa`, `type: ignore`, `biome-ignore`, `pragma: no cover` and the like). Do not "
+    "threshold. If a suppression (`noqa`, `type: ignore`, `biome-ignore`, `pragma: no cover` and the like) is the "
+    "necessary fix, propose it in this copy and explain its exact line and reason in your summary; Delivery asks "
+    "the owner yes/no before pushing it. Do not "
     "change lint, format, CI workflow, hook or security configuration (`.github/`, `pyproject.toml`, `biome.json`, "
     "`.pre-commit-config.yaml`, `conftest.py` and the like): if the fix needs that, change nothing and say so in your "
     "summary."

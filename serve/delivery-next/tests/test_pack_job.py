@@ -1145,7 +1145,7 @@ FLAKY = f"import flaky\n\n\n@flaky.off\n{TESTED}"
         (TESTED, ("biome.json", "{}\n"), (["biome.json"], [], [])),
         (TESTED, (".github/workflows/ci.yml", "on: push\n"), ([".github/workflows/ci.yml"], [], [])),
         (TESTED, ("tests/test_page.py", f"import pytest\n\n@pytest.mark.skip\n{TESTED}"),
-         ([], ["tests/test_page.py (adds a suppression or skip)"], [])),
+         ([], ["tests/test_page.py (adds a skip or xfail)"], [])),
         (TESTED, ("tests/test_page.py", "def test_contrast():\n    pass\n"),
          ([], ["tests/test_page.py (removes an assertion or test)"], [])),
         (TESTED, ("tests/test_page.py", "def test_contrast():\n    return\n    assert contrast() >= LIMIT\n"),
@@ -1261,6 +1261,26 @@ def test_a_held_question_shows_the_diff_of_what_it_asks_about_whatever_else_the_
     fakes.github.checks = ["success"]
     assert answered(job, "push-reviewed")["state"] == "passed"
     assert git(checkout.parents[1], "show", f"{landed(checkout)}:big.txt").count("x") == 15000
+
+
+def test_a_suppression_repair_keeps_and_shows_the_whole_candidate_before_approval(tmp_path, checkout, clone):
+    edited = f"import flaky  # noqa: F401 - required by the fixture\n\n\n{TESTED}"
+    on_main(checkout, "tests/test_page.py", TESTED)
+    fakes, job, _ = ci_failed(
+        tmp_path, checkout, clone, {"extra.txt": "the other edit\n", "tests/test_page.py": edited}
+    )
+    state = answered(job, "repair")
+    (q,) = state["questions"]
+    assert q["paths"] == ["extra.txt", "tests/test_page.py"]
+    assert [o["id"] for o in q["options"]] == PUSHED
+    assert all(part in q["text"] for part in ("tests/test_page.py:1:", "required by the fixture", "complete patch"))
+    assert all(part in q["diff"] for part in ("extra.txt", "+import flaky"))
+    repair = json.loads((job.store.root / pack_job.FILE).read_text())["context"]["repair"]
+    assert repair["patch"] == q["diff"]
+    assert not (job.store.root / pack_state.RUNS / f"{state['run']}-ci-repair").exists()
+    fakes.github.checks = ["success"]
+    assert answered(job, "push-reviewed")["state"] == "passed"
+    assert git(checkout.parents[1], "show", f"{landed(checkout)}:extra.txt") == "the other edit"
 
 
 @pytest.mark.parametrize(

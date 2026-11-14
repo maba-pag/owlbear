@@ -1,14 +1,15 @@
 """Whether an agent's edit weakens a check or touches configuration reserved for the owner.
 
 Shared by the design-pack CI repair (``impeccable_runs.pack_repair_edits``) and a stuck step's repair (#1066). The
-weakening patterns (a deleted test, an added skip, suppression or early return, a removed assertion or test) are a
-quick filter, not a proof. Configuration means lint, format, CI workflow, hook or security configuration.
+weakening patterns (a deleted test, an added skip or early return, a removed assertion or test) are a quick filter,
+not a proof. New suppressions and configuration (lint, format, CI workflow, hook or security) need the owner.
 """
 
 from __future__ import annotations
 
 import ast
 import re
+from collections import Counter
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
@@ -27,9 +28,14 @@ CONFIG_FILES = frozenset({
     "renovate.json", ".nvmrc", ".python-version", ".mcp.json", ".snyk", "CODEOWNERS", "SECURITY.md",
     "test_linter_formatter_policy.py",
 })  # fmt: skip
-WEAKENING = re.compile(
-    r"noqa|type:\s*ignore|pyright:\s*ignore|pragma:\s*no\s*cover|fmt:\s*(off|skip)|biome-ignore|eslint-disable"
-    r"|@ts-(ignore|nocheck|expect-error)|pytest\.mark\.(skip|xfail)|pytest\.(skip|xfail)\(|unittest\.skip"
+WEAKENING = re.compile(r"pytest\.mark\.(skip|xfail)|pytest\.(skip|xfail)\(|unittest\.skip")
+SUPPRESSIONS = re.compile(
+    r"\bnoqa(?:\s*:\s*[A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)?"
+    r"|\b(?:type|pyright):\s*ignore(?:\s*\[[^\]]*\])?"
+    r"|\bpragma:\s*no\s*cover|\bfmt:\s*(?:off|skip)"
+    r"|\bbiome-ignore(?:\s+[\w/()]+)+"
+    r"|\beslint-disable(?:-next-line|-line)?(?:\s+[\w@/-]+(?:\s*,\s*[\w@/-]+)*)?"
+    r"|@ts-(?:ignore|nocheck|expect-error)"
 )
 REMOVED = re.compile(r"\bassert|\bexpect\(|\bdef test|^\s*(it|test|describe)(\.\w+)?\(")  # a check it took out
 DISABLING = re.compile(  # an added line that turns a test off without a suppression's words
@@ -71,7 +77,7 @@ def weakened(run: Git, at: Path, head: str, path: str, how: str) -> tuple[str, s
     cut = any(REMOVED.search(x) for x in removed)
     same = cut and _same_code(run, at, head, path)  # only reformatted: no check went
     if any(WEAKENING.search(x) for x in added):
-        return "adds a suppression or skip", ""
+        return "adds a skip or xfail", ""
     if edited and (any(DISABLING.search(x) for x in added) or _returns_early(at / path, lines)):
         return "disables a test", ""
     if cut and not same:
@@ -79,6 +85,41 @@ def weakened(run: Git, at: Path, head: str, path: str, how: str) -> tuple[str, s
     if edited:
         return "", "reformats" if same else "removes lines from" if removed else "changes"
     return "", ""
+
+
+def suppressions(run: Git, at: Path, head: str, path: str) -> list[str]:
+    """New directives, with their exact source lines; a kept directive on the corresponding old line is not new."""
+    lines = run(at, ["diff", "--cached", "--unified=0", head, "--", path]).splitlines()
+    removed: list[str] = []
+    added: list[tuple[int, str]] = []
+    found: list[str] = []
+
+    def finish() -> None:
+        for i, (number, text) in enumerate(added):
+            old = _directives(removed[i]) if i < len(removed) else Counter()
+            if _directives(text) - old:
+                found.append(f"{path}:{number}: {text}")
+        removed.clear()
+        added.clear()
+
+    number = 0
+    for line in lines:
+        if match := HUNK.match(line):
+            finish()
+            number = int(match[1])
+        elif line.startswith("-") and not line.startswith("---"):
+            removed.append(line[1:])
+        elif line.startswith("+") and not line.startswith("+++"):
+            added.append((number, line[1:]))
+            number += 1
+        else:
+            finish()
+    finish()
+    return found
+
+
+def _directives(line: str) -> Counter[str]:
+    return Counter(re.sub(r"\s+", "", m[0]) for m in SUPPRESSIONS.finditer(line))
 
 
 def configured(path: str) -> bool:

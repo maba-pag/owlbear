@@ -25,7 +25,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.preparation import DataPermissions, Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
-from owlbear_delivery_next.change_contracts.repair_records import PreparationProposal, Witness
+from owlbear_delivery_next.change_contracts.repair_records import KEPT, PreparationProposal, Witness
 from owlbear_delivery_next.change_contracts.repair_tools import Defect
 from owlbear_delivery_next.change_flow import loop, stuck, worktree
 from owlbear_delivery_next.github.account import Origin
@@ -102,8 +102,73 @@ def test_a_fix_that_weakens_a_test_is_never_applied(repo, tmp_path) -> None:
     store = SimpleNamespace(log=lambda *_: None, write=lambda *_: None)
     step_repair._proven(store, None, c, (repo, at), ("true",), 60.0, Profile())  # noqa: SLF001
     assert "weakens a check" in c.stop.reason
-    assert "tests/test_a.py (adds a suppression or skip)" in c.stop.reason
-    assert (worktree.git(repo, "rev-parse", "HEAD"), c.repairs.done[-1].commit) == (head, "")  # nothing applied
+    assert "tests/test_a.py (adds a skip or xfail)" in c.stop.reason
+    repair_copy.drop(repo, at)
+    assert worktree.git(repo, "rev-parse", "HEAD") == head
+    kept = c.repairs.done[-1]
+    assert kept.paths == ["tests/test_a.py"]
+    assert "+@pytest.mark.skip" in kept.diff
+    assert kept.diff in c.stop.reason
+    assert worktree.git(repo, "rev-parse", f"{KEPT}c1").strip() == kept.commit
+    assert worktree.git(repo, "show", f"{kept.commit}:tests/test_a.py").startswith("import pytest")
+
+
+@pytest.mark.usefixtures("user_on")
+def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_application(repo, tmp_path, monkeypatch) -> None:
+    c, store = stuck_change(), Store(tmp_path / "store")
+    c.names.branch, c.names.target = "c1", "c1"
+    fixed = "def test_a():\n    assert 1  # noqa: S101 - this is a test assertion\n"
+    head = worktree.git(repo, "rev-parse", "HEAD")
+    witness = (shlex.join([sys.executable, "-c", "import runpy; runpy.run_path('tests/test_a.py')['test_a']()"]),)
+    store.write_profile(
+        Profile(entries={"check:.": ProfileEntry(state="known", value=witness[0], evidence="owner confirmed")})
+    )
+    copies = []
+
+    def model_result(_store, cfg):
+        copies.append(cfg.worktree)
+        (cfg.worktree / "tests/test_a.py").write_text(fixed)
+        return Run(
+            cfg.session_id,
+            "result",
+            repair_tools.RepairResult(
+                cause="The lint rule needs the owner's exception.",
+                tried=[repair_tools.Try(fix="Suppress S101 on the test assertion.", outcome="The test still passes.")],
+                fix="patch",
+            ),
+            model_check="verified",
+            usage={"credits": 0.25},
+            termination=Termination(confirmed=True),
+        )
+
+    monkeypatch.setattr(worktree, "ensure", lambda *_: repo)
+    monkeypatch.setattr(sessions, "run", model_result)
+    step_repair.run(store, Lock(c.slug), c, repo)
+    asked = store.read(c.slug)
+    q, kept = loop.open_question(asked), asked.repairs.current
+    assert [(o.id, o.next) for o in q.options] == [("yes", stuck.APPLY), ("no", stuck.DECLINE)]
+    assert q.subject == "reserved"
+    assert all(part in q.text for part in (kept.diff, "tests/test_a.py:2:", fixed.splitlines()[1], kept.tried[0].fix))
+    assert kept.witness.exit == 0
+    assert not copies[0].exists()
+    declined = loop.fold(asked.model_copy(deep=True), [AnswerItem(question=q.id, option="no", at=NOW)], NOW)
+    store.write(Lock(c.slug), declined)
+    stopped = store.read(c.slug)
+    assert stopped.repairs.done[-1].diff == kept.diff
+    assert kept.diff in stop_routes.shown(stopped, store)["reason"]
+    assert worktree.git(repo, "rev-parse", "HEAD") == head
+    approved = loop.fold(asked, [AnswerItem(question=q.id, option="yes", at=NOW)], NOW)
+    step_repair.run(store, Lock(c.slug), approved, repo)
+    after = store.read(c.slug)
+    assert (after.repairs.current, after.step.kind, after.step.task, after.outcome) == (
+        None,
+        StepKind.BUILD,
+        "t1",
+        None,
+    )
+    assert after.repairs.done[-1].phase == "applied"
+    assert (repo / "tests/test_a.py").read_text() == fixed
+    assert after.repairs.done[-1].diff == kept.diff
 
 
 def test_a_selector_fix_is_held_even_when_its_own_empty_check_passes(repo, tmp_path, monkeypatch) -> None:
