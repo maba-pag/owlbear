@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import sys
 from concurrent.futures import ThreadPoolExecutor
 from enum import StrEnum
 from pathlib import Path
 from tempfile import mkstemp as _real_mkstemp
+from threading import Barrier, local
 from unittest.mock import patch
 
 import pytest
@@ -15,6 +15,7 @@ from owlbear_memory.errors import ConcurrencyError, NotFoundError, TransitionErr
 from owlbear_memory.errors import ValidationError as MemValidationError
 from owlbear_memory.models import ChallengeRecord, MemoryCategory, MemoryEntry, MemoryState
 from pydantic import ValidationError as PydanticValidationError
+from ruamel.yaml import YAML
 
 from owlbear_memory_mcp.tools import MemoryState as McpState
 
@@ -75,12 +76,22 @@ def test_a_recommended_scope_round_trips_and_an_entry_without_one_keeps_its_byte
 
 
 def test_concurrent_reads_and_writes_parse_every_entry(tmp_path: Path) -> None:
-    previous_interval = sys.getswitchinterval()
-    sys.setswitchinterval(1e-5)
+    """Overlap initialized parser state without changing process-wide scheduling."""
     entry = _make_valid_entry().model_copy(update={"content": "c" * 500})
     paths = [tmp_path / f"{index}.md" for index in range(8)]
     for path in paths:
         storage.write_entry(path, entry, memory_dir=tmp_path)
+
+    first_parse = local()
+    rendezvous = Barrier(8, timeout=10)
+    get_constructor_parser = YAML.get_constructor_parser
+
+    def concurrent_parser(yaml: YAML, stream: str) -> tuple[object, object]:
+        result = get_constructor_parser(yaml, stream)
+        if not getattr(first_parse, "started", False):
+            first_parse.started = True
+            rendezvous.wait()
+        return result
 
     def exercise(worker: int) -> int:
         unreadable = 0
@@ -90,11 +101,11 @@ def test_concurrent_reads_and_writes_parse_every_entry(tmp_path: Path) -> None:
             storage.write_entry(paths[worker], entry, memory_dir=tmp_path)
         return unreadable
 
-    try:
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            assert sum(executor.map(exercise, range(8))) == 0
-    finally:
-        sys.setswitchinterval(previous_interval)
+    with (
+        patch.object(YAML, "get_constructor_parser", concurrent_parser),
+        ThreadPoolExecutor(max_workers=8) as executor,
+    ):
+        assert sum(executor.map(exercise, range(8))) == 0
 
 
 def test_public_memory_types() -> None:
