@@ -127,6 +127,9 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
     c, store = stuck_change(), Store(tmp_path / "store")
     c.names.branch, c.names.target = "c1", "c1"
     fixed = "def test_a():\n    assert 1  # noqa: S101 - this is a test assertion\n"
+    (repo / "fixture.py").write_text("# noqa: F401\nimport os\n")
+    worktree.git(repo, "add", "fixture.py")
+    worktree.git(repo, "commit", "-qm", "existing line suppression")
     head = worktree.git(repo, "rev-parse", "HEAD")
     witness = (shlex.join([sys.executable, "-c", "import runpy; runpy.run_path('tests/test_a.py')['test_a']()"]),)
     store.write_profile(
@@ -137,6 +140,7 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
     def model_result(_store, cfg):
         copies.append(cfg.worktree)
         (cfg.worktree / "tests/test_a.py").write_text(fixed)
+        (cfg.worktree / "fixture.py").write_text("# ruff: noqa: F401\nimport os\n")
         return Run(
             cfg.session_id,
             "result",
@@ -159,6 +163,7 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
     assert q.subject == "reserved"
     assert all(part in q.text for part in (kept.diff, "tests/test_a.py:2:", fixed.splitlines()[1], kept.tried[0].fix))
     assert kept.witness.exit == 0
+    assert "fixture.py:1: # ruff: noqa: F401" in q.text
     assert not copies[0].exists()
     declined = loop.fold(asked.model_copy(deep=True), [AnswerItem(question=q.id, option="no", at=NOW)], NOW)
     store.write(Lock(c.slug), declined)

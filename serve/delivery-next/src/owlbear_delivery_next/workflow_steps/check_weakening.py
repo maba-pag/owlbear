@@ -30,7 +30,7 @@ CONFIG_FILES = frozenset({
 })  # fmt: skip
 WEAKENING = re.compile(r"pytest\.mark\.(skip|xfail)|pytest\.(skip|xfail)\(|unittest\.skip")
 SUPPRESSIONS = re.compile(
-    r"\bnoqa(?:\s*:\s*[A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)?"
+    r"\b(?:(?:ruff|flake8)\s*:\s*)?noqa(?:\s*:\s*[A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)?"
     r"|\b(?:type|pyright):\s*ignore(?:\s*\[[^\]]*\])?"
     r"|\bpragma:\s*no\s*cover|\bfmt:\s*(?:off|skip)"
     r"|\bbiome-ignore(?:-all|-start|-end)?(?:\s+[\w/()*-]+)*"
