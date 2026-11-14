@@ -155,7 +155,7 @@ def test_a_window_only_tool_changes_the_plan_or_the_brief_only_where_they_can_ch
     [
         (K.BUILD, Exit.RETRY, None),
         (K.REVIEW, Exit.RETRY, None),
-        (K.CHECK, Exit.ASK, K.PLAN),
+        (K.CHECK, Exit.RETRY, None),
         (K.FOLLOW, Exit.ASK, K.PLAN),
     ],
 )
@@ -168,9 +168,18 @@ def test_a_tool_no_runtime_has_changes_the_work_that_asked_for_it(enclosing, exi
         assert (r.setup, r.back_to) == (True, None)
     else:
         assert options(r) == [("replan", target), ("pause", "pause")]
-    c = loop.apply(change(enclosing), r, NOW)
+    c = change(enclosing)
+    c.plan.tasks[0].done = True
+    c.plan.tasks[0].spans = [f"{'a' * 40}..{'b' * 40}"]
+    if enclosing == K.CHECK:
+        c.step.task = "visual"
+    completed = c.plan.model_copy(deep=True)
+    c = loop.apply(c, r, NOW)
     if exit_ == Exit.RETRY:
         assert (c.repairs.current.step, c.questions) == (enclosing, [])
+    if enclosing == K.CHECK:
+        stuck.applied(c, "fixed-setup")
+        assert (c.step.kind, c.step.task, c.plan, loop.next_step(c, NOW)) == (K.CHECK, "visual", completed, c.step)
 
 
 def test_a_brief_challenge_without_the_tool_makes_it_the_rounds_finding_for_the_shaper() -> None:

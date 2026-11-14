@@ -180,7 +180,8 @@ REVIEW_FINISH = (
 )
 SOURCE_ONLY = (
     "Find the command, directory and URL from the project's files only (scripts, package manifests, a test "
-    "runner's web-server configuration). Do not start the app: outside a prepared test copy it may reach live data. "
+    "runner's web-server configuration, and preview scripts in tests or fixtures). Do not start the app: outside a "
+    "prepared test copy it may reach live data. "
     "Delivery prepares the option you choose, launches the recipe on that test copy and verifies readiness; a "
     "launch that fails comes back to you."
 )
@@ -256,6 +257,15 @@ def check(
 ) -> str:
     """Return the first message of a check-preparation session that ends with a launch recipe and its preparation."""
     ctx = ctx or Preparing()
+    previous = shaping_capture.starting(change.brief)
+    if (r := change.recipe) is not None and r.check == person.id:
+        previous = [
+            (
+                f"This check last launched with command `{r.command}`, directory `{r.directory}`, ready_url "
+                f"`{r.ready_url}`. Verify it against this worktree and choose a currently permitted preparation; "
+                "this is source-discovery context, not proof that the current code or preparation still works."
+            )
+        ]
     return "\n".join(
         [
             f"You prepare the owner's check `{person.id}` of the Change `{change.slug}` in the worktree {worktree}.",
@@ -273,8 +283,7 @@ def check(
             *_options(ctx),
             "",
             "## Launch recipe",
-            "Find the command that serves this check in the project's files (scripts, package manifests).",
-            *shaping_capture.starting(change.brief),
+            *previous,
             SOURCE_ONLY,
             "",
             "## Finish",

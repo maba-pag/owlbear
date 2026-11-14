@@ -367,7 +367,7 @@ def _engine(store: Store, lock: Lock, change: Change, repo: Path) -> None:
 def _reused(store: Store, lock: Lock, change: Change) -> bool:
     """Check prep without an agent: this check's last launched recipe, while still valid and its inputs unchanged.
 
-    Otherwise the recipe is forgotten and an agent prepares again.
+    Otherwise an agent prepares again, with the last successful recipe kept as source-verification context.
     """
     r, s, now = change.recipe, change.step, datetime.now(UTC)
     if s.kind != StepKind.CHECK or r is None:
@@ -377,8 +377,6 @@ def _reused(store: Store, lock: Lock, change: Change) -> bool:
     held = r.check == (s.task or "") and root.is_dir() and not tools.check_recipe(recipe, tools.Worktree("", ""), root)
     held = held and prepare.reusable(store, change, store.settings())  # its preparation still declared and permitted
     if not (held and r.inputs and worktree.launch_inputs(root, r.directory) == r.inputs):
-        change.recipe = None
-        store.write(lock, change)
         return False
     change.env = Environment(check=r.check, command=r.command, directory=r.directory, ready_url=r.ready_url)
     before.reset(change, worktree.head(root))
