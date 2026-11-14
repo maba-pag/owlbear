@@ -1,5 +1,9 @@
 """The machine host's Metrics page on fixture data only, for the visual check: ``metrics_preview.py <port>``.
 
+Launch recipe for the visual check: directory ``serve/delivery-next``, command
+``uv run python tests/metrics_preview.py {port}``, ready URL ``http://127.0.0.1:{port}/``; the state paths (e.g.
+``/metrics?period=all&by=agent``) open without ``#token=`` because SEED supplies the token.
+
 It never reads the owner's data: ``main`` replaces HOME with a fresh temporary folder before it imports OwlBear,
 drops ``OWLBEAR_DATA`` and ``COPILOT_HOME``, and keeps Git from reaching GitHub (D-01M68Z8Q740BSN13D1R06JX6DW);
 importing this file changes nothing. The page is ``http://127.0.0.1:<port>/metrics#token=preview``; every HTML page it
