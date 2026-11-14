@@ -133,13 +133,13 @@ def classify(run: Run, p: MissingTool, enclosing: StepKind, now: datetime) -> St
 
 
 def _nowhere(tool: str, said: str, enclosing: StepKind, subject: str) -> StepResult:
-    """No runtime here has it: a plan, build or review has a setup problem for repair (#1066).
+    """No runtime here has it: a plan, build, review or check has a setup problem for repair (#1066).
 
     A brief challenge's step back becomes its round's finding (``steps.brief_round``); the brief changes in chat.
     """
     reason = f"needs {said}, which no runtime here provides"
     cause = cause_key(ErrorKind.SCOPE, enclosing, subject)
-    if enclosing in {StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW}:
+    if enclosing in {StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK}:
         return setup(cause, f"the {enclosing} {reason}")
     if enclosing == StepKind.SHAPE:
         return StepResult(exit=Exit.BACK, back_to=StepKind.SHAPE, cause=cause, reason=reason, operational=True)

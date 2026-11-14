@@ -180,7 +180,8 @@ REVIEW_FINISH = (
 )
 SOURCE_ONLY = (
     "Find the command, directory and URL from the project's files only (scripts, package manifests, a test "
-    "runner's web-server configuration). Do not start the app: outside a prepared test copy it may reach live data. "
+    "runner's web-server configuration, and preview scripts in tests or fixtures). Do not start the app: outside a "
+    "prepared test copy it may reach live data. "
     "Delivery prepares the option you choose, launches the recipe on that test copy and verifies readiness; a "
     "launch that fails comes back to you."
 )
@@ -273,8 +274,7 @@ def check(
             *_options(ctx),
             "",
             "## Launch recipe",
-            "Find the command that serves this check in the project's files (scripts, package manifests).",
-            *shaping_capture.starting(change.brief),
+            *shaping_capture.starting(change, person.id),
             SOURCE_ONLY,
             "",
             "## Finish",
