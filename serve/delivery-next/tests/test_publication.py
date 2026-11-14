@@ -1486,6 +1486,66 @@ def test_without_ask_before_merge_a_gated_head_merges_without_consent(tmp_path, 
     assert (result.exit, result.cause) == (Exit.ASK, loop.CONSENT)
 
 
+def test_correcting_a_method_releases_the_persisted_hold_but_still_checks_the_merge(tmp_path, clone):
+    gh = FakeGh(pr(head=A))
+    detected = prof(**{profile.METHODS: ProfileEntry(state="known", value="merge")})
+    cx = ctx(tmp_path, gh, detected, repo=clone)
+    cx.store.write_profile(detected)
+    c = change(worktree=str(clone))
+    c.plan.tasks[0].done = True
+    c, refused = merge.run(cx, c)
+    assert (refused.waiting, refused.who, gh.merges) == (Waiting.OWNER_ACTION, "you", [])
+    assert refused.reason == "merge PR #7 in GitHub (method-not-allowed: squash is not allowed)"
+    cx.store.write(cx.lock, loop.apply(c, refused, NOW))
+    original = cx.store.read("c1")
+    started = []
+
+    def spawn(slug):
+        started.append(slug)
+        return scheduler.RunnerRecord(pid=101, created=1.0, started_at=NOW)
+
+    host = scheduler.Host(cx.store, clone, spawn=spawn, members=lambda _pids: {}, alive=lambda _pid, _born: True)
+    host.observe_pr = lambda _slug: ("open", False)
+    assert (host.tick(NOW), host.tick(NOW), started) == ([], [], [])
+    assert cx.store.read("c1").outcome == original.outcome
+    assert (
+        cx.store.save(
+            cx.store.config_path,
+            config.Layer,
+            lambda layer: layer.model_copy(update={"prefs": config.Prefs(merge_method=MergeMethod.MERGE)}),
+            "owner corrected the method",
+            owner=True,
+        )
+        == ""
+    )
+    paused = cx.store.read("c1")
+    paused.intent.paused_at = NOW
+    cx.store.write(cx.lock, paused)
+    assert host.tick(NOW) == []
+    assert cx.store.read("c1").outcome == original.outcome
+    resumed = loop.fold(cx.store.read("c1"), [IntentItem(at=NOW, intent="resume")], NOW)
+    cx.store.write(cx.lock, resumed)
+    assert host.tick(NOW) == ["c1"]
+    recovered = cx.store.read("c1")
+    assert (recovered.step, recovered.plan, recovered.reviews, recovered.outcome) == (
+        original.step,
+        original.plan,
+        original.reviews,
+        None,
+    )
+    assert (host.tick(NOW), started, gh.merges) == ([], ["c1"], [])
+    gh.checks = (Check(name="test", status="in_progress"),)
+    _, pending = merge.run(cx, recovered)
+    assert (pending.waiting, gh.merges) == (Waiting.CI, [])
+    gh.checks = (Check(name="test", status="completed", conclusion="success"),)
+    merged(gh)
+    _, result = merge.run(cx, recovered)
+    assert (result.exit, gh.merges) == (
+        Exit.DONE,
+        [MergeRequest(repository="o/r", number=7, expected_head_sha=A, method=MergeMethod.MERGE)],
+    )
+
+
 @pytest.mark.parametrize(("detected", "account"), [("yes", False), ("no", True), ("no", False)])
 def test_merge_asks_the_projects_account_again_when_detection_found_no_push_permission(
     tmp_path, clone, detected, account
