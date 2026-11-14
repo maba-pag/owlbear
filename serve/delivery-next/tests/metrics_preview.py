@@ -2,10 +2,11 @@
 
 It never reads the owner's data: ``main`` replaces HOME with a fresh temporary folder before it imports OwlBear,
 drops ``OWLBEAR_DATA`` and ``COPILOT_HOME``, and keeps Git from reaching GitHub (D-01M68Z8Q740BSN13D1R06JX6DW);
-importing this file changes nothing. The page is ``http://127.0.0.1:<port>/metrics#token=preview``. The fixture holds
-8 agents in 2 projects, 4 models, 5 steps and "No step", 16 days, 7 tools covering every outcome, and session logs:
-compactions with timing shares for 4 agents, a compacted session without a share, and an agent whose sessions are
-readable but never compacted.
+importing this file changes nothing. The page is ``http://127.0.0.1:<port>/metrics#token=preview``; every HTML page it
+serves also seeds that token itself (``SEED``), so a capture that opens a state path without the fragment still renders
+the fixture, never the page's missing-token notice. The fixture holds 8 agents in 2 projects, 4 models, 5 steps and
+"No step", 14 days of 2 runs each, 7 tools covering every outcome, and session logs: compactions with timing shares
+for 4 agents, a compacted session without a share, and an agent whose sessions are readable but never compacted.
 """
 
 from __future__ import annotations
@@ -19,7 +20,9 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 TOKEN = "preview"  # noqa: S105 - a fixture host on 127.0.0.1 only
-DAYS = 16
+SEED = f'<script>sessionStorage.setItem("token", "{TOKEN}")</script>'.encode()
+DAYS = 14
+DAILY = 2  # runs a day: the runs list stays short enough for one capture of each state
 AGENTS = (  # (agent, step, its sessions' logs: "compacts", "never" compacts, or None without a log)
     ("shaper", "shape", "compacts"), ("planner", "plan", "compacts"), ("builder", "build", "compacts"),
     ("reviewer", "review", "compacts"), ("challenger", "plan", "never"), ("preparer", "check", None),
@@ -76,13 +79,14 @@ def seed() -> None:
 
     now = datetime.now(UTC).replace(microsecond=0) - timedelta(hours=2)
     lines: list[dict] = []
+    unshared: list[str] = []
     k = 0
     for day in range(DAYS):
         for i, (agent, step, logs) in enumerate(AGENTS):
-            if (day + i) % 2:
+            if (day + i) % (every := len(AGENTS) // DAILY):
                 continue
             k += 1
-            rid, model = f"r{k}", MODELS[(day // 2 + i) % len(MODELS)]
+            rid, model = f"r{k}", MODELS[(day // 2 + i + i // every) % len(MODELS)]
             project, name = PROJECTS[day // 2 % 2]
             at = (now - timedelta(days=day, minutes=i)).isoformat(timespec="seconds")
             spent = round(0.4 + (day * 7 + i * 3) % 11 * 0.37, 2)
@@ -100,11 +104,43 @@ def seed() -> None:
             ]  # fmt: skip
             if logs:
                 calls = 6 + k % 9
-                if agent == "builder" and day == 0:  # compacted before any model call: no timing share
+                if agent == "builder" and not unshared:  # compacted before any model call: no timing share
+                    unshared.append(rid)
                     _log(f"s-{rid}", 0, 0)
                 else:
                     _log(f"s-{rid}", calls, None if logs == "never" else 1 + k * 5 % calls)
     assert not spend_ledger.append(lines), "the fixture ledger could not be written"
+
+
+def seeded(app):
+    """*app* with ``SEED`` placed right after ``<head>`` of each HTML page, before the page's own modules run."""
+
+    async def serve(scope, receive, send) -> None:
+        if scope["type"] != "http":
+            await app(scope, receive, send)
+            return
+        start: dict = {}
+        body: list[bytes] = []
+
+        async def held(message: dict) -> None:
+            if message["type"] == "http.response.start":
+                start.update(message)
+            if b"text/html" not in dict(start.get("headers", [])).get(b"content-type", b""):
+                await send(message)
+                return
+            if message["type"] != "http.response.body":  # the start waits for the page's new length
+                return
+            body.append(message.get("body", b""))
+            if message.get("more_body"):
+                return
+            page = b"".join(body).replace(b"<head>", b"<head>" + SEED, 1)
+            headers = [(k, v) for k, v in start["headers"] if k != b"content-length"]
+            await send(start | {"headers": [*headers, (b"content-length", str(len(page)).encode())]})
+            await send({"type": "http.response.body", "body": page})
+
+        await app(scope, receive, held)
+
+    return serve
 
 
 def main() -> None:
@@ -126,7 +162,7 @@ def main() -> None:
                         code=codebase.CURRENT)  # fmt: skip
     print(f"Metrics preview: {base}/metrics#token={TOKEN}", flush=True)  # noqa: T201 - the recipe's address
     try:  # Uvicorn replays a stop signal once it returns: the app's own end removes HOME
-        uvicorn.run(app.create(Machine(record), gone), host="127.0.0.1", port=port, log_level="warning")
+        uvicorn.run(seeded(app.create(Machine(record), gone)), host="127.0.0.1", port=port, log_level="warning")
     finally:
         gone()
 
