@@ -2,32 +2,22 @@
 
 from __future__ import annotations
 
-import http.client
 import json
 import os
 import socket
 import subprocess
 import sys
 import time
-import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
 
-
-def _metrics(base: str, by: str, token: str) -> str:
-    url = f"{base}/api/next/metrics?by={by}"
-    asked = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})  # noqa: S310 - http to 127.0.0.1
-    with urllib.request.urlopen(asked, timeout=10) as answer:  # noqa: S310 - the preview on 127.0.0.1
-        return answer.read().decode()
+import httpx
 
 
-def _page(port: int, path: str) -> str:
-    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
-    try:
-        connection.request("GET", path)
-        return connection.getresponse().read().decode()
-    finally:
-        connection.close()
+def _get(url: str, **headers: str) -> str:
+    answer = httpx.get(url, headers=headers, timeout=10)
+    answer.raise_for_status()
+    return answer.text
 
 
 def test_the_preview_serves_its_fixture_and_never_the_owners_data(tmp_path, monkeypatch) -> None:
@@ -60,10 +50,11 @@ def test_the_preview_serves_its_fixture_and_never_the_owners_data(tmp_path, monk
         while True:
             assert preview.poll() is None, preview.stdout.read() if preview.stdout else ""
             try:
-                answers = {by: _metrics(base, by, metrics_preview.TOKEN) for by in ("agent", "model", "step", "day")}
-                page = _page(port, "/metrics?period=all&by=agent")  # a visual state's path, without #token=
+                answers = {by: _get(f"{base}/api/next/metrics?by={by}", authorization=f"Bearer {metrics_preview.TOKEN}")
+                           for by in ("agent", "model", "step", "day")}  # fmt: skip
+                page = _get(f"{base}/metrics?period=all&by=agent")  # a visual state's path, without #token=
                 break
-            except OSError:
+            except httpx.TransportError:
                 assert time.monotonic() < deadline, "the preview did not answer in 20 s"
                 time.sleep(0.2)
     finally:
@@ -71,7 +62,7 @@ def test_the_preview_serves_its_fixture_and_never_the_owners_data(tmp_path, monk
         out, _ = preview.communicate(timeout=10)
     assert [by for by, text in answers.items() if "sentinel" in text] == []
     assert "sentinel" not in out
-    assert page.index(metrics_preview.SEED.decode()) < page.index('type="module"')  # before the page asks the host
+    assert page.index(metrics_preview.SEED) < page.index('type="module"')  # before the page asks the host
     found = {by: json.loads(text) for by, text in answers.items()}
     least = {"agent": 8, "model": 3, "step": 3, "day": 14}
     assert [by for by, n in least.items() if len(found[by]["rows"]) < n] == []

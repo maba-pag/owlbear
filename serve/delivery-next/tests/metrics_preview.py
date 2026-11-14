@@ -24,7 +24,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 TOKEN = "preview"  # noqa: S105 - a fixture host on 127.0.0.1 only
-SEED = f'<script>sessionStorage.setItem("token", "{TOKEN}")</script>'.encode()
+SEED = f'<script>sessionStorage.setItem("token", "{TOKEN}")</script>'
 DAYS = 14
 DAILY = 2  # runs a day: the runs list stays short enough for one capture of each state
 AGENTS = (  # (agent, step, its sessions' logs: "compacts", "never" compacts, or None without a log)
@@ -116,35 +116,10 @@ def seed() -> None:
     assert not spend_ledger.append(lines), "the fixture ledger could not be written"
 
 
-def seeded(app):
-    """*app* with ``SEED`` placed right after ``<head>`` of each HTML page, before the page's own modules run."""
-
-    async def serve(scope, receive, send) -> None:
-        if scope["type"] != "http":
-            await app(scope, receive, send)
-            return
-        start: dict = {}
-        body: list[bytes] = []
-
-        async def held(message: dict) -> None:
-            if message["type"] == "http.response.start":
-                start.update(message)
-            if b"text/html" not in dict(start.get("headers", [])).get(b"content-type", b""):
-                await send(message)
-                return
-            if message["type"] != "http.response.body":  # the start waits for the page's new length
-                return
-            body.append(message.get("body", b""))
-            if message.get("more_body"):
-                return
-            page = b"".join(body).replace(b"<head>", b"<head>" + SEED, 1)
-            headers = [(k, v) for k, v in start["headers"] if k != b"content-length"]
-            await send(start | {"headers": [*headers, (b"content-length", str(len(page)).encode())]})
-            await send({"type": "http.response.body", "body": page})
-
-        await app(scope, receive, held)
-
-    return serve
+def seed_pages(pages) -> None:
+    """Each page *pages* serves gets ``SEED`` right after ``<head>``, before the page's own modules run."""
+    served = pages.pages
+    pages.pages = lambda: {path: html.replace("<head>", "<head>" + SEED, 1) for path, html in served().items()}
 
 
 def main() -> None:
@@ -155,18 +130,20 @@ def main() -> None:
     from owlbear_delivery_next.local_system import codebase  # noqa: PLC0415
     from owlbear_delivery_next.machine_host import app  # noqa: PLC0415
     from owlbear_delivery_next.machine_host.machine import Machine  # noqa: PLC0415
+    from owlbear_delivery_next.project_host import pages  # noqa: PLC0415
     from owlbear_delivery_next.project_host.host import HostRecord  # noqa: PLC0415
 
     def gone() -> None:
         shutil.rmtree(home, ignore_errors=True)
 
     seed()
+    seed_pages(pages)
     base = f"http://127.0.0.1:{port}"
     record = HostRecord(url=f"{base}/", token=TOKEN, pid=os.getpid(), started_at=datetime.now(UTC),
                         code=codebase.CURRENT)  # fmt: skip
     print(f"Metrics preview: {base}/metrics#token={TOKEN}", flush=True)  # noqa: T201 - the recipe's address
     try:  # Uvicorn replays a stop signal once it returns: the app's own end removes HOME
-        uvicorn.run(seeded(app.create(Machine(record), gone)), host="127.0.0.1", port=port, log_level="warning")
+        uvicorn.run(app.create(Machine(record), gone), host="127.0.0.1", port=port, log_level="warning")
     finally:
         gone()
 
