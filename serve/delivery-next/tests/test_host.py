@@ -593,14 +593,17 @@ def test_a_symlinked_launch_directory_is_read_at_its_target(store, tmp_path):
 
 
 @pytest.mark.parametrize("change", [_other_check, _launch_file])
-def test_a_recipe_for_another_check_or_other_inputs_is_forgotten_and_an_agent_prepares(
+def test_a_recipe_for_another_check_or_other_inputs_is_kept_as_context_and_an_agent_prepares(
     store, tmp_path, reusable, change
 ):
     _fake, agents = reusable
     change(store, tmp_path)
+    previous = store.read("c1").recipe
     step(store, tmp_path)
     after = store.read("c1")
-    assert (agents, after.recipe, after.env) == (["agent"], None, None)
+    assert (agents, after.recipe, after.env) == (["agent"], previous, None)
+    told = runner.step_input.check(after, after.checks[0], tmp_path, [])
+    assert (f"command `{previous.command}`" in told) == (previous.check == after.step.task)
 
 
 def test_a_project_without_a_preparation_option_repairs_and_neither_reuses_nor_prepares(store, tmp_path, reusable):

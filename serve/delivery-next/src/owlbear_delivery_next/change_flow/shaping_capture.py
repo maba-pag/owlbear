@@ -47,14 +47,16 @@ def requested(c: Change) -> ShapingCapture | None:
     return ShapingCapture(key=k)
 
 
-def starting(b: Brief) -> list[str]:
-    """The preparer's starting recipe: the one the brief's current pages were captured with, if any."""
-    if (r := b.recipe) is None:
+def starting(c: Change, check: str) -> list[str]:
+    """The preparer's starting recipe: this check's last launch, else the brief's captured pages."""
+    r = c.recipe if c.recipe is not None and c.recipe.check == check else c.brief.recipe
+    if r is None:
         return []
     said = (
-        f"Start from the recipe the brief's current pages were captured with: command `{r.command}`, directory "
-        f"`{r.directory}`, ready_url `{r.ready_url}`. Verify it in this worktree; return it, or adjusted if this "
-        "Change renamed what it runs, keeping `{port}`."
+        f"Start from the previously established recipe: command `{r.command}`, directory `{r.directory}`, ready_url "
+        f"`{r.ready_url}`. Verify it against this worktree and choose a currently permitted preparation; return it, "
+        "or adjusted if this Change renamed what it runs, keeping `{port}`. This is source-discovery context, not "
+        "proof that the current code or preparation still works."
     )
     return [said]
 
