@@ -441,7 +441,7 @@ OwlBear's pages run Changes; open them at the address `owlbear status` prints.
    shows as done.
 
 Delivery repairs a stuck step in a temporary copy and proves its fix with the step's checks.
-A new lint or type suppression needs your yes/no: the question shows its exact line, reason,
+A new or broadened lint or type suppression needs your yes/no: the question shows its exact line, reason,
 proof and complete patch. Yes applies the fix and runs the step again. No stops and keeps the
 patch in the repair record and stop details. A skip, a removed assertion or a deleted test is
 never applied; its refused patch is kept too. Keeping an existing suppression on an edited line

@@ -38,7 +38,7 @@ def config(run: str, r: Repair) -> dict[str, Any]:
                 f"{', '.join(r.refused[:10])}. Delivery pushed nothing and never pushes it.")  # fmt: skip
         ask, options = "Try again without it, or discard?", [pack_rounds.RETRY, pack_rounds.DISCARD]
     elif r.suppressions:
-        text = (f"The agent's CI repair {made} adds suppressions that need your approval:\n"
+        text = (f"The agent's CI repair {made} adds or broadens suppressions that need your approval:\n"
                 f"{chr(10).join(r.suppressions)}\nNothing was pushed. Review its complete patch.")  # fmt: skip
         ask = "Push this exact repair, including its suppressions?"
         options = [pack_rounds.PUSH_REVIEWED if r.reviewed else pack_rounds.PUSH_CONFIG, pack_rounds.DISCARD]

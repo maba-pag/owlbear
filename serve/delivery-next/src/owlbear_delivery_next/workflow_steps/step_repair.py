@@ -229,7 +229,7 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
     r.held = [f"changes {p}, configuration that is yours" for p in r.paths if check_weakening.configured(p)]
     r.held += [f"makes {p} a link or submodule" for p, how in changed if how.split()[0] in check_weakening.LINKS]
     r.held += [
-        f"adds a suppression that is yours to approve: {line}"
+        f"adds or broadens a suppression that is yours to approve: {line}"
         for p in r.paths
         for line in check_weakening.suppressions(repair_copy.git, at, r.base, p)
     ]

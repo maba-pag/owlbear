@@ -33,9 +33,13 @@ SUPPRESSIONS = re.compile(
     r"\b(?:(?:ruff|flake8)\s*:\s*)?noqa(?:\s*:\s*[A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)?"
     r"|\b(?:type|pyright):\s*ignore(?:\s*\[[^\]]*\])?"
     r"|\bpragma:\s*no\s*cover|\bfmt:\s*(?:off|skip)"
-    r"|\bbiome-ignore(?:-all|-start|-end)?(?:\s+[\w/()*-]+)*"
+    r"|\bbiome-ignore(?:-all|-start)?(?![\w-])(?:\s+[\w/()*-]+)*"
     r"|\beslint-disable(?:-next-line|-line)?(?:\s+[\w@/-]+(?:\s*,\s*[\w@/-]+)*)?"
     r"|@ts-(?:ignore|nocheck|expect-error)"
+)
+TERMINATORS = re.compile(
+    r"\bfmt:\s*on|\bbiome-ignore-end(?:\s+[\w/()*-]+)*"
+    r"|\beslint-enable(?:\s+[\w@/-]+(?:\s*,\s*[\w@/-]+)*)?"
 )
 REMOVED = re.compile(r"\bassert|\bexpect\(|\bdef test|^\s*(it|test|describe)(\.\w+)?\(")  # a check it took out
 DISABLING = re.compile(  # an added line that turns a test off without a suppression's words
@@ -44,7 +48,7 @@ DISABLING = re.compile(  # an added line that turns a test off without a suppres
 RETURN = re.compile(r"^\s*return\b")
 BLOCK = re.compile(r"^\s*(async\s+)?def\s|\bfunction\b|=>|^\s*(it|test)(\.\w+)?\(")  # a function's first line
 TEST = re.compile(r"^\s*(async\s+)?def\s+test|^\s*(it|test)(\.\w+)?\(")  # a test's first line
-HUNK = re.compile(r"^@@ -\S+ \+(\d+)")
+HUNK = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)")
 LINKS = frozenset({"120000", "160000"})  # a symbolic link or a submodule: never pushed without the owner
 LINTERS = re.compile(r"^\.(?:eslintrc|prettierrc|stylelintrc)|^(?:eslint|prettier|stylelint)\.config\.\w+$")
 TESTS = re.compile(r"(^|/)(tests?/|test_[^/]*\.py$|[^/]*_test\.py$|[^/]*\.test\.[mc]?[jt]sx?$)")
@@ -88,27 +92,32 @@ def weakened(run: Git, at: Path, head: str, path: str, how: str) -> tuple[str, s
 
 
 def suppressions(run: Git, at: Path, head: str, path: str) -> list[str]:
-    """New directives, with their exact source lines; a kept directive on the corresponding old line is not new."""
+    """Added directives or removed terminators, with exact lines; corresponding unchanged directives stay exempt."""
     lines = run(at, ["diff", "--cached", "--unified=0", head, "--", path]).splitlines()
-    removed: list[str] = []
+    removed: list[tuple[int, str]] = []
     added: list[tuple[int, str]] = []
     found: list[str] = []
 
     def finish() -> None:
         for i, (number, text) in enumerate(added):
-            old = _directives(removed[i]) if i < len(removed) else Counter()
+            old = _directives(removed[i][1]) if i < len(removed) else Counter()
             if _directives(text) - old:
                 found.append(f"{path}:{number}: {text}")
+        for i, (number, text) in enumerate(removed):
+            new = _directives(added[i][1], TERMINATORS) if i < len(added) else Counter()
+            if _directives(text, TERMINATORS) - new:
+                found.append(f"{path}:{number}: removes a suppression terminator: {text}")
         removed.clear()
         added.clear()
 
-    number = 0
+    number = old_number = 0
     for line in lines:
         if match := HUNK.match(line):
             finish()
-            number = int(match[1])
+            old_number, number = int(match[1]), int(match[2])
         elif line.startswith("-") and not line.startswith("---"):
-            removed.append(line[1:])
+            removed.append((old_number, line[1:]))
+            old_number += 1
         elif line.startswith("+") and not line.startswith("+++"):
             added.append((number, line[1:]))
             number += 1
@@ -118,8 +127,8 @@ def suppressions(run: Git, at: Path, head: str, path: str) -> list[str]:
     return found
 
 
-def _directives(line: str) -> Counter[str]:
-    return Counter(re.sub(r"\s+", "", m[0]) for m in SUPPRESSIONS.finditer(line))
+def _directives(line: str, pattern: re.Pattern[str] = SUPPRESSIONS) -> Counter[str]:
+    return Counter(re.sub(r"\s+", "", m[0]) for m in pattern.finditer(line))
 
 
 def configured(path: str) -> bool:
@@ -146,7 +155,7 @@ def _returns_early(file: Path, diff: list[str]) -> bool:
     line = 0
     for x in diff:
         if found := HUNK.match(x):
-            line = int(found[1])
+            line = int(found[2])
         elif x.startswith("+") and not x.startswith("+++"):
             if RETURN.match(x[1:]) and _in_test(text, line - 1):
                 return True
