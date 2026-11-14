@@ -118,10 +118,11 @@ export function compactionChart(c, pick) {
           tip: tip(r, labels[i], null), ...(i === mark ? { itemStyle: marked } : {}) })),
           itemStyle: { color: "transparent" },
           emphasis: { itemStyle: { color: t.surface, borderColor: t.text, borderWidth: 2 } } },
-        { id: "dots", name: "Session", type: "scatter", z: 3, symbolSize: 10, data: dots,
+        { id: "dots", name: "Session", type: "scatter", clip: false, z: 3, symbolSize: 10, data: dots,
           itemStyle: { color: t.parts[1], borderColor: t.canvas, borderWidth: 1 },
           emphasis: { scale: 1.6, itemStyle: { borderColor: t.text, borderWidth: 2 } } },
-        { id: "median", name: "Median", type: "scatter", z: 4, symbol: "rect", symbolSize: [4, 22], data: medians,
+        { id: "median", name: "Median", type: "scatter", clip: false, z: 4, symbol: "rect", symbolSize: [4, 22],
+          data: medians,
           itemStyle: { color: t.text }, emphasis: { scale: 1.3 } },
       ],
     };  // fmt: skip
