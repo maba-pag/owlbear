@@ -194,13 +194,13 @@ def test_metrics_orders_its_sections_folds_its_tables_and_loads_the_vendored_ech
         expect(page.locator("#tools-chart + details#tools-fold #tools")).to_have_count(1)
         expect(page.locator("#tools-fold #wrong")).to_have_count(1)
         assert page.evaluate("window.echarts.version") == "6.1.0"
-        credits = "echarts.getInstanceByDom(document.getElementById('split-chart'))"
-        colour = f"{credits}?.getOption().series[0].itemStyle.color"
+        chart = "echarts.getInstanceByDom(document.getElementById('split-chart'))"
+        colour = f"{chart}?.getOption().series[0].itemStyle.color"
         page.wait_for_function(f"{colour} === '#BD8300'")  # light: Okabe-Ito orange, darkened
-        page.evaluate(f"window.lightChart = {credits}")
+        page.evaluate(f"window.lightChart = {chart}")
         page.emulate_media(color_scheme="dark")  # an OS scheme switch, without a reload
         page.wait_for_function(f"{colour} === '#E69F00'")  # dark: the original orange
-        assert page.evaluate(f"{credits} === window.lightChart")
+        assert page.evaluate(f"{chart} === window.lightChart")
         for name, table_id in (("split", "split"), ("compaction", "compaction-table"), ("tools", "tools")):
             fold, table = page.locator(f"#{name}-fold"), page.locator(f"#{table_id}")
             expect(fold).not_to_have_attribute("open", "")  # closed on load
