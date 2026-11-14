@@ -1266,14 +1266,14 @@ def test_a_held_question_shows_the_diff_of_what_it_asks_about_whatever_else_the_
 def test_a_suppression_repair_keeps_and_shows_the_whole_candidate_before_approval(tmp_path, checkout, clone):
     edited = f"import flaky  # noqa: F401 - required by the fixture\n\n\n{TESTED}"
     on_main(checkout, "tests/test_page.py", TESTED)
-    on_main(checkout, "fixture.mjs", "/* eslint-disable\n  no-console\n*/\nlet value = 1;\n")
+    on_main(checkout, "fixture.mjs", "\n\n/* eslint-disable\n  no-console\n*/\nlet value = 1;\n")
     fakes, job, _ = ci_failed(
         tmp_path,
         checkout,
         clone,
         {
             "fixture.mjs": (
-                "/* eslint-disable\n  no-console,\n  no-alert\n*/\n"
+                "\n\n/* eslint-disable\n  no-console,\n  no-alert\n*/\n"
                 "// biome-ignore-all lint/style/useConst: fixture mutates in replay\n"
                 "let value = 1;\n++value; // eslint-disable-line no-plusplus\n"
             ),
@@ -1288,8 +1288,8 @@ def test_a_suppression_repair_keeps_and_shows_the_whole_candidate_before_approva
     assert all(part in q["diff"] for part in ("fixture.mjs", "+import flaky"))
     repair = json.loads((job.store.root / pack_job.FILE).read_text())["context"]["repair"]
     assert any("biome-ignore-all" in line for line in repair["suppressions"])
-    assert any("fixture.mjs:7: ++value; // eslint-disable-line no-plusplus" in line for line in repair["suppressions"])
-    assert "fixture.mjs:3:   no-alert" in repair["suppressions"]
+    assert any("fixture.mjs:9: ++value; // eslint-disable-line no-plusplus" in line for line in repair["suppressions"])
+    assert "fixture.mjs:5:   no-alert" in repair["suppressions"]
     assert repair["patch"].rstrip("\n") == q["diff"]
     assert not (job.store.root / pack_state.RUNS / f"{state['run']}-ci-repair").exists()
     fakes.github.checks = ["success"]
