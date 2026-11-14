@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import re
 from collections import Counter
+from itertools import takewhile
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
@@ -105,14 +106,12 @@ def weakened(run: Git, at: Path, head: str, path: str, how: str) -> tuple[str, s
 def suppressions(run: Git, at: Path, head: str, path: str) -> list[str]:
     """Added directives or removed terminators, with exact lines; corresponding unchanged directives stay exempt."""
     lines = run(at, ["diff", "--cached", "--unified=0", head, "--", path]).splitlines()
-    for line in lines:
-        if HUNK.match(line):
-            break
-        if line == "+++ /dev/null":
-            return []
+    headers = list(takewhile(lambda line: not HUNK.match(line), lines))
+    if "+++ /dev/null" in headers:
+        return []
     removed: list[tuple[int, str]] = []
     added: list[tuple[int, str]] = []
-    found: list[str] = []
+    found = _module_scope(run, at, head, path, created="--- /dev/null" in headers)
 
     def finish() -> None:
         found.extend(_suppression_edits(path, removed, added))
@@ -133,6 +132,27 @@ def suppressions(run: Git, at: Path, head: str, path: str) -> list[str]:
         elif not line.startswith("\\"):
             finish()
     finish()
+    return list(dict.fromkeys(found))
+
+
+def _module_scope(run: Git, at: Path, head: str, path: str, *, created: bool) -> list[str]:
+    if not path.endswith(".py"):
+        return []
+    new = _leading_ignores((at / path).read_text("utf-8"))
+    if not new or (not created and _leading_ignores(run(at, ["show", f"{head}:{path}"]))):
+        return []
+    return [f"{path}:{number}: {text}" for number, text in new]
+
+
+def _leading_ignores(source: str) -> list[tuple[int, str]]:
+    found = []
+    for number, text in enumerate(source.splitlines(), 1):
+        if not text.strip():
+            continue
+        if not text.lstrip().startswith("#"):
+            break
+        if re.match(r"\s*#\s*type:\s*ignore\b", text):
+            found.append((number, text))
     return found
 
 
