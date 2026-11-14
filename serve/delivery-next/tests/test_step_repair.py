@@ -177,10 +177,13 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
     c, store = stuck_change(), Store(tmp_path / "store")
     c.names.branch, c.names.target = "c1", "c1"
     fixed = "def test_a():\n    assert 1  # noqa: S101 - this is a test assertion\n"
-    (repo / "fixture.py").write_text("# noqa: F401\nimport os\n# fmt: off\nfirst=1\n# fmt: on\nsecond=2\n")
-    (repo / "unused_fixture.py").write_text("# fmt: off\nfirst=1\n# fmt: on\n")
-    (repo / "mypy_scope.py").write_text("value = 1  # type: ignore\n")
-    (repo / "retained.py").write_text("value = 1  # noqa: F401, E501\nshifted = 2  # noqa: F841\n")
+    for name, text in {
+        "fixture.py": "# noqa: F401\nimport os\n# fmt: off\nfirst=1\n# fmt: on\nsecond=2\n",
+        "unused_fixture.py": "# fmt: off\nfirst=1\n# fmt: on\n",
+        "mypy_scope.py": "value = 1  # type: ignore\n",
+        "retained.py": "value = 1  # noqa: F401, E501\nshifted = 2  # noqa: F841\n",
+    }.items():
+        (repo / name).write_text(text)
     worktree.git(repo, "add", "fixture.py", "unused_fixture.py", "mypy_scope.py", "retained.py")
     worktree.git(repo, "commit", "-qm", "existing line suppression")
     head = worktree.git(repo, "rev-parse", "HEAD")
@@ -204,11 +207,15 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
 
     def model_result(_store, cfg):
         copies.append(cfg.worktree)
-        (cfg.worktree / "tests/test_a.py").write_text(fixed)
-        (cfg.worktree / "fixture.py").write_text("# ruff: noqa: F401\nimport os\n# fmt: off\nfirst=1\nsecond=2\n")
+        for name, text in {
+            "tests/test_a.py": fixed,
+            "fixture.py": "# ruff: noqa: F401\nimport os\n# fmt: off\nfirst=1\nsecond=2\n",
+            "mypy_scope.py": "# type: ignore\nvalue = 1\n",
+            "retained.py": "inserted = 0\nvalue = 1  # noqa: F401\nshifted = 3  # noqa: F841\n",
+        }.items():
+            (cfg.worktree / name).write_text(text)
         (cfg.worktree / "unused_fixture.py").unlink()
-        (cfg.worktree / "mypy_scope.py").write_text("# type: ignore\nvalue = 1\n")
-        (cfg.worktree / "retained.py").write_text("inserted = 0\nvalue = 1  # noqa: F401\nshifted = 3  # noqa: F841\n")
+        (cfg.worktree / "missing.py").symlink_to("not-present.py")
         return Run(
             cfg.session_id,
             "result",
@@ -235,6 +242,7 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
     assert "fixture.py:5: removes a suppression terminator: # fmt: on" in q.text
     assert not any("unused_fixture.py:" in reason for reason in kept.held)
     assert "mypy_scope.py:1: # type: ignore" in q.text
+    assert "makes missing.py a link or submodule" in q.text
     assert not any("retained.py:" in reason for reason in kept.held)
     assert not copies[0].exists()
     declined = loop.fold(asked.model_copy(deep=True), [AnswerItem(question=q.id, option="no", at=NOW)], NOW)
@@ -255,6 +263,7 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
     assert after.repairs.done[-1].phase == "applied"
     assert (repo / "tests/test_a.py").read_text() == fixed
     assert not (repo / "unused_fixture.py").exists()
+    assert (repo / "missing.py").is_symlink()
     assert after.repairs.done[-1].diff == kept.diff
 
 

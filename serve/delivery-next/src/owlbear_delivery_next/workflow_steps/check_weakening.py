@@ -137,9 +137,9 @@ def suppressions(run: Git, at: Path, head: str, path: str) -> list[str]:
 
 
 def _module_scope(run: Git, at: Path, head: str, path: str, *, created: bool) -> list[str]:
-    if not path.endswith(".py"):
+    if not path.endswith(".py") or not run(at, ["ls-files", "--stage", "--", path]).startswith(("100644 ", "100755 ")):
         return []
-    new = _leading_ignores((at / path).read_text("utf-8"))
+    new = _leading_ignores(run(at, ["show", f":{path}"]))
     if not new or (not created and _leading_ignores(run(at, ["show", f"{head}:{path}"]))):
         return []
     return [f"{path}:{number}: {text}" for number, text in new]
