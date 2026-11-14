@@ -147,7 +147,7 @@ def _module_scope(run: Git, at: Path, head: str, path: str, *, created: bool) ->
 
 def _leading_ignores(source: str) -> list[tuple[int, str]]:
     found = []
-    for number, text in enumerate(source.splitlines(), 1):
+    for number, text in enumerate(source.removeprefix("\ufeff").splitlines(), 1):
         if not text.strip():
             continue
         if not text.lstrip().startswith("#"):

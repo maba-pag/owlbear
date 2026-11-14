@@ -180,7 +180,7 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
     for name, text in {
         "fixture.py": "# noqa: F401\nimport os\n# fmt: off\nfirst=1\n# fmt: on\nsecond=2\n",
         "unused_fixture.py": "# fmt: off\nfirst=1\n# fmt: on\n",
-        "mypy_scope.py": "value = 1  # type: ignore\n",
+        "mypy_scope.py": "\ufeffvalue = 1  # type: ignore\n",
         "retained.py": "value = 1  # noqa: F401, E501\nshifted = 2  # noqa: F841\n",
     }.items():
         (repo / name).write_text(text)
@@ -210,7 +210,7 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
         for name, text in {
             "tests/test_a.py": fixed,
             "fixture.py": "# ruff: noqa: F401\nimport os\n# fmt: off\nfirst=1\nsecond=2\n",
-            "mypy_scope.py": "# type: ignore\nvalue = 1\n",
+            "mypy_scope.py": "\ufeff# type: ignore\nvalue = 1\n",
             "retained.py": "inserted = 0\nvalue = 1  # noqa: F401\nshifted = 3  # noqa: F841\n",
         }.items():
             (cfg.worktree / name).write_text(text)
