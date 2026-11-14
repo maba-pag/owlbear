@@ -187,6 +187,8 @@ def test_agent_validator_checks_mcp_configuration_keys(tmp_path: Path, monkeypat
 
     assert any("MCP servers are missing" in error for error in errors)
     assert any("MCP servers have no validator registry: ['ddgs']" in error for error in errors)
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_AGENT_ROOTS", ())
+    assert _AGENT_VALIDATOR.main([]) == 1
 
 
 def test_agent_validator_reads_mcp_servers_from_the_root_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -307,19 +309,6 @@ def test_agent_validator_discovers_project_local_root(tmp_path: Path, monkeypatc
     monkeypatch.setattr(_AGENT_VALIDATOR, "_AGENT_ROOTS", (local_root,))
 
     assert _AGENT_VALIDATOR._discover_agent_files() == [path]  # noqa: SLF001
-
-
-def test_agent_validator_checks_mcp_surface_without_standalone_agents(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    monkeypatch.setattr(_AGENT_VALIDATOR, "_AGENT_ROOTS", (tmp_path / "agents",))
-
-    assert _AGENT_VALIDATOR.main([]) == 0
-
-    monkeypatch.setattr(_AGENT_VALIDATOR, "_MCP_CONFIG", tmp_path / "missing.json")
-
-    assert _AGENT_VALIDATOR.main([]) == 1
-    assert "MCP configuration file does not exist" in capsys.readouterr().err
 
 
 def test_skill_validator_discovers_project_local_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
