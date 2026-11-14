@@ -3,8 +3,10 @@ import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { call } from "/assets/ui.mjs";
 import { PERIODS, SPLITS, filter, state, show, kept, query, preselect } from "./state.mjs";
 import { credits, count, head, runs } from "./runs.mjs";
-import { toolUse } from "./tools.mjs";
-import { compaction } from "./compaction.mjs";
+import { toolUse, toolsChart } from "./tools.mjs";
+import { compaction, compactionChart } from "./compaction.mjs";
+import { folded } from "./fold.mjs";
+import { creditsChart, creditsControls } from "./credits.mjs";
 
 const UNKNOWN = "?";
 const DRILL = { project: "in", agent: "agent", model: "model", change: "change" };  // a row that filters its value
@@ -133,7 +135,8 @@ function totals() {
   </section>`;
 }
 
-function drill(row) {
+/** What a split row's button, or its bar in the credits chart, does: filters the page to it, or null. */
+export function drill(row) {
   const key = DRILL[filter.by];
   if (filter.by === "day" && row.key !== UNKNOWN) {
     return () => changed(() => { filter.period = "custom"; filter.from = row.key; filter.to = row.key; })();
@@ -173,9 +176,11 @@ function split() {
   const heads = [label, "Credits", "Share", "Runs", "Unknown", "Tokens"];
   return html`<section aria-labelledby="split-title">
     <p-heading size="lg"><h2 id="split-title">By ${label.toLowerCase()}</h2></p-heading>
-    ${rows.length ? html`<p-table id="split" caption=${`Credits by ${label.toLowerCase()}`}><p-table-head>
+    ${rows.length ? creditsControls() : nothing}
+    ${rows.length ? folded("split", `Table: credits by ${label.toLowerCase()}`, html`<p-table id="split"
+      caption=${`Credits by ${label.toLowerCase()}`}><p-table-head>
       <p-table-head-row>${heads.map(head)}</p-table-head-row>
-      </p-table-head><p-table-body>${rows.map((r) => splitRow(r, total))}</p-table-body></p-table>`
+      </p-table-head><p-table-body>${rows.map((r) => splitRow(r, total))}</p-table-body></p-table>`)
       : html`<p-text id="split-none" size="sm">Nothing was spent that these filters show.</p-text>`}
   </section>`;
 }
@@ -207,10 +212,17 @@ function coverage() {
   </section>`;
 }
 
+/** Draws the charts of what the page shows, once it is rendered. */
+export function drawn() {
+  creditsChart(state.data?.rows ?? [], filter.by, drill);
+  compactionChart(state.data?.compaction, (agent) => changed(() => { filter.agent = agent; })());
+  toolsChart(state.data?.tool_use);
+}
+
 export function view() {
   const error = state.error ? html`<p-inline-notification id="error" state="error" heading="Not shown"
     description=${state.error} dismiss-button="false"></p-inline-notification>` : nothing;
   if (!state.data) return html`${error}${filters()}<p-text id="loading">Reading the spend…</p-text>`;
-  return html`${error}${filters()}${totals()}${split()}${compaction(state.data.compaction)}${runs()}
-    ${toolUse(state.data.tool_use)}${coverage()}`;
+  return html`${error}${filters()}${totals()}${split()}${compaction(state.data.compaction)}
+    ${toolUse(state.data.tool_use)}${runs()}${coverage()}`;
 }

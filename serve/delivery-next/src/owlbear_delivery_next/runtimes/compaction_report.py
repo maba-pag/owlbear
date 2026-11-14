@@ -63,6 +63,8 @@ def report(  # noqa: PLR0913 - one value per filter the page offers
         got = shares.get(key) or []
         row["median"] = round(statistics.median(got), 4) if got else None
         row["earliest"] = round(min(got), 4) if got else None
+        row["shares"] = list(got)  # unrounded, one per compacted session with a timing share: the chart's dots
+        row["unshared"] = row["compacted"] - len(got)
     keep = [r for r in rows.values() if not agent or (r["subagent"] or r["agent"]) == agent]
     keep.sort(key=lambda r: (r["agent"], r["subagent"], r["project"] is not None, r["name"] or r["project"] or ""))
     return {"rows": keep, "errors": errors}

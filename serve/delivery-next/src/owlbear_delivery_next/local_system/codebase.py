@@ -30,6 +30,8 @@ SHIPPED = (
     "web/vendor/*/LICENSE",  # a vendored release's license, version and pinned sums (TD-264)
     "web/vendor/*/VERSION",
     "web/vendor/*/SHA256SUMS",
+    "web/vendor/*/NOTICE",  # ECharts' notice and the licence its LICENSE names for a subcomponent
+    "web/vendor/*/licenses/*",
 )
 
 

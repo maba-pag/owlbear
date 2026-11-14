@@ -113,6 +113,8 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
         expect(page.locator("#runs .lower")).to_have_count(1)
         expect(page.locator("#lower-bound")).to_contain_text("spent at least this")
         expect(page.locator("#exact li")).to_have_text([re.compile(r"^1 run did not report its credits")])
+        for fold in ("split", "tools"):  # the tables are folded below their charts
+            page.locator(f"#{fold}-fold > summary").click()
         expect(rows.locator(".share")).to_have_text(["57%", "29%", "14%", "0%"])  # of the 3.50 credits
         expect(page.locator("#runs p-table-row").nth(0)).to_contain_text("may have reached its credit limit of 0.5")
         tools = page.locator("#tools p-table-row")  # C-28: weighted, 1 of 1 and 0 of 9 calls accepted
@@ -161,6 +163,57 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
         page.reload()  # the filters stay in the address
         expect(page.locator("#split-none")).to_be_visible()
         expect(page.locator("#error")).to_have_count(0)
+        browser.close()
+
+
+@pytest.mark.browser
+def test_metrics_orders_its_sections_folds_its_tables_and_loads_the_vendored_echarts(pds) -> None:
+    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
+
+    seeded()
+    with serve() as (_machine, _server, base), sync_playwright() as pw:
+        try:
+            browser = pw.chromium.launch()
+        except Error as exc:
+            pytest.skip(f"no Playwright Chromium: {exc}")
+        page = browser.new_page()
+        errors: list[str] = []
+        page.on("pageerror", lambda e: errors.append(str(e)))
+        page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+        pds.only(page, base)
+        page.goto(f"{base}/metrics#token=t")
+        expect(page.locator("#split p-table-row")).to_have_count(4)
+        assert page.locator("#page h2, #exact").evaluate_all("hs => hs.map(h => h.id)") == [
+            "totals-title", "exact", "split-title", "compaction-title", "tool-use-title", "runs-title",
+            "coverage-title"]  # fmt: skip
+        assert page.locator("script[src*=echarts]").evaluate_all("s => s.map(e => e.getAttribute('src'))") == [
+            "/assets/echarts/6.1.0/echarts.min.js"
+        ]
+        expect(page.locator("#split-chart + details#split-fold #split")).to_have_count(1)  # chart, then its fold
+        expect(page.locator("#compaction-chart + details#compaction-fold #compaction-table")).to_have_count(1)
+        expect(page.locator("#tools-chart + details#tools-fold #tools")).to_have_count(1)
+        expect(page.locator("#tools-fold #wrong")).to_have_count(1)
+        assert page.evaluate("window.echarts.version") == "6.1.0"
+        chart = "echarts.getInstanceByDom(document.getElementById('split-chart'))"
+        colour = f"{chart}?.getOption().series[0].itemStyle.color"
+        page.wait_for_function(f"{colour} === '#BD8300'")  # light: Okabe-Ito orange, darkened
+        page.evaluate(f"window.lightChart = {chart}")
+        page.emulate_media(color_scheme="dark")  # an OS scheme switch, without a reload
+        page.wait_for_function(f"{colour} === '#E69F00'")  # dark: the original orange
+        assert page.evaluate(f"{chart} === window.lightChart")
+        for name, table_id in (("split", "split"), ("compaction", "compaction-table"), ("tools", "tools")):
+            fold, table = page.locator(f"#{name}-fold"), page.locator(f"#{table_id}")
+            expect(fold).not_to_have_attribute("open", "")  # closed on load
+            expect(table).to_be_hidden()
+        for name, key in (("split", "Enter"), ("tools", " ")):
+            page.locator(f"#{name}-fold > summary").focus()
+            page.keyboard.press(key)
+            expect(page.locator(f"#{name}-fold")).to_have_attribute("open", "")
+            expect(page.locator(f"#{name} p-table-row").first).to_be_visible()
+        page.reload()
+        expect(page.locator("#split p-table-row")).to_have_count(4)
+        assert page.locator("details.fold").evaluate_all("ds => ds.map(d => d.open)") == [False] * 3
+        assert errors == []
         browser.close()
 
 
@@ -471,3 +524,42 @@ def test_a_reconcile_error_keeps_its_whole_text(tmp_path, monkeypatch, caplog, w
     errors = spend_reconcile.status()["errors"]
     assert errors == [f"shop: RuntimeError: {whole_error}", f"spotter: RuntimeError: {whole_error}"]
     assert [r.getMessage() for r in caplog.records] == [f"spend reconcile: {e}" for e in errors]
+
+
+def _rgb(colour: str) -> tuple[float, float, float]:
+    if colour.startswith("#"):
+        hexes = colour[1:] if len(colour) == 7 else "".join(c * 2 for c in colour[1:])
+        return tuple(int(hexes[i : i + 2], 16) / 255 for i in (0, 2, 4))  # type: ignore[return-value]
+    h, s, li = (float(v) for v in re.findall(r"[\d.]+", colour))
+    s, li = s / 100, li / 100
+    a = s * min(li, 1 - li)
+
+    def f(n: int) -> float:
+        k = (n + h / 30) % 12
+        return li - a * max(-1, min(k - 3, 9 - k, 1))
+
+    return f(0), f(8), f(4)
+
+
+def _contrast(fg: str, bg: str) -> float:
+    def lum(c: str) -> float:
+        lin = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in _rgb(c)]
+        return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+    hi, lo = sorted((lum(fg), lum(bg)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def test_every_chart_part_colour_reaches_3_to_1_on_the_pds_canvas_in_both_schemes() -> None:
+    """AC-8: the chart palette's parts and accepted green stand out from the PDS canvas in light and dark mode."""
+    web = codebase.ROOT / "web"
+    palette = (web / "pages" / "metrics" / "palette.mjs").read_text(encoding="utf-8")
+    pds = (web / "pds" / "index.css").read_text(encoding="utf-8")
+    canvas = re.search(r"--p-color-canvas: light-dark\((#\w+|hsl\([^)]*\)), (#\w+|hsl\([^)]*\))\)", pds)
+    assert canvas
+    for i, scheme in enumerate(("light", "dark")):
+        parts = re.findall(r"#[0-9A-Fa-f]{6}", re.search(rf"{scheme}: \[([^\]]*)\]", palette)[1])  # type: ignore[index]
+        success = re.search(rf'SUCCESS = {{[^}}]*{scheme}: "(#\w+)"', palette)[1]  # type: ignore[index]
+        assert len(parts) == 7
+        for colour in [*parts, success]:
+            assert _contrast(colour, canvas[i + 1]) >= 3, f"{scheme} {colour} on {canvas[i + 1]}"
