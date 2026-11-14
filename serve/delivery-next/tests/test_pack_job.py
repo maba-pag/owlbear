@@ -1046,7 +1046,7 @@ def test_a_repair_that_cannot_be_read_or_laid_out_holds_with_its_whole_error(
             listed.clear()
 
     def refusing(at: Path, argv: list[str]) -> str:
-        if argv[0] == "ls-tree":  # the repair's protected content, read from its commit
+        if argv[:2] == ["ls-tree", "-z"]:  # the repair's protected snapshot, not baseline source classification
             raise noted(pack_files.PackError(whole_error))
         return real(at, argv)
 
