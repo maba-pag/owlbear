@@ -33,6 +33,8 @@ def git(cwd: Path, args: list[str]) -> str:
     if done.returncode:
         msg = f"git {args[0]} failed: {failed(done)}"
         raise pack_files.PackError(msg)
+    if args[0] == "diff" and "--binary" in args:
+        return done.stdout  # a binary patch needs its terminal blank line
     return done.stdout.strip()
 
 

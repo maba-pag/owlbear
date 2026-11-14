@@ -98,6 +98,8 @@ def test_a_fix_that_weakens_a_test_is_never_applied(repo, tmp_path) -> None:
     r = c.repairs.current
     r.base, r.fix = repair_copy.copy(repo, at), "patch"
     (at / "tests/test_a.py").write_text("import pytest\n\n\n@pytest.mark.skip\ndef test_a():\n    assert 1\n")
+    asset = b"\x00\xffretained asset\x00"
+    (at / "asset.bin").write_bytes(asset)
     head = worktree.git(repo, "rev-parse", "HEAD")
     store = SimpleNamespace(log=lambda *_: None, write=lambda *_: None)
     step_repair._proven(store, None, c, (repo, at), ("true",), 60.0, Profile())  # noqa: SLF001
@@ -106,11 +108,18 @@ def test_a_fix_that_weakens_a_test_is_never_applied(repo, tmp_path) -> None:
     repair_copy.drop(repo, at)
     assert worktree.git(repo, "rev-parse", "HEAD") == head
     kept = c.repairs.done[-1]
-    assert kept.paths == ["tests/test_a.py"]
+    assert kept.paths == ["asset.bin", "tests/test_a.py"]
     assert "+@pytest.mark.skip" in kept.diff
     assert kept.diff in c.stop.reason
     assert worktree.git(repo, "rev-parse", f"{KEPT}c1").strip() == kept.commit
     assert worktree.git(repo, "show", f"{kept.commit}:tests/test_a.py").startswith("import pytest")
+    replay = tmp_path / "replay"
+    repair_copy.copy(repo, replay)
+    patch = tmp_path / "retained.patch"
+    patch.write_text(kept.diff)
+    worktree.git(replay, "apply", "--binary", str(patch))
+    assert (replay / "asset.bin").read_bytes() == asset
+    repair_copy.drop(repo, replay)
 
 
 @pytest.mark.usefixtures("user_on")

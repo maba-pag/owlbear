@@ -1283,7 +1283,7 @@ def test_a_suppression_repair_keeps_and_shows_the_whole_candidate_before_approva
     assert all(part in q["diff"] for part in ("fixture.mjs", "+import flaky"))
     repair = json.loads((job.store.root / pack_job.FILE).read_text())["context"]["repair"]
     assert any("biome-ignore-all" in line for line in repair["suppressions"])
-    assert repair["patch"] == q["diff"]
+    assert repair["patch"].rstrip("\n") == q["diff"]
     assert not (job.store.root / pack_state.RUNS / f"{state['run']}-ci-repair").exists()
     fakes.github.checks = ["success"]
     assert answered(job, "push-reviewed")["state"] == "passed"
@@ -1320,6 +1320,16 @@ def test_a_held_binary_test_edit_git_does_not_render_is_never_pushed_even_after_
 
     assert (q["paths"], [o["id"] for o in q["options"]]) == (["tests/fixture.dat (changes a test)"], REFUSED)
     assert ("Binary files" in q["diff"], "binary content" in q["text"]) == (True, True)
+    repair = json.loads((job.store.root / pack_job.FILE).read_text())["context"]["repair"]
+    patch = tmp_path / "retained.patch"
+    patch.write_text(repair["patch"])
+    replay = tmp_path / "replay"
+    git(checkout, "worktree", "add", "--detach", str(replay), head)
+    try:
+        git(replay, "apply", "--binary", str(patch))
+        assert (replay / "tests/fixture.dat").read_bytes() == b"\0new\n"
+    finally:
+        git(checkout, "worktree", "remove", "--force", str(replay))
     again = pack_job.Job(job.store, fakes.live(checkout))
     with pytest.raises(pack_job.Refused):
         again.answer(q["id"], "push-reviewed")

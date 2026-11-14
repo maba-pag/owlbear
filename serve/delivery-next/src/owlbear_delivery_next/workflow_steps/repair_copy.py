@@ -34,6 +34,8 @@ def git(at: Path, args: list[str], env: dict[str, str] | None = None, stdin: str
         said = (done.stderr.strip() or done.stdout.strip() or f"exit {done.returncode}").strip()
         msg = f"git {' '.join(args)} in {at} failed: {said}"
         raise RepairError(msg)
+    if args[0] == "diff" and "--binary" in args:
+        return done.stdout  # a binary patch needs its terminal blank line
     return done.stdout.rstrip("\n")  # leading blanks are data: `git status` starts " M path"
 
 
