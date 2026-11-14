@@ -75,6 +75,8 @@ def asked(c: Change, text: str, now: datetime) -> None:
         r.phase, r.question = "asked", asked.id
         if r.fix == "preparation" and c.outcome is not None:
             c.outcome.reason = "Approve the proposed test preparation"
+        elif r.fix == "patch" and c.outcome is not None:
+            c.outcome.reason = "Approve the proposed repair"
 
 
 def owned(c: Change, question: str) -> bool:
@@ -151,6 +153,8 @@ def stopped(c: Change, why: str, now: datetime) -> None:
     if r.fix == "preparation" and r.diff:
         proof = f"\n\nDelivery's trial:\n{r.witness.output}" if r.witness else ""
         said += f"\n\nThe preparation proposal kept (not applied):\n{r.diff}{proof}"
+    elif r.fix == "patch" and r.diff:
+        said += f"\n\nThe fix kept (not applied):\n{r.diff}"
     _stop(c, r.cause, said, now)
 
 

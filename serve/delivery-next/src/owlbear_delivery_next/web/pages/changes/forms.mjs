@@ -34,6 +34,10 @@ export function droppedLine(q) {
   return e ? refusal(`Your answer at ${new Date(e.at).toLocaleTimeString()} was not applied: ${e.reason}`) : nothing;
 }
 
+function repairPatch(diff, label = "The repair patch") {
+  return diff ? html`<pre class="repair-diff" tabindex="0" aria-label=${label}>${diff}</pre>` : nothing;
+}
+
 export function questionForm(q, d) {
   const key = `${d.key}:question:${q.id}`, mine = draft(key, () => ({}));
   if (mine.option !== undefined && !q.options.some((o) => o.id === mine.option)) delete mine.option;  // withdrawn
@@ -48,6 +52,7 @@ export function questionForm(q, d) {
   const clarifying = q.ordinary && mine.kind === "clarification";
   const confirm = (on) => { mine.confirmed = on; show(); };
   return panel(`Question ${q.id}`, key, text(questionText(q), { weight: "semibold", cls: "recorded" }), droppedLine(q),
+    repairPatch(q.diff),
     q.options.length ? choice(key, "option", "Choose an option", q.options) : nothing,
     field(key, "text", "Your answer in words"),
     q.ordinary ? choice(key, "kind", "How your answer bears on the brief", CLASSES) : nothing,
@@ -338,7 +343,9 @@ export function pullbackNote(p, d) {
 // A stop the owner may clear once he did what it asks (#754), so Delivery reruns its step; *d.recovery* has the stop,
 // as a paused Change's line describes its pause. Unset settings withhold the action (D-01M61SBWK4VE4MNTD35TR0VPS8).
 export function stopNotice(d) {
-  const r = d.recovery, reason = r ? r.reason : d.line.replace(/^.*?stopped: /, ""), action = r ? r.action : d.action;
+  const r = d.recovery, kept = d.retained_repair;
+  const reason = kept ? kept.reason : r ? r.reason : d.line.replace(/^.*?stopped: /, "");
+  const action = r ? r.action : d.action;
   // what keeps the rerun from starting: the unreadable settings in full, else how many are unset (never their keys)
   const wait = !r?.unset ? "" : r.settings.reason ? r.unset : `${settingsWait(r.settings.count)} to run the step again`;
   const held = !r || wait;  // no stop he may clear, or its rerun waits on the settings: no action
@@ -365,5 +372,7 @@ export function stopNotice(d) {
   };
   return html`<p-inline-notification class="recorded" state="error" heading="Stopped" heading-tag="h3"
     dismiss-button="false" action-label=${held ? nothing : "Done: run the step again"}
-    action-icon=${held ? nothing : "refresh"} @action=${held ? nothing : clear}>${said}</p-inline-notification>`;
+    action-icon=${held ? nothing : "refresh"} @action=${held ? nothing : clear}>${
+      kept ? text(said, { cls: "repair-reason" }) : said}</p-inline-notification>
+    ${kept ? text("The fix kept (not applied):") : nothing}${repairPatch(kept?.diff, "The retained repair patch")}`;
 }

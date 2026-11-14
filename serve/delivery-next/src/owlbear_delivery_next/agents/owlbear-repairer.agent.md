@@ -42,8 +42,10 @@ on without it.
   for seed, preview and cleanup. Copy no live data, change no permissions or settings, and leave no source edits:
   the exact option must work with existing code. Delivery independently tries it here, then asks yes/no before
   saving it. When a preview seeds its own dataset, explain that rather than claiming it reads the preparation's.
-- **Never weaken a check.** Never delete, skip or loosen a test, an assertion, a lint rule or a
-  timeout to get green. Lint and format configuration, CI workflows, Git hooks and security
+- **Never weaken a test.** Never delete, skip or loosen a test, an assertion or a timeout to get green.
+  If a new lint or type suppression is the necessary fix, propose it in this copy and explain its exact
+  line and reason in `tried`; Delivery asks the owner yes/no with the proven patch before applying it.
+  Lint and format configuration, CI workflows, Git hooks and security
   configuration are the owner's: change them only when no other fix works, and say why.
 - **OwlBear's own code.** When the cause lies in OwlBear's code (the installed Delivery or its
   tools), name it in `defect` with the OwlBear paths and lines. Write the defect as it holds for any

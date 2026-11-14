@@ -25,7 +25,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.preparation import DataPermissions, Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
-from owlbear_delivery_next.change_contracts.repair_records import PreparationProposal, Witness
+from owlbear_delivery_next.change_contracts.repair_records import KEPT, PreparationProposal, Witness
 from owlbear_delivery_next.change_contracts.repair_tools import Defect
 from owlbear_delivery_next.change_flow import loop, stuck, worktree
 from owlbear_delivery_next.github.account import Origin
@@ -98,12 +98,184 @@ def test_a_fix_that_weakens_a_test_is_never_applied(repo, tmp_path) -> None:
     r = c.repairs.current
     r.base, r.fix = repair_copy.copy(repo, at), "patch"
     (at / "tests/test_a.py").write_text("import pytest\n\n\n@pytest.mark.skip\ndef test_a():\n    assert 1\n")
+    asset = b"\x00\xffretained asset\x00"
+    (at / "asset.bin").write_bytes(asset)
     head = worktree.git(repo, "rev-parse", "HEAD")
     store = SimpleNamespace(log=lambda *_: None, write=lambda *_: None)
     step_repair._proven(store, None, c, (repo, at), ("true",), 60.0, Profile())  # noqa: SLF001
     assert "weakens a check" in c.stop.reason
-    assert "tests/test_a.py (adds a suppression or skip)" in c.stop.reason
-    assert (worktree.git(repo, "rev-parse", "HEAD"), c.repairs.done[-1].commit) == (head, "")  # nothing applied
+    assert "tests/test_a.py (adds a skip or xfail)" in c.stop.reason
+    repair_copy.drop(repo, at)
+    assert worktree.git(repo, "rev-parse", "HEAD") == head
+    kept = c.repairs.done[-1]
+    assert kept.paths == ["asset.bin", "tests/test_a.py"]
+    assert "+@pytest.mark.skip" in kept.diff
+    assert kept.diff in c.stop.reason
+    assert worktree.git(repo, "rev-parse", f"{KEPT}c1").strip() == kept.commit
+    assert worktree.git(repo, "show", f"{kept.commit}:tests/test_a.py").startswith("import pytest")
+    replay = tmp_path / "replay"
+    repair_copy.copy(repo, replay)
+    patch = tmp_path / "retained.patch"
+    patch.write_text(kept.diff)
+    worktree.git(replay, "apply", "--binary", str(patch))
+    assert (replay / "asset.bin").read_bytes() == asset
+    repair_copy.drop(repo, replay)
+
+
+@pytest.mark.usefixtures("user_on")
+def test_a_failed_repair_commit_keeps_its_patch_before_copy_cleanup(repo, tmp_path, monkeypatch) -> None:
+    c, store = stuck_change(), Store(tmp_path / "store")
+    c.names.branch, c.names.target = "c1", "c1"
+    store.write_profile(
+        Profile(entries={"check:.": ProfileEntry(state="known", value="true", evidence="owner confirmed")})
+    )
+    hooks = tmp_path / "hooks"
+    hooks.mkdir()
+    hook = hooks / "pre-commit"
+    hook.write_text("#!/bin/sh\necho 'fixture hook refuses the repair' >&2\nexit 1\n")
+    hook.chmod(0o755)
+    worktree.git(repo, "config", "core.hooksPath", str(hooks))
+    copies = []
+
+    def model_result(_store, cfg):
+        copies.append(cfg.worktree)
+        (cfg.worktree / "a.txt").write_text("repaired\n")
+        (cfg.worktree / "asset.bin").write_bytes(b"\0retained before commit\xff")
+        return Run(
+            cfg.session_id,
+            "result",
+            repair_tools.RepairResult(
+                cause="The fixture needs its repair.",
+                tried=[repair_tools.Try(fix="Repair the fixture.", outcome="Ready for Delivery's checks.")],
+                fix="patch",
+            ),
+            model_check="verified",
+            termination=Termination(confirmed=True),
+        )
+
+    monkeypatch.setattr(worktree, "ensure", lambda *_: repo)
+    monkeypatch.setattr(sessions, "run", model_result)
+    step_repair.run(store, Lock(c.slug), c, repo)
+    stopped = store.read(c.slug)
+    kept = stopped.repairs.done[-1]
+    assert "fixture hook refuses the repair" in stopped.stop.reason
+    assert "+repaired" in kept.diff
+    assert kept.diff in stopped.stop.reason
+    assert kept.paths == ["a.txt", "asset.bin"]
+    assert not kept.commit
+    assert not copies[0].exists()
+    replay = tmp_path / "replay"
+    repair_copy.copy(repo, replay)
+    repair_copy.git(replay, ["apply", "--binary", "-"], stdin=kept.diff)
+    assert (replay / "asset.bin").read_bytes() == b"\0retained before commit\xff"
+    assert (repo / "a.txt").read_text() == "a\n"
+    repair_copy.drop(repo, replay)
+
+
+@pytest.mark.usefixtures("user_on")
+def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_application(repo, tmp_path, monkeypatch) -> None:
+    c, store = stuck_change(), Store(tmp_path / "store")
+    c.names.branch, c.names.target = "c1", "c1"
+    fixed = "def test_a():\n    assert 1  # noqa: S101 - this is a test assertion\n"
+    for name, text in {
+        "fixture.py": "# noqa: F401\nimport os\n# fmt: off\nfirst=1\n# fmt: on\nsecond=2\n",
+        "unused_fixture.py": "# fmt: off\nfirst=1\n# fmt: on\n",
+        "mypy_scope.py": "\ufeffvalue = 1  # type: ignore\n",
+        "retained.py": (
+            "value = 1  # noqa: F401, E501\nshifted = 2  # noqa: F841\n"
+            "typed = 1  # type: ignore\npyrighted = 2  # pyright: ignore\n"
+        ),
+    }.items():
+        (repo / name).write_text(text)
+    (repo / "replaced.py").symlink_to("not-present.py")
+    worktree.git(repo, "add", "fixture.py", "unused_fixture.py", "mypy_scope.py", "retained.py", "replaced.py")
+    worktree.git(repo, "commit", "-qm", "existing line suppression")
+    head = worktree.git(repo, "rev-parse", "HEAD")
+    witness = (
+        shlex.join(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import runpy, subprocess; "
+                    "assert subprocess.check_output(['git', 'diff', '--cached', '--name-only']).strip(); "
+                    "runpy.run_path('tests/test_a.py')['test_a']()"
+                ),
+            ]
+        ),
+    )
+    store.write_profile(
+        Profile(entries={"check:.": ProfileEntry(state="known", value=witness[0], evidence="owner confirmed")})
+    )
+    copies = []
+
+    def model_result(_store, cfg):
+        copies.append(cfg.worktree)
+        (cfg.worktree / "replaced.py").unlink()
+        for name, text in {
+            "tests/test_a.py": fixed,
+            "fixture.py": "# ruff: noqa: F401\nimport os\n# fmt: off\nfirst=1\nsecond=2\n",
+            "mypy_scope.py": "\ufeff# type: ignore\nvalue = 1\n",
+            "replaced.py": "# ruff: noqa: F401\nimport os\n",
+            "retained.py": (
+                "inserted = 0\nvalue = 1  # noqa: F401\nshifted = 3  # noqa: F841\n"
+                "typed = 1  # type: ignore[assignment]\npyrighted = 2  # pyright: ignore[reportAssignmentType]\n"
+            ),
+        }.items():
+            (cfg.worktree / name).write_text(text)
+        (cfg.worktree / "unused_fixture.py").unlink()
+        (cfg.worktree / "missing.py").symlink_to("not-present.py")
+        return Run(
+            cfg.session_id,
+            "result",
+            repair_tools.RepairResult(
+                cause="The lint rule needs the owner's exception.",
+                tried=[repair_tools.Try(fix="Suppress S101 on the test assertion.", outcome="The test still passes.")],
+                fix="patch",
+            ),
+            model_check="verified",
+            usage={"credits": 0.25},
+            termination=Termination(confirmed=True),
+        )
+
+    monkeypatch.setattr(worktree, "ensure", lambda *_: repo)
+    monkeypatch.setattr(sessions, "run", model_result)
+    step_repair.run(store, Lock(c.slug), c, repo)
+    asked = store.read(c.slug)
+    q, kept = loop.open_question(asked), asked.repairs.current
+    assert [(o.id, o.next) for o in q.options] == [("yes", stuck.APPLY), ("no", stuck.DECLINE)]
+    assert q.subject == "reserved"
+    assert all(part in q.text for part in (kept.diff, "tests/test_a.py:2:", fixed.splitlines()[1], kept.tried[0].fix))
+    assert kept.witness.exit == 0
+    assert "fixture.py:1: # ruff: noqa: F401" in q.text
+    assert "fixture.py:5: removes a suppression terminator: # fmt: on" in q.text
+    assert not any("unused_fixture.py:" in reason for reason in kept.held)
+    assert "mypy_scope.py:1: # type: ignore" in q.text
+    assert "replaced.py:1: # ruff: noqa: F401" in q.text
+    assert "makes missing.py a link or submodule" in q.text
+    assert not any("retained.py:" in reason for reason in kept.held)
+    assert not copies[0].exists()
+    declined = loop.fold(asked.model_copy(deep=True), [AnswerItem(question=q.id, option="no", at=NOW)], NOW)
+    store.write(Lock(c.slug), declined)
+    stopped = store.read(c.slug)
+    assert stopped.repairs.done[-1].diff == kept.diff
+    assert kept.diff in stop_routes.shown(stopped, store)["reason"]
+    assert worktree.git(repo, "rev-parse", "HEAD") == head
+    approved = loop.fold(asked, [AnswerItem(question=q.id, option="yes", at=NOW)], NOW)
+    step_repair.run(store, Lock(c.slug), approved, repo)
+    after = store.read(c.slug)
+    assert (after.repairs.current, after.step.kind, after.step.task, after.outcome) == (
+        None,
+        StepKind.BUILD,
+        "t1",
+        None,
+    )
+    assert after.repairs.done[-1].phase == "applied"
+    assert (repo / "tests/test_a.py").read_text() == fixed
+    assert not (repo / "unused_fixture.py").exists()
+    assert (repo / "missing.py").is_symlink()
+    assert not (repo / "replaced.py").is_symlink()
+    assert after.repairs.done[-1].diff == kept.diff
 
 
 def test_a_selector_fix_is_held_even_when_its_own_empty_check_passes(repo, tmp_path, monkeypatch) -> None:

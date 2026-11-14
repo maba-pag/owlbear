@@ -351,7 +351,7 @@ def _stopped(c: Change, s: str) -> Status | None:
         stuck.obstruction(c.stop.reason)
         if (
             kept
-            and kept.fix == "preparation"
+            and kept.fix in {"preparation", "patch"}
             and kept.phase == "stopped"
             and kept.cause == c.outcome.cause
             and kept.diff

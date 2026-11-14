@@ -440,6 +440,14 @@ OwlBear's pages run Changes; open them at the address `owlbear status` prints.
 4. Once the pull request's checks and your branch rules pass, OwlBear merges it and the Change
    shows as done.
 
+Delivery repairs a stuck step in a temporary copy and proves its fix with the step's checks.
+A new or broadened lint or type suppression needs your yes/no: the question shows its exact line, reason,
+proof and complete patch. Yes applies the fix and runs the step again. No stops and keeps the
+patch in the repair record and stop details. A skip, a removed assertion or a deleted test is
+never applied; its refused patch is kept too. Keeping an existing suppression on an edited line
+does not count as adding one. Design-pack CI repairs use the same distinction and show the
+whole candidate before asking you to approve a suppression.
+
 When your answer on Changes leaves brief work for the shaper, Delivery posts one continuation
 to the chat that saved that brief version. The brief panel says whether it posted, waits for
 Resume, failed, or could not be confirmed, with the whole available error. Posting means the

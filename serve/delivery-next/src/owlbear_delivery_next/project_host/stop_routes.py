@@ -71,6 +71,23 @@ def shown(c: Change, store: Store) -> dict[str, Any] | None:
     }
 
 
+def retained(c: Change) -> dict[str, str] | None:
+    """A refused or declined patch, shown even when the stop has no recovery action."""
+    r = c.repairs.done[-1] if c.repairs.done else None
+    if not (
+        c.stop
+        and c.outcome
+        and c.outcome.exit == Exit.STOP
+        and r
+        and r.phase == "stopped"
+        and r.cause == c.outcome.cause
+        and r.fix == "patch"
+        and r.diff
+    ):
+        return None
+    return {"reason": c.stop.reason.removesuffix(f"\n\nThe fix kept (not applied):\n{r.diff}"), "diff": r.diff}
+
+
 def _owner(request: Request) -> None:
     if request.headers.get("x-owlbear-use", "").lower() == "chat":
         raise HTTPException(403, "Only the owner clears a stop, on the Changes page")
