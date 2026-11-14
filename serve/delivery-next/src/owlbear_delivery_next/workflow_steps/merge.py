@@ -30,6 +30,32 @@ M = StepKind.MERGE
 _ASSISTED = {Block.RULES_UNKNOWN, Block.NO_PERMISSION, Block.METHOD_NOT_ALLOWED, Block.WRONG_BASE, Block.PROTECTION}
 
 
+def settle_method(c: Change, method: MergeMethod | None) -> None:
+    """Release a refused method's owner wait after its preference changes; the full merge gate runs again."""
+    o = c.outcome
+    if (
+        method is None
+        or c.step.kind != M
+        or c.finished_at
+        or c.stop
+        or c.blocked
+        or c.amending
+        or c.queue
+        or c.intent.paused_at
+        or c.intent.abandoned_at
+        or c.intent.hold
+        or o is None
+        or (o.exit, o.waiting, o.who) != (Exit.PENDING, Waiting.OWNER_ACTION, "you")
+    ):
+        return
+    for refused in MergeMethod:
+        # Existing persisted waits have no structured refused-method field.
+        reason = f"merge PR #{c.names.pr} in GitHub ({Block.METHOD_NOT_ALLOWED}: {refused} is not allowed)"
+        if o.reason == reason and method != refused:
+            c.outcome = None
+            return
+
+
 def checks(state: CiState) -> list[dict[str, str]]:
     """The expected checks at the offered head, for the merge dialog."""
     rows = [(n, "passed") for n in state.passed] + [(c.name, "failed") for c in state.failed]
