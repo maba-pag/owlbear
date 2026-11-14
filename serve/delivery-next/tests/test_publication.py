@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import subprocess
@@ -408,20 +409,39 @@ def test_a_head_change_voids_consent_shows_the_delta_and_asks_again(tmp_path, cl
 
 
 def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_merging(tmp_path, clone, whole_error):
-    head, entries = ci_head(clone, "${{ inputs.n }}")
+    ci_head(clone, "${{ inputs.n }}")
+    head = _commit_workflow(
+        clone, "release.yml", "on:\n  pull_request_target:\n    types: [labeled]\njobs:\n  release: {name: Release}\n"
+    )
+    texts = profile.workflow_texts_at(clone, head)
+    entries = profile.ci_entries({n: profile.workflow(t) for n, t in texts.items()}, profile.flows_digest(texts))
+    legacy_digest = hashlib.sha256(json.dumps(sorted(texts.items())).encode()).hexdigest()[:16]
+    legacy = ProfileEntry(state="unknown", value="Release", evidence=f"jobs{profile.DIGEST}{legacy_digest}")
     gh = FakeGh(pr(head=head))
     gh.checks = ()
     p = prof(**entries)
-    cx = ctx(tmp_path, gh, p)
+    cx = ctx(tmp_path, gh, profile.confirm(prof(**{profile.DECLARED: legacy}), profile.DECLARED, "Release", NOW))
     cx.store.root.mkdir()
-    c, result = merge.run(cx, change(worktree=str(clone), head=head))
+    c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
+    c.questions.append(
+        Question(
+            id="q0", step=StepKind.FOLLOW, text="Merge after Release passes?", options=[],
+            cause=f"gate:follow:declared-{legacy_digest}", answer=Answer(option="yes", at=NOW),
+        )
+    )  # fmt: skip
+    c, result = follow.run(cx, c)
     assert (result.exit, [o.id for o in result.question.options]) == (Exit.ASK, ["yes", "pause"])
     assert result.question.subject == "reserved"  # which checks gate a merge is his: a yes or no on what was read
     assert "those it could read: none it could read. Merge on that basis?" in result.question.text
+    assert "CI check-detection evidence changed" in result.question.text
     assert result.cause.endswith(f"declared-{profile.digest_of(entries[profile.DECLARED])}")
     assert gh.merges == []
     c = loop.apply(c, result, NOW)
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
+    assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == ((), None)
+    assert follow.declared(cx, c, gh.pr, StepKind.MERGE) == ((), None)
+    assert profile.value(cx.profile, profile.DECLARED) == "Release"  # branch evidence never overwrites the profile
+    cx.profile = p  # the unchanged current-policy confirmation path below still saves its answer
     saving = cx.store.write_profile
 
     def locked(_profile) -> None:
@@ -470,7 +490,7 @@ def test_a_none_confirmation_does_not_survive_a_workflow_the_change_adds(tmp_pat
     cx.gh = gh
     c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
     c, result = follow.run(cx, c)
-    assert (result.exit, "its CI files changed in this Change" in result.reason) == (Exit.ASK, True)
+    assert (result.exit, "CI check-detection evidence changed" in result.reason) == (Exit.ASK, True)
     assert follow.run(cx, c)[1].cause == result.cause  # asked once per digest
     c = loop.apply(c, result, NOW)
     answer = AnswerItem(at=NOW, question=c.outcome.question, text="t (a), t (b)")  # as saved before #1168: still read
@@ -1954,9 +1974,15 @@ def test_unresolved_triggers_or_check_names_stay_unknown_never_no_ci():
         "ci.yml": profile.workflow("on: [push, pull_request]\njobs:\n  test:\n    name: Unit tests\n  lint: {}\n"),
         "queue.yml": profile.workflow("on: merge_group\njobs:\n  e2e: {}\n"),
         "push.yml": profile.workflow("on: push\njobs:\n  deploy: {}\n"),
+        "release.yml": profile.workflow(
+            "on:\n  pull_request_target:\n    types: [labeled]\njobs:\n  release: {name: Release}\n"
+        ),
+        "mixed.yml": profile.workflow("on: [pull_request, pull_request_target]\njobs:\n  audit: {}\n"),
     }
     e = profile.ci_entries(flows)
-    assert (e[profile.WORKFLOWS].value, e[profile.DECLARED].value) == ("ci.yml, queue.yml", "Unit tests, lint")
+    assert (e[profile.WORKFLOWS].value, e[profile.DECLARED].value) == (
+        "ci.yml, queue.yml, release.yml, mixed.yml", "Unit tests, lint, audit"
+    )  # fmt: skip
     assert e[profile.DECLARED].state == "known"
     flows["matrix.yml"] = profile.workflow("on: pull_request\njobs:\n  t:\n    strategy: {matrix: {os: [a, b]}}\n")
     flows["bad.yml"] = profile.workflow("on: [unclosed")

@@ -440,6 +440,12 @@ OwlBear's pages run Changes; open them at the address `owlbear status` prints.
 4. Once the pull request's checks and your branch rules pass, OwlBear merges it and the Change
    shows as done.
 
+Delivery infers PR-head check names from `pull_request` workflows, not base-context `pull_request_target`
+jobs such as release or triage automation. Required checks and every check actually reported on the PR head
+still gate merging. When check names cannot be fully detected, your consent to the displayed basis holds
+through CI follow-up and merge for the same workflow and detection-policy evidence. Changed evidence needs
+fresh consent; an old confirmation cannot keep an obsolete detection result in force.
+
 Delivery repairs a stuck step in a temporary copy and proves its fix with the step's checks.
 A new or broadened lint or type suppression needs your yes/no: the question shows its exact line, reason,
 proof and complete patch. Yes applies the fix and runs the step again. No stops and keeps the
