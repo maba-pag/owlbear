@@ -180,7 +180,8 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
     (repo / "fixture.py").write_text("# noqa: F401\nimport os\n# fmt: off\nfirst=1\n# fmt: on\nsecond=2\n")
     (repo / "unused_fixture.py").write_text("# fmt: off\nfirst=1\n# fmt: on\n")
     (repo / "mypy_scope.py").write_text("value = 1  # type: ignore\n")
-    worktree.git(repo, "add", "fixture.py", "unused_fixture.py", "mypy_scope.py")
+    (repo / "retained.py").write_text("value = 1  # noqa: F401, E501\nshifted = 2  # noqa: F841\n")
+    worktree.git(repo, "add", "fixture.py", "unused_fixture.py", "mypy_scope.py", "retained.py")
     worktree.git(repo, "commit", "-qm", "existing line suppression")
     head = worktree.git(repo, "rev-parse", "HEAD")
     witness = (
@@ -207,6 +208,7 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
         (cfg.worktree / "fixture.py").write_text("# ruff: noqa: F401\nimport os\n# fmt: off\nfirst=1\nsecond=2\n")
         (cfg.worktree / "unused_fixture.py").unlink()
         (cfg.worktree / "mypy_scope.py").write_text("# type: ignore\nvalue = 1\n")
+        (cfg.worktree / "retained.py").write_text("inserted = 0\nvalue = 1  # noqa: F401\nshifted = 3  # noqa: F841\n")
         return Run(
             cfg.session_id,
             "result",
@@ -233,6 +235,7 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
     assert "fixture.py:5: removes a suppression terminator: # fmt: on" in q.text
     assert not any("unused_fixture.py:" in reason for reason in kept.held)
     assert "mypy_scope.py:1: # type: ignore" in q.text
+    assert not any("retained.py:" in reason for reason in kept.held)
     assert not copies[0].exists()
     declined = loop.fold(asked.model_copy(deep=True), [AnswerItem(question=q.id, option="no", at=NOW)], NOW)
     store.write(Lock(c.slug), declined)

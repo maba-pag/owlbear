@@ -10,7 +10,8 @@ from __future__ import annotations
 import ast
 import re
 from collections import Counter
-from itertools import takewhile
+from difflib import SequenceMatcher
+from itertools import takewhile, zip_longest
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
@@ -158,19 +159,39 @@ def _leading_ignores(source: str) -> list[tuple[int, str]]:
 
 def _suppression_edits(path: str, removed: list[tuple[int, str]], added: list[tuple[int, str]]) -> list[str]:
     found = []
-    for i, (number, text) in enumerate(added):
-        old = _directives(removed[i][1]) if i < len(removed) else Counter()
-        if _directives(text) - old:
-            found.append(f"{path}:{number}: {text}")
-    for i, (number, text) in enumerate(removed):
-        new = _directives(added[i][1], TERMINATORS) if i < len(added) else Counter()
-        if _directives(text, TERMINATORS) - new:
-            found.append(f"{path}:{number}: removes a suppression terminator: {text}")
+    before = [_source(text) for _, text in removed]
+    after = [_source(text) for _, text in added]
+    for _, start, end, new_start, new_end in SequenceMatcher(None, before, after, autojunk=False).get_opcodes():
+        pairs = zip_longest(removed[start:end], added[new_start:new_end], fillvalue=(0, ""))
+        for (old_number, old), (number, text) in pairs:
+            if _introduced(old, text):
+                found.append(f"{path}:{number}: {text}")
+            if _introduced(text, old, TERMINATORS):
+                found.append(f"{path}:{old_number}: removes a suppression terminator: {old}")
     return found
 
 
+def _source(line: str) -> str:
+    if match := SUPPRESSIONS.search(line):
+        return re.sub(r"\s*(?:#|//|/\*)\s*$", "", line[: match.start()]).strip()
+    return line.strip()
+
+
+def _introduced(before: str, after: str, pattern: re.Pattern[str] = SUPPRESSIONS) -> bool:
+    old = _directives(before, pattern)
+    return any(token.rpartition(":")[0] not in old for token in _directives(after, pattern) - old)
+
+
 def _directives(line: str, pattern: re.Pattern[str] = SUPPRESSIONS) -> Counter[str]:
-    return Counter(re.sub(r"\s+", "", m[0]) for m in pattern.finditer(line))
+    found = []
+    for match in pattern.finditer(line):
+        token = re.sub(r"\s+", "", match[0])
+        if "noqa:" in token:
+            family, _, rules = token.rpartition(":")
+            found.extend(f"{family}:{rule}" for rule in rules.split(","))
+        else:
+            found.append(token)
+    return Counter(found)
 
 
 def configured(path: str) -> bool:
