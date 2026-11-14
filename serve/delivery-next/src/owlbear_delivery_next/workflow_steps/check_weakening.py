@@ -43,6 +43,8 @@ TERMINATORS = re.compile(
     r"\bfmt:\s*on|\bbiome-ignore-end(?:\s+[\w/()*-]+)*"
     r"|\beslint-enable(?:\s+[\w@/-]+(?:\s*,\s*[\w@/-]+)*)?"
 )
+ESLINT_OPENER = re.compile(r"/\*\s*(eslint-(?:disable(?:-next-line|-line)?|enable))\b")
+ESLINT_BLOCK = re.compile(ESLINT_OPENER.pattern + r"(.*?)\*/", re.DOTALL)
 REMOVED = re.compile(r"\bassert|\bexpect\(|\bdef test|^\s*(it|test|describe)(\.\w+)?\(")  # a check it took out
 DISABLING = re.compile(  # an added line that turns a test off without a suppression's words
     r"\b(it|test|describe)\.(skip|todo|only)\b|\bx(it|test|describe)\(|SkipTest|importorskip|__test__\s*=\s*False"
@@ -108,11 +110,11 @@ def suppressions(run: Git, at: Path, head: str, path: str) -> list[str]:
     """Added directives or removed terminators, with exact lines; corresponding unchanged directives stay exempt."""
     lines = run(at, ["diff", "--cached", "--unified=0", head, "--", path]).splitlines()
     headers = list(takewhile(lambda line: not HUNK.match(line), lines))
-    if "+++ /dev/null" in headers:
+    if "+++ /dev/null" in headers or not (hunks := list(_hunks(lines))):
         return []
     removed: list[tuple[int, str]] = []
     added: list[tuple[int, str]] = []
-    found = _module_scope(run, at, head, path, created="--- /dev/null" in headers)
+    found = _scope_changes(run, at, head, path, created="--- /dev/null" in headers)
 
     def finish() -> None:
         found.extend(_suppression_edits(path, removed, added))
@@ -120,7 +122,7 @@ def suppressions(run: Git, at: Path, head: str, path: str) -> list[str]:
         added.clear()
 
     number = old_number = 0
-    for line in _hunks(lines):
+    for line in hunks:
         if match := HUNK.match(line):
             finish()
             old_number, number = int(match[1]), int(match[2])
@@ -136,13 +138,15 @@ def suppressions(run: Git, at: Path, head: str, path: str) -> list[str]:
     return list(dict.fromkeys(found))
 
 
-def _module_scope(run: Git, at: Path, head: str, path: str, *, created: bool) -> list[str]:
-    if not path.endswith(".py") or not run(at, ["ls-files", "--stage", "--", path]).startswith(("100644 ", "100755 ")):
+def _scope_changes(run: Git, at: Path, head: str, path: str, *, created: bool) -> list[str]:
+    if not run(at, ["ls-files", "--stage", "--", path]).startswith(("100644 ", "100755 ")):
         return []
-    new = _leading_ignores(run(at, ["show", f":{path}"]))
-    if not new or (not created and _leading_ignores(run(at, ["show", f"{head}:{path}"]))):
-        return []
-    return [f"{path}:{number}: {text}" for number, text in new]
+    before = "" if created else run(at, ["show", f"{head}:{path}"])
+    after = run(at, ["show", f":{path}"])
+    found = _block_edits(path, before, after)
+    if path.endswith(".py") and not _leading_ignores(before):
+        found.extend(f"{path}:{number}: {text}" for number, text in _leading_ignores(after))
+    return found
 
 
 def _leading_ignores(source: str) -> list[tuple[int, str]]:
@@ -157,6 +161,34 @@ def _leading_ignores(source: str) -> list[tuple[int, str]]:
     return found
 
 
+def _block_edits(path: str, before: str, after: str) -> list[str]:
+    old, new = list(ESLINT_BLOCK.finditer(before)), list(ESLINT_BLOCK.finditer(after))
+    matcher = SequenceMatcher(None, [m[0] for m in old], [m[0] for m in new], autojunk=False)
+    found = []
+    for _, start, end, new_start, new_end in matcher.get_opcodes():
+        for left, right in zip_longest(old[start:end], new[new_start:new_end]):
+            if right and _introduced(_block_text(left), _block_text(right)):
+                found.extend(_block_evidence(path, after, right, ""))
+            if left and _introduced(_block_text(right), _block_text(left), TERMINATORS):
+                found.extend(_block_evidence(path, before, left, "removes a suppression terminator: "))
+    return found
+
+
+def _block_text(match: re.Match[str] | None) -> str:
+    if match is None:
+        return ""
+    rules = re.sub(r"(?m)^[ \t]*\*[ \t]?", "", match[2])
+    rules = re.split(r"\s--(?:\s|$)", rules, maxsplit=1)[0]
+    rules = re.sub(r"\s+", " ", rules).strip()
+    return f"{match[1]} {rules}"
+
+
+def _block_evidence(path: str, source: str, match: re.Match[str], reason: str) -> list[str]:
+    first = source.count("\n", 0, match.start())
+    lines = source.splitlines()[first : first + match[0].count("\n") + 1]
+    return [f"{path}:{number}: {reason}{text}" for number, text in enumerate(lines, first + 1)]
+
+
 def _suppression_edits(path: str, removed: list[tuple[int, str]], added: list[tuple[int, str]]) -> list[str]:
     found = []
     before = [_source(text) for _, text in removed]
@@ -164,9 +196,10 @@ def _suppression_edits(path: str, removed: list[tuple[int, str]], added: list[tu
     for _, start, end, new_start, new_end in SequenceMatcher(None, before, after, autojunk=False).get_opcodes():
         pairs = zip_longest(removed[start:end], added[new_start:new_end], fillvalue=(0, ""))
         for (old_number, old), (number, text) in pairs:
-            if _introduced(old, text):
+            before_line, after_line = ESLINT_OPENER.sub("", old), ESLINT_OPENER.sub("", text)
+            if _introduced(before_line, after_line):
                 found.append(f"{path}:{number}: {text}")
-            if _introduced(text, old, TERMINATORS):
+            if _introduced(after_line, before_line, TERMINATORS):
                 found.append(f"{path}:{old_number}: removes a suppression terminator: {old}")
     return found
 
@@ -185,15 +218,20 @@ def _introduced(before: str, after: str, pattern: re.Pattern[str] = SUPPRESSIONS
 def _directives(line: str, pattern: re.Pattern[str] = SUPPRESSIONS) -> Counter[str]:
     found = []
     for match in pattern.finditer(line):
-        token = re.sub(r"\s+", "", match[0])
-        if token.startswith(("type:ignore[", "pyright:ignore[")):
-            token = token.replace("[", ":", 1).removesuffix("]")
-        if "noqa:" in token or token.startswith(("type:ignore:", "pyright:ignore:")):
-            family, _, rules = token.rpartition(":")
-            found.extend(f"{family}:{rule}" for rule in rules.split(","))
-        else:
-            found.append(token)
+        found.extend(_directive_rules(re.sub(r"\s+", "", match[0])))
     return Counter(found)
+
+
+def _directive_rules(token: str) -> list[str]:
+    if token.startswith(("type:ignore[", "pyright:ignore[")):
+        token = token.replace("[", ":", 1).removesuffix("]")
+    if "noqa:" in token or token.startswith(("type:ignore:", "pyright:ignore:")):
+        family, _, rules = token.rpartition(":")
+        return [f"{family}:{rule}" for rule in rules.split(",")]
+    if match := re.match(r"eslint-(?:disable(?:-next-line|-line)?|enable)", token):
+        family, rules = match[0], token[match.end() :]
+        return [f"{family}:{rule}" for rule in rules.split(",")] if rules else [token]
+    return [token]
 
 
 def configured(path: str) -> bool:
