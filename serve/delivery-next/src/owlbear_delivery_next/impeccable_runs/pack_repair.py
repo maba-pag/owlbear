@@ -317,6 +317,7 @@ def _made(job: Job, ctx: Context, src: pack_git.Source, gh: Provider) -> Outcome
         r.held, r.refused, r.reviewed = _held(run, at, r.stop.head, paths, package=package, skills=skills, kind=kind)
         r.suppressions = [line for p in r.paths for line in check_weakening.suppressions(run, at, r.stop.head, p)]
         r.patch = run(at, ["diff", "--cached", "--binary", r.stop.head])
+        job.keep(ctx)
         if asked := _asked(r):  # the diff of what he is asked about, whole, or no push from his question
             changed = ["--cached", r.stop.head, "--", *asked]
             diff, r.diff_binary = run(at, ["diff", *changed]), _binary(run, at, changed)

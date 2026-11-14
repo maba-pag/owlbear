@@ -213,6 +213,8 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
         _stopped(store, lock, change, "it reported a fix but changed nothing")
         return
     r.paths = [p for p, _ in changed]
+    r.diff = repair_copy.git(at, ["diff", "--cached", "--binary", r.base, "--", *r.paths])
+    store.write(lock, change)
     said = f"fix: {stuck.obstruction(r.found)}\n\nRepaired by an agent; committed by Delivery."
     r.commit = repair_copy.commit(at, said)
     repair_copy.git(path, ["update-ref", f"{KEPT}{change.slug}", r.commit])

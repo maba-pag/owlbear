@@ -123,6 +123,56 @@ def test_a_fix_that_weakens_a_test_is_never_applied(repo, tmp_path) -> None:
 
 
 @pytest.mark.usefixtures("user_on")
+def test_a_failed_repair_commit_keeps_its_patch_before_copy_cleanup(repo, tmp_path, monkeypatch) -> None:
+    c, store = stuck_change(), Store(tmp_path / "store")
+    c.names.branch, c.names.target = "c1", "c1"
+    store.write_profile(
+        Profile(entries={"check:.": ProfileEntry(state="known", value="true", evidence="owner confirmed")})
+    )
+    hooks = tmp_path / "hooks"
+    hooks.mkdir()
+    hook = hooks / "pre-commit"
+    hook.write_text("#!/bin/sh\necho 'fixture hook refuses the repair' >&2\nexit 1\n")
+    hook.chmod(0o755)
+    worktree.git(repo, "config", "core.hooksPath", str(hooks))
+    copies = []
+
+    def model_result(_store, cfg):
+        copies.append(cfg.worktree)
+        (cfg.worktree / "a.txt").write_text("repaired\n")
+        (cfg.worktree / "asset.bin").write_bytes(b"\0retained before commit\xff")
+        return Run(
+            cfg.session_id,
+            "result",
+            repair_tools.RepairResult(
+                cause="The fixture needs its repair.",
+                tried=[repair_tools.Try(fix="Repair the fixture.", outcome="Ready for Delivery's checks.")],
+                fix="patch",
+            ),
+            model_check="verified",
+            termination=Termination(confirmed=True),
+        )
+
+    monkeypatch.setattr(worktree, "ensure", lambda *_: repo)
+    monkeypatch.setattr(sessions, "run", model_result)
+    step_repair.run(store, Lock(c.slug), c, repo)
+    stopped = store.read(c.slug)
+    kept = stopped.repairs.done[-1]
+    assert "fixture hook refuses the repair" in stopped.stop.reason
+    assert "+repaired" in kept.diff
+    assert kept.diff in stopped.stop.reason
+    assert kept.paths == ["a.txt", "asset.bin"]
+    assert not kept.commit
+    assert not copies[0].exists()
+    replay = tmp_path / "replay"
+    repair_copy.copy(repo, replay)
+    repair_copy.git(replay, ["apply", "--binary", "-"], stdin=kept.diff)
+    assert (replay / "asset.bin").read_bytes() == b"\0retained before commit\xff"
+    assert (repo / "a.txt").read_text() == "a\n"
+    repair_copy.drop(repo, replay)
+
+
+@pytest.mark.usefixtures("user_on")
 def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_application(repo, tmp_path, monkeypatch) -> None:
     c, store = stuck_change(), Store(tmp_path / "store")
     c.names.branch, c.names.target = "c1", "c1"
