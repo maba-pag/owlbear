@@ -132,7 +132,19 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
     worktree.git(repo, "add", "fixture.py", "unused_fixture.py")
     worktree.git(repo, "commit", "-qm", "existing line suppression")
     head = worktree.git(repo, "rev-parse", "HEAD")
-    witness = (shlex.join([sys.executable, "-c", "import runpy; runpy.run_path('tests/test_a.py')['test_a']()"]),)
+    witness = (
+        shlex.join(
+            [
+                sys.executable,
+                "-c",
+                (
+                    "import runpy, subprocess; "
+                    "assert subprocess.check_output(['git', 'diff', '--cached', '--name-only']).strip(); "
+                    "runpy.run_path('tests/test_a.py')['test_a']()"
+                ),
+            ]
+        ),
+    )
     store.write_profile(
         Profile(entries={"check:.": ProfileEntry(state="known", value=witness[0], evidence="owner confirmed")})
     )

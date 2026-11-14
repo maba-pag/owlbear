@@ -218,6 +218,7 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
     repair_copy.git(path, ["update-ref", f"{KEPT}{change.slug}", r.commit])
     r.diff = repair_copy.git(path, ["diff", "--binary", r.base, r.commit, "--", *r.paths])
     store.write(lock, change)
+    repair_copy.git(at, ["reset", "--quiet", "--soft", r.base])
     found = {p: check_weakening.weakened(repair_copy.git, at, r.base, p, how) for p, how in changed}
     weak = [f"{p} ({found[p][0]})" for p in r.paths if found[p][0]]
     if weak:
