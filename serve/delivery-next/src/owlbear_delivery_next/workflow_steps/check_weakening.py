@@ -162,6 +162,7 @@ def _leading_ignores(source: str) -> list[tuple[int, str]]:
 def _block_edits(path: str, before: str, after: str) -> list[str]:
     old, new = list(ESLINT_BLOCK.finditer(before)), list(ESLINT_BLOCK.finditer(after))
     matcher = SequenceMatcher(None, [m[0] for m in old], [m[0] for m in new], autojunk=False)
+    positions = _source_positions(before, after) if old and new else {}
     found = []
     for _, start, end, new_start, new_end in matcher.get_opcodes():
         for left, right in zip_longest(old[start:end], new[new_start:new_end]):
@@ -169,7 +170,40 @@ def _block_edits(path: str, before: str, after: str) -> list[str]:
                 found.extend(_block_evidence(path, after, right, ""))
             if left and _introduced(_block_text(right), _block_text(left), TERMINATORS):
                 found.extend(_block_evidence(path, before, left, "removes a suppression terminator: "))
+            if left and right and _block_moved(before, after, left, right, positions):
+                found.extend(_block_evidence(path, after, right, "broadens suppression scope: "))
     return found
+
+
+def _source_positions(before: str, after: str) -> dict[int, int]:
+    old, new = [
+        [(number, text.strip()) for number, text in enumerate(_block_source(source)) if text.strip()]
+        for source in (before, after)
+    ]
+    matcher = SequenceMatcher(None, [text for _, text in old], [text for _, text in new], autojunk=False)
+    positions = {}
+    for _, start, end, new_start, new_end in matcher.get_opcodes():
+        for (number, _), (new_number, _) in zip(old[start:end], new[new_start:new_end], strict=False):
+            positions[number] = new_number
+    return positions
+
+
+def _block_source(source: str) -> list[str]:
+    return ESLINT_BLOCK.sub(lambda match: "\n" * match[0].count("\n"), source).splitlines()
+
+
+def _block_moved(before: str, after: str, left: re.Match[str], right: re.Match[str], positions: dict[int, int]) -> bool:
+    if left[1] != right[1]:
+        return False
+    old, new = before.count("\n", 0, left.start()), after.count("\n", 0, right.start())
+    if left[1] == "eslint-disable":
+        return any(number < old and current >= new for number, current in positions.items())
+    if left[1] == "eslint-enable":
+        return any(number >= old and current < new for number, current in positions.items())
+    if left[1] == "eslint-disable-next-line":
+        old, new = old + left[0].count("\n") + 1, new + right[0].count("\n") + 1
+    lines = _block_source(after)
+    return new < len(lines) and bool(lines[new].strip()) and positions.get(old) != new
 
 
 def _block_text(match: re.Match[str] | None) -> str:

@@ -1267,6 +1267,7 @@ def test_a_suppression_repair_keeps_and_shows_the_whole_candidate_before_approva
     edited = f"import flaky  # noqa: F401 - required by the fixture\n\n\n{TESTED}"
     on_main(checkout, "tests/test_page.py", TESTED)
     on_main(checkout, "fixture.mjs", "\n\n/* eslint-disable\n  no-console\n*/\nlet value = 1;\n")
+    on_main(checkout, "moved.mjs", "/* eslint-disable-next-line no-alert */\nconsole.log(1);\nalert(2);\n")
     fakes, job, _ = ci_failed(
         tmp_path,
         checkout,
@@ -1278,11 +1279,12 @@ def test_a_suppression_repair_keeps_and_shows_the_whole_candidate_before_approva
                 "let value = 1;\n++value; // eslint-disable-line no-plusplus\n"
             ),
             "tests/test_page.py": edited,
+            "moved.mjs": "console.log(1);\n/* eslint-disable-next-line no-alert */\nalert(2);\n",
         },
     )
     state = answered(job, "repair")
     (q,) = state["questions"]
-    assert q["paths"] == ["fixture.mjs", "tests/test_page.py"]
+    assert q["paths"] == ["fixture.mjs", "moved.mjs", "tests/test_page.py"]
     assert [o["id"] for o in q["options"]] == PUSHED
     assert all(part in q["text"] for part in ("tests/test_page.py:1:", "required by the fixture", "complete patch"))
     assert all(part in q["diff"] for part in ("fixture.mjs", "+import flaky"))
@@ -1290,6 +1292,7 @@ def test_a_suppression_repair_keeps_and_shows_the_whole_candidate_before_approva
     assert any("biome-ignore-all" in line for line in repair["suppressions"])
     assert any("fixture.mjs:9: ++value; // eslint-disable-line no-plusplus" in line for line in repair["suppressions"])
     assert "fixture.mjs:5:   no-alert" in repair["suppressions"]
+    assert "moved.mjs:2: broadens suppression scope: /* eslint-disable-next-line no-alert */" in repair["suppressions"]
     assert repair["patch"].rstrip("\n") == q["diff"]
     assert not (job.store.root / pack_state.RUNS / f"{state['run']}-ci-repair").exists()
     fakes.github.checks = ["success"]
