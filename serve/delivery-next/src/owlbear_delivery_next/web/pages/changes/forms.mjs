@@ -3,7 +3,7 @@ import { settingsWait } from "/assets/ui.mjs";
 import { questionText } from "/assets/page/config/unset.mjs";
 import { DIALOG, REVERT, state, show, draft, notify, send, starts } from "./state.mjs";
 import {
-  button, external, field, choice, tick, hd, text, list, row, panel, info, notice, refusal,
+  button, external, field, choice, tick, hd, text, list, row, panel, info, refusal,
 } from "./widgets.mjs";
 import { taskRounds } from "./progress.mjs";
 
@@ -34,6 +34,10 @@ export function droppedLine(q) {
   return e ? refusal(`Your answer at ${new Date(e.at).toLocaleTimeString()} was not applied: ${e.reason}`) : nothing;
 }
 
+function repairPatch(diff, label = "The repair patch") {
+  return diff ? html`<pre class="repair-diff" tabindex="0" aria-label=${label}>${diff}</pre>` : nothing;
+}
+
 export function questionForm(q, d) {
   const key = `${d.key}:question:${q.id}`, mine = draft(key, () => ({}));
   if (mine.option !== undefined && !q.options.some((o) => o.id === mine.option)) delete mine.option;  // withdrawn
@@ -47,7 +51,8 @@ export function questionForm(q, d) {
   };
   const clarifying = q.ordinary && mine.kind === "clarification";
   const confirm = (on) => { mine.confirmed = on; show(); };
-  return panel(`Question ${q.id}`, key, text(questionText(q), { weight: "semibold" }), droppedLine(q),
+  return panel(`Question ${q.id}`, key, text(questionText(q), { weight: "semibold", cls: "recorded" }), droppedLine(q),
+    repairPatch(q.diff),
     q.options.length ? choice(key, "option", "Choose an option", q.options) : nothing,
     field(key, "text", "Your answer in words"),
     q.ordinary ? choice(key, "kind", "How your answer bears on the brief", CLASSES) : nothing,
@@ -116,7 +121,7 @@ export function retryForm(q, r, d) {
       instead: "The question stays open.",
     })) send("/answers", { question: q.id, option }, d, key);
   };
-  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold" }), droppedLine(q),
+  return panel(`Question ${q.id}`, key, text(q.text, { weight: "semibold", cls: "recorded" }), droppedLine(q),
     hd(4, "Plan tasks to rebuild", "sm"),
     r.tasks.map((t) => html`${tick(`${t.id}: ${t.title}`, mine.ticked.includes(t.id), flip(t.id))}
       ${taskRounds(t.id, d, " (rebuild list)")}
@@ -338,12 +343,15 @@ export function pullbackNote(p, d) {
 // A stop the owner may clear once he did what it asks (#754), so Delivery reruns its step; *d.recovery* has the stop,
 // as a paused Change's line describes its pause. Unset settings withhold the action (D-01M61SBWK4VE4MNTD35TR0VPS8).
 export function stopNotice(d) {
-  const r = d.recovery, reason = r ? r.reason : d.line.replace(/^.*?stopped: /, ""), action = r ? r.action : d.action;
+  const r = d.recovery, kept = d.retained_repair;
+  const reason = kept ? kept.reason : r ? r.reason : d.line.replace(/^.*?stopped: /, "");
+  const action = r ? r.action : d.action;
   // what keeps the rerun from starting: the unreadable settings in full, else how many are unset (never their keys)
   const wait = !r?.unset ? "" : r.settings.reason ? r.unset : `${settingsWait(r.settings.count)} to run the step again`;
-  if (!r || wait) {
-    return notice("error", "Stopped", `${reason}.`, action ? `What to do: ${action}.` : "", r ? `${wait}.` : "");
-  }
+  const held = !r || wait;  // no stop he may clear, or its rerun waits on the settings: no action
+  // a reason in paragraphs (#1220) keeps what to do apart from its details
+  const said = [`${reason}.`, action ? `What to do: ${action}.` : "", wait ? `${wait}.` : ""].filter(Boolean)
+    .join(reason.includes("\n\n") ? "\n\n" : " ");
   const clear = async () => {
     const again = "If the cause is still there, it stops again with the same message.";
     const sure = await ask({
@@ -362,7 +370,9 @@ export function stopNotice(d) {
     state.started = { text: "Recovery accepted: Delivery reruns the step when it can run. Existing pauses are kept." };
     show();
   };
-  return html`<p-inline-notification state="error" heading="Stopped" heading-tag="h3" dismiss-button="false"
-    action-label="Done: run the step again" action-icon="refresh" @action=${clear}>${reason}. What to do: ${action}.
-    </p-inline-notification>`;
+  return html`<p-inline-notification class="recorded" state="error" heading="Stopped" heading-tag="h3"
+    dismiss-button="false" action-label=${held ? nothing : "Done: run the step again"}
+    action-icon=${held ? nothing : "refresh"} @action=${held ? nothing : clear}>${
+      kept ? text(said, { cls: "repair-reason" }) : said}</p-inline-notification>
+    ${kept ? text("The fix kept (not applied):") : nothing}${repairPatch(kept?.diff, "The retained repair patch")}`;
 }

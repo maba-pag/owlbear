@@ -4,14 +4,17 @@ import dataclasses
 import gzip
 import json
 import subprocess
+from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from owlbear_memory.engine import MemoryEngine
 from owlbear_memory.models import MemoryState
 
 from owlbear_delivery_next.commands import cli
-from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
+from owlbear_delivery_next.github.owlbear_issues import Issue, OwlbearIssues
+from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.improvement import (
     assumptions,
     case_edits,
@@ -25,6 +28,7 @@ from owlbear_delivery_next.improvement import proposal_apply as act
 from owlbear_delivery_next.improvement import proposal_targets as targets
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
+from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.state_store import backlog
 
 UNITS = {"f-1": "chg:p1:fix", "f-2": "chg:p2:fix", "f-3": "syn:scout-a", "f-4": "chg:p1:other"}
@@ -38,57 +42,41 @@ class FakeGitHub:
     """The issues of one repository behind ``gh api``; every payload sent is kept."""
 
     def __init__(self):
-        self.issues, self.sent, self.close_fails = [{"number": 1, "pull_request": {}, "body": "x"}], [], 0
+        self.issues, self.sent = [{"number": 1, "pull_request": {}, "body": "x"}], []
 
     def __call__(self, argv, data, _timeout, _cwd, _env):
         method, endpoint = argv[argv.index("--method") + 1], next(a for a in argv if a.startswith("repos/"))
         body = json.loads(data) if data else None
         self.sent.append(body)
         if method == "GET":
-            return self._done(self.issues[::-1] if "page=1" in endpoint else [])
+            query = parse_qs(urlsplit(endpoint).query)
+            page, size = int(query["page"][0]), int(query["per_page"][0])
+            return self._done(self.issues[::-1][(page - 1) * size : page * size])
         if method == "POST":
             n = len(self.issues) + 1
             self.issues.append(body | {"number": n, "html_url": f"https://github.com/o/r/issues/{n}", "state": "open"})
             return self._done(self.issues[-1])
-        if self.close_fails:
-            self.close_fails -= 1
-            return subprocess.CompletedProcess((), 1, b"", b"HTTP 502: bad gateway (token ghp_" + b"a" * 36 + b")")
-        issue = next(i for i in self.issues if endpoint.endswith(f"/issues/{i['number']}"))
-        issue["state"] = "closed"
-        return self._done(issue)
+        pytest.fail(f"unexpected issue method {method}")
 
     @staticmethod
     def _done(value):
         return subprocess.CompletedProcess((), 0, json.dumps(value).encode(), b"")
 
 
-class FakeBacklog:
-    def __init__(self, folder, entries):
-        self.folder, self.entries, self.repository = folder, entries, "o/shared"
-
-    def read(self, *, fresh=False):
-        assert fresh
-        return {e.id: e for e in self.entries}, []
-
-    def add(self, title, text, source, evidence=()):
-        entry = SimpleNamespace(
-            id=str(len(self.entries) + 1), title=title, text=text, source=source, evidence=list(evidence)
-        )
-        entry.folder = self.folder
-        self.entries.append(entry)
-        return entry, True
-
-
 @pytest.fixture
 def world(tmp_path, monkeypatch):
     monkeypatch.setattr(targets, "units_of", lambda: UNITS)
     places = {}
-    for pid, name in (("p1", "alpha"), ("p2", "beta"), ("ps", "example")):
-        (tmp_path / name).mkdir()
+    for pid, name in (("p1", "alpha"), ("p2", "beta")):
         places[pid] = targets.Place(folder=f"{name}-folder", clone=tmp_path / name)
     gh, entries, checks = FakeGitHub(), [], []
+
+    def unexpected_backlog(folder):
+        entries.append(folder)
+        pytest.fail(f"unexpected backlog dispatch to {folder}")
+
     seams = act.Seams(
-        backlog=lambda folder: FakeBacklog(folder, entries),
+        backlog=unexpected_backlog,
         memory=MemoryEngine,
         issues=lambda: OwlbearIssues("o/r", tmp_path, runner=gh),
         case=act.intake,
@@ -125,47 +113,66 @@ def _record(rid):
     (spotter.root() / "cards" / f"{rid}.json.gz").write_bytes(gzip.compress(b'{"moment": {}}'))
 
 
-def test_a_backlog_entry_lands_in_the_project_its_change_unit_names_once(world):
+def test_a_backlog_entry_lands_in_the_project_its_change_unit_names_once(world, shared_repo, github):
+    root, _ = shared_repo
+    world.seams = dataclasses.replace(world.seams, backlog=lambda folder: backlog.Backlog(DataRepo(root), folder))
     agents = world.places["p2"].clone / ".github" / "agents"
     agents.mkdir(parents=True)
     (agents / "exporter.agent.md").write_text("exports")
+    world.places["p1"].clone.mkdir()
     (world.places["p1"].clone / ".github").symlink_to(world.places["p2"].clone / ".github")  # same files, other id
     pid = _waiting("agent-change", "agent:exporter", ["f-2"])
 
     done = _accept(pid, world)
 
     assert done["apply_state"] == "done", done["failures"]
-    (entry,) = world.entries
-    assert (entry.folder, entry.title, entry.source) == ("beta-folder", TEXT["title"], "retro")
+    (entry,) = backlog.Backlog(DataRepo(root), "beta-folder").read(fresh=True)[0].values()
+    assert (entry.origin, entry.title, entry.text, entry.source) == (
+        "beta-folder",
+        TEXT["title"],
+        TEXT["body"],
+        "retro",
+    )
     assert entry.evidence == ["f-2", f"retro-proposal:{pid}"]  # last: the backlog keeps an entry's newest refs
+    assert done["applied"][0]["artefact"] == {
+        "kind": "backlog",
+        "where": "acme/owlbear-data",
+        "ref": "#1",
+        "link": "https://github.com/acme/owlbear-data/issues/1",
+    }
     assert act.apply(pid, world.seams)["applied"] == done["applied"]
-    assert len(world.entries) == 1
+    assert len(github.issues) == 1
 
 
 def test_a_historical_synthetic_proposal_cannot_be_redirected_or_applied(world):
     pid = _waiting("agent-change", "agent:exporter", ["f-3"], provenance="synthetic")
-    with pytest.raises(store.RetroError, match=r"synthetic Retro.*retired"):
-        act.decide(pid, "redirected", _seen(pid, world), "owner", places=world.places, shared_root=world.shared,
-                   direction="change it")  # fmt: skip
+    [shown] = improvement_view.proposals({}, world.shared)
+    assert shown["id"] == pid
+    before = store.lines(props.FILE)
+    for state in ("accepted", "redirected"):
+        with pytest.raises(store.RetroError, match=r"synthetic Retro.*retired"):
+            act.decide(pid, state, _seen(pid, world), "owner", places=world.places, shared_root=world.shared,
+                       direction="change it" if state == "redirected" else "")  # fmt: skip
+        assert store.lines(props.FILE) == before
+        assert (world.entries, world.gh.sent) == ([], [])
 
     snapshot = {"destination": {"kind": "backlog", "folder": "alpha-folder"},
                 "publishable": TEXT, "findings": ["f-3"], "provenance": "synthetic"}  # fmt: skip
     props.transition(pid, "accepted", "owner", snapshot=snapshot)
     with pytest.raises(store.RetroError, match=r"synthetic Retro.*retired"):
         act.apply(pid, world.seams)
-    assert world.entries == []
+    assert (world.entries, world.gh.sent) == ([], [])
 
 
-def test_a_synthetic_proposal_remains_visible_but_cannot_be_accepted(world):
-    pid = _waiting("agent-change", "agent:exporter", ["f-3"], provenance="synthetic")
-    [shown] = improvement_view.proposals({}, world.shared)
-    assert shown["id"] == pid
-    with pytest.raises(store.RetroError, match=r"synthetic Retro.*retired"):
-        act.decide(pid, "accepted", _seen(pid, world), "owner", places=world.places, shared_root=world.shared)
-    assert world.entries == []
+def test_a_lesson_is_a_pending_memory_in_its_projects_folder_scoped_to_its_agent(world, shared_repo):
+    world.shared, remote = shared_repo
 
+    def git(root, *args):
+        out = DataRepo(root).git(*args)
+        out.check_returncode()
+        return out.stdout.strip()
 
-def test_a_lesson_is_a_pending_memory_in_its_projects_folder_scoped_to_its_agent(world):
+    heads = (git(world.shared, "rev-parse", "HEAD"), git(remote, "--git-dir=.", "rev-parse", "refs/heads/main"))
     pid = _waiting("lesson", "agent:owlbear-builder", ["f-1"])
 
     done = _accept(pid, world)
@@ -175,6 +182,14 @@ def test_a_lesson_is_a_pending_memory_in_its_projects_folder_scoped_to_its_agent
     (memory,) = MemoryEngine(folder).get_entries()
     assert (memory.title, memory.content, memory.state) == (TEXT["title"], TEXT["body"], MemoryState.PENDING)
     assert (memory.source_agent, memory.scope_agents, memory.recommended) == ("retro", ["builder"], "project")
+    path = f"alpha-folder/memory/{memory.id}.md"
+    assert (world.shared / path).is_file()
+    assert git(world.shared, "ls-files", "--", "alpha-folder/memory") == ""
+    assert (
+        path
+        in git(world.shared, "ls-files", "--others", "--exclude-standard", "--", "alpha-folder/memory").splitlines()
+    )
+    assert (git(world.shared, "rev-parse", "HEAD"), git(remote, "--git-dir=.", "rev-parse", "refs/heads/main")) == heads
     assert done["applied"][0]["artefact"] | {"ref": ""} == {
         "kind": "memory",
         "where": str(folder),
@@ -183,39 +198,141 @@ def test_a_lesson_is_a_pending_memory_in_its_projects_folder_scoped_to_its_agent
     }
 
 
-def test_an_owlbear_change_is_one_issue_in_its_repository_carrying_the_marker(world):
+def test_an_owlbear_change_is_one_issue_in_its_repository_carrying_the_marker(world, monkeypatch):
     pid = _waiting("delivery-change", "delivery:hand-off", ["f-1"])
+    act.decide(pid, "accepted", _seen(pid, world), "owner", places=world.places, shared_root=world.shared)
+    accepted = props.folded()[pid]["accepted"]
+    props.reviewed(pid, "later", {"verdict": "survive", "publishable": {"title": "grown", "body": "grown body"}})
+    assert props.folded()[pid]["accepted"] == accepted
+    kept = props.outcome
+    lost = iter([True])
 
-    done = _accept(pid, world)
-    act.apply(pid, world.seams)
+    def flaky(proposal, kind, **fields):
+        if kind == "applied" and next(lost, False):
+            msg = "the answer was lost"
+            raise OSError(msg)
+        kept(proposal, kind, **fields)
+
+    monkeypatch.setattr(props, "outcome", flaky)
+    failed = act.apply(pid, world.seams)
+    assert (failed["apply_state"], failed["applied"]) == ("failed", [])
+    assert [f["error"] for f in failed["failures"]] == ["OSError: the answer was lost"]
+    assert len([i for i in world.gh.issues if "pull_request" not in i]) == 1
+
+    done = act.apply(pid, world.seams)
+    assert done["apply_state"] == "done"
 
     made = [i for i in world.gh.issues if "pull_request" not in i]
     assert [(i["title"], i["state"]) for i in made] == [(TEXT["title"], "open")]
-    assert f"<!-- retro-proposal:{pid} -->" in made[0]["body"]
+    assert made[0]["body"] == f"{TEXT['body']}\n\n<!-- retro-proposal:{pid} -->"
     assert done["applied"][0]["artefact"]["link"] == "https://github.com/o/r/issues/2"
+    before = store.lines(props.FILE)
+    assert act.apply(pid, world.seams) == done
+    assert store.lines(props.FILE) == before
+    assert len(world.gh.issues) == 2
 
 
-def test_an_issue_search_that_reads_every_page_without_the_marker_makes_none(world, tmp_path):
+def test_an_issue_search_past_a_thousand_entries_files_once_and_finds_an_older_marker(world, tmp_path):
     asked = []
 
-    def full(argv, _data, _timeout, _cwd, _env):  # every page is full and none carries the marker
+    def tracked(argv, data, timeout, cwd, env):
         asked.append(argv[argv.index("--method") + 1])
-        page = [{"number": n, "body": "other", "html_url": "u", "state": "open"} for n in range(100)]
-        return subprocess.CompletedProcess((), 0, json.dumps(page).encode(), b"")
+        return world.gh(argv, data, timeout, cwd, env)
 
     pid = _waiting("delivery-change", "delivery:hand-off", ["f-1"])
-    world.seams = dataclasses.replace(world.seams, issues=lambda: OwlbearIssues("o/r", tmp_path, runner=full))
-    _accept(pid, world)
+    marker = f"<!-- retro-proposal:{pid} -->"
+    world.gh.issues.extend({"number": n, "body": "other"} for n in range(2, 1002))
+    world.gh.issues.append({"number": 1002, "pull_request": {}, "body": marker})
+    issues = OwlbearIssues("o/r", tmp_path, runner=tracked)
+    world.seams = dataclasses.replace(world.seams, issues=lambda: issues)
 
-    snap = props.folded()[pid]
-    assert (snap["apply_state"], asked) == ("failed", ["GET"] * 10)  # unsure the issue is absent: none is made
-    assert "find_issue" in snap["failures"][0]["error"]
+    done = _accept(pid, world)
+    assert done["apply_state"] == "done", done["failures"]
+    assert asked == ["GET"] * 11 + ["POST"]
+    made = world.gh.issues[-1]
+    assert (made["title"], marker in made["body"]) == (TEXT["title"], True)
+
+    world.gh.issues.extend({"number": n, "pull_request": {}, "body": marker} for n in range(1004, 2004))
+    asked.clear()
+    found = issues.find(marker)
+    assert found is not None
+    assert found.url == done["applied"][0]["artefact"]["link"]
+    assert asked == ["GET"] * 11
+
+
+def test_a_missing_issue_list_cannot_repeat_a_filing_or_erase_a_recovered_issue(world, tmp_path, monkeypatch):
+    control = SimpleNamespace(hidden=False, reject=False, posts=0)
+    marker, legacy = "<!-- marker -->", "<!-- legacy -->"
+
+    def client():
+        return OwlbearIssues("o/r", tmp_path, runner=run)
+
+    def run(argv, data, timeout, cwd, env):
+        method = argv[argv.index("--method") + 1]
+        if method == "GET" and control.hidden:
+            return subprocess.CompletedProcess((), 0, b"[]", b"")
+        if method == "POST":
+            control.posts += 1
+            if control.reject:
+                control.hidden = False
+                assert client().find(legacy) == Issue(3, "https://github.com/o/r/issues/3", "open")
+                control.hidden = True
+                return subprocess.CompletedProcess((), 1, b"", b"gh: API rate limit exceeded (HTTP 429)")
+        return world.gh(argv, data, timeout, cwd, env)
+
+    made = client().create("first", marker, marker=marker)
+    control.hidden = True
+    with pytest.raises(ProviderError) as unread:
+        client().find(marker)
+    assert unread.value.code == FailureCode.RESPONSE_UNKNOWN
+    with pytest.raises(ProviderError) as repeated:
+        client().create("first", marker, marker=marker)
+    assert repeated.value.code == FailureCode.RESPONSE_UNKNOWN
+    assert control.posts == 1
+    control.hidden = False
+    assert client().find(marker) == made
+
+    world.gh.issues.append(
+        {"number": 3, "html_url": "https://github.com/o/r/issues/3", "state": "open", "body": legacy}
+    )
+    control.hidden, control.reject = True, True
+    assert client().find(legacy) is None
+    with pytest.raises(ProviderError) as rejected:
+        client().create("legacy", legacy, marker=legacy)
+    assert rejected.value.code == FailureCode.RATE_LIMITED
+    with pytest.raises(ProviderError) as recovered:
+        client().find(legacy)
+    assert recovered.value.code == FailureCode.RESPONSE_UNKNOWN
+    with pytest.raises(ProviderError):
+        client().create("legacy", legacy, marker=legacy)
+    assert control.posts == 2
+    control.hidden = False
+    assert client().find(legacy) == Issue(3, "https://github.com/o/r/issues/3", "open")
+
+    ordering = "<!-- recovered at claim -->"
+    world.gh.issues.append(
+        {"number": 4, "html_url": "https://github.com/o/r/issues/4", "state": "open", "body": ordering}
+    )
+    control.hidden, control.reject = True, False
+    touch, once = Path.touch, iter([True])
+
+    def recovered_at_claim(path, *args, **kwargs):
+        if path.suffix == ".pending" and next(once, False):
+            control.hidden = False
+            assert client().find(ordering) == Issue(4, "https://github.com/o/r/issues/4", "open")
+            control.hidden = True
+        return touch(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "touch", recovered_at_claim)
+    with pytest.raises(ProviderError):
+        client().create("ordering", ordering, marker=ordering)
+    assert control.posts == 2
 
 
 def test_a_failure_longer_than_any_cut_is_kept_whole_and_masked(world, whole_error):
     token = "ghp_" + "a" * 36
 
-    class Unreachable(FakeBacklog):
+    class Unreachable:
         def read(self, *, fresh=False):  # noqa: ARG002 - the backlog's signature
             raise backlog.BacklogError(502, f"{whole_error}\n(token {token})")
 
@@ -223,7 +340,7 @@ def test_a_failure_longer_than_any_cut_is_kept_whole_and_masked(world, whole_err
     agents.mkdir(parents=True)
     (agents / "exporter.agent.md").write_text("exports")
     pid = _waiting("agent-change", "agent:exporter", ["f-2"])
-    world.seams = dataclasses.replace(world.seams, backlog=lambda folder: Unreachable(folder, []))
+    world.seams = dataclasses.replace(world.seams, backlog=lambda _folder: Unreachable())
 
     done = _accept(pid, world)
 
@@ -302,7 +419,7 @@ def test_a_case_whose_making_went_unrecorded_is_found_again_after_a_check_promot
 
     def unrecorded(proposal, kind, **fields):
         if fields.get("step") == "created":
-            msg = "the disk was full"
+            msg = "the host stopped before recording the case"
             raise OSError(msg)
         kept(proposal, kind, **fields)
 
@@ -339,28 +456,6 @@ def test_a_synthetic_case_rests_on_its_assumption_and_the_reset_leaves_it_out():
     cases.reset()
 
     assert cid not in cases.current()["cases"]
-
-
-def test_a_retry_after_a_lost_response_makes_nothing_twice_from_what_was_accepted(world, monkeypatch):
-    pid = _waiting("delivery-change", "delivery:hand-off", ["f-1"])
-    act.decide(pid, "accepted", _seen(pid, world), "owner", places=world.places, shared_root=world.shared)
-    props.reviewed(pid, "later", {"verdict": "survive", "publishable": {"title": "grown", "body": "grown body"}})
-    kept = props.outcome
-    lost = iter([True])
-
-    def flaky(proposal, kind, **fields):
-        if kind == "applied" and next(lost, False):
-            msg = "the answer was lost"
-            raise OSError(msg)
-        kept(proposal, kind, **fields)
-
-    monkeypatch.setattr(props, "outcome", flaky)
-    assert act.apply(pid, world.seams)["apply_state"] == "failed"
-
-    done = act.apply(pid, world.seams)
-
-    assert done["apply_state"] == "done"
-    assert [i["title"] for i in world.gh.issues if "pull_request" not in i] == [TEXT["title"]]
 
 
 def test_a_historical_synthetic_issue_is_listed_by_reset_once_without_another_write(world, capsys):

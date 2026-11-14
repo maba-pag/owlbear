@@ -110,7 +110,7 @@ def _judged(rev, *graded):
     retro_units.settle("chat:c1", rev["rev"], "judged", run="run-x")
 
 
-def test_a_chat_revision_takes_only_new_events_and_records_and_a_late_record_makes_a_grade_only_run(tmp_path):
+def test_chat_revision_journey(tmp_path):
     retro_store.watermark()
     chat = _Chat(tmp_path)
     chat.say(
@@ -137,23 +137,21 @@ def test_a_chat_revision_takes_only_new_events_and_records_and_a_late_record_mak
     ]
     [gap] = retro_units.gap_grades(found, known, graded)
     assert (gap["id"], gap["grade"], gap["reason"]) == ("rg-g", "not-assessable", "the log was replaced")
+    retro_store.add_grades([gap])
+    retro_store.add_grades([retro_units.grade(next(r for r in found if r["id"] == "d"), "r1", "worth-it")])
     [item] = chat.due()
     r2 = retro_units.freeze(item, {}, found)
     assert (r2["rev"], r2["from_events"], r2["cutoff_events"], r2["records"]) == ("r2", 3, 5, ["c"])
     assert retro_store.units()["chat:c1"]["family"] == "chat:c1"
-
-
-def test_a_new_gap_record_alone_is_graded_without_a_run(tmp_path):
-    retro_store.watermark()
-    chat = _Chat(tmp_path)
-    chat.say(_event("user.message", content="go"))
-    [item] = chat.due()
-    _judged(retro_units.freeze(item, {}, []))
-    _record("g", 0, step="chat", session="c1", skipped="not followed")
+    _judged(r2, "c")
+    assert set(retro_store.graded()) == {"a", "c", "d", "g"}
+    _record("new-gap", 0, step="chat", session="c1", skipped="not followed")
     assert chat.due() == []
     known, found = retro_store.units(), retro_units.records()
-    assert [g["id"] for g in retro_units.gap_grades(found, known, retro_store.graded())] == ["rg-g"]
+    [gap] = retro_units.gap_grades(found, known, retro_store.graded())
+    assert (gap["id"], gap["grade"], gap["reason"]) == ("rg-new-gap", "not-assessable", "not followed")
     assert retro_units.late(found, known, retro_store.graded()) == []
+    assert [r["rev"] for r in known["chat:c1"]["revisions"]] == ["r1", "r2"]
 
 
 def test_a_chat_quiet_since_before_the_watermark_waits_for_the_button(tmp_path):

@@ -16,6 +16,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Brief,
     Change,
     Environment,
+    Exit,
     Names,
     Plan,
     Step,
@@ -33,21 +34,11 @@ from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import before, captures, check, prepare, visual
 
+from .test_visual import commit, git, with_origin
+
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 HOME = VisualState(name="home", path="/", expect="The greeting is centred")
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-
-
-def git(cwd, *args):
-    done = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
-    return done.stdout.strip()
-
-
-def commit(work, name, text):
-    (work / name).parent.mkdir(parents=True, exist_ok=True)
-    (work / name).write_text(text)
-    git(work, "add", name)
-    git(work, "commit", "-q", "-m", f"edit {name}")
 
 
 def free_port():
@@ -56,25 +47,12 @@ def free_port():
         return s.getsockname()[1]
 
 
-@pytest.fixture(autouse=True)
-def git_env(tmp_path, monkeypatch):
-    (tmp_path / "gitconfig").write_text("")
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    for who in ("AUTHOR", "COMMITTER"):
-        monkeypatch.setenv(f"GIT_{who}_NAME", "t")
-        monkeypatch.setenv(f"GIT_{who}_EMAIL", "t@t")
-
-
 @pytest.fixture
-def ui(tmp_path, monkeypatch):
+def ui(tmp_path, change_repo, monkeypatch):
     """A Change whose page says "before" at the merge-base and "after" at its head, at the visual check."""
-    origin, work = tmp_path / "origin.git", tmp_path / "work"
-    git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
-    git(tmp_path, "clone", "-q", str(origin), str(work))
+    work = with_origin(change_repo, tmp_path)
     commit(work, "site/index.html", "before")
     git(work, "push", "-q", "origin", "HEAD:refs/heads/main")
-    git(work, "switch", "-q", "-c", "owlbear/c1")
     commit(work, "site/index.html", "after")
     port = free_port()
     monkeypatch.setattr(check, "free_port", lambda: port)  # the port Delivery picks, known to the test
@@ -280,7 +258,18 @@ def test_an_install_over_time_is_stopped_with_its_whole_group(ui, tmp_path, monk
 def test_the_runner_records_the_before_capture_and_the_page_serves_it(ui, tmp_path):
     store = Store(tmp_path / "store")
     store.write(Lock("c1"), ui)
-    none = Preparation(id="none", kind="data-only", seed="true", cleanup="true", isolation={"APP_ENV": "test"})
+    resources, held = tmp_path / "resources", tmp_path / "cleanup-held"
+    resources.mkdir()
+    prefix = "from pathlib import Path;import os;p=Path(os.environ['RESOURCES'])/Path.home().parent.name;"
+    seed = shlex.join([sys.executable, "-c", prefix + "p.write_text('synthetic resource')"])
+    cleanup = shlex.join([sys.executable, "-c", prefix + "assert not Path(os.environ['HELD']).exists();p.unlink()"])
+    none = Preparation(
+        id="none",
+        kind="data-only",
+        seed=seed,
+        cleanup=cleanup,
+        isolation={"HOME": ".fixture-home", "RESOURCES": str(resources), "HELD": str(held)},
+    )
     assert (
         store.save(
             store.config_path,
@@ -307,6 +296,29 @@ def test_the_runner_records_the_before_capture_and_the_page_serves_it(ui, tmp_pa
     assert client.get("/api/next/changes/c1").json()["before"]["head"] == c.before.head
     for name in ("other-1280.png", "..%2Fhome-1280.png"):
         assert client.get(f"/api/next/changes/c1/before/{name}").status_code == 404
+    assert list(resources.iterdir()) == []
+    held.touch()
+    c.before = None
+    captures.at_merge_base(store, Lock("c1"), c, Path(c.names.worktree))
+    c = store.read("c1")
+    owed = prepare.left(store, c)
+    assert len(owed) == 1
+    retained = Path(owed[0].home)
+    assert retained.is_dir()
+    assert len(list(resources.iterdir())) == 1
+    assert any("cleanup did not finish" in note for note in c.before.findings)
+    assert c.outcome.exit == Exit.RETRY
+    held.unlink()
+    c.outcome.wake_at = None
+    assert not prepare.ran(store, Lock("c1"), c, Path(c.names.worktree), runnable=False)
+    assert not retained.exists()
+    assert list(resources.iterdir()) == []
+    assert prepare.launch(store, c, store.settings(), lambda _event: None).exit == Exit.PENDING
+    assert len(list(resources.iterdir())) == 1
+    c.env = None
+    assert prepare.end(store, c, Path(c.names.worktree), store.settings(), lambda _event: None) is None
+    assert list(resources.iterdir()) == []
+    assert Path(c.names.worktree).is_dir()
 
 
 @pytest.mark.parametrize("site", ["merge-base", "test-copy", "capture"])

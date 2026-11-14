@@ -22,7 +22,6 @@ from owlbear_delivery_next.workflow_steps import (
     check,
     held,
     held_writes,
-    overlap,
     pending_child,
     pick,
     prepare,
@@ -127,28 +126,20 @@ def continued(store: Store, lock: Lock, c: Change, path: Path) -> bool:
         return False
     parent = held.restored(p.run)
     task = next((t for t in c.plan.tasks if t.id == s.task), None) if c.plan else None
-    raw = session_result.to_result(parent, s.kind, datetime.now(UTC))
-    if raw.cause == cause_key(ErrorKind.RESULT, s.kind, LABEL) and isinstance(parent.payload, tools.AskQuestion):
-        raw.reason = f"{parent.payload.question} (why: {parent.payload.why})"
     parent.head = parent.head or p.head or None
-    raw = review.recorded(c, task, parent, path, raw)
+    review.recorded(c, task, parent, path, session_result.to_result(parent, s.kind, datetime.now(UTC)))
     store.write(lock, c)
-    result = overlap.integrated(store, lock, c, path, (task.base if task else None, parent.ending), raw)
-    gated = result is not raw
-    if gated:
-        event = _retired(c, result.reason)
-    else:
-        result, event = checked(store, lock, c, path)
+    result, event = checked(store, lock, c, path)
     if result.exit == Exit.ASK and p.answer:
         c = budgets.effect_observed(c, p.answer, datetime.now(UTC))
     final = loop.apply(c, result, datetime.now(UTC))
     rejected = result.cause == cause_key(ErrorKind.RESULT, c.step.kind, LABEL)
     retrying = result.exit == Exit.RETRY and rejected
     offered = result.exit == Exit.ASK and result.question is not None and result.question.cause is None
-    if retrying or (not gated and offered):
+    if retrying or offered:
         final.step.session = p.run.session_id
     final.step.question_errors = result.reason.splitlines() if retrying else []
-    if gated or rejected or offered or result.setup:  # a routed question is settled by its repair (#1062)
+    if rejected or offered or result.setup:  # a routed question is settled by its repair (#1062)
         final.pending_question = None
     final.pending_child = None
     store.write(lock, final)
@@ -320,7 +311,7 @@ def message(c: Change, proposed: tools.AskQuestion) -> str:
         "integration_target": c.names.target,
         "question": proposed.model_dump(mode="json"),
         "answered": [
-            {"id": q.id, "question": q.text[:300], "answer": answer_kinds.answer_text(q)[:300]}
+            {"id": q.id, "question": q.text[:300], "answer": answer_kinds.answer_text(q)}  # whole: what was chosen
             for q in c.questions
             if q.answer is not None
         ],

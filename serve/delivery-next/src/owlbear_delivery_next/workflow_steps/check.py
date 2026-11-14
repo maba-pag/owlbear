@@ -40,6 +40,14 @@ type Found = dict[int, str]
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
 
 
+class PrepareError(Exception):
+    """A check cannot start on its test copy; its result says why."""
+
+    def __init__(self, result: loop.StepResult) -> None:
+        super().__init__(result.reason)
+        self.result = result
+
+
 def free_port() -> int:
     """A port no local listener holds now, as the kernel hands it out; the launch takes it right away (TD-40)."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

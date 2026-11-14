@@ -102,14 +102,25 @@ def runtime_at(origin: Path, commit: str) -> Path:
     return runtime
 
 
-def test_repo_git_fetches_only_annotated_tags_and_the_legacy_runtime_takes_the_newest_descendant(origin):
-    runtime_at(origin, git(origin, "rev-parse", "v0.1^{commit}"))
+def test_versions_command_reads_annotated_descendant_releases_without_installing(origin, monkeypatch, capsys):
+    current, next_commit = git(origin, "rev-parse", "v0.1^{commit}"), git(origin, "rev-parse", "v0.2^{commit}")
+    runtime = runtime_at(origin, current)
+    monkeypatch.setattr(sys, "platform", "darwin")
 
-    choice = versions.target()
+    assert command.main(["versions"]) == 0
 
-    assert (local_home.root() / versions.REPO / "HEAD").is_file()
-    assert choice == Choice("v0.2", git(origin, "rev-parse", "v0.2^{commit}"))
-    assert set(versions.fetch(local_home.root() / versions.REPO)) == {"v0.1", "v0.2"}
+    assert capsys.readouterr().out == (
+        f"running: no installed version at {current[:12]}\nnext: v0.2 at {next_commit[:12]}\n"
+    )
+    assert versions.target() == Choice("v0.2", next_commit)
+    bare = local_home.root() / versions.REPO
+    assert (bare / "HEAD").is_file()
+    assert set(versions.fetch(bare)) == {"v0.1", "v0.2"}
+
+    git(origin, "tag", "-a", "v0.3", "v0.2", "-m", "v0.3 names v0.2's tag")
+    assert versions.fetch(bare)["v0.3"] == next_commit
+    assert git(runtime, "rev-parse", "HEAD") == current
+    assert not (local_home.root() / local_home.VERSIONS).exists()
 
 
 def test_a_legacy_runtime_ahead_of_the_newest_version_waits(origin):
@@ -122,7 +133,10 @@ def test_a_legacy_runtime_ahead_of_the_newest_version_waits(origin):
     assert "does not descend from the running commit" in choice.notes[0]
 
 
-def test_the_mark_in_machine_json_keeps_a_lower_version_from_being_taken(origin):
+def test_legacy_registry_mark_prevents_taking_an_older_release(origin):
+    (local_home.root() / registry.MACHINE).write_text(json.dumps({"format": 3, "projects": []}))
+    assert registry.load().active == ""
+
     runtime_at(origin, git(origin, "rev-parse", "v0.1^{commit}"))
     with registry.locked():
         saved = registry.load()
@@ -157,18 +171,6 @@ def installing(origin, monkeypatch) -> SimpleNamespace:  # noqa: ARG001 - the re
     return said
 
 
-def test_a_version_installs_beside_the_others_as_a_detached_worktree_at_its_commit(origin, installing):
-    commit = git(origin, "rev-parse", "v0.2^{commit}")
-
-    folder = versions.install(Choice("v0.2", commit))
-
-    assert folder == local_home.root() / local_home.VERSIONS / "v0.2"
-    assert git(folder, "rev-parse", "HEAD") == commit
-    assert (folder / "f.txt").read_text() == "1\n"
-    assert versions.install(Choice("v0.2", commit)) == folder  # installed and checked before: not again
-    assert len(installing.synced) == 1
-
-
 def test_a_failed_selfcheck_removes_the_install(origin, installing):
     installing.check = "its store has format 9, newer than this version's 7"
 
@@ -195,16 +197,23 @@ def released(origin: Path, tag: str, manifest: str | None, name: str = versions.
     return git(origin, "rev-parse", "HEAD")
 
 
-def test_a_version_is_ready_only_once_its_own_pack_is_installed_by_its_own_interpreter(origin, installing):
+def test_prepare_builds_a_detached_version_and_reuses_its_own_checked_pack(origin, installing):
     commit = released(origin, "v0.3", '{"pack": "p-new"}')
     versions.fetch(versions.repo())
 
     folder = versions.install(Choice("v0.3", commit))
-    versions.install(Choice("v0.3", commit))  # installed and checked before: its pack is installed again
+
+    assert folder == local_home.root() / local_home.VERSIONS / "v0.3"
+    assert git(folder, "rev-parse", "HEAD") == commit
+    assert git(folder, "rev-parse", "--abbrev-ref", "HEAD") == "HEAD"
+    assert (folder / "f.txt").read_text() == "v0.3\n"
+    assert versions.install(Choice("v0.3", commit)) == folder
 
     made = f'{folder.resolve()}|-m owlbear_delivery_next impeccable --install|{{"pack": "p-new"}}'
     assert installing.packs() == [made, made]
     assert len(installing.synced) == 1
+    assert not (local_home.root() / local_home.RUNTIME).exists()
+    assert not (folder / versions.ACTIVATED).exists()
 
 
 def test_a_version_from_before_the_impeccable_rename_is_read_and_installed_by_its_old_names(origin, installing):
@@ -423,7 +432,7 @@ def test_upstream_ahead_without_an_owlbear_release_shows_no_newer_pack(origin):
     assert impeccable.look()["state"] == "none"
 
 
-def test_a_release_pinning_another_pack_is_newer_with_updating_by_itself_off_and_starts_nothing(origin, monkeypatch):
+def test_release_discovery_is_read_only_and_channel_changes_withdraw_the_offer(origin, monkeypatch):
     runtime = at_v0_2(origin)
     head = git(runtime, "rev-parse", "HEAD")
     released(origin, "v0.3", '{"pack": "p-new"}')
@@ -438,7 +447,26 @@ def test_a_release_pinning_another_pack_is_newer_with_updating_by_itself_off_and
     assert fetched == [1]
     assert impeccable.look()["checked_at"] is not None  # each look fetches; the update checks say when
     assert fetched == [1, 1]
-    assert not (local_home.root() / local_home.VERSIONS).exists()  # nothing installed
+    checks = update_checks.Checks(SimpleNamespace(say=print, stopping=threading.Event()), spawn=lambda work: work())
+    checks.start("owlbear")
+
+    def owlbear() -> dict:
+        return next(u for u in checks.read()["updates"] if u["name"] == "owlbear")
+
+    assert (impeccable.release()["state"], owlbear()["state"], owlbear()["latest"]) == ("newer", "newer", "v0.3")
+    assert checks.read()["available"] == 1
+
+    with registry.locked():
+        saved = registry.load()
+        saved.settings = saved.settings.model_copy(update={"channel": "major"})  # v0.1 until v1: v0.3 is not taken
+        registry.save(saved)
+
+    said, row = impeccable.release(), owlbear()
+    assert (said["state"], said["detail"]) == ("unknown", impeccable.MOVED)
+    assert (row["state"], row["detail"], checks.read()["available"]) == ("unknown", impeccable.MOVED, 0)
+    checks.start("owlbear")
+    assert (impeccable.release()["state"], owlbear()["state"]) == ("none", "current")
+    assert not (local_home.root() / local_home.VERSIONS).exists()
     assert git(runtime, "rev-parse", "HEAD") == head
 
 
@@ -447,6 +475,8 @@ def test_the_owlbear_update_check_finds_a_release_with_the_same_pack_while_off_a
     runtime = at_v0_2(origin)  # updating by itself off
     head = git(runtime, "rev-parse", "HEAD")
     released(origin, "v0.3", json.dumps(pack_files.manifest()))  # the same pack: the banner says nothing
+
+    assert impeccable.look()["state"] == "same"
     busy = SimpleNamespace(say=print, stopping=threading.Event(), busy=lambda: ["a running step"])
     checks = update_checks.Checks(busy, spawn=lambda work: work())
 
@@ -459,38 +489,8 @@ def test_the_owlbear_update_check_finds_a_release_with_the_same_pack_while_off_a
     assert git(runtime, "rev-parse", "HEAD") == head
 
 
-def test_a_release_found_on_another_channel_is_unknown_to_the_banner_and_the_update_check_until_looked_at_again(
-    origin,
-):
-    """A channel change can withdraw the version found; with the check's interval unset it would stay offered."""
+def test_a_release_with_an_unreadable_pack_is_unknown_but_owlbear_remains_available(origin):
     at_v0_2(origin)
-    released(origin, "v0.3", '{"pack": "p-new"}')
-    checks = update_checks.Checks(SimpleNamespace(say=print, stopping=threading.Event()), spawn=lambda work: work())
-    checks.start("owlbear")
-
-    def owlbear() -> dict:
-        return next(u for u in checks.read()["updates"] if u["name"] == "owlbear")
-
-    assert (impeccable.release()["state"], owlbear()["state"], owlbear()["latest"]) == ("newer", "newer", "v0.3")
-
-    with registry.locked():
-        saved = registry.load()
-        saved.settings = saved.settings.model_copy(update={"channel": "major"})  # v0.1 until v1: v0.3 is not taken
-        registry.save(saved)
-
-    said, row = impeccable.release(), owlbear()
-    assert (said["state"], said["detail"]) == ("unknown", impeccable.MOVED)
-    assert (row["state"], row["detail"], checks.read()["available"]) == ("unknown", impeccable.MOVED, 0)
-    checks.start("owlbear")
-    assert (impeccable.release()["state"], owlbear()["state"]) == ("none", "current")
-
-
-def test_a_release_pinning_the_same_pack_shows_nothing_and_an_unreadable_one_stays_unknown(origin):
-    at_v0_2(origin)
-    released(origin, "v0.3", json.dumps(pack_files.manifest()))
-
-    assert impeccable.look()["state"] == "same"
-
     released(origin, "v0.4", None)
     said = impeccable.look()
     assert (said["state"], said["version"]) == ("unknown", "v0.4")
@@ -522,16 +522,6 @@ def test_an_install_waits_while_the_disk_is_nearly_full(origin, installing, monk
     assert installing.synced == []
 
 
-def test_the_versions_command_says_what_runs_and_what_comes_next(origin):
-    runtime_at(origin, git(origin, "rev-parse", "v0.1^{commit}"))
-    lines: list[str] = []
-
-    assert versions.report(lines.append) == 0
-
-    assert lines[0].startswith("running: no installed version at ")
-    assert lines[1].startswith("next: v0.2 at ")
-
-
 @pytest.mark.parametrize("prepare", [False, True])
 def test_the_versions_command_says_versions_it_could_not_read_or_install_whole(
     origin, monkeypatch, capsys, whole_error, prepare
@@ -559,7 +549,7 @@ def test_the_versions_command_says_versions_it_could_not_read_or_install_whole(
         assert capsys.readouterr().out == f"{running}the versions could not be read: {whole}\n"
 
 
-def registered(tmp_path: Path, marker: int | None = None, config: int | None = None) -> Path:
+def registered(tmp_path: Path, marker: int | None = None) -> Path:
     clone = tmp_path / "clone"
     git(tmp_path, "init", "-q", str(clone))
     entry = registry.register(clone)
@@ -567,20 +557,17 @@ def registered(tmp_path: Path, marker: int | None = None, config: int | None = N
     store.mkdir(parents=True, exist_ok=True)
     if marker is not None:
         (store / "format").write_text(f"{marker}\n")
-    if config is not None:
-        (store / "config.json").write_text(json.dumps({"format": config}))
     return clone
 
 
-def test_the_selfcheck_passes_on_projects_whose_formats_it_reads(tmp_path):
-    registered(tmp_path, marker=STORE_FORMAT)
+def test_selfcheck_reads_registered_formats_then_refuses_newer_store_and_settings(tmp_path):
+    clone = registered(tmp_path, marker=STORE_FORMAT)
 
     assert selfcheck.problems() == []
 
-
-def test_the_selfcheck_refuses_a_store_or_settings_newer_than_it_reads(tmp_path):
-    clone = registered(tmp_path, marker=99, config=99)
-
+    store = project_home.home(registry.load().projects[0].id)
+    (store / "format").write_text("99\n")
+    (store / "config.json").write_text(json.dumps({"format": 99}))
     found = selfcheck.problems()
 
     assert f"{clone}: its store has format 99, newer than this version's {STORE_FORMAT}" in found
@@ -651,18 +638,14 @@ def test_the_selfcheck_creates_nothing_on_a_machine_without_owlbear():
     assert not home.exists()
 
 
-def test_the_selfcheck_refuses_a_page_module_a_page_names_but_the_version_lacks(monkeypatch):
+@pytest.mark.parametrize(
+    ("name", "expected"), [("main.mjs", "pages/changes/main.mjs"), ("list.mjs", "pages/changes/list.mjs")]
+)
+def test_selfcheck_refuses_missing_direct_or_transitively_imported_page_modules(monkeypatch, name, expected):
     own = pages.page_files()
-    monkeypatch.setattr(pages, "page_files", lambda: {k: v for k, v in own.items() if k != ("changes", "main.mjs")})
+    monkeypatch.setattr(pages, "page_files", lambda: {k: v for k, v in own.items() if k != ("changes", name)})
 
-    assert selfcheck.problems() == ["the pages' assets are missing: pages/changes/main.mjs"]
-
-
-def test_the_selfcheck_refuses_a_module_only_another_module_imports(monkeypatch):
-    own = pages.page_files()
-    monkeypatch.setattr(pages, "page_files", lambda: {k: v for k, v in own.items() if k != ("changes", "list.mjs")})
-
-    assert selfcheck.problems() == ["the pages' assets are missing: pages/changes/list.mjs"]
+    assert selfcheck.problems() == [f"the pages' assets are missing: {expected}"]
 
 
 def test_the_selfcheck_reads_settings_in_format_23_and_refuses_the_next_one(tmp_path):
@@ -694,19 +677,12 @@ def test_the_selfcheck_reads_the_default_shared_checkout_with_no_pointer(tmp_pat
 
 
 @pytest.mark.usefixtures("origin")
-def test_a_runtime_whose_commit_cannot_be_read_takes_nothing():
+def test_a_runtime_whose_commit_cannot_be_read_takes_nothing(monkeypatch):
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(local_home.root()))
     (local_home.root() / local_home.RUNTIME).mkdir()
 
     with pytest.raises(versions.VersionError, match="rev-parse"):
         versions.target()
-
-
-def test_a_tag_of_a_tag_is_peeled_to_its_commit(origin):
-    git(origin, "tag", "-a", "v0.3", "v0.2", "-m", "v0.3 names v0.2's tag")
-
-    tags = versions.fetch(versions.repo())
-
-    assert tags["v0.3"] == git(origin, "rev-parse", "v0.2^{commit}")
 
 
 def test_an_install_at_another_commit_is_made_again(origin, installing):
@@ -716,12 +692,6 @@ def test_an_install_at_another_commit_is_made_again(origin, installing):
     assert versions.install(Choice("v0.2", new)) == folder
     assert git(folder, "rev-parse", "HEAD") == new
     assert len(installing.synced) == 2
-
-
-def test_a_format_3_machine_json_reads_with_no_version_ever_active():
-    (local_home.root() / registry.MACHINE).write_text(json.dumps({"format": 3, "projects": []}))
-
-    assert registry.load().active == ""
 
 
 @pytest.mark.parametrize(

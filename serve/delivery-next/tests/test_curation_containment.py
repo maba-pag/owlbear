@@ -511,7 +511,7 @@ def _until_stopped(act, copied: str, watched: tuple[str, ...]) -> None:
     written when *watched* is empty: the parent kills it."""
 
     def stop(name: str) -> None:
-        Path(copied).write_text(name)
+        real(Path(copied), name)
         time.sleep(120)
 
     real, record = curation_tree.atomic_write, curation_apply.write

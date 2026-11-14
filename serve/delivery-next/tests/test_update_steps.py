@@ -23,6 +23,18 @@ from owlbear_delivery_next.project_host.host import HostRecord
 
 URL, TOKEN = "http://127.0.0.1:4321/", "t"  # the host's address and token
 WHOLE = {"key": "looking", "label": "", "state": "done", "started_at": None, "ended_at": None, "line": ""}  # a step
+KEYS = (
+    "looking",
+    "getting",
+    "building",
+    "selfcheck",
+    "impeccable",
+    "waiting",
+    "standby",
+    "health",
+    "switching",
+    "handover",
+)
 
 
 class FakeStandby:
@@ -80,6 +92,7 @@ def kept() -> dict:
 
 
 def test_a_successful_update_reports_each_step_with_its_times_and_line_and_keeps_them_for_the_new_host(stepping):
+    stepping.busy = [["p: c1: a running step (process 9)"]] * 3
     m = stepping.machine
 
     m.updater._update()  # noqa: SLF001 - the thread's work, run here
@@ -93,52 +106,45 @@ def test_a_successful_update_reports_each_step_with_its_times_and_line_and_keeps
     assert {e["step"] for e in report["log"]} == set(states(report))
     assert (kept()["version"], kept()["steps"], kept()["log"]) == ("v0.2", report["steps"], report["log"])
     assert oct((local_home.root() / update_steps.RECORD).stat().st_mode & 0o777) == "0o600"
+    waiting = next(s for s in report["steps"] if s["key"] == "waiting")
+    assert (waiting["state"], waiting["line"]) == ("done", "nothing runs")
+    assert [e["line"] for e in report["log"] if e["step"] == "waiting"] == [
+        "waits for p: c1: a running step (process 9)",
+        "nothing runs",
+    ]
 
 
-def test_a_failed_selfcheck_fails_its_step_with_its_whole_failure_and_nothing_after_it_starts(stepping, whole_error):
-    stepping.check = whole_error
+@pytest.mark.parametrize(
+    ("attribute", "step", "done"),
+    [
+        ("sync", "building", ("looking", "getting")),
+        ("check", "selfcheck", ("looking", "getting", "building")),
+        ("pack", "impeccable", ("looking", "getting", "building", "selfcheck")),
+    ],
+    ids=["environment", "selfcheck", "pack"],
+)
+def test_preparation_failure_reports_its_whole_step_and_starts_nothing_later(
+    stepping, whole_error, attribute, step, done
+):
+    setattr(stepping, attribute, whole_error)
     m = stepping.machine
 
     m.updater._update()  # noqa: SLF001
 
     report = m.updater.report()
-    selfcheck = next(s for s in report["steps"] if s["key"] == "selfcheck")
-    assert (selfcheck["state"], selfcheck["line"]) == ("failed", whole_error)
-    assert {"step": "selfcheck", "line": whole_error} in [{"step": e["step"], "line": e["line"]} for e in report["log"]]
-    assert selfcheck["ended_at"]
-    later = dict.fromkeys(("impeccable", "waiting", "standby", "health", "switching", "handover"), "pending")
-    assert states(report) == {"looking": "done", "getting": "done", "building": "done", "selfcheck": "failed"} | later
+    failed = next(s for s in report["steps"] if s["key"] == step)
+    line = f"VersionError: its environment could not be made: {whole_error}" if attribute == "sync" else whole_error
+    assert (failed["state"], failed["line"]) == ("failed", line)
+    assert {"step": step, "line": line} in [{"step": e["step"], "line": e["line"]} for e in report["log"]]
+    assert failed["ended_at"]
+    later = dict.fromkeys(KEYS[len(done) + 1 :], "pending")
+    assert states(report) == dict.fromkeys(done, "done") | {step: "failed"} | later
     assert report["phase"] == "failed"
     assert stepping.activated == []
-
-
-def test_a_failed_pack_install_fails_installing_its_impeccable_with_its_whole_failure(stepping, whole_error):
-    stepping.pack = whole_error
-    m = stepping.machine
-
-    m.updater._update()  # noqa: SLF001
-
-    report = m.updater.report()
-    assert states(report)["selfcheck"] == "done"
-    pack = next(s for s in report["steps"] if s["key"] == "impeccable")
-    assert (pack["state"], pack["line"]) == ("failed", whole_error)
-    assert states(report)["waiting"] == "pending"
-    assert m.impeccable.read()["install"]["state"] == "failed"  # every page still offers Install
-
-
-def test_a_failed_environment_fails_building_with_uvs_whole_output(stepping, whole_error):
-    stepping.sync = whole_error
-    m = stepping.machine
-
-    m.updater._update()  # noqa: SLF001
-
-    report = m.updater.report()
-    said = f"its environment could not be made: {whole_error}"
-    reported = f"VersionError: {said}"
-    building = next(s for s in report["steps"] if s["key"] == "building")
-    assert (building["state"], building["line"]) == ("failed", reported)
-    assert {"step": "building", "line": reported} in [{"step": e["step"], "line": e["line"]} for e in report["log"]]
-    assert report["detail"] == f"VersionError: {said}"
+    if attribute == "pack":
+        assert m.impeccable.read()["install"]["state"] == "failed"
+    elif attribute == "sync":
+        assert report["detail"] == line
 
 
 def test_steps_that_could_not_be_kept_are_logged_whole_in_each_update(stepping, monkeypatch, whole_error):
@@ -160,25 +166,19 @@ def test_steps_that_could_not_be_kept_are_logged_whole_in_each_update(stepping, 
         assert [e["line"] for e in m.updater.report()["log"]].count(line) == 1
 
 
-def test_waiting_for_running_steps_is_its_own_step_and_the_log_keeps_each_line_once(stepping):
-    stepping.busy = [["p: c1: a running step (process 9)"]] * 3
-    m = stepping.machine
-
-    m.updater._update()  # noqa: SLF001
-
-    report = m.updater.report()
-    waiting = next(s for s in report["steps"] if s["key"] == "waiting")
-    assert (waiting["state"], waiting["line"]) == ("done", "nothing runs")
-    lines = [e["line"] for e in report["log"] if e["step"] == "waiting"]
-    assert lines == ["waits for p: c1: a running step (process 9)", "nothing runs"]
-
-
 def client(m: Machine) -> TestClient:
     return TestClient(app.create(m), base_url="http://127.0.0.1", headers={"authorization": f"Bearer {TOKEN}"})
 
 
 def test_start_update_now_is_refused_with_its_reason_while_a_step_runs(stepping):
     m = stepping.machine
+    stepping.busy = [["p: c1: a check environment"]]
+    got = client(m).get("/api/next/update").json()
+    assert (got["startable"], got["reason"], got["phase"]) == (
+        False,
+        "Work runs now: p: c1: a check environment",
+        "idle",
+    )
     stepping.busy = [["p: c1: a running step (process 9)"]]
 
     started = client(m).post("/api/next/update/start")
@@ -188,15 +188,6 @@ def test_start_update_now_is_refused_with_its_reason_while_a_step_runs(stepping)
     assert m.updater.thread is None  # no update started, nor waits
     got = client(m).get("/api/next/update").json()  # once the step ended
     assert (got["startable"], got["reason"]) == (True, "")
-
-
-def test_get_update_says_why_start_update_now_cannot_start(stepping):
-    stepping.busy = [["p: c1: a check environment"]]
-
-    got = client(stepping.machine).get("/api/next/update").json()
-
-    assert (got["startable"], got["reason"]) == (False, "Work runs now: p: c1: a check environment")
-    assert got["phase"] == "idle"
 
 
 def test_work_starting_after_start_update_now_was_admitted_makes_it_wait_before_it_switches(stepping):

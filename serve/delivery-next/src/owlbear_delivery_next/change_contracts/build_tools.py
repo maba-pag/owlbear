@@ -32,6 +32,8 @@ def _response(result: BuildResult, item: ItemRef | None) -> list[str]:
 def check_build(result: BuildResult, tree: Worktree, checks: Sequence[str], item: ItemRef | None = None) -> list[str]:
     """Field errors against the observed HEAD and task checks; a non-code reply needs no new commit."""
     errors = _response(result, item)
+    if (m := getattr(result, "merge", None)) is not None and bool(m.this) != bool(m.other):
+        errors.append(f"merge.{'other' if m.this else 'this'}: empty - say what the product does with that side too")
     reply = (result.response is not None and result.response.how != "fixed") or bool(result.rejected)
     if reply and tree.head == tree.base and not tree.dirty:
         return errors

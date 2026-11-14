@@ -14,15 +14,16 @@ AFTER = "BBBBBBBB-0000-4000-8000-000000000002"
 PAYLOAD_FILE = Path("changes/c1/notes.txt")
 
 
-def repo(tmp_path: Path) -> Path:
+def repo(tmp_path: Path, *, payload: bool = True) -> Path:
     path = tmp_path / "shop"
     subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True, capture_output=True)  # noqa: S603, S607
     folder = project_home.clone_dir(path)
     folder.mkdir(parents=True)
     (folder / MARKER).write_text("7")
     (folder / "config.json").write_text(json.dumps({"format": 1, "widths": [1600]}))
-    (folder / PAYLOAD_FILE.parent).mkdir(parents=True)
-    (folder / PAYLOAD_FILE).write_text("regular payload\n")
+    if payload:
+        (folder / PAYLOAD_FILE.parent).mkdir(parents=True)
+        (folder / PAYLOAD_FILE).write_text("regular payload\n")
     return path
 
 

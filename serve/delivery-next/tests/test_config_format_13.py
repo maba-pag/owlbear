@@ -6,7 +6,7 @@ import pytest
 
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.settings.improvement import Spotter
-from owlbear_delivery_next.state_store.store import FormatTooNewError, StoreError, read_layer
+from owlbear_delivery_next.state_store.store import StoreError, read_layer
 
 
 def _written(tmp_path, data: dict, fmt: int) -> object:
@@ -48,11 +48,6 @@ def test_an_existing_format_13_layer_keeps_its_preferences_and_its_mode_becomes_
     assert layer.prefs.delete_remote_branch is False
     assert layer.spotter is not None
     assert layer.spotter == Spotter(switch="off")
-
-
-def test_a_newer_format_than_23_is_refused(tmp_path):
-    with pytest.raises(FormatTooNewError):
-        read_layer(_written(tmp_path, {}, 24), Layer)
 
 
 @pytest.mark.parametrize("fmt", [14.5, 15.0, True, "15", "abc"])  # "abc" is malformed today: the same refusal

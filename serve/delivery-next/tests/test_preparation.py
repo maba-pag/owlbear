@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -21,7 +22,8 @@ from owlbear_delivery_next.change_contracts.models import (
     Waiting,
 )
 from owlbear_delivery_next.change_contracts.preparation import DataPermissions, Preparation, Preparing
-from owlbear_delivery_next.change_flow import loop, worktree
+from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow.worktree import git
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -32,7 +34,7 @@ from owlbear_delivery_next.workflow_steps import prepare, worker_questions
 TOOL = """import os, pathlib, sys
 act, snap, db = sys.argv[1], os.environ.get("OWLBEAR_SNAPSHOT", ""), os.environ.get("TEST_DB", "")
 with open(os.environ.get("TEST_LOG") or os.environ["PREP_LOG"], "a") as f:
-    f.write(f"{act} {db}\\n")
+    f.write(f"cleanup {os.getcwd()}\\n" if act == "cleanup-where" else f"{act} {db}\\n")
     if os.environ.get("LIVE_SECRET"):
         f.write(f"secret-{act}\\n")
 if act == "export":
@@ -51,6 +53,11 @@ if act == "fail":
     sys.exit("restore refused")
 if act == "fail-whole":
     sys.exit(pathlib.Path(__file__).with_name("whole.txt").read_text())
+if act in {"cleanup", "cleanup-where"} and os.environ.get("REQUIRE_SNAPSHOT"):
+    assert snap, "cleanup needs the same frozen snapshot environment"
+    assert pathlib.Path(snap, "db.txt").read_text() == "user-1"
+    if pathlib.Path(os.environ["CLEANUP_HOLD"]).exists():
+        sys.exit("cleanup service temporarily unavailable")
 """
 SETUP = """import os, pathlib, sys
 act, log = sys.argv[1], pathlib.Path(os.environ["TEST_LOG"])
@@ -63,10 +70,6 @@ if act == "cleanup" and log.with_name("cleanup-fails").exists():
 """
 LIVE = {"TEST_DB": "postgres://live/app"}
 UNCOVERED = "its isolation does not point the live TEST_DB elsewhere"
-
-
-def git(root: Path, *args: str) -> str:
-    return worktree.git(root, *args)
 
 
 @pytest.fixture
@@ -128,6 +131,24 @@ def recipe(name: str = "copy", reason: str = "orders need live data") -> tools.C
 
 def lines(log: Path) -> list[str]:
     return [line.split()[0] for line in log.read_text().splitlines()] if log.exists() else []
+
+
+def assert_setup_repair(c, result, cause):
+    assert (result.exit, result.cause, result.setup, result.operational, result.question, result.stop) == (
+        Exit.RETRY,
+        cause,
+        True,
+        True,
+        None,
+        None,
+    )
+    repaired = loop.apply(c, result, datetime.now(UTC))
+    assert (repaired.step, repaired.brief, repaired.stop) == (c.step, c.brief, None)
+    assert (repaired.repairs.current.phase, repaired.repairs.current.cause, repaired.repairs.current.evidence) == (
+        "running",
+        cause,
+        result.reason,
+    )
 
 
 @pytest.mark.parametrize(
@@ -198,7 +219,10 @@ def test_a_live_copy_must_point_every_declared_live_resource_elsewhere(env):
     assert preparation.refusals(copy, rules, {}) == ["its isolation TEST_DB points at the live TEST_DB"]
     prepare._write(store, "c1", prepare.Prepared(check="visual", option=copy))  # noqa: SLF001 - as accepted
     result = prepare.launch(store, change(repo), settings(copy, isolation=[]), lambda _e: None)
-    assert (result.exit, result.question, lines(log)) == (Exit.STOP, None, [])  # nothing exported
+    assert_setup_repair(change(repo), result, "project-env:check:preparation-unsafe")
+    assert "copy: its isolation TEST_DB equals the live value" in result.reason
+    assert "its isolation TEST_DB points at the live TEST_DB" in result.reason
+    assert lines(log) == []  # nothing exported
 
 
 def test_restore_seed_cleanup_and_the_launch_never_inherit_delivery_s_environment(env, monkeypatch):
@@ -295,24 +319,22 @@ def test_a_recipe_names_a_declared_permitted_option_and_edits_only_its_setup_fil
     ]
 
 
-def test_with_no_safe_option_delivery_stops_and_starts_no_preparer(tmp_path):
+def test_with_no_safe_option_delivery_repairs_and_starts_no_preparer(tmp_path):
     unsafe = settings(option(tmp_path), data_classes=[])
     asked = prepare.unsafe(unsafe, LIVE)
-    assert (asked.exit, asked.cause, asked.question, asked.stop.action) == (
-        Exit.STOP, "project-env:check:preparation-unsafe", None, "Run the step again"
-    )  # fmt: skip
+    assert_setup_repair(change(tmp_path), asked, "project-env:check:preparation-unsafe")
     assert "copy: data classes customers are not permitted" in asked.reason
     assert prepare.unsafe(settings(option(tmp_path)), LIVE) is None
 
 
-def test_without_a_declared_option_no_check_launches_and_the_stop_says_to_declare_one(env):
+def test_without_a_declared_option_no_check_launches_and_repair_proposes_one(env):
     repo, store, _log, tmp = env
     asked = prepare.unsafe(settings(), LIVE)
-    assert (asked.exit, asked.cause, asked.question, asked.stop.action) == (
-        Exit.STOP, "project-env:check:preparation-missing", None, "Run the step again"
-    )  # fmt: skip
-    assert "under `preparations` in the project's settings file (`<project folder>/config.json`" in asked.reason
-    assert "data-only option whose seed and cleanup are `true`" in asked.reason
+    assert_setup_repair(change(repo), asked, "project-env:check:preparation-missing")
+    assert asked.reason == (
+        "Checks cannot run: this project has no safe test copy set up, and Delivery never runs a check on live data. "
+        "No test preparation option is declared (TD-96). Delivery will propose one for your approval"
+    )
     c = change(repo)
     assert not prepare.reusable(store, c, settings(), LIVE)  # a last recipe without a preparation never relaunches
     with pytest.raises(prepare.PrepareError, match="the check has no test preparation"):
@@ -322,22 +344,52 @@ def test_without_a_declared_option_no_check_launches_and_the_stop_says_to_declar
     assert prepare.unsafe(resolve(None, Layer(preparations=[none])), LIVE) is None  # a project without data
 
 
+def _shaping_snapshot_cleanup(env, c, events, copy):
+    repo, store, log, tmp = env
+    held = Path(copy.isolation["CLEANUP_HOLD"])
+    target = tmp / "target"
+    git(repo, "worktree", "add", "--detach", str(target), "HEAD")
+    shaping = option(tmp, cleanup=run(tmp, "cleanup-where"))
+    shaping.isolation.update(copy.isolation)
+    kept = settings(shaping, retention="keep")
+    c.brief.preparation = "copy"
+    assert prepare.shaping(store, c, kept, events.append)(target)["TEST_DB"] == str(tmp / "test.db")
+    rec = prepare.read(store, "c1", prepare.SHAPING)
+    assert (rec.home, rec.open, (tmp / "test.db").read_text()) == (str(target), True, "user-1+seeded")
+    held.touch()
+    assert prepare.end(store, c, repo, kept, events.append) is None
+    assert Path(rec.snapshot).is_dir()
+    assert target.is_dir()
+    held.unlink()
+    assert prepare.end(store, c, repo, kept, events.append) is None
+    assert log.read_text().splitlines()[-1] == f"cleanup {target.resolve()}"
+    assert (Path(rec.snapshot).exists(), prepare.left(store, c)) == (False, [])
+
+
 def test_one_frozen_snapshot_is_restored_separately_before_each_capture_and_ended(env):
     repo, store, log, tmp = env
-    c, s, events = change(repo), settings(option(tmp)), []
-    prepare._write(store, "c1", prepare.Prepared(check="visual", option=option(tmp)))  # noqa: SLF001 - as accepted
+    copy = option(tmp)
+    copy.isolation["REQUIRE_SNAPSHOT"] = "1"
+    held = tmp / "cleanup-held"
+    copy.isolation["CLEANUP_HOLD"] = str(held)
+    c, s, events = change(repo), settings(copy), []
+    prepare._write(store, "c1", prepare.Prepared(check="visual", option=copy))  # noqa: SLF001 - as accepted
     before_root = tmp / "merge-base"
-    before_root.mkdir()
+    git(repo, "worktree", "add", "--detach", str(before_root), "HEAD")
 
     launched = prepare.merge_base(store, c, s, events.append)(before_root)
     assert launched["TEST_DB"] == str(tmp / "test.db")  # the "before" launch runs isolated
     assert (tmp / "test.db").read_text() == "user-1+seeded"  # masked before it was frozen, then seeded
     (tmp / "test.db").write_text("changed by the before capture")
+    snapshot = Path(prepare.read(store, "c1", "visual").snapshot)
+    assert prepare.end(store, c, repo, s, events.append) is None
+    assert not before_root.exists()
+    assert snapshot.is_dir()  # the before copy's cleanup never discards the frozen source for the after copy
     assert prepare.due(store, c)
     result = prepare.launch(store, c, s, events.append)
     assert (result.exit, result.waiting) == (Exit.PENDING, Waiting.CHECK_START)
     assert (tmp / "test.db").read_text() == "user-1+seeded"  # the same snapshot, restored again
-    assert lines(log) == ["export", "mask", "restore", "seed", "restore", "seed"]
+    assert lines(log) == ["export", "mask", "restore", "seed", "cleanup", "restore", "seed"]
     assert all(line.endswith(str(tmp / "test.db")) for line in log.read_text().splitlines()[2:])
     rec = prepare.read(store, "c1", "visual")
     snapshot = Path(rec.snapshot)
@@ -346,21 +398,17 @@ def test_one_frozen_snapshot_is_restored_separately_before_each_capture_and_ende
 
     assert prepare.left(store, c) == []  # the check's environment still runs
     c.env = None
+    held.touch()
+    assert prepare.end(store, c, repo, s, events.append) is None
+    assert snapshot.is_dir()
+    assert prepare.read(store, "c1", "visual").open
+    assert "cleanup service temporarily unavailable" in events[-1]["cleanup"]
+    held.unlink()
     assert prepare.end(store, c, repo, s, events.append) is None
     assert (lines(log)[-1], snapshot.exists()) == ("cleanup", False)  # retention: deleted after the check
     assert prepare.left(store, c) == []
 
-    target = tmp / "target"  # the shaping capture's own checkout (D-01M6Q56RXK85C5T4AG7R051X6N)
-    target.mkdir()
-    where = f"{sys.executable} -c \"import os; open(os.environ['TEST_LOG'], 'a').write('cleanup ' + os.getcwd())\""
-    kept = settings(option(tmp, cleanup=where), retention="keep")
-    c.brief.preparation = "copy"
-    assert prepare.shaping(store, c, kept, events.append)(target)["TEST_DB"] == str(tmp / "test.db")
-    rec = prepare.read(store, "c1", prepare.SHAPING)
-    assert (rec.home, rec.open, (tmp / "test.db").read_text()) == (str(target), True, "user-1+seeded")
-    assert prepare.end(store, c, repo, kept, events.append) is None
-    assert log.read_text().splitlines()[-1] == f"cleanup {target.resolve()}"  # never the Change worktree
-    assert (Path(rec.snapshot).exists(), prepare.left(store, c)) == (False, [])  # never kept, whatever retention says
+    _shaping_snapshot_cleanup(env, c, events, copy)
 
 
 def test_cleanup_runs_after_a_failed_restore_and_the_snapshot_may_be_kept(env):
@@ -409,39 +457,18 @@ def test_a_snapshot_changed_after_it_was_frozen_is_never_restored(env):
     )
 
 
-def test_a_revoked_permission_stops_and_a_changed_option_prepares_again(env):
-    repo, store, _log, tmp = env
+def test_a_revoked_permission_repairs_and_a_changed_option_prepares_again(env):
+    repo, store, log, tmp = env
     c = change(repo)
     prepare._write(store, "c1", prepare.Prepared(check="visual", option=option(tmp)))  # noqa: SLF001 - as accepted
-    assert prepare.launch(store, c, settings(option(tmp), data_classes=[]), lambda _e: None).exit == Exit.STOP
+    revoked = prepare.launch(store, c, settings(option(tmp), data_classes=[]), lambda _e: None)
+    assert_setup_repair(c, revoked, "project-env:check:preparation-unsafe")
+    assert "copy: data classes customers are not permitted" in revoked.reason
+    assert lines(log) == []
     changed = prepare.launch(store, c, settings(option(tmp, seed=run(tmp, "other"))), lambda _e: None)
     assert (changed.exit, changed.reason) == (Exit.RETRY, "the preparation option copy changed since it was chosen")
     assert not prepare.reusable(store, c, settings(option(tmp, seed=run(tmp, "other"))), LIVE)
     assert prepare.reusable(store, c, settings(option(tmp)), LIVE)
-
-
-def test_setup_edits_become_a_patch_applied_for_the_check_and_discarded_after(env):
-    repo, store, _log, tmp = env
-    data = option(tmp, "data-only", id="fixtures")
-    c, s = change(repo, "pc1"), settings(data)
-    (repo / "src" / "left.py").write_text("found before the session\n")
-    ctx = prepare.context(store, c, s, repo)
-    (repo / "fixtures" / "users.json").write_text('[{"name": "Ada"}]\n')
-    (repo / "fixtures" / "orders.json").write_text("[]\n")
-    accepted = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK)
-
-    assert prepare.chosen(store, Lock("c1"), c, repo, recipe("fixtures"), ctx, accepted) is accepted
-    assert prepare.edits(repo) == ["src/left.py"]  # the preparer's edits are gone; what it found stays
-    assert sorted(prepare.read(store, "c1", "pc1").paths) == ["fixtures/orders.json", "fixtures/users.json"]
-    (repo / "src" / "left.py").unlink()
-
-    assert prepare.launch(store, c, s, lambda _e: None).exit == Exit.PENDING
-    assert (repo / "fixtures" / "users.json").read_text() == '[{"name": "Ada"}]\n'  # applied
-    assert sorted(prepare.edits(repo)) == ["fixtures/orders.json", "fixtures/users.json"]
-    c.env = None
-    assert prepare.end(store, c, repo, s, lambda _e: None) is None
-    assert (prepare.edits(repo), (repo / "fixtures" / "users.json").read_text()) == ([], "[]\n")
-    assert prepare.read(store, "c1", "pc1").paths  # kept with the recipe for its next check
 
 
 OLD, NEW, THIRD = "fixtures/users.json", "fixtures/néw users.json", "fixtures/third.json"
@@ -754,22 +781,6 @@ def test_cleanup_cannot_replace_an_unverified_preparer_stop(env, monkeypatch):
     assert prepare.edits(repo) == []
 
 
-def test_a_patch_that_cannot_be_discarded_stops_the_change(env, monkeypatch):
-    repo, store, _log, tmp = env
-    c, s = change(repo, "pc1"), settings(option(tmp))
-    rec = prepare.Prepared(check="pc1", option=option(tmp), paths=["fixtures/users.json"], applied=str(repo), open=True)
-    prepare._write(store, "c1", rec)  # noqa: SLF001 - an applied patch
-    c.env = None
-
-    def broken(*_a):
-        raise subprocess.CalledProcessError(128, "git", stderr=b"index.lock exists")
-
-    monkeypatch.setattr(prepare, "discard", broken)
-    stop = prepare.end(store, c, repo, s, lambda _e: None)
-    assert (stop.exit, stop.stop.action) == (Exit.STOP, f"Discard those edits in {repo}")
-    assert prepare.left(store, c)  # it is ended again once the owner resumes
-
-
 def test_an_old_project_layer_with_a_seed_command_loads_without_it(tmp_path):
     store = Store(tmp_path)
     store.config_path.write_text(json.dumps({"format": 1, "seed": "npm run seed", "widths": [1600]}))
@@ -810,17 +821,21 @@ def test_a_live_copy_pointing_at_live_is_refused_and_never_exported(env):
     repo, store, log, tmp = env
     rules = DataPermissions(data_classes=["customers"], isolation=["TEST_DB"])
     copy = option(tmp, isolation={"TEST_DB": "postgres://live:5432/app"})
-    why = ["its isolation TEST_DB points at the live TEST_DB"]
+    why = ["its isolation TEST_DB equals the live value", "its isolation TEST_DB points at the live TEST_DB"]
     assert preparation.refusals(copy, rules, LIVE) == why
+    synthetic = option(tmp, "data-only", isolation={"TEST_DB": "postgres://LIVE/app"})
+    assert preparation.refusals(synthetic, rules, LIVE) == ["its isolation TEST_DB equals the live value"]
     data = option(tmp, "data-only", id="fixtures")
     head = git(repo, "rev-parse", "HEAD").strip()
     ctx = Preparing((copy, data), rules, head, live=LIVE)
     refused = preparation.check(recipe(), tools.Worktree(head, head), repo, ctx)
-    assert refused[0] == f"preparation: copy is not permitted ({why[0]}) - pick another or ask"
+    assert refused[0] == f"preparation: copy is not permitted ({'; '.join(why)}) - pick another or ask"
     assert preparation.check(recipe("fixtures"), tools.Worktree(head, head), repo, ctx) == []
 
     prepare._write(store, "c1", prepare.Prepared(check="visual", option=copy))  # noqa: SLF001 - as accepted
-    assert prepare.launch(store, change(repo), settings(copy), lambda _e: None).exit == Exit.STOP
+    unsafe = prepare.launch(store, change(repo), settings(copy), lambda _e: None)
+    assert_setup_repair(change(repo), unsafe, "project-env:check:preparation-unsafe")
+    assert f"copy: {why[0]}" in unsafe.reason
     alongside = prepare.launch(store, change(repo), settings(copy, data), lambda _e: None)
     assert (alongside.exit, alongside.reason) == (Exit.RETRY, "the preparation option copy is no longer permitted")
     assert lines(log) == []  # nothing exported
@@ -867,35 +882,42 @@ def test_a_failed_masking_is_deleted_even_when_the_owner_keeps_snapshots(env, mo
     assert prepare.read(store, "c1", "visual").snapshot == ""  # an unmasked snapshot is never kept
 
 
-def patched(env) -> tuple[Change, object, Path]:
-    """A data-only check whose seed and cleanup run a setup script only the preparer's accepted patch holds."""
-    repo, store, _log, tmp = env
+def test_seed_and_cleanup_run_with_the_setup_patch_and_a_failed_cleanup_stays_outstanding_until_it_succeeds(env):
+    repo, store, log, tmp = env
     script = f"{sys.executable} fixtures/setup.py"
     data = option(tmp, "data-only", id="fixtures", seed=f"{script} seed", cleanup=f"{script} cleanup")
     c, s = change(repo, "pc1"), settings(data)
+    (repo / "src" / "left.py").write_text("found before the session\n")
     ctx = prepare.context(store, c, s, repo)
+    (repo / "fixtures" / "users.json").write_text('[{"name": "Ada"}]\n')
+    (repo / "fixtures" / "orders.json").write_text("[]\n")
     (repo / "fixtures" / "setup.py").write_text(SETUP)
     accepted = loop.StepResult(exit=Exit.PENDING, waiting=Waiting.PERSON_CHECK)
     assert prepare.chosen(store, Lock("c1"), c, repo, recipe("fixtures"), ctx, accepted) is accepted
+    paths = ["fixtures/orders.json", "fixtures/setup.py", "fixtures/users.json"]
+    kept = prepare.read(store, "c1", "pc1")
+    assert (sorted(kept.paths), kept.reason) == (paths, recipe("fixtures").reason)
+    assert (prepare.edits(repo), (repo / "fixtures" / "users.json").read_text()) == (["src/left.py"], "[]\n")
     assert not (repo / "fixtures" / "setup.py").exists()
-    return c, s, tmp / "test.db"
-
-
-def test_seed_and_cleanup_run_with_the_setup_patch_and_a_failed_cleanup_stays_outstanding_until_it_succeeds(env):
-    repo, store, log, tmp = env
-    c, s, db = patched(env)
     assert prepare.launch(store, c, s, lambda _e: None).exit == Exit.PENDING
-    assert (lines(log), db.read_text()) == (["seed-from-patch"], "seeded by the patch")  # the data-only seed
+    assert (lines(log), (tmp / "test.db").read_text()) == (["seed-from-patch"], "seeded by the patch")
+    assert (repo / "fixtures" / "users.json").read_text() == '[{"name": "Ada"}]\n'
+    assert (repo / "fixtures" / "orders.json").read_text() == "[]\n"
+    assert sorted(prepare.edits(repo)) == [*paths, "src/left.py"]
     (fails := tmp / "cleanup-fails").write_text("")
     c.env, events = None, []
     assert prepare.end(store, c, repo, s, events.append) is None
     assert (lines(log)[-1], events[-1]["outstanding"]) == ("cleanup-from-patch", True)  # the patch's own script ran
-    assert (prepare.edits(repo), [r.check for r in prepare.left(store, c)]) == ([], ["pc1"])  # discarded; still owed
+    assert (prepare.edits(repo), [r.check for r in prepare.left(store, c)]) == (["src/left.py"], ["pc1"])
     fails.unlink()
     assert prepare.end(store, c, repo, s, events.append) is None  # the next runner: the patch is applied again
     assert (lines(log)[-1], events[-1]["cleanup"], prepare.left(store, c), prepare.edits(repo)) == (
-        "cleanup-from-patch", "ok", [], []
+        "cleanup-from-patch", "ok", [], ["src/left.py"]
     )  # fmt: skip
+    assert (repo / "fixtures" / "users.json").read_text() == "[]\n"
+    assert not any((repo / name).exists() for name in paths[:2])
+    assert (repo / "src" / "left.py").read_text() == "found before the session\n"
+    assert sorted(prepare.read(store, "c1", "pc1").paths) == paths
 
 
 def commit(repo: Path, *paths: str) -> None:
@@ -1034,3 +1056,5 @@ def test_setup_edits_that_cannot_be_discarded_stop_and_log_whole(env, whole_erro
     )
     assert stop.reason == expected
     assert [e.get("stuck") for e in said if e["event"] == "prepared-end"] == [expected]
+    assert (stop.exit, stop.stop.action) == (Exit.STOP, f"Discard those edits in {repo}")
+    assert [r.check for r in prepare.left(store, c)] == ["pc1"]

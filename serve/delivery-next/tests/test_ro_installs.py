@@ -98,6 +98,11 @@ def test_dependencies_install_once_survive_the_reset_and_install_again_when_the_
     session(store, change, app)
     assert count.read_text() == "x\nx\n"
     assert len(installs(store)) == 2
+    git(app, "worktree", "remove", "--force", str(at))
+    session(store, change, app)
+    assert count.read_text() == "x\n"
+    assert len(installs(store)) == 3
+    assert (store.root / "changes" / "c1" / ro_installs.STATE).is_file()
 
 
 def test_a_failed_install_is_noted_for_the_session_and_tried_again_next_time(tmp_path, app):
@@ -131,13 +136,3 @@ def test_an_install_that_cannot_start_says_its_whole_error(tmp_path, app, monkey
     said = f"`{INSTALL}` did not start: PermissionError: [Errno 13] {whole_error}\nNOTE-MARK"
     assert first.message == f"review\n\nDependencies could not be installed in app: {said}"
     assert [(e["ok"], e["error"]) for e in installs(store)] == [(False, said)]
-
-
-def test_a_new_read_only_worktree_forgets_earlier_installs(tmp_path, app):
-    store, change = store_with(tmp_path, INSTALL)
-    at = session(store, change, app).worktree
-    git(app, "worktree", "remove", "--force", str(at))
-    session(store, change, app)
-    assert (at / "app" / "node_modules" / "count").read_text() == "x\n"
-    assert len(installs(store)) == 2
-    assert (store.root / "changes" / "c1" / ro_installs.STATE).is_file()

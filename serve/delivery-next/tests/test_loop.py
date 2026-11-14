@@ -122,7 +122,10 @@ def test_a_task_whose_findings_were_fixed_is_not_built_again():
 def test_walk_from_brief_approval_to_done():
     checks = [PersonCheck(id="p1", criteria=["AC-1"], paths=["ui"])]
     c = change(K.SHAPE, None, checks=checks).model_copy(update={"plan": None})
-    c.brief.approved_version, c.brief.challenged = None, 1  # its challenge loop ended on v1 (TD-249)
+    c.brief.approved_version = None
+    c, step = loop.schedule(c, [BriefApproval(at=NOW, version=1)], NOW)
+    assert (c.brief.approved_version, step.kind) == (None, K.SHAPE)
+    c.brief.challenged = 1  # its challenge loop ended on v1 (TD-249)
     c, step = loop.schedule(c, [BriefApproval(at=NOW, version=1)], NOW)
     assert (step.kind, c.brief.approved[0].version, c.brief.approved[0].criteria) == (K.PLAN, 1, c.brief.criteria)
     review = Review(commit="abc", inputs=Inputs(criteria={"AC-1": 1}), verdict="pass")
@@ -151,13 +154,6 @@ def test_walk_from_brief_approval_to_done():
     assert c.finished_at == NOW
     assert c.names.preserved == ["x"]
     assert loop.next_step(c, LATER) is None
-
-
-def test_an_approval_of_a_version_its_challenge_loop_did_not_end_on_records_nothing():
-    c = change(K.SHAPE, None).model_copy(update={"plan": None})
-    c.brief.approved_version = None
-    c, step = loop.schedule(c, [BriefApproval(at=NOW, version=1)], NOW)
-    assert (c.brief.approved_version, step.kind) == (None, K.SHAPE)  # TD-249
 
 
 def test_cause_count_survives_retry_back_replan_and_an_unobserved_answer():
@@ -239,12 +235,16 @@ def test_recovery_resets_network_counts_only():
     assert list(budgets.recovered(c, ErrorKind.NETWORK).budgets.causes) == ["checks:build:"]
 
 
-def test_third_round_of_findings_asks_and_accepting_moves_on():
+def test_same_scope_review_rounds_survive_task_renames_and_accepting_moves_on():
     c = change(K.REVIEW)
-    for _ in range(2):
+    for tid in ("t1", "t1b"):
+        c.plan.tasks[0].id = tid
+        c.step = Step(kind=K.REVIEW, task=tid)
         c = loop.apply(c, StepResult(exit=Exit.RETRY, reason="naming"), NOW)
-        assert (c.step.kind, c.step.task) == (K.BUILD, "t1")
+        assert (c.step.kind, c.step.task) == (K.BUILD, tid)
         c = loop.apply(c, StepResult(exit=Exit.DONE), NOW)
+    c.plan.tasks[0].id = "t1c"
+    c.step = Step(kind=K.REVIEW, task="t1c")
     c = loop.apply(c, StepResult(exit=Exit.RETRY, reason="naming"), NOW)
     assert c.outcome.exit == Exit.ASK
     c, step = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="accept")], NOW)
@@ -264,15 +264,6 @@ def test_unread_usage_blocks_until_the_owner_runs_the_same_step_again_fresh():
         after, step = loop.schedule(c, [item], LATER)
         assert (step.kind, step.task, step.mode, step.session) == (K.REVIEW, "t1", None, None)
         assert after.questions[-1].effect_observed_at == LATER  # never resumed as a worker's answer
-
-
-def test_renamed_task_with_the_same_scope_keeps_its_review_rounds():
-    c = change(K.REVIEW)
-    for task in ("t1", "t1b", "t1c"):
-        c.plan.tasks[0].id = task
-        c.step = Step(kind=K.REVIEW, task=task)
-        c = loop.apply(c, StepResult(exit=Exit.RETRY, reason="naming"), NOW)
-    assert c.outcome.exit == Exit.ASK
 
 
 def test_unrelated_replans_do_not_preempt_a_new_cause_or_its_repair():
@@ -340,14 +331,10 @@ def test_merged_pr_reaches_cleanup_while_paused_and_waiting():
     assert loop.schedule(c, [], NOW, "merged")[1].kind == K.CLEANUP
 
 
-def test_closed_pr_asks_once():
-    c, step = loop.schedule(change(), [], NOW, "closed")
-    c, step = loop.schedule(c, [], NOW, "closed")
-    assert (step, c.step.kind, len(c.questions)) == (None, K.MERGE, 1)
-
-
 def test_closed_pr_reopen_holds_until_the_pr_is_seen_open_again():
     c, _ = loop.schedule(change(), [], NOW, "closed")
+    c, step = loop.schedule(c, [], NOW, "closed")
+    assert (step, c.step.kind, len(c.questions)) == (None, K.MERGE, 1)
     c, step = loop.schedule(c, [AnswerItem(at=NOW, question="q1", option="reopen")], NOW, "closed")
     assert (step.kind, len(c.questions)) == (K.FOLLOW, 1)
     c, _ = loop.schedule(loop.apply(c, StepResult(exit=Exit.DONE), NOW), [], NOW, "closed")

@@ -232,7 +232,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     result = review.recorded(change, task, run, path, result)
     result = disputes.processed(change, task, run.session_id, run.payload, result, run.changed)
     result = review.delegated(change, task, result)
-    result = conversation.disputed(task, run.payload, result)
+    result = conversation.disputed(change, task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
     change = budgets.effect_observed(change, answer.id, end) if answer and session_result.effect_seen(run) else change
     events: list[dict[str, object]] = []
@@ -240,7 +240,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
         result = plan_round.planned(post, lock, change, path, run.payload, result, profile, others, events)
         overlap.record(change, result, others, path)
         end = datetime.now(UTC)
-    result = overlap.integrated(post, lock, change, path, (start, run.ending), result)
+    result = overlap.integrated(post, lock, change, path, start, result, run.payload)
     if isinstance(p := run.payload, tools.WrongPremise) and (p.stage, s.kind, result.exit) == TARGET:
         writer = github_writer.of(store, repo)
         result = engine.needs_target(change, path, f"{p.reason} ({'; '.join(p.evidence)})", end, writer)

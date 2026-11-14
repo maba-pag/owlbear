@@ -46,8 +46,12 @@ def client(store: Store, global_path: Path | None = None, **kw: object) -> TestC
 
 def test_the_settings_need_the_token_and_a_local_host(store):
     assert client(store).get("/api/next/config").status_code == 401
+    body = {"rev": "x", "layer": {"format": F}}
+    assert client(store).put("/api/next/config/project", json=body).status_code == 401
     c = TestClient(api.create_app(store, "t", Host()), base_url="http://example.com", headers=AUTH)
     assert c.get("/api/next/config").status_code == 403
+    assert c.put("/api/next/config/project", json=body).status_code == 403
+    assert not store.config_path.exists()
     page = client(store).get("/config")
     assert page.status_code == 200
     assert "Settings" in page.text
@@ -364,6 +368,11 @@ def test_the_global_layer_is_saved_only_where_a_location_is_configured(store, tm
     assert (s["pr_marker"], s["agents"]["builder"]["model"], s["sources"]["agents.builder.model"]) == (
         False, "g-1", "global"
     )  # fmt: skip
+    before = path.read_bytes()
+    stale = c.put("/api/next/config/global", json={"rev": got["global_rev"], "layer": {"format": F, "pr_marker": True}})
+    bad = c.put("/api/next/config/global", json={"rev": r.json()["global_rev"], "layer": {"widths": [100]}})
+    assert (stale.status_code, bad.status_code) == (409, 422)
+    assert path.read_bytes() == before
 
 
 def test_a_save_landing_while_get_reads_cannot_be_overwritten_by_that_page(store, monkeypatch):
@@ -394,29 +403,6 @@ def test_a_save_landing_while_get_reads_cannot_be_overwritten_by_that_page(store
     r = c.put("/api/next/config/project", json={"rev": seen["project_rev"], "layer": seen["project"]})
     assert r.status_code == 409
     assert store.read_config().agents["builder"].effort == "high"
-
-
-def test_saves_need_the_token_and_a_local_host(store):
-    body = {"rev": "x", "layer": {"format": F}}
-    assert client(store).put("/api/next/config/project", json=body).status_code == 401
-    c = TestClient(api.create_app(store, "t", Host()), base_url="http://example.com", headers=AUTH)
-    assert c.put("/api/next/config/project", json=body).status_code == 403
-    assert not (store.root / "config.json").exists()
-
-
-def test_a_stale_or_invalid_global_save_changes_nothing(store, tmp_path):
-    path = tmp_path / "global" / "config.json"
-    c = client(store, path, headers=AUTH)
-    rev = c.get("/api/next/config").json()["global_rev"]
-    ok = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": F, "pr_marker": True}})
-    assert ok.status_code == 200
-    before = path.read_bytes()
-
-    stale = c.put("/api/next/config/global", json={"rev": rev, "layer": {"format": F, "pr_marker": False}})
-    bad = c.put("/api/next/config/global", json={"rev": ok.json()["global_rev"], "layer": {"widths": [100]}})
-
-    assert (stale.status_code, bad.status_code) == (409, 422)
-    assert path.read_bytes() == before
 
 
 def test_global_round_values_are_valid_on_their_own_whatever_this_project_overrides(store, tmp_path):
@@ -885,17 +871,17 @@ def _owner_clears_after_a_lost_marker(cwd: Path, monkeypatch, exc, shared: data_
 
 
 @pytest.mark.parametrize("exc", [OSError, _Abrupt], ids=["marker-fails", "abrupt-stop"])
-def test_an_owner_clear_over_http_survives_a_lost_receipt_marker_unshared(tmp_path, monkeypatch, exc):
+@pytest.mark.parametrize("sharing", [False, True], ids=["unshared", "shared"])
+def test_an_owner_clear_over_http_survives_a_lost_receipt_marker(tmp_path, monkeypatch, request, exc, sharing):
     cwd = _git_project(tmp_path / "shop")
-    monkeypatch.delenv(data_repo.VIEW, raising=False)
-    _owner_clears_after_a_lost_marker(cwd, monkeypatch, exc, None)
-
-
-@pytest.mark.parametrize("exc", [OSError, _Abrupt], ids=["marker-fails", "abrupt-stop"])
-def test_an_owner_clear_over_http_survives_a_lost_receipt_marker_shared(tmp_path, monkeypatch, shared_repo, exc):
-    cwd = _git_project(tmp_path / "shop")
-    monkeypatch.setenv(data_repo.VIEW, str(shared_repo[0]))
-    _owner_clears_after_a_lost_marker(cwd, monkeypatch, exc, data_repo.DataRepo(shared_repo[0]))
+    shared = None
+    if sharing:
+        root = request.getfixturevalue("shared_repo")[0]
+        monkeypatch.setenv(data_repo.VIEW, str(root))
+        shared = data_repo.DataRepo(root)
+    else:
+        monkeypatch.delenv(data_repo.VIEW, raising=False)
+    _owner_clears_after_a_lost_marker(cwd, monkeypatch, exc, shared)
 
 
 @pytest.mark.parametrize("raw", ["{not json", '{"format": 99, "entries": {}}'], ids=["damaged", "future"])

@@ -28,7 +28,7 @@ from .test_config_api import offered_model, prices
 from .test_machine_pages import _git, browsing, clone, errors, until
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Callable, Iterator
 
     from playwright.sync_api import Page
 
@@ -118,11 +118,8 @@ def fail_read_state(route):
     route.fulfill(status=503, json={"detail": "the read state could not be read"})
 
 
-@pytest.fixture
-def store(tmp_path: Path, shared_repo, monkeypatch) -> Store:
-    monkeypatch.setenv(data_repo.VIEW, str(shared_repo[0]))
-    _git(shared_repo[0], "commit", "--allow-empty", "-m", settings_carry.MESSAGE)
-    _git(shared_repo[0], "push")
+def settings_sources(monkeypatch) -> None:
+    """Native offered-model and release producers for the Settings host and its Reader."""
     monkeypatch.setattr(
         model_choices,
         "_read",
@@ -135,6 +132,22 @@ def store(tmp_path: Path, shared_repo, monkeypatch) -> Store:
         ],
     )
     monkeypatch.setattr(pack_files, "fetch", lambda *_args, **_kwargs: b"[]")
+
+
+@pytest.fixture
+def local_store(tmp_path: Path, monkeypatch) -> Store:
+    settings_sources(monkeypatch)
+    repo = clone(tmp_path / "this-project")
+    registry.register(repo)
+    return Store.open(repo)
+
+
+@pytest.fixture
+def store(tmp_path: Path, shared_repo, monkeypatch) -> Store:
+    monkeypatch.setenv(data_repo.VIEW, str(shared_repo[0]))
+    _git(shared_repo[0], "commit", "--allow-empty", "-m", settings_carry.MESSAGE)
+    _git(shared_repo[0], "push")
+    settings_sources(monkeypatch)
     repo = clone(tmp_path / "this-project", origin="https://github.com/acme/this-project.git")
     registry.register(repo)
     with registry.locked():
@@ -145,11 +158,19 @@ def store(tmp_path: Path, shared_repo, monkeypatch) -> Store:
 
 
 @contextlib.contextmanager
-def settings_page(store: Store, pds: Any) -> Iterator[Any]:
+def settings_page(
+    store: Store, pds: Any, *, wait_models: bool = True, before_goto: Callable[[Any], None] | None = None
+) -> Iterator[Any]:
     """Use the machine pages' native host, registered clone and real Stores."""
     with pytest.MonkeyPatch.context() as mp, browsing(mp, pds) as (page, base):
+        if before_goto:
+            before_goto(page)
         page.goto(f"{base}/config?project={store.root.name}#token=t")
-        opened(page, pds)
+        if wait_models:
+            opened(page, pds)
+        else:
+            pds.group(page, "agents")
+            page.locator("#agents-rows").wait_for()
         yield page
 
 
@@ -393,24 +414,33 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
 
 
 @pytest.mark.browser
-def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(store, pds, monkeypatch) -> None:
+def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(local_store, pds, monkeypatch) -> None:
     """Each group has an address, back and forward follow them; an old address of a section or row, or of the former
     Runs group, opens its group there, and the overview's unset list links each setting's row (GW8RT6); a group with
     three or fewer unset names them all (D-01M66B6GS0HKACV9C4R4QKFX7T)."""
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
 
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"sessions": None}))
-    with settings_page(store, pds) as page:
+    with settings_page(local_store, pds) as page:
         url = page.url.split("#")[0]
         pds.group(page, "overview")
         expect(page.locator("#unset-agents")).to_have_text(f"Agents and runs, 1 unset: {SESSIONS}")
         expect(page.locator("#set-sessions p-text[color='error']")).to_have_count(0)  # not shown: another group
+        # Slow frames keep the linked control's focus recovery pending while the owner moves away.
+        page.evaluate("""() => {
+            window.settingsFrame = window.requestAnimationFrame;
+            window.requestAnimationFrame = (f) => setTimeout(() => f(performance.now()), 100);
+        }""")
         page.locator("#unset").get_by_role("link", name=SESSIONS, exact=True).click()
         expect(page).to_have_url(f"{url}#agents")
         at_once = page.get_by_label("Agent sessions at once in one project")
         expect(at_once).to_be_focused()
         named = page.locator("#set-sessions p-text[color='error']")
         expect(named).to_have_text("Agent sessions at once in one project")
+        page.keyboard.press("Tab")
+        page.wait_for_timeout(1500)  # past every frame the page could still put the focus back in
+        expect(at_once).not_to_be_focused()
+        page.evaluate("() => { window.requestAnimationFrame = window.settingsFrame; }")
         page.go_back()
         expect(page).to_have_url(f"{url}#overview")
         expect(page.locator("#unset")).to_be_visible()
@@ -460,6 +490,41 @@ def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(store, p
 WAIT = "Challenge starts by itself after (minutes), shaper"  # the shaper's wait's cell (#986)
 
 
+def unset_link_reveals_a_row_and_undo_keeps_its_focus(page, pds, rows):
+    pds.pick(page, "Show", "set")
+    expect(rows).to_have_count(0)
+    pds.group(page, "overview")
+    page.locator("#unset").get_by_role("link", name=SESSIONS, exact=True).click()
+    expect(page.locator("#set-sessions")).to_be_visible()
+    expect(pds.select(page, "Show")).to_have_js_property("value", "all")
+    sessions, row = page.get_by_label(SESSIONS), page.locator("#set-sessions")
+    sessions.fill("3")
+    pds.pick(page, "Show", "unsaved")
+    expect(row).to_be_visible()
+    sessions.press("ArrowRight")  # End scrolls rather than moving the caret on macOS
+    sessions.press("Backspace")
+    expect(page.locator("#pending")).to_have_text("No unsaved edits.")
+    expect(row).to_be_visible()
+    expect(sessions).to_be_focused()
+    sessions.press_sequentially("5")
+    expect(page.locator("#pending")).to_contain_text(f"{SESSIONS}: inherited \u2192 5")
+    sessions.press("Backspace")
+    pds.pick(page, "Show", "all")
+    pds.pick(page, "Show", "unsaved")
+    expect(row).to_be_hidden()
+    pds.pick(page, "Show", "all")
+    sessions.fill("2")
+    return sessions, row
+
+
+def a_saved_number_keeps_raw_spelling_as_a_draft(page, pds, sessions, row) -> None:
+    pds.pick(page, "Show", "all")
+    sessions.fill("02")
+    expect(page.locator("#pending")).to_contain_text(f"{SESSIONS}: 2 \u2192 02")
+    pds.pick(page, "Show", "unsaved")
+    expect(row).to_be_visible()
+
+
 @pytest.mark.browser
 def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row_shows_every_row(
     store, pds, monkeypatch
@@ -492,13 +557,19 @@ def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row
             ["Where you edit", "Spotter", "Your instructions, skills and memory", "Shell guard"]
         )
         pds.group(page, "agents")
+        sessions, row = unset_link_reveals_a_row_and_undo_keeps_its_focus(page, pds, rows)
         page.get_by_label("Rounds at most, builder").fill("4")
         page.get_by_label(WAIT).fill("20")  # the shaper's row alone has the cell; the others say n/a
         big_enough(page.get_by_label(WAIT))
         expect(page.locator("#set-rounds-planner")).to_contain_text("n/a")
         pds.pick(page, "Show", "unsaved")
-        expect(rows).to_have_count(3)  # the final review follows the builder's rounds, so it changes too
-        expect(page.locator("#set-rounds-builder, #set-rounds-final_review, #set-rounds-shaper")).to_have_count(3)
+        expect(rows).to_have_count(4)  # sessions, and the final review follows the builder's rounds
+        assert sorted(rows.evaluate_all("rows => rows.map(r => r.id)")) == [
+            "set-rounds-builder",
+            "set-rounds-final_review",
+            "set-rounds-shaper",
+            "set-sessions",
+        ]
         pds.group(page, "checks")
         expect(none).to_have_text("No unsaved edits in this group.")
         pds.group(page, "agents")
@@ -507,50 +578,19 @@ def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row
         expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
         expect(rows).to_have_count(0)  # saved: no longer an edit
         pds.pick(page, "Show", "set")
-        expect(rows).to_have_count(2)  # this project sets the builder's rounds and the shaper's wait, nothing else
-        expect(page.locator("#set-rounds-builder, #set-rounds-shaper")).to_have_count(2)
+        expect(rows).to_have_count(3)  # the saved sessions, builder rounds and shaper wait
+        assert sorted(rows.evaluate_all("rows => rows.map(r => r.id)")) == [
+            "set-rounds-builder",
+            "set-rounds-shaper",
+            "set-sessions",
+        ]
         pds.pick(page, "Layer", "global")
         expect(rows).to_have_count(0)
         expect(none).to_have_text("This layer sets nothing in this group.")
         pds.pick(page, "Layer", "project")
-        pds.group(page, "overview")
-        page.locator("#unset").get_by_role("link", name=SESSIONS, exact=True).click()
-        expect(page.locator("#set-sessions")).to_be_visible()
-        expect(pds.select(page, "Show")).to_have_js_property("value", "all")
-
-
-@pytest.mark.browser
-def test_the_unsaved_filter_keeps_a_row_whose_edit_is_undone_until_the_filter_changes(store, pds, monkeypatch) -> None:
-    """Backspacing the only character of a draft must not hide its row and take the focus before a replacement can be
-    typed; the row goes once the filter, or a save, changes."""
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-
-    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"sessions": None}))
-    with settings_page(store, pds) as page:
-        sessions, row = page.get_by_label("Agent sessions at once in one project"), page.locator("#set-sessions")
-        sessions.fill("3")
-        pds.pick(page, "Show", "unsaved")
-        expect(row).to_be_visible()
-        sessions.press("ArrowRight")  # one character; End scrolls rather than moving the caret on macOS
-        sessions.press("Backspace")
-        expect(page.locator("#pending")).to_have_text("No unsaved edits.")
-        expect(row).to_be_visible()
-        expect(sessions).to_be_focused()
-        sessions.press_sequentially("5")
-        expect(page.locator("#pending")).to_contain_text(f"{SESSIONS}: inherited \u2192 5")
-        sessions.press("Backspace")
-        pds.pick(page, "Show", "all")
-        pds.pick(page, "Show", "unsaved")
-        expect(row).to_be_hidden()
-        pds.pick(page, "Show", "all")
-        sessions.fill("2")
-        page.get_by_role("button", name="Save project settings").click()
-        pds.answer(page, "Save project settings")
-        expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
-        sessions.fill("02")
-        expect(page.locator("#pending")).to_contain_text(f"{SESSIONS}: 2 \u2192 02")
-        pds.pick(page, "Show", "unsaved")
-        expect(row).to_be_visible()
+        a_saved_number_keeps_raw_spelling_as_a_draft(page, pds, sessions, row)
+    saved = store.read_config()
+    assert (saved.sessions, saved.agents["builder"].max_rounds, saved.agents["shaper"].challenge_wait) == (2, 4, 20)
 
 
 # The most characters on one rendered line of an element's text, counted one character at a time.
@@ -591,24 +631,6 @@ def test_running_text_stops_at_about_75_characters_a_line_and_a_table_keeps_its_
         pending.focus()
         pending.press("End")
         page.wait_for_function("document.querySelector('#pending').scrollTop > 0")
-
-
-@pytest.mark.browser
-def test_the_owner_s_own_tab_after_an_unset_link_keeps_its_focus(store, pds, monkeypatch) -> None:
-    """Copilot review of #813: the focus put on a linked row's control is never put back after the owner moves it."""
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-
-    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"sessions": None}))
-    with settings_page(store, pds) as page:
-        pds.group(page, "overview")
-        # slow frames widen the time the page keeps the focus on the control, so a Tab lands inside it
-        page.evaluate("window.requestAnimationFrame = (f) => setTimeout(() => f(performance.now()), 100)")
-        page.locator("#unset").get_by_role("link", name=SESSIONS, exact=True).click()
-        at_once = page.get_by_label("Agent sessions at once in one project")
-        expect(at_once).to_be_focused()
-        page.keyboard.press("Tab")
-        page.wait_for_timeout(1500)  # past every frame the page could still put the focus back in
-        expect(at_once).not_to_be_focused()
 
 
 # Set one task after the page read the offered models' body: its own handling of them, a chain of microtasks, has run.
@@ -721,16 +743,18 @@ def test_a_save_blocks_old_layers_before_its_across_read_finishes(store, pds) ->
 
 
 @pytest.mark.browser
-def test_an_older_read_s_layers_answered_last_never_replace_a_newer_read_s(store, pds) -> None:
+def test_an_older_read_s_layers_answered_last_never_replace_a_newer_read_s(local_store, pds) -> None:
     """#810: two reads' refreshes overlap; the first one's layers, answered after the second's, are not shown."""
-    with refresh_page(store, pds) as (page, _base):
+    with refresh_page(local_store, pds) as (page, _base):
         pds.group(page, "overview")
         expect(page.locator("#reads-status")).to_contain_text("Last read")
         held = hold_first(page, "**/api/next/config")
         page.locator("#read-again").click()
         until(page, lambda: held, seconds=20)
-        store.config_path.parent.mkdir(parents=True, exist_ok=True)
-        store.config_path.write_text(json.dumps({"format": CONFIG_FORMAT, "agents": {"builder": {"minutes": 45}}}))
+        local_store.config_path.parent.mkdir(parents=True, exist_ok=True)
+        local_store.config_path.write_text(
+            json.dumps({"format": CONFIG_FORMAT, "agents": {"builder": {"minutes": 45}}})
+        )
         page.locator("#read-again").click()  # the second read's refresh shows the change
         pds.group(page, "agents")
         expect(page.get_by_label("Minutes per session, builder")).to_have_value("45")
@@ -743,13 +767,15 @@ def test_an_older_read_s_layers_answered_last_never_replace_a_newer_read_s(store
 
 @pytest.mark.browser
 @pytest.mark.parametrize("order", ["failure first", "failure last"])
-def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, order: str, whole_error) -> None:
+def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(local_store, pds, order: str, whole_error) -> None:
     """#810: of two reads' refreshes, the newer one's layers fail; the older one's, answered before or after, show."""
-    with refresh_page(store, pds) as (page, _base):
+    with refresh_page(local_store, pds) as (page, _base):
         pds.group(page, "overview")
         expect(page.locator("#reads-status")).to_contain_text("Last read")
-        store.config_path.parent.mkdir(parents=True, exist_ok=True)
-        store.config_path.write_text(json.dumps({"format": CONFIG_FORMAT, "agents": {"builder": {"minutes": 45}}}))
+        local_store.config_path.parent.mkdir(parents=True, exist_ok=True)
+        local_store.config_path.write_text(
+            json.dumps({"format": CONFIG_FORMAT, "agents": {"builder": {"minutes": 45}}})
+        )
         held: list[tuple[Any, Any]] = []
 
         def hold(route: Any) -> None:
@@ -786,9 +812,9 @@ def test_a_newer_read_s_failed_layers_never_discard_an_older_read_s(store, pds, 
 
 
 @pytest.mark.browser
-def test_an_older_read_s_failed_layers_never_speak_over_a_newer_read_s(store, pds) -> None:
+def test_an_older_read_s_failed_layers_never_speak_over_a_newer_read_s(local_store, pds) -> None:
     """#810: of two reads' refreshes, the older one's layers fail after the newer one's showed; no error is said."""
-    with refresh_page(store, pds) as (page, _base):
+    with refresh_page(local_store, pds) as (page, _base):
         pds.group(page, "overview")
         expect(page.locator("#reads-status")).to_contain_text("Last read")
         held: list[Any] = []
@@ -985,7 +1011,6 @@ def test_preview_and_unset_lines_follow_the_shown_layer(store, pds, monkeypatch)
           const { preview } = await import("/assets/page/config/layers.mjs");
           const results = [];
           for (const [layer, key, value, path] of [
-            ["project", "sessions", "", "sessions"],
             ["machine", "sessions", "6", "sessions"],
             ["global", "sessions", "7", "sessions"],
             ["machine", "pr_labels", "", "pr_labels"],
@@ -1001,7 +1026,6 @@ def test_preview_and_unset_lines_follow_the_shown_layer(store, pds, monkeypatch)
           return results;
         }""")
         assert results == [
-            {"value": 3, "from": "machine"},
             {"value": 4, "from": "project"},
             {"value": 4, "from": "project"},
             {"value": None},
@@ -1032,18 +1056,42 @@ def test_preview_and_unset_lines_follow_the_shown_layer(store, pds, monkeypatch)
             expect(page.get_by_label(LABELS)).to_have_attribute("placeholder", placeholder)
 
 
+def memory_restrictions_keep_saved_values_while_global_is_drafted(page, pds) -> None:
+    stale = page.get_by_label(MEMORY_LABELS["stale_factor"])
+    for layer in ("project", "machine"):
+        pds.pick(page, "Layer", layer)
+        expect(stale).to_be_disabled()
+        expect(stale).to_have_value("7")
+        expect(page.locator("#set-memory-stale_factor")).to_contain_text("set on Global")
+        expect(page.locator("#set-memory-purge_days")).to_contain_text("set on Global")
+        expect(page.get_by_label(MEMORY_LABELS["purge_days"])).to_be_disabled()
+    pds.pick(page, "Layer", "global")
+    stale.fill("8")
+    pds.pick(page, "Layer", "project")
+    expect(stale).to_have_value("7")
+    pds.pick(page, "Layer", "global")
+    rows = page.locator("main p-table-row[data-setting]:visible")
+    pds.pick(page, "Show", "unset")
+    expect(rows).to_have_count(9)
+    expect(page.locator("#set-memory-stale_factor")).to_be_hidden()
+    pds.pick(page, "Show", "set")
+    expect(rows).to_have_count(1)
+    expect(page.locator("#set-memory-stale_factor")).to_be_visible()
+    pds.pick(page, "Show", "all")
+
+
 @pytest.mark.browser
 def test_the_curator_threshold_shows_read_only_with_its_value_off_global(store, pds, monkeypatch) -> None:
     """#809: every layer shows the curator's threshold; one that can't hold it shows the saved value read-only, with
     its in-use line and where it is set; its unset link focuses the row; Global's unsaved edit stays Global's."""
-    _layered(store, monkeypatch, GLOBAL, {}, {})
+    _layered(store, monkeypatch, GLOBAL | {"memory": {"stale_factor": 7}}, {}, {})
     with settings_page(store, pds) as page:
         threshold = page.get_by_label("Curator's confidence threshold in percent (50 to 100)")
         row, line = page.locator("#set-curator_threshold"), _in_use(page, "set-curator_threshold")
         url = page.url.split("#")[0]
         pds.group(page, "overview")
         expect(page.locator("#unset-memory")).to_contain_text("unset")
-        assert _unset_count(page, "memory") == 10
+        assert _unset_count(page, "memory") == 9
         page.locator("#unset-memory").get_by_role("link", name="Points an outstanding rating adds", exact=True).click()
         expect(page).to_have_url(f"{url}#memory")
         expect(page.locator("#set-memory-outstanding_boost p-text[color='error']")).to_have_count(1)
@@ -1054,7 +1102,7 @@ def test_the_curator_threshold_shows_read_only_with_its_value_off_global(store, 
         expect(threshold).to_be_disabled()
         expect(threshold).to_have_attribute("placeholder", "unset")
         expect(row).to_contain_text("set on Global")
-        pds.pick(page, "Layer", "global")
+        memory_restrictions_keep_saved_values_while_global_is_drafted(page, pds)
         expect(threshold).to_be_enabled()
         expect(row).not_to_contain_text("set on Global")
         threshold.fill("90")
@@ -1101,7 +1149,7 @@ def _saved_by_keyboard(page, pds, button: str, whose: str) -> None:
 
 
 @pytest.mark.browser
-def test_guardrail_controls_serialize(store, pds, monkeypatch) -> None:
+def test_guardrail_controls_serialize(local_store, pds, monkeypatch) -> None:
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
 
     actions = {
@@ -1111,7 +1159,7 @@ def test_guardrail_controls_serialize(store, pds, monkeypatch) -> None:
         "irreversible_harm": "stop-and-ask",
     }
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update=dict.fromkeys((*USER_KEYS, "guard_level"))))
-    with settings_page(store, pds) as page:
+    with settings_page(local_store, pds) as page:
         pds.group(page, "overview")
         expect(page.locator("#unset")).to_contain_text(f"{INSTRUCTIONS}, {SKILLS}, {MEMORY}")
         expect(page.locator("#unset-guardrails")).to_contain_text("4 unset")
@@ -1131,7 +1179,7 @@ def test_guardrail_controls_serialize(store, pds, monkeypatch) -> None:
             big_enough(pds.select(page, label).get_by_role("combobox"))
         _saved_by_keyboard(page, pds, "Save project settings", "this-project's")
         expect(page.locator("#user-config p-text[color='error']")).to_have_count(0)
-    saved = store.read_config()
+    saved = local_store.read_config()
     assert [getattr(saved, key) for key in USER_KEYS] == [True, False, True]
     assert saved.guard_level == "lenient"
     assert {field: getattr(saved.spotter, field) for field in CATEGORY_LABELS} == actions
@@ -1433,6 +1481,8 @@ def test_every_memory_value_is_saved_to_global_exactly_and_shown_again_after_a_r
     _layered(store, monkeypatch, GLOBAL, {}, {})
     with settings_page(store, pds) as page:
         url = page.url.split("#")[0]
+        pds.group(page, "overview")
+        assert _unset_count(page, "memory") == 10
         pds.pick(page, "Layer", "global")
         pds.group(page, "memory")
         for label in MEMORY_LABELS.values():
@@ -1458,33 +1508,6 @@ def test_every_memory_value_is_saved_to_global_exactly_and_shown_again_after_a_r
         "purge_days": 0,
         "explore_slots": None,
     }
-
-
-@pytest.mark.browser
-def test_memory_values_are_read_only_off_global_and_the_filter_lists_the_unset_ones(store, pds, monkeypatch) -> None:
-    _layered(store, monkeypatch, GLOBAL | {"memory": {"stale_factor": 7}}, {}, {})
-    with settings_page(store, pds) as page:
-        pds.group(page, "memory")
-        for layer in ("project", "machine"):
-            pds.pick(page, "Layer", layer)
-            stale = page.get_by_label(MEMORY_LABELS["stale_factor"])
-            expect(stale).to_be_disabled()
-            expect(stale).to_have_value("7")
-            expect(page.locator("#set-memory-stale_factor")).to_contain_text("set on Global")
-            expect(page.locator("#set-memory-purge_days")).to_contain_text("set on Global")
-            expect(page.get_by_label(MEMORY_LABELS["purge_days"])).to_be_disabled()
-        pds.pick(page, "Layer", "global")
-        page.get_by_label(MEMORY_LABELS["stale_factor"]).fill("8")
-        pds.pick(page, "Layer", "project")
-        expect(page.get_by_label(MEMORY_LABELS["stale_factor"])).to_have_value("7")
-        pds.pick(page, "Layer", "global")
-        rows = page.locator("main p-table-row[data-setting]:visible")
-        pds.pick(page, "Show", "unset")
-        expect(rows).to_have_count(9)  # eight memory values and the curator's threshold; stale_factor is set
-        expect(page.locator("#set-memory-stale_factor")).to_be_hidden()
-        pds.pick(page, "Show", "set")
-        expect(rows).to_have_count(1)
-        expect(page.locator("#set-memory-stale_factor")).to_be_visible()
 
 
 @pytest.mark.browser
@@ -1563,11 +1586,11 @@ def test_a_global_save_not_recorded_as_seen_says_why_whole(store, pds, monkeypat
 
 @pytest.mark.browser
 @pytest.mark.timeout(120)
-def test_older_other_project_values_cannot_replace_a_newer_read(store, pds, tmp_path):
+def test_older_other_project_values_cannot_replace_a_newer_read(local_store, pds, tmp_path):
     beta = registry.register(clone(tmp_path / "beta"))
     other = Store.open(Path(beta.path))
     other.config_path.write_text(json.dumps({"format": CONFIG_FORMAT, "agents": {"builder": {"minutes": 20}}}))
-    with refresh_page(store, pds) as (page, _base):
+    with refresh_page(local_store, pds) as (page, _base):
         expect(page.locator("#across-table")).to_contain_text("beta: 20")
         held = hold_first(page, f"**/p/{beta.id}/api/next/config")
         again = page.get_by_role("button", name="Read again")
@@ -1584,8 +1607,8 @@ def test_older_other_project_values_cannot_replace_a_newer_read(store, pds, tmp_
 
 @pytest.mark.browser
 @pytest.mark.timeout(120)
-def test_older_model_rates_cannot_replace_a_newer_read(store, pds, monkeypatch):
-    with refresh_page(store, pds) as (page, _base):
+def test_older_model_rates_cannot_replace_a_newer_read(local_store, pds, monkeypatch):
+    with refresh_page(local_store, pds) as (page, _base):
         models = hold_first(page, "**/config/models")
         again = page.get_by_role("button", name="Read again")
         again.click()
@@ -1607,8 +1630,8 @@ def test_older_model_rates_cannot_replace_a_newer_read(store, pds, monkeypatch):
 
 @pytest.mark.browser
 @pytest.mark.timeout(120)
-def test_a_second_read_stays_busy_when_the_first_refresh_finishes(store, pds):
-    with refresh_page(store, pds) as (page, _base):
+def test_a_second_read_stays_busy_when_the_first_refresh_finishes(local_store, pds):
+    with refresh_page(local_store, pds) as (page, _base):
         layers = hold_first(page, "**/api/next/config", fetch=False)
         again = page.get_by_role("button", name="Read again")
         again.click()
@@ -1628,8 +1651,8 @@ def test_a_second_read_stays_busy_when_the_first_refresh_finishes(store, pds):
 
 @pytest.mark.browser
 @pytest.mark.timeout(120)
-def test_unreadable_state_without_a_read_date_shows_its_failure(store, pds):
-    with refresh_page(store, pds) as (page, _base):
+def test_unreadable_state_without_a_read_date_shows_its_failure(local_store, pds):
+    with refresh_page(local_store, pds) as (page, _base):
         (local_home.root() / settings_seen.NAME).write_text("{not json")
         poll(page)
         expect(page.locator(".reads-failure")).to_contain_text("read state")
@@ -1639,8 +1662,8 @@ def test_unreadable_state_without_a_read_date_shows_its_failure(store, pds):
 @pytest.mark.browser
 @pytest.mark.timeout(120)
 @pytest.mark.parametrize("old_fails", [False, True], ids=["source-failure", "old-503"])
-def test_old_read_state_cannot_hide_a_newer_partial_read(store, pds, monkeypatch, old_fails):
-    with refresh_page(store, pds) as (page, base):
+def test_old_read_state_cannot_hide_a_newer_partial_read(local_store, pds, monkeypatch, old_fails):
+    with refresh_page(local_store, pds) as (page, base):
         route, response = polled_read(page, base)
 
         def fail(*_args, **_kwargs):
@@ -1663,8 +1686,8 @@ def test_old_read_state_cannot_hide_a_newer_partial_read(store, pds, monkeypatch
 
 @pytest.mark.browser
 @pytest.mark.timeout(120)
-def test_old_read_state_keeps_data_without_clearing_a_newer_get_failure(store, pds):
-    with refresh_page(store, pds) as (page, base):
+def test_old_read_state_keeps_data_without_clearing_a_newer_get_failure(local_store, pds):
+    with refresh_page(local_store, pds) as (page, base):
         route, response = polled_read(page, base, failure=True)
         page.route("**/config/read", fail_read_state)
         poll(page)
@@ -1678,8 +1701,8 @@ def test_old_read_state_keeps_data_without_clearing_a_newer_get_failure(store, p
 
 @pytest.mark.browser
 @pytest.mark.timeout(120)
-def test_old_read_state_cannot_clear_a_failed_manual_read(store, pds):
-    with refresh_page(store, pds) as (page, base):
+def test_old_read_state_cannot_clear_a_failed_manual_read(local_store, pds):
+    with refresh_page(local_store, pds) as (page, base):
         route, response = polled_read(page, base, failure=True)
         page.route(
             "**/config/read", lambda route: route.fulfill(status=503, json={"detail": "the read could not start"})
@@ -1709,9 +1732,9 @@ def notice_on_disk() -> None:
 @pytest.mark.browser
 @pytest.mark.timeout(120)
 @pytest.mark.parametrize("reread_fails", [False, True], ids=["dismiss-GET", "dismiss-reread-503"])
-def test_a_dismissal_blocks_older_read_state_even_if_rereading_fails(store, pds, reread_fails):
+def test_a_dismissal_blocks_older_read_state_even_if_rereading_fails(local_store, pds, reread_fails):
     notice_on_disk()
-    with refresh_page(store, pds) as (page, base):
+    with refresh_page(local_store, pds) as (page, base):
         entries = page.locator("#reads-changed li")
         expect(entries).to_have_count(1)
         route, response = polled_read(page, base)
@@ -1729,9 +1752,9 @@ def test_a_dismissal_blocks_older_read_state_even_if_rereading_fails(store, pds,
 
 @pytest.mark.browser
 @pytest.mark.timeout(120)
-def test_a_read_answered_after_dismissal_refreshes_current_notices(store, pds):
+def test_a_read_answered_after_dismissal_refreshes_current_notices(local_store, pds):
     notice_on_disk()
-    with refresh_page(store, pds) as (page, _base):
+    with refresh_page(local_store, pds) as (page, _base):
         entries = page.locator("#reads-changed li")
         expect(entries).to_have_count(1)
         held = hold_first(page, "**/config/read", "POST")

@@ -205,16 +205,13 @@ def test_a_run_whose_usage_was_never_read_says_why() -> None:
         end("r2", "2026-10-01T11:40:00+00:00", {"error": said}, session="s2"),
         start("r3", "2026-10-01T12:00:00+00:00", session="s3", before={}),
     ]
-    totals = spend_metrics.query(spend_shares.derive(lines), tz=UTC)["totals"]
-    assert (totals["unknown"], totals["open"], totals["unknown_why"], totals["failed_why"]) == (3, 1, [said], [])
-
-
-def test_a_killed_run_stays_open_and_unknown_until_reconciled() -> None:
-    pieces = spend_shares.derive([start("r1", "2026-10-01T10:00:00+00:00", before={})])
-    assert [(p["kind"], p["credits"]) for p in pieces] == [("open", None)]
+    pieces = spend_shares.derive(lines)
     found = spend_metrics.query(pieces, tz=UTC)
-    assert (found["totals"]["unknown"], found["totals"]["open"], found["coverage"]["open"]) == (1, 1, 1)
-    assert found["runs"]["items"][0]["open"] is True
+    totals = found["totals"]
+    assert (totals["unknown"], totals["open"], totals["unknown_why"], totals["failed_why"]) == (3, 1, [said], [])
+    assert [(p["kind"], p["credits"]) for p in pieces if p["run"] == "r3"] == [("open", None)]
+    assert found["coverage"]["open"] == 1
+    assert next(r for r in found["runs"]["items"] if r["run"] == "r3")["open"] is True
 
 
 def test_pre_ledger_history_of_a_resumed_session_is_a_gap_with_no_day() -> None:

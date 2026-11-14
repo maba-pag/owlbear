@@ -55,7 +55,6 @@ def clone(tmp_path, monkeypatch) -> Path:
     git(work, "commit", "-qm", "base")
     git(work, "branch", "main")
     monkeypatch.setattr(runner.worktree, "ensure", lambda *_a: work)
-    monkeypatch.setattr(retry.worktree, "ensure", lambda *_a: work)
     return work
 
 
@@ -89,7 +88,8 @@ def built(store: Store, clone: Path, monkeypatch, write: str, *reject: str):
         (clone / "a.txt").write_text(write)
         git(clone, "commit", "-qam", f"build {write.strip()}")
         rejected = [{"finding": k, "reason": f"{k} is wrong"} for k in reject]
-        payload = tools.BuildResult(summary="Built.", checks=[], rejected=rejected)
+        merge = {"merge": {"this": "", "other": ""}} if cfg.submit is tools.MERGED else {}  # a merge task's report
+        payload = cfg.submit.model(summary="Built.", checks=[], rejected=rejected, **merge)
         return Run(cfg.session_id, "result", payload, head=git(clone, "rev-parse", "HEAD"), termination=DONE)
 
     monkeypatch.setattr(runner, "_kept", kept)
@@ -113,10 +113,10 @@ def reviewed(store: Store, clone: Path, monkeypatch, found: range = range(0), **
     return seen[0]
 
 
-def answer(store: Store, option: str) -> Change:
+def answer(store: Store, option: str, text: str = "") -> Change:
     c = store.read("c1")
     q = loop.open_question(c)
-    c, _ = loop.schedule(c, [AnswerItem(at=NOW, channel="status-view", question=q.id, option=option)], NOW)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, channel="status-view", question=q.id, option=option, text=text)], NOW)
     store.write(Lock("c1"), c)
     return c
 
@@ -286,7 +286,7 @@ def head(clone: Path) -> str:
     return git(clone, "rev-parse", "HEAD")
 
 
-def test_a_promoted_undo_is_found_again_and_each_retried_head_keeps_its_own_archive(clone):
+def test_task_undo_preserves_target_work_archives_and_promoted_recovery(clone):
     c, task, lp = undoing(clone)
     (clone / "a.txt").write_text("b\n")
     git(clone, "commit", "-qam", "build b")
@@ -295,6 +295,12 @@ def test_a_promoted_undo_is_found_again_and_each_retried_head_keeps_its_own_arch
     (clone / "a.txt").write_text("c\n")
     git(clone, "commit", "-qam", "another round's repair")
     task.spans = [f"{task.base}..{head(clone)}"]
+    git(clone, "switch", "-qc", "side", "main")
+    (clone / "t.txt").write_text("target\n")
+    git(clone, "add", "t.txt")
+    git(clone, "commit", "-qm", "target change")
+    git(clone, "switch", "-q", "owlbear/c1")
+    git(clone, "merge", "-q", "--no-ff", "-m", "merge the target", "side")
     (clone / "left.txt").write_text("an edit")
     assert retry._undo(clone, c, task, lp, head(clone)) == "the worktree has uncommitted edits"  # noqa: SLF001
     (clone / "left.txt").unlink()
@@ -303,24 +309,13 @@ def test_a_promoted_undo_is_found_again_and_each_retried_head_keeps_its_own_arch
     undone = git(clone, "rev-parse", "HEAD")
     assert git(clone, "rev-parse", retry.archive("c1", "t1", 1, git(clone, "rev-parse", "HEAD^"))) != first
     assert retry._undo(clone, c, task, lp, start) == ""  # noqa: SLF001 - a restart before the record was written
-    assert (git(clone, "rev-parse", "HEAD"), (clone / "a.txt").read_text()) == (undone, "a\n")
+    assert (git(clone, "rev-parse", "HEAD"), (clone / "a.txt").read_text(), (clone / "t.txt").read_text()) == (
+        undone,
+        "a\n",
+        "target\n",
+    )
     assert git(clone, "rev-parse", retry.archive("c1", "t1", 1, first)) == first  # never deleted
     assert len(git(clone, "for-each-ref", "refs/heads/owlbear/archive").splitlines()) == 2  # none of the undo
-
-
-def test_an_undo_keeps_the_target_merges_in_its_range(clone):
-    c, task, lp = undoing(clone)
-    (clone / "a.txt").write_text("b\n")
-    git(clone, "commit", "-qam", "build b")
-    task.spans = [f"{task.base}..{head(clone)}"]
-    git(clone, "switch", "-qc", "side", "main")
-    (clone / "t.txt").write_text("target\n")
-    git(clone, "add", "t.txt")
-    git(clone, "commit", "-qm", "target change")
-    git(clone, "switch", "-q", "owlbear/c1")
-    git(clone, "merge", "-q", "--no-ff", "-m", "merge the target", "side")
-    assert retry._undo(clone, c, task, lp, head(clone)) == ""  # noqa: SLF001
-    assert ((clone / "a.txt").read_text(), (clone / "t.txt").read_text()) == ("a\n", "target\n")
 
 
 def test_an_attempt_with_another_tasks_build_inside_it_is_not_undone(clone):

@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts import evidence, failures, tool_schema, tools
+from owlbear_delivery_next.change_contracts.amendment_records import Amendment
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline, Said
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, ConsentItem, IntentItem, Recovery, RestartItem
 from owlbear_delivery_next.change_contracts.models import (
@@ -674,22 +675,36 @@ def task_for(c, item, tid):
     return conversation.marker(c.slug, item, tid)
 
 
-def test_a_wrong_premise_on_a_review_request_asks_the_owner_instead_of_replanning_the_change():
-    ref = ItemRef(id="t1", kind="thread", version="v", task="pr-t1-v", url="https://x/pull/7#r1")
-    task = Task(id="pr-t1-v", title="answer", item=ref, detail="boecht: handle min > max\n\nhttps://x/pull/7#r1")
-    replan = loop.StepResult(exit=Exit.BACK, back_to=StepKind.PLAN, cause="scope:build:brief", reason="not in brief")
-    premise = tools.WrongPremise(stage="brief", reason="not in the brief", evidence=["src/math.ts:1"])
-    asked = conversation.disputed(task, premise, replan)
-    assert (asked.exit, asked.back_to, [o.next for o in asked.question.options]) == (
-        Exit.ASK,
-        None,
-        [StepKind.BUILD, StepKind.BUILD, "pause"],
-    )
-    assert "handle min > max" in asked.question.text
-    assert "not in the brief" in asked.question.text
+def test_a_wrong_premise_on_a_review_request_is_repaired_or_amends_the_brief_and_never_asks():
+    ref = ItemRef(id="t1", kind="thread", version="v1234567890", task="pr-t1-v", url="https://x/pull/7#r1")
+    said = "boecht: handle min > max\n\nalso when both are negative\n\nhttps://x/pull/7#r1"
+    task = Task(id="pr-t1-v", title="answer", item=ref, detail=said)
+    c = change(StepKind.BUILD)
+    c.step.task = task.id
+    c.plan.tasks.append(task)
+    replan = loop.StepResult(exit=Exit.BACK, back_to=StepKind.PLAN, cause="scope:build:plan", reason="out of scope")
+    plan = tools.WrongPremise(stage="plan", reason="needs lib/range.ts", evidence=["src/math.ts:1"])
+    own = conversation.disputed(c, task, plan, replan)
+    assert (own.exit, own.setup, own.question) == (Exit.RETRY, True, None)
+    repaired = loop.apply(c, own, NOW)
+    assert (repaired.repairs.current.task, repaired.questions) == (task.id, [])
+    for part in ("needs lib/range.ts", "src/math.ts:1", "also when both are negative", "https://x/pull/7#r1"):
+        assert part in repaired.repairs.current.evidence  # the Repairer gets the request and the report whole
+    brief = tools.WrongPremise(stage="brief", reason="AC-2 forbids it", evidence=["src/math.ts:1"])
+    assert conversation.disputed(c, task, brief, replan) is replan  # the runner starts the brief's amendment
+    mark = "https://x/pull/7#r1 (request v1234567)"
+    assert brief.evidence == [mark, "src/math.ts:1"]
+    declined = Amendment(id="A1", at=NOW, step="build", base=1, items=[], evidence=[mark], state="declined")
+    c.amendments.append(declined.model_copy(update={"choice": "reshape"}))
+    assert conversation.disputed(c, task, brief, replan) is replan  # he reshaped the brief: a conflict left is new
+    c.amendments.append(declined.model_copy(update={"id": "A2", "choice": "within"}))
+    again = conversation.disputed(c, task, brief, replan)  # he said no: the same premise is not his a second time
+    assert (again.setup, "after amendment A2 for it was declined" in again.reason) == (True, True)
+    task.item.version = "v2"  # the reviewer changed the request: a new conflict is a new amendment
+    assert conversation.disputed(c, task, brief, replan) is replan
     target = tools.WrongPremise(stage="target", reason="needs main", evidence=["x"])
-    assert conversation.disputed(task, target, replan) is replan  # a missing target commit still integrates
-    assert conversation.disputed(Task(id="t", title="plan task"), premise, replan) is replan
+    assert conversation.disputed(c, task, target, replan) is replan  # a missing target commit still integrates
+    assert conversation.disputed(c, Task(id="t", title="plan task"), plan, replan) is replan
 
 
 def test_a_person_quoting_a_full_delivery_marker_still_opens_a_task(tmp_path):
@@ -2017,9 +2032,6 @@ def integration_collision_setup(tmp_path, clone):
     git(clone, "push", "-q", "origin", "HEAD:refs/heads/main")
     git(clone, "switch", "-q", "owlbear/c1")
     store, lock = Store(tmp_path / "store"), Lock("c1")
-    neighbour = Plan(tasks=[Task(id="t1", title="one", scope=["src/app.py"])])
-    with store.lock("c3") as other_lock:
-        store.write(other_lock, Change(slug="c3", handle="c3", brief=Brief(outcome="cache pages"), plan=neighbour))
     c = change(StepKind.MERGE, worktree=str(clone))
     c.plan.tasks[0].done = True
     c = loop.apply(c, engine.integrate(c, StepKind.MERGE, "origin/main"), NOW)
@@ -2034,10 +2046,12 @@ def test_an_integration_build_collision_asks_the_owner_once_across_a_restart_the
     tmp_path, integration_collision_setup, monkeypatch, lose_base
 ):
     clone, mine, store, lock, tid = integration_collision_setup
-    built = tools.BuildResult(summary="s", checks=[], response={"how": "fixed", "text": "Merged."})
+    report = {"this": "The page shows an empty chart.", "other": "The page hides the chart."}
+    built = tools.MergedResult(summary="s", checks=[], merge=report)
     runs = []
 
     async def build(cfg):
+        assert cfg.submit is tools.MERGED  # a merge task's result carries its report
         if not runs:
             with pytest.raises(subprocess.CalledProcessError):
                 git(clone, "merge", "-q", "--no-edit", "origin/main")
@@ -2083,8 +2097,10 @@ def test_an_integration_build_collision_asks_the_owner_once_across_a_restart_the
         ("pause", "pause"),
     ]
     assert q.subject == "product"
-    assert "This Change and c3 changed the same part of the project" in q.text
-    assert q.text.endswith("Details: c3 on src/app.py")
+    assert [o.label for o in q.options[:2]] == [
+        "Yes: The page shows an empty chart.",
+        "No, the merged-in work's: The page hides the chart.",
+    ]
     answered, step = loop.schedule(asked, [AnswerItem(at=NOW, question=q.id, option="keep")], NOW)
     assert (step.kind, step.task) == (StepKind.BUILD, tid)
     restarted.write(Lock("c1"), answered)

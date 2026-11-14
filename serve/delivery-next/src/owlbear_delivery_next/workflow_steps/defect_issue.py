@@ -46,7 +46,7 @@ def file(store: Store, path: Path, defect: Defect) -> str:
     try:
         if found := issues.find(marker):
             return f"filed before: {found.url}"
-        return f"filed {issues.create(defect.title, f'{body}\n\n{marker}').url}"
+        return f"filed {issues.create(defect.title, f'{body}\n\n{marker}', marker=marker).url}"
     except (ProviderError, AccountMissing) as exc:
         return f"not filed: {failure(exc)}"
 

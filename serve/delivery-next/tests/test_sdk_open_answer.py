@@ -100,23 +100,6 @@ def _open(tmp_path, session, order, monkeypatch):
 
 def test_a_replacement_check_sends_the_pending_owner_answer_before_it_is_acknowledged(tmp_path, monkeypatch):
     order = []
-    _open(tmp_path, _Session(order), order, monkeypatch)
-
-    assert [step[0] for step in order] == ["send", "delivered"]
-    sent = order[0][1]
-    assert f"- {ANSWER}: English" in sent
-
-
-def test_a_refused_first_send_is_never_acknowledged_as_delivered(tmp_path, monkeypatch):
-    order = []
-    with pytest.raises(RuntimeError, match="send refused"):
-        _open(tmp_path, _Session(order, refuse=True), order, monkeypatch)
-
-    assert [step[0] for step in order] == ["send"]
-
-
-def test_the_sources_outside_the_worktree_are_off_before_the_first_message(tmp_path, monkeypatch):
-    order = []
 
     async def scoped(_session, worktree, _user, _log):
         order.append(("scoped", worktree))
@@ -126,6 +109,16 @@ def test_the_sources_outside_the_worktree_are_off_before_the_first_message(tmp_p
 
     assert [step[0] for step in order] == ["scoped", "send", "delivered"]
     assert order[0][1] == tmp_path
+    sent = order[1][1]
+    assert f"- {ANSWER}: English" in sent
+
+
+def test_a_refused_first_send_is_never_acknowledged_as_delivered(tmp_path, monkeypatch):
+    order = []
+    with pytest.raises(RuntimeError, match="send refused"):
+        _open(tmp_path, _Session(order, refuse=True), order, monkeypatch)
+
+    assert [step[0] for step in order] == ["send"]
 
 
 class _Listing(_Session):

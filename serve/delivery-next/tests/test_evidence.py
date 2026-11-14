@@ -79,32 +79,27 @@ def reviewed_change(work) -> Change:
     )
 
 
-def test_a_review_holds_on_its_head_and_on_a_rebase_with_an_identical_tree(work):
-    c = reviewed_change(work)
-    assert publish.reviewed(c, work, git(work, "rev-parse", "HEAD"))
-    git(work, "commit", "-q", "--amend", "-m", "reworded")
-    assert publish.reviewed(c, work, git(work, "rev-parse", "HEAD"))
-
-
 @pytest.mark.parametrize(
     "edit",
-    [
-        pytest.param(lambda w: (w / "d.txt").write_text("d\n"), id="added-outside-coverage"),
-        pytest.param(lambda w: (w / "a.txt").unlink(), id="deleted-covered"),
-        pytest.param(lambda w: git(w, "mv", "b.txt", "e.txt"), id="renamed"),
-    ],
+    ["reworded", "added-outside-coverage", "deleted-covered", "renamed"],
 )
-def test_a_review_is_void_when_the_head_leaves_its_coverage(work, edit):
+def test_final_review_follows_content_not_commit_identity(work, edit):
     c = reviewed_change(work)
-    edit(work)
-    assert not publish.reviewed(c, work, commit(work, "more"))
-
-
-def test_the_changed_set_names_both_ends_of_a_rename(work):
     base = git(work, "rev-parse", "HEAD")
-    git(work, "mv", "c.txt", "f.txt")
-    commit(work, "rename")
-    assert set(worktree.diff(work, base)) == {"c.txt", "f.txt"}
+    assert publish.reviewed(c, work, base)
+    if edit == "reworded":
+        git(work, "commit", "-q", "--amend", "-m", "reworded")
+        assert publish.reviewed(c, work, git(work, "rev-parse", "HEAD"))
+        return
+    if edit == "added-outside-coverage":
+        (work / "d.txt").write_text("d\n")
+    elif edit == "deleted-covered":
+        (work / "a.txt").unlink()
+    else:
+        git(work, "mv", "b.txt", "e.txt")
+    assert not publish.reviewed(c, work, commit(work, "more"))
+    if edit == "renamed":
+        assert set(worktree.diff(work, base)) == {"b.txt", "e.txt"}
 
 
 def test_integrating_a_target_commit_that_adds_a_file_voids_the_final_review(work):
@@ -119,7 +114,7 @@ def test_integrating_a_target_commit_that_adds_a_file_voids_the_final_review(wor
     assert not publish.reviewed(c, work, head)
 
 
-def test_fingerprints_name_spaces_unicode_absence_a_mode_change_and_more_than_200_paths(work):
+def test_wide_engine_evidence_preserves_paths_modes_and_coverage(work):
     before = worktree.fingerprints(work, ["a.txt"])
     names = ["with space.txt", "ünï cødé.txt", *(f"many/{i}.txt" for i in range(250))]
     (work / "many").mkdir()
@@ -133,16 +128,10 @@ def test_fingerprints_name_spaces_unicode_absence_a_mode_change_and_more_than_20
     assert len(worktree.fingerprints(work, ["many"])) == 250
     assert before["a.txt"].startswith("100644 blob")
     assert worktree.fingerprints(work, ["a.txt"])["a.txt"].startswith("100755 blob")
-
-
-def test_a_code_review_over_more_than_200_changed_paths_needs_no_listing(work):
-    for i in range(250):
-        (work / f"n{i}.txt").write_text(str(i))
-    commit(work, "wide")
     c = reviewed_change(work)
     assert len(c.reviews[-1].inputs.paths) > 200
     assert publish.reviewed(c, work, git(work, "rev-parse", "HEAD"))
-    tree = SimpleNamespace(changed=[f"n{i}.txt" for i in range(250)])
+    tree = SimpleNamespace(changed=[f"many/{i}.txt" for i in range(250)])
     review = tools.ReviewResult(verdict="pass")
     assert tools.check_review(review, tree) == []
     assert tools.check_review(review, tree, visual=True) != []

@@ -2317,8 +2317,10 @@ def test_a_discard_confirmed_after_its_project_unloaded_never_goes_to_the_shown_
     with browsing(monkeypatch, pds) as (page, base):
         page.route(re.compile(r".*/impeccable/update/(answer|discard)$"), sending)
         page.goto(f"{base}/updates/impeccable?project={beta.id}#token=t")
-        label = page.locator("#pack-discard").inner_text()
-        page.locator("#pack-discard").click()
+        discard = page.locator("#pack-discard")
+        page.wait_for_function("() => document.querySelector('#pack-discard')?.innerText.trim()")
+        label = discard.inner_text()
+        discard.click()
         pds.modal(page).wait_for()
         unload = "async id => (await import('/assets/ui.mjs')).machineState().projects.find(p => p.id === id).state"
         page.evaluate(f"{unload} = 'failed'", alpha.id)  # what the next poll shows once alpha's host fails

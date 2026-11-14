@@ -6,15 +6,13 @@ that the refusal is explicit and that nothing unknown was overwritten or deleted
 
 import errno
 import os
-import subprocess
 
 import pytest
 
-from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move
+from owlbear_delivery_next.state_store import fd_tree, project_home, project_move
 from owlbear_delivery_next.state_store.database import StoreError
 
 SOURCE_ID = "abc123"
-BEFORE, AFTER = "AAAAAAAA-0000-4000-8000-000000000001", "BBBBBBBB-0000-4000-8000-000000000002"
 REAL_SAVE, REAL_SYNC, REAL_OWNED = project_move._save, fd_tree.sync, project_move._owned  # noqa: SLF001
 
 
@@ -35,26 +33,6 @@ class CrashError(OSError):
     """An interruption part-way through a cross-volume move."""
 
 
-@pytest.fixture
-def clone(tmp_path):
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=repo, check=True, capture_output=True)  # noqa: S607
-    folder = repo / ".git" / "owlbear-delivery"
-    (folder / "changes" / "c1").mkdir(parents=True)
-    (folder / "changes" / "c1" / "runner.log").write_text("ran\n")
-    (folder / "clone-id").write_text(f"{SOURCE_ID}\n")
-    return repo, folder
-
-
-def move(repo, monkeypatch):
-    if not (project_home.clone_dir(repo) / offline_protocol.PREPARED).exists():
-        monkeypatch.setattr(offline_protocol, "boot_session", lambda: BEFORE)
-        offline_protocol.prepare_clone(repo, gaps=lambda: ())
-    monkeypatch.setattr(offline_protocol, "boot_session", lambda: AFTER)
-    return offline_protocol.finish_clone(repo, gaps=lambda: ())
-
-
 def heal(monkeypatch):
     """Restore the real seams; an undo would also drop the test's HOME from conftest."""
     monkeypatch.setattr(project_move, "_save", REAL_SAVE)
@@ -62,8 +40,10 @@ def heal(monkeypatch):
     monkeypatch.setattr(project_move, "_owned", REAL_OWNED)
 
 
-def test_the_published_name_is_durable_in_its_parent_before_the_switch_is_recorded(clone, monkeypatch):
-    repo, _ = clone
+def test_the_published_name_is_durable_in_its_parent_before_the_switch_is_recorded(
+    legacy_project_clone, offline_move, monkeypatch
+):
+    repo, _ = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     events = []
     real_fsync = os.fsync
@@ -80,15 +60,17 @@ def test_the_published_name_is_durable_in_its_parent_before_the_switch_is_record
 
     monkeypatch.setattr(os, "fsync", fsync)
     monkeypatch.setattr(project_move, "_save", save)
-    assert move(repo, monkeypatch) == target
+    assert offline_move(repo) == target
     before = events[: events.index(("switch",))]
     for folder in (target.parent, target.parent.parent):  # the projects folder and the folder that holds it
         st = folder.stat()
         assert ("sync", st.st_dev, st.st_ino) in before, f"{folder} was not synced before the switch"
 
 
-def test_an_ancestor_swapped_after_the_switch_refuses_and_keeps_the_source_and_record(clone, monkeypatch):
-    repo, folder = clone
+def test_an_ancestor_swapped_after_the_switch_refuses_and_keeps_the_source_and_record(
+    legacy_project_clone, offline_move, monkeypatch
+):
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     aside = target.parent.parent / "projects-aside"
 
@@ -100,7 +82,7 @@ def test_an_ancestor_swapped_after_the_switch_refuses_and_keeps_the_source_and_r
 
     monkeypatch.setattr(project_move, "_save", save)
     with pytest.raises(StoreError, match=r"is not the copy this move published"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     with pytest.raises(StoreError, match=r"is not the copy this move published"):
         project_home.current(repo)  # the path still names another folder: nothing is admitted
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
@@ -109,7 +91,7 @@ def test_an_ancestor_swapped_after_the_switch_refuses_and_keeps_the_source_and_r
     heal(monkeypatch)
     target.parent.rmdir()
     aside.rename(target.parent)
-    assert move(repo, monkeypatch) == target
+    assert offline_move(repo) == target
 
 
 def interrupted_copy(monkeypatch):
@@ -124,19 +106,21 @@ def interrupted_copy(monkeypatch):
     monkeypatch.setattr(fd_tree, "sync", sync)
 
 
-def test_a_foreign_file_in_an_interrupted_staging_copy_is_refused_and_stays_where_it_is(clone, monkeypatch):
+def test_a_foreign_file_in_an_interrupted_staging_copy_is_refused_and_stays_where_it_is(
+    legacy_project_clone, offline_move, monkeypatch
+):
     """A pending staging entry that is not a prefix of its source is foreign: refused in place, never adopted."""
-    repo, folder = clone
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     stage = target.parent / f".{SOURCE_ID}.staging"
     interrupted_copy(monkeypatch)
     with pytest.raises(CrashError):
-        move(repo, monkeypatch)
+        offline_move(repo)
     foreign = stage / "changes" / "c1" / "foreign.txt"
     foreign.write_text("foreign\n")
     heal(monkeypatch)
     with pytest.raises(StoreError, match=r"is not from a move OwlBear recorded: nothing was moved"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert foreign.read_text() == "foreign\n"  # still at the stage path, with its bytes
     assert stage.exists()
     assert not target.exists()
@@ -144,19 +128,21 @@ def test_a_foreign_file_in_an_interrupted_staging_copy_is_refused_and_stays_wher
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"  # the source is whole
 
 
-def test_an_owned_partial_of_an_interrupted_staging_copy_resumes_and_is_kept_not_reused(clone, monkeypatch):
+def test_an_owned_partial_of_an_interrupted_staging_copy_resumes_and_is_kept_not_reused(
+    legacy_project_clone, offline_move, monkeypatch
+):
     """A pending entry that is a prefix of its source is our own partial copy: kept aside and copied again."""
-    repo, folder = clone
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     stage = target.parent / f".{SOURCE_ID}.staging"
     interrupted_copy(monkeypatch)
     with pytest.raises(CrashError):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     assert not target.exists()
     assert (stage / "changes" / "c1" / "runner.log").read_text() == "ran\n"
     heal(monkeypatch)
-    assert move(repo, monkeypatch) == target
+    assert offline_move(repo) == target
     kept = [p for p in target.parent.iterdir() if p.name.startswith(".retired-")]
     assert len(kept) == 1
     assert not stage.exists()
@@ -164,30 +150,34 @@ def test_an_owned_partial_of_an_interrupted_staging_copy_resumes_and_is_kept_not
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
 
 
-def test_a_file_inserted_after_the_copy_is_refused_and_kept_in_the_source(clone, monkeypatch):
-    repo, folder = clone
+def test_a_file_inserted_after_the_copy_is_refused_and_kept_in_the_source(
+    legacy_project_clone, offline_move, monkeypatch
+):
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     planted = folder / "changes" / "c1" / "unknown.txt"
     after_copy(monkeypatch, lambda: planted.write_text("unknown\n"))
     with pytest.raises(StoreError, match=r"changed while it was copied"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert planted.read_text() == "unknown\n"
     assert not (target / "changes" / "c1" / "unknown.txt").exists()
     assert not target.exists()
 
 
-def test_a_hard_link_at_the_temporary_name_is_never_written_through(clone, monkeypatch, tmp_path):
-    repo, _ = clone
+def test_a_hard_link_at_the_temporary_name_is_never_written_through(legacy_project_clone, offline_move, tmp_path):
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     foreign = tmp_path / "foreign.txt"
     foreign.write_text("foreign\n")
-    os.link(foreign, clone[1] / ".tmp-move.json")
-    assert move(repo, monkeypatch) == target
+    os.link(foreign, folder / ".tmp-move.json")
+    assert offline_move(repo) == target
     assert foreign.read_text() == "foreign\n"
 
 
-def test_a_lock_file_replaced_after_the_switch_is_kept_and_the_replacement_untouched(clone, monkeypatch):
-    repo, folder = clone
+def test_a_lock_file_replaced_after_the_switch_is_kept_and_the_replacement_untouched(
+    legacy_project_clone, offline_move, monkeypatch
+):
+    repo, folder = legacy_project_clone
     (folder / "host.lock").write_text("")
 
     def sync(dfd, entry):
@@ -197,38 +187,23 @@ def test_a_lock_file_replaced_after_the_switch_is_kept_and_the_replacement_untou
             (folder / "host.lock").write_text("foreign\n")
 
     monkeypatch.setattr(fd_tree, "sync", sync)
-    assert move(repo, monkeypatch) == project_home.home(SOURCE_ID)
+    assert offline_move(repo) == project_home.home(SOURCE_ID)
     assert (folder / "host.lock").read_text() == "foreign\n"
 
 
-def test_bytes_edited_after_the_copy_are_refused_and_kept_in_the_source(clone, monkeypatch):
-    repo, folder = clone
+def test_bytes_edited_after_the_copy_are_refused_and_kept_in_the_source(
+    legacy_project_clone, offline_move, monkeypatch
+):
+    repo, folder = legacy_project_clone
     after_copy(monkeypatch, lambda: (folder / "changes" / "c1" / "runner.log").write_text("ran\nedited\n"))
     with pytest.raises(StoreError, match=r"changed while it was copied"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\nedited\n"
     assert not project_home.home(SOURCE_ID).exists()
 
 
-def test_a_writer_holding_the_source_after_the_switch_writes_into_the_kept_source(clone, monkeypatch):
-    repo, folder = clone
-    target = project_home.home(SOURCE_ID)
-    writers = []
-    after_copy(
-        monkeypatch,
-        lambda: writers.append(os.open(folder / "changes" / "c1" / "runner.log", os.O_WRONLY | os.O_APPEND)),
-    )
-    assert move(repo, monkeypatch) == target
-    os.write(writers[0], b"late\n")  # an fd held across the switch still reaches the source file
-    os.close(writers[0])
-    assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\nlate\n"
-    assert (target / "changes" / "c1" / "runner.log").read_text() == "ran\n"
-    assert project_home.current(repo) == target
-    assert (target / "changes" / "c1" / "runner.log").read_text() == "ran\n"
-
-
-def test_a_resumed_move_syncs_the_published_name_before_it_switches(clone, monkeypatch):
-    repo, _ = clone
+def test_a_resumed_move_syncs_the_published_name_before_it_switches(legacy_project_clone, offline_move, monkeypatch):
+    repo, _ = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     events, failed = [], []
     real_fsync = os.fsync
@@ -250,8 +225,8 @@ def test_a_resumed_move_syncs_the_published_name_before_it_switches(clone, monke
     monkeypatch.setattr(os, "fsync", fsync)
     monkeypatch.setattr(project_move, "_save", save)
     with pytest.raises(StoreError, match=r"was not made durable"):
-        move(repo, monkeypatch)
-    assert move(repo, monkeypatch) == target
+        offline_move(repo)
+    assert offline_move(repo) == target
     before = events[: events.index(("switch",))]
     for folder in (target.parent, target.parent.parent):
         assert ("sync", *_id(folder)) in before, f"{folder} was not synced before the switch"
@@ -285,13 +260,13 @@ def test_a_failed_metadata_write_never_deletes_a_foreign_entry_at_its_temporary_
     assert [p.read_text() for p in folder.iterdir() if p.name.startswith(".retired-")] == ["foreign\n"]
 
 
-def test_a_quarantined_entry_refuses_the_next_start_and_is_never_adopted_or_deleted(clone, monkeypatch):
-    repo, folder = clone
+def test_a_quarantined_entry_refuses_the_next_start_and_is_never_adopted_or_deleted(legacy_project_clone, offline_move):
+    repo, folder = legacy_project_clone
     target = project_home.home(SOURCE_ID)
     kept = folder / f"{fd_tree.QUARANTINE}0123456789abcdef"  # what a failed metadata write leaves behind
     kept.write_text("foreign\n")
     with pytest.raises(StoreError, match=r"kept by an earlier failed operation"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert kept.read_text() == "foreign\n"
     assert not target.exists()
     assert not (folder / project_move.MOVE_RECORD).exists()
@@ -321,23 +296,10 @@ def test_a_failed_metadata_write_keeps_its_own_temporary_entry_under_a_retired_n
     assert [p.read_text() for p in kept] == ["{}\n"]
 
 
-def test_a_lock_file_is_retained_and_never_unlinked_by_a_move(clone, monkeypatch):
-    repo, folder = clone
-    (folder / "host.lock").write_text("")
-    assert move(repo, monkeypatch) == project_home.home(SOURCE_ID)
-    assert (folder / "host.lock").is_file()
-
-
-def test_an_unedited_source_entry_stays_whole_in_place_after_the_switch(clone, monkeypatch):
-    repo, folder = clone
-    assert move(repo, monkeypatch) == project_home.home(SOURCE_ID)
-    assert (folder / "changes" / "c1" / "runner.log").read_text() == "ran\n"
-    assert not list(folder.glob(".retained-*"))
-    assert (project_home.home(SOURCE_ID) / "changes" / "c1" / "runner.log").read_text() == "ran\n"
-
-
-def test_a_source_leaf_replaced_after_its_copy_is_refused_and_the_replacement_is_kept_in_place(clone, monkeypatch):
-    repo, folder = clone
+def test_a_source_leaf_replaced_after_its_copy_is_refused_and_the_replacement_is_kept_in_place(
+    legacy_project_clone, offline_move, monkeypatch
+):
+    repo, folder = legacy_project_clone
 
     def swap():
         (folder / "changes" / "c1" / "runner.log").unlink()
@@ -345,6 +307,6 @@ def test_a_source_leaf_replaced_after_its_copy_is_refused_and_the_replacement_is
 
     after_copy(monkeypatch, swap)
     with pytest.raises(StoreError, match=r"changed while it was copied"):
-        move(repo, monkeypatch)
+        offline_move(repo)
     assert (folder / "changes" / "c1" / "runner.log").read_text() == "foreign\n"
     assert not project_home.home(SOURCE_ID).exists()

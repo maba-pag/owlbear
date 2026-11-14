@@ -1,0 +1,248 @@
+"""A stuck check's synthetic preparation: prove the exact option, ask, then publish only what was approved."""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import shlex
+from typing import TYPE_CHECKING
+
+from owlbear_delivery_next.change_contracts import preparation
+from owlbear_delivery_next.change_contracts.repair_records import Witness
+from owlbear_delivery_next.local_system.publication_hold import Requires
+from owlbear_delivery_next.settings.config import Layer
+from owlbear_delivery_next.state_store import config_save, prepared, profile_share
+from owlbear_delivery_next.state_store.store import StoreError
+from owlbear_delivery_next.workflow_steps import check, prepare, repair_copy
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from owlbear_delivery_next.change_contracts.models import Change
+    from owlbear_delivery_next.change_contracts.preparation import Preparation
+    from owlbear_delivery_next.change_contracts.repair_records import PreparationProposal, Repair
+    from owlbear_delivery_next.settings.config import Settings
+    from owlbear_delivery_next.state_store.store import Lock, Store
+
+CAUSES = frozenset({"project-env:check:preparation-missing", "project-env:check:preparation-unsafe"})
+
+
+class CleanupPending(repair_copy.RepairError):
+    """The trial's resources remain owned by its recorded cleanup, retried before any further repair."""
+
+
+def options(r: Repair) -> list[Preparation]:
+    """The shown value: replace only the proposed id, or append it; leave every other option unchanged."""
+    if r.preparation is None:
+        msg = "the repair supplied no preparation proposal"
+        raise repair_copy.RepairError(msg)
+    option = r.preparation.option
+    before = r.preparations_before or []
+    return [option if o.id == option.id else o for o in before] + (
+        [] if any(o.id == option.id for o in before) else [option]
+    )
+
+
+def shown(r: Repair) -> str:
+    """The complete value the owner approves, kept after either answer."""
+    return json.dumps({"preparations": [o.model_dump(mode="json") for o in options(r)]}, indent=2)
+
+
+def context(change: Change, settings: Settings) -> str:
+    """The actual project setup and requested states, not a generic no-data recipe."""
+    r = change.repairs.current
+    return "\n".join(
+        [
+            "## Missing or unsafe test preparation",
+            "Propose fix=preparation, not a code patch or a no-change retry. Do not edit the project settings.",
+            "Inspect what this check reads. Use committed fixtures or self-contained commands; leave no source edits.",
+            "The host proves the committed project HEAD, not untracked or unfinished files in this diagnostic copy.",
+            "Propose synthetic data only, within the current permissions. Never copy live data or relax permissions.",
+            "Declare HOME as a directory relative to the worktree root. Delivery anchors it there for every command.",
+            "Describe the source, seeded content, cleanup and isolation. Supply verify: one command that checks the",
+            "seeded state the check needs. Exercise it here, not only an unrelated unit test or the seed's exit.",
+            "Delivery runs restore, seed, verify and cleanup in this copy before showing your exact option.",
+            "If a fixture preview seeds itself, explain its separate dataset; do not claim it reads this preparation.",
+            "Current preparations:",
+            json.dumps(
+                [o.model_dump(mode="json") for o in r.preparations_before]
+                if r and r.preparations_before is not None
+                else None
+            ),
+            "Standing data permissions:",
+            settings.data.model_dump_json(),
+            "Required visual states:",
+            json.dumps([s.model_dump(mode="json") for s in change.brief.visual]),
+        ]
+    )
+
+
+def _permitted(proposal: PreparationProposal, settings: Settings) -> None:
+    why = preparation.refusals(proposal.option, settings.data, os.environ)
+    if why:
+        msg = f"the proposed preparation {proposal.option.id} is not permitted: {'; '.join(why)}"
+        raise repair_copy.RepairError(msg)
+
+
+def _independent(proposal: PreparationProposal, root: Path, source: Path) -> None:
+    commands = (proposal.option.restore, proposal.option.seed, proposal.verify, proposal.option.cleanup)
+    values = [word for command in commands for word in shlex.split(command)] + list(proposal.option.isolation.values())
+    for at, kind in ((root, "throwaway Repairer checkout"), (source, "stuck worktree")):
+        names = [re.compile(rf"(?<![\w./-]){re.escape(str(path))}(?=$|[/:\s'\"),;])") for path in (at, at.resolve())]
+        if any(name.search(value) for name in names for value in values):
+            msg = f"the preparation depends on its {kind} {at}; use baseline project files"
+            raise repair_copy.RepairError(msg)
+
+
+def prove(
+    store: Store, lock: Lock, change: Change, trees: tuple[Path, Path, bool], trial: tuple[float, tuple[str, ...]]
+) -> None:
+    """Run the exact option and seeded-state check, always clean it, and keep the host's whole trial."""
+    r = change.repairs.current
+    if r is None or r.preparation is None:
+        msg = "the repair supplied no preparation proposal"
+        raise repair_copy.RepairError(msg)
+    source, root, ended = trees
+    if not ended:
+        msg = "the Repairer's processes are not confirmed gone; its checkout cannot be removed for proof"
+        raise repair_copy.RepairError(msg)
+    r.witness, r.diff = None, ""
+    p = r.preparation
+    _permitted(p, store.settings())
+    _independent(p, root, source)
+    baseline = repair_copy.git(source, ["rev-parse", "HEAD"])
+    clean = root.with_name(f"{root.name}-preparation-proof")
+    repair_copy.drop(source, clean)
+    repair_copy.git(source, ["worktree", "add", "--quiet", "--detach", str(clean), baseline])
+    repair_copy.drop(source, root)
+    rec, cleanup_recorded = None, False
+    try:
+        home = clean.resolve() / p.option.isolation["HOME"]
+        if home.resolve() != home:
+            msg = "the preparation HOME redirects from its declared worktree directory"
+            raise repair_copy.RepairError(msg)
+        rec = prepared.Prepared(
+            check=f"repair-trial-{len(change.repairs.done) + 1}",
+            option=p.option,
+            home=str(clean),
+            open=True,
+            trial=True,
+        )
+        prepared.write(store, change.slug, rec)
+        r.witness, cleaned = _trial(store, lock, change, clean, trial)
+        rec.open = not cleaned
+        prepared.write(store, change.slug, rec)
+        cleanup_recorded = cleaned
+        store.write(lock, change)
+        if not cleaned:
+            msg = f"the preparation trial cleanup is outstanding in {clean}:\n{r.witness.output}"
+            raise CleanupPending(msg)
+        if repair_copy.changed(clean, baseline):
+            msg = "the preparation trial left source edits; a settings-only proposal must use unchanged project code"
+            raise repair_copy.RepairError(msg)
+    finally:
+        if rec is None or cleanup_recorded:
+            repair_copy.drop(source, clean)
+            if rec is not None and not clean.exists():
+                prepared.write(store, change.slug, rec.model_copy(update={"home": ""}))
+    store.write(lock, change)
+    if r.witness.exit != 0:
+        msg = f"the preparation trial failed in {clean}:\n{r.witness.output}"
+        raise repair_copy.RepairError(msg)
+    r.diff = shown(r)
+
+
+def _trial(
+    store: Store, lock: Lock, change: Change, root: Path, trial: tuple[float, tuple[str, ...]]
+) -> tuple[Witness, bool]:
+    within, installs = trial
+    r = change.repairs.current
+    if r is None or r.preparation is None:
+        msg = "a preparation trial needs its proposal"
+        raise repair_copy.RepairError(msg)
+    p = r.preparation
+    env = prepare.isolated(prepare.Prepared(check=change.step.task or "", option=p.option), root)
+    commands, output, seconds = [], [], 0.0
+    exit_code: int | None = 0
+
+    def run(command: str, *, install: bool = False, cleanup: bool = False) -> bool:
+        nonlocal seconds, exit_code
+        commands.append(command)
+        done = check.execute(
+            ["/bin/sh", "-c", command] if install else shlex.split(command),
+            root,
+            lambda e: store.log(lock, change.slug, e),
+            max(30.0 if cleanup else 0.1, within - seconds),
+            None if install else env,
+        )
+        seconds += done.seconds
+        output.append(f"$ {command}\n{done.output}{done.why}")
+        if done.exit != 0:
+            exit_code = done.exit
+        return done.exit == 0
+
+    try:
+        for command in installs:
+            run(command, install=True)
+            if exit_code != 0:
+                break
+        for command in filter(None, (p.option.restore, p.option.seed, p.verify)):
+            if exit_code != 0:
+                break
+            run(command)
+    finally:
+        cleaned = run(p.option.cleanup, cleanup=True)
+    return Witness(commands=commands, exit=exit_code, seconds=seconds, output="\n".join(output)), cleaned
+
+
+def question(r: Repair) -> str:
+    """One exact yes/no, its consequence, and the host-run proof."""
+    p, w = r.preparation, r.witness
+    if p is None or w is None:
+        msg = "a preparation question needs its exact proposal and host-run trial"
+        raise repair_copy.RepairError(msg)
+    return (
+        f"Save this test preparation and run the step again? {p.description}\n\n"
+        "Yes saves the exact preparations entry below in this project's settings, commits and pushes it when "
+        "settings are shared, then reruns this step. No changes no settings and stops with this proposal kept. "
+        "Data permissions do not change. A chat can later remove or replace this saved project option; "
+        "removing it does not undo checks or their effects that already ran.\n\n"
+        f"The setup problem this changes: {r.evidence}\nDelivery found: {r.found}\n\n"
+        f"The exact settings value:\n{r.diff}\n\n"
+        f"Delivery's trial passed in the throwaway copy (exit 0 in {w.seconds:.0f} s):\n{w.output}"
+    )
+
+
+def apply(store: Store, change: Change) -> str:
+    """Publish the approved edit, without replacing another setup or reporting a failed push as success."""
+    r = change.repairs.current
+    if r is None or r.preparation is None:
+        msg = "the approved repair has no preparation proposal"
+        raise repair_copy.RepairError(msg)
+    _permitted(r.preparation, store.settings())
+    after = options(r)
+
+    def changed(layer: Layer) -> Layer:
+        if layer.preparations not in (r.preparations_before, after):
+            msg = "the project's preparations changed after this proposal was shown; nothing was overwritten"
+            raise repair_copy.RepairError(msg)
+        _permitted(r.preparation, store.settings())
+        return layer.model_copy(update={"preparations": after})
+
+    prepared = config_save.Prepared(
+        profile_share.config_digest(store.config_path),
+        changed,
+        Requires("the project settings the preparation proposal was approved against"),
+    )
+    try:
+        notice = store.save(
+            store.config_path, Layer, prepared, f"{store.name or 'the project'}: approved test preparation"
+        )
+    except StoreError as exc:
+        msg = f"the approved preparation could not be published: {exc}"
+        raise repair_copy.RepairError(msg) from exc
+    if notice:
+        msg = f"the approved preparation is not published: {notice}"
+        raise repair_copy.RepairError(msg)
+    return f"preparation {r.preparation.option.id}"

@@ -27,7 +27,7 @@ REPLAY_UNCERTAIN = (
     "replay: ReplayError: the replay judge replay-0123abcd may still be running; stop it before replaying again"
 )
 STARTED = "2026-10-25T00:00:00+00:00"
-UNPROVABLE = [{}, {"run": "legacy-run"}, {"started_at": STARTED}]  # the identity a historical record may lack
+UNPROVABLE = [{"run": "legacy-run"}, {"started_at": STARTED}]  # empty identity joins the later-run journey
 
 
 def clone(path: Path) -> Path:
@@ -91,6 +91,14 @@ def reboot_then_recover(machine: Machine, ident: str) -> None:
     machine.maintenance.recover(ident, rebooted=True)
 
 
+def recover_run(machines, project_id: str) -> None:
+    first = machines()
+    first.load_all()
+    [lease] = held(first, project_id)
+    reboot_then_recover(first, lease["id"])
+    first.stop_all()
+
+
 @pytest.mark.parametrize("identity", UNPROVABLE)
 def test_a_legacy_run_without_its_proven_identity_holds_once_and_a_restart_after_recovery_does_not_resurrect_it(
     tmp_path, machines, identity
@@ -116,6 +124,10 @@ def test_a_later_different_legacy_run_with_a_proven_identity_gets_its_own_hold_a
     first = machines()
     first.load_all()
     reboot_then_recover(first, held(first, bad.id)[0]["id"])
+
+    untouched = machines()
+    untouched.load_all()
+    assert (held(untouched, bad.id), len(sessions_of(untouched, bad.id))) == ([], 1)
 
     write_pack(folder, {"run": "later-run", "started_at": "2026-10-26T00:00:00+00:00"})
     later = machines()
@@ -145,23 +157,6 @@ def open_project(tmp_path: Path, shared, name: str):
     return entry, store.root
 
 
-def test_a_loaded_project_legacy_run_without_its_proven_identity_is_held_once_and_not_resurrected_on_restart(
-    tmp_path, machines, shared_repo
-):
-    shared, _remote = shared_repo
-    good, folder = open_project(tmp_path, shared, "good")
-    write_pack(folder, {})
-    first = machines()
-    first.load_all()
-    assert len(held(first, good.id)) == 1, sessions_of(first, good.id)
-    reboot_then_recover(first, held(first, good.id)[0]["id"])
-
-    restarted = machines()
-    restarted.load_all()
-    assert held(restarted, good.id) == [], "a restart re-held a loaded legacy run its owner already recovered"
-    assert len(sessions_of(restarted, good.id)) == 1
-
-
 def test_a_loaded_project_later_different_legacy_run_gets_its_own_hold_after_the_recovered_one(
     tmp_path, machines, shared_repo
 ):
@@ -170,7 +165,13 @@ def test_a_loaded_project_later_different_legacy_run_gets_its_own_hold_after_the
     write_pack(folder, {})
     first = machines()
     first.load_all()
-    reboot_then_recover(first, held(first, good.id)[0]["id"])
+    [lease] = held(first, good.id)
+    reboot_then_recover(first, lease["id"])
+
+    restarted = machines()
+    restarted.load_all()
+    assert held(restarted, good.id) == [], "a restart re-held a loaded legacy run its owner already recovered"
+    assert len(sessions_of(restarted, good.id)) == 1
 
     write_pack(folder, {"reason": "a later run's own reason"})
     later = machines()
@@ -214,11 +215,7 @@ def test_a_same_bytes_atomic_replacement_of_an_untouched_legacy_run_is_a_new_run
     shared, _remote = shared_repo
     entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
     write_pack(folder, {})
-    first = machines()
-    first.load_all()
-    assert len(held(first, entry.id)) == 1, sessions_of(first, entry.id)
-    reboot_then_recover(first, held(first, entry.id)[0]["id"])
-    first.stop_all()
+    recover_run(machines, entry.id)
     folder = live_folder(entry, folder, loaded=loaded)
 
     untouched = machines()
@@ -243,10 +240,7 @@ def test_an_in_place_rewrite_with_its_mtime_restored_is_a_new_run_while_an_untou
     shared, _remote = shared_repo
     entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
     write_pack(folder, {})
-    first = machines()
-    first.load_all()
-    reboot_then_recover(first, held(first, entry.id)[0]["id"])
-    first.stop_all()
+    recover_run(machines, entry.id)
     folder = live_folder(entry, folder, loaded=loaded)
     record = folder / pack_job.FILE
 
@@ -281,10 +275,7 @@ def test_an_unreadable_legacy_run_record_is_held_conservatively_and_is_never_bor
     shared, _remote = shared_repo
     entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
     write_pack(folder, {})
-    first = machines()
-    first.load_all()
-    reboot_then_recover(first, held(first, entry.id)[0]["id"])
-    first.stop_all()
+    recover_run(machines, entry.id)
     folder = live_folder(entry, folder, loaded=loaded)
     (folder / pack_job.FILE).write_text("{not a run", encoding="utf-8")
 
@@ -316,12 +307,8 @@ def test_a_legacy_run_whose_metadata_cannot_be_read_is_held_again_after_a_real_r
     entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
     write_pack(folder, {})
     monkeypatch.setattr(pack_run_record, "os", NoFstat(os))
-    first = machines()
-    first.load_all()
-    assert len(held(first, entry.id)) == 1, sessions_of(first, entry.id)
-    reboot_then_recover(first, held(first, entry.id)[0]["id"])
+    recover_run(machines, entry.id)
     monkeypatch.setattr(pack_run_record, "os", os)
-    first.stop_all()
     folder = live_folder(entry, folder, loaded=loaded)
 
     record = folder / pack_job.FILE
@@ -368,31 +355,19 @@ def test_a_partial_running_record_is_held_once_and_is_held_again_after_recovery_
     first = machines()
     first.load_all()
     assert len(held(first, entry.id)) == 1, sessions_of(first, entry.id)
-    reboot_then_recover(first, held(first, entry.id)[0]["id"])
-    first.stop_all()
-
-    restarted = machines()
-    restarted.load_all()
-    assert [s["state"] for s in sessions_of(restarted, entry.id)] == ["recovered", "held"]
-    restarted.stop_all()
-
-
-@pytest.mark.parametrize("loaded", [False, True])
-def test_an_active_partial_record_hold_is_not_duplicated_when_the_project_is_reconstructed(
-    tmp_path, machines, shared_repo, loaded
-):
-    shared, _remote = shared_repo
-    entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
-    write_bare(folder, PARTIAL)
-    first = machines()
-    first.load_all()
-    assert len(held(first, entry.id)) == 1, sessions_of(first, entry.id)
     first.stop_all()
 
     restarted = machines()
     restarted.load_all()
     assert len(held(restarted, entry.id)) == 1, "reconstruction duplicated an active partial-record hold"
     assert len(sessions_of(restarted, entry.id)) == 1
+    reboot_then_recover(restarted, held(restarted, entry.id)[0]["id"])
+    restarted.stop_all()
+
+    recovered = machines()
+    recovered.load_all()
+    assert [s["state"] for s in sessions_of(recovered, entry.id)] == ["recovered", "held"]
+    recovered.stop_all()
 
 
 @pytest.mark.parametrize("loaded", [False, True])
@@ -488,8 +463,9 @@ def test_a_project_whose_host_lock_another_host_holds_leaves_that_hosts_record_b
         os.close(fd)
 
 
+@pytest.mark.parametrize("historical", [False, True], ids=["atomic-replacement", "historical-finish"])
 def test_a_foreign_replacement_landing_after_the_constructors_own_rewrite_gets_its_own_hold(
-    tmp_path, machines, shared_repo, monkeypatch
+    tmp_path, machines, shared_repo, monkeypatch, historical
 ):
     shared, _remote = shared_repo
     good, folder = open_project(tmp_path, shared, "good")
@@ -502,7 +478,9 @@ def test_a_foreign_replacement_landing_after_the_constructors_own_rewrite_gets_i
         own = real_write(path, text)
         if path == record and not seams and '"failed"' in text:
             seams.append(path)
-            real_write(path, original)  # a foreign writer puts back the same bytes as a new file
+            if historical:
+                shutil.rmtree(path.parent / pack_run.UPDATER)  # the old _finish removed the workspace
+            real_write(path, historical_finish(LATER) if historical else original)
         return own
 
     monkeypatch.setattr(pack_job, "atomic_write", replace_after_own_rewrite)
@@ -587,11 +565,7 @@ def test_a_host_stopped_record_without_its_directory_is_held_once_and_a_later_re
     shared, _remote = shared_repo
     entry, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
     (folder / pack_job.FILE).write_text(historical_finish(ENDED), encoding="utf-8")
-    first = machines()
-    first.load_all()
-    assert len(held(first, entry.id)) == 1, sessions_of(first, entry.id)
-    reboot_then_recover(first, held(first, entry.id)[0]["id"])
-    first.stop_all()
+    recover_run(machines, entry.id)
     folder = live_folder(entry, folder, loaded=loaded)
 
     untouched = machines()
@@ -604,46 +578,6 @@ def test_a_host_stopped_record_without_its_directory_is_held_once_and_a_later_re
     replaced.load_all()
     assert [s["state"] for s in sessions_of(replaced, entry.id)] == ["recovered", "held"], (
         "a historical host-stopped rewrite after recovery was not held"
-    )
-
-
-def test_a_historical_finish_landing_after_the_constructors_own_rewrite_gets_its_own_hold(
-    tmp_path, machines, shared_repo, monkeypatch
-):
-    shared, _remote = shared_repo
-    good, folder = open_project(tmp_path, shared, "good")
-    write_pack(folder, {"state": "running"})
-    record = live_folder(good, folder, loaded=True) / pack_job.FILE
-    real_write, seams = pack_job.atomic_write, []
-
-    def historical_finish_after_own_rewrite(path, text):
-        own = real_write(path, text)
-        if path == record and not seams and '"failed"' in text:
-            seams.append(path)
-            shutil.rmtree(path.parent / pack_run.UPDATER, ignore_errors=True)  # the old _finish removed the workspace
-            real_write(path, historical_finish(LATER))
-        return own
-
-    monkeypatch.setattr(pack_job, "atomic_write", historical_finish_after_own_rewrite)
-    first = machines()
-    first.load_all()
-    assert seams, "the constructor's own rewrite never ran"
-    assert len(held(first, good.id)) == 2, sessions_of(first, good.id)  # A, and the historical finish held at once
-    reboot_then_recover(first, held(first, good.id)[0]["id"])
-    first.stop_all()
-    monkeypatch.setattr(pack_job, "atomic_write", real_write)
-
-    restarted = machines()
-    restarted.load_all()
-    assert [s["state"] for s in sessions_of(restarted, good.id)] == ["recovered", "held"], (
-        "a historical finish after the constructor's own rewrite was not held"
-    )
-    restarted.stop_all()
-
-    again = machines()
-    again.load_all()
-    assert [s["state"] for s in sessions_of(again, good.id)] == ["recovered", "held"], (
-        "reconstruction with the foreign historical hold active duplicated it"
     )
 
 

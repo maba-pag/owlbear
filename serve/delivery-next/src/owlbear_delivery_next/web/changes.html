@@ -47,11 +47,11 @@
   .card .open::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
   .card .open:focus-visible { outline: none; }
   .says, .next, .meta { margin: 0; overflow-wrap: anywhere; }
-  .says { font-size: var(--p-typescale-sm); }
+  .says { font-size: var(--p-typescale-sm); white-space: pre-wrap; }  /* a question keeps its paragraphs (#1220) */
   #nothing-yours { font-size: var(--p-typescale-md); }  /* the list's answer to "what needs me?", read at body size */
   .card .says { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-  .card .says.whole { display: block; overflow: visible; white-space: pre-wrap; }  /* an error, whole (#971) */
-  .status > p-text, .log li > span { min-inline-size: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .card .says.whole { display: block; overflow: visible; }  /* an error, whole (#971) */
+  .status > p-text, .log li > span, .recorded { min-inline-size: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
   .stage { font-weight: 600; }
   .next { font-size: var(--p-typescale-sm); font-weight: 600; }
   .meta { font-size: var(--p-typescale-xs); color: var(--p-color-contrast-medium); }
@@ -63,6 +63,10 @@
   .detail-head .back { grid-column: 1 / -1; justify-self: start; }
   .detail-head h2 { overflow-wrap: anywhere; }
   .act { box-shadow: inset 0 0 0 1px var(--p-color-contrast-low); }
+  .repair-diff { margin: 0; max-block-size: 24rem; overflow: auto; white-space: pre;
+    font-size: var(--p-typescale-xs); padding: var(--p-spacing-static-sm); background: var(--p-color-canvas);
+    border-radius: var(--p-radius-md); }
+  .repair-reason { max-inline-size: 47ch; }
   #changes { display: grid; gap: var(--p-spacing-fluid-sm); }
   .info { padding-top: var(--p-spacing-static-md); border-top: 1px solid var(--p-color-contrast-lower); }
   .diagnostics { min-width: 0; margin: 0; padding: 0; list-style: none; }

@@ -1046,7 +1046,7 @@ def test_a_repair_that_cannot_be_read_or_laid_out_holds_with_its_whole_error(
             listed.clear()
 
     def refusing(at: Path, argv: list[str]) -> str:
-        if argv[0] == "ls-tree":  # the repair's protected content, read from its commit
+        if argv[:2] == ["ls-tree", "-z"]:  # the repair's protected snapshot, not baseline source classification
             raise noted(pack_files.PackError(whole_error))
         return real(at, argv)
 
@@ -1145,7 +1145,7 @@ FLAKY = f"import flaky\n\n\n@flaky.off\n{TESTED}"
         (TESTED, ("biome.json", "{}\n"), (["biome.json"], [], [])),
         (TESTED, (".github/workflows/ci.yml", "on: push\n"), ([".github/workflows/ci.yml"], [], [])),
         (TESTED, ("tests/test_page.py", f"import pytest\n\n@pytest.mark.skip\n{TESTED}"),
-         ([], ["tests/test_page.py (adds a suppression or skip)"], [])),
+         ([], ["tests/test_page.py (adds a skip or xfail)"], [])),
         (TESTED, ("tests/test_page.py", "def test_contrast():\n    pass\n"),
          ([], ["tests/test_page.py (removes an assertion or test)"], [])),
         (TESTED, ("tests/test_page.py", "def test_contrast():\n    return\n    assert contrast() >= LIMIT\n"),
@@ -1263,6 +1263,43 @@ def test_a_held_question_shows_the_diff_of_what_it_asks_about_whatever_else_the_
     assert git(checkout.parents[1], "show", f"{landed(checkout)}:big.txt").count("x") == 15000
 
 
+def test_a_suppression_repair_keeps_and_shows_the_whole_candidate_before_approval(tmp_path, checkout, clone):
+    edited = f"import flaky  # noqa: F401 - required by the fixture\n\n\n{TESTED}"
+    on_main(checkout, "tests/test_page.py", TESTED)
+    on_main(checkout, "fixture.mjs", "\n\n/* eslint-disable\n  no-console\n*/\nlet value = 1;\n")
+    on_main(checkout, "moved.mjs", "/* eslint-disable-next-line no-alert */\nconsole.log(1);\nalert(2);\n")
+    fakes, job, _ = ci_failed(
+        tmp_path,
+        checkout,
+        clone,
+        {
+            "fixture.mjs": (
+                "\n\n/* eslint-disable\n  no-console,\n  no-alert\n*/\n"
+                "// biome-ignore-all lint/style/useConst: fixture mutates in replay\n"
+                "let value = 1;\n++value; // eslint-disable-line no-plusplus\n"
+            ),
+            "tests/test_page.py": edited,
+            "moved.mjs": "console.log(1);\n/* eslint-disable-next-line no-alert */\nalert(2);\n",
+        },
+    )
+    state = answered(job, "repair")
+    (q,) = state["questions"]
+    assert q["paths"] == ["fixture.mjs", "moved.mjs", "tests/test_page.py"]
+    assert [o["id"] for o in q["options"]] == PUSHED
+    assert all(part in q["text"] for part in ("tests/test_page.py:1:", "required by the fixture", "complete patch"))
+    assert all(part in q["diff"] for part in ("fixture.mjs", "+import flaky"))
+    repair = json.loads((job.store.root / pack_job.FILE).read_text())["context"]["repair"]
+    assert any("biome-ignore-all" in line for line in repair["suppressions"])
+    assert any("fixture.mjs:9: ++value; // eslint-disable-line no-plusplus" in line for line in repair["suppressions"])
+    assert "fixture.mjs:5:   no-alert" in repair["suppressions"]
+    assert "moved.mjs:2: broadens suppression scope: /* eslint-disable-next-line no-alert */" in repair["suppressions"]
+    assert repair["patch"].rstrip("\n") == q["diff"]
+    assert not (job.store.root / pack_state.RUNS / f"{state['run']}-ci-repair").exists()
+    fakes.github.checks = ["success"]
+    assert answered(job, "push-reviewed")["state"] == "passed"
+    assert "let value = 1;" in git(checkout.parents[1], "show", f"{landed(checkout)}:fixture.mjs")
+
+
 @pytest.mark.parametrize(
     "change",
     [("tests/test_page.py", f"{TESTED}\n{LONG}"), ("biome.json", f'{{"x": "{"a" * 25000}"}}\n')],
@@ -1293,6 +1330,16 @@ def test_a_held_binary_test_edit_git_does_not_render_is_never_pushed_even_after_
 
     assert (q["paths"], [o["id"] for o in q["options"]]) == (["tests/fixture.dat (changes a test)"], REFUSED)
     assert ("Binary files" in q["diff"], "binary content" in q["text"]) == (True, True)
+    repair = json.loads((job.store.root / pack_job.FILE).read_text())["context"]["repair"]
+    patch = tmp_path / "retained.patch"
+    patch.write_text(repair["patch"])
+    replay = tmp_path / "replay"
+    git(checkout, "worktree", "add", "--detach", str(replay), head)
+    try:
+        git(replay, "apply", "--binary", str(patch))
+        assert (replay / "tests/fixture.dat").read_bytes() == b"\0new\n"
+    finally:
+        git(checkout, "worktree", "remove", "--force", str(replay))
     again = pack_job.Job(job.store, fakes.live(checkout))
     with pytest.raises(pack_job.Refused):
         again.answer(q["id"], "push-reviewed")

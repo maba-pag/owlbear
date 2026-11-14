@@ -95,6 +95,10 @@ End the step with exactly one call:
     the files it changes;
   - for a pull-request comment: `response` with `fixed` after a commit, or `answered` (or
     `no-action` where offered) without one;
+  - for a task that merges another branch in, or repairs that integration: `merge`. Keep both sides' behaviour. Run the checks
+    on the resolved merge before you commit it, and ask or report before committing, never after.
+    Where both sides cannot hold, keep this Change's side for now and say in `merge` what the
+    product does with each side: the owner decides, never you;
   - for review findings you judge wrong, where the task offers it: `rejected`, each by its key
     with your evidence; a result that rejects every finding needs no commit and no checks. A
     finding marked as the owner's is never rejected, so a result with one always commits.

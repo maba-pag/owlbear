@@ -779,6 +779,11 @@ def test_schema_errors_name_the_field_and_the_agent_cannot_name_a_commit() -> No
     assert tool_schema.parse(AskQuestion, "not json")[1] == [
         "arguments: not a JSON object - send the fields as one object"
     ]
+    merged, errors = tool_schema.parse(tools.MergedResult, GOOD)  # a merge task's result says what the merge did
+    assert merged is None
+    assert [e.split(":")[0] for e in errors] == ["merge"]
+    half = tools.MergedResult(**GOOD, merge={"this": "The page shows an empty chart.", "other": ""})
+    assert tools.check_build(half, Worktree(HEAD, BASE), [])[0].startswith("merge.other: empty")
 
 
 def test_the_derived_head_must_move_past_the_base_with_a_clean_worktree() -> None:

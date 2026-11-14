@@ -207,45 +207,34 @@ def test_a_host_that_dies_during_the_challenge_keeps_the_revision_and_challenges
     assert (mp.kinds(), c.step.mode, len(c.plan.tasks)) == (["plan", "challenge", "plan"], "challenge", 3)
 
 
-@pytest.mark.parametrize(("revision", "unreviewed"), [(2, ["r1"])])  # changed; resubmitted unchanged: below
-def test_an_early_last_round_with_rejections_gets_a_check_outside_the_count(
-    store, change_repo, mp, revision, unreviewed
-):
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        (3, 2, 3, 2, False, "standing", ["r1"], "count"),
+        (1, 0, 2, 1, False, "standing", [], "clean"),
+        (1, 0, 2, 2, True, "left-open", ["r1"], "max"),
+    ],
+)
+def test_last_plan_rejection_checks_preserve_review_status(store, change_repo, mp, scenario):
+    maximum, last_at, ask_at, revision, upheld, state, unreviewed, ended = scenario
     c = store.read("c1")
-    c.loops[PLAN].policy = RoundPolicy(max_rounds=3, max_findings=5, last_round_at=2, ask_owner_at=3)
+    c.loops[PLAN].policy = RoundPolicy(max_rounds=maximum, max_findings=5, last_round_at=last_at, ask_owner_at=ask_at)
     store.write(Lock("c1"), c)
     mp.plans += [plan(1), plan(revision, {"F1": "no"})]
-    mp.reviews += [review("t1"), review(upheld={"F1": False})]
+    mp.reviews += [review("t1"), review(upheld={"F1": upheld})]
     step(store, change_repo)
     c = step(store, change_repo)
     assert "Judge only these rejections" in mp.said("challenge")
     assert (mp.told[-1][1].cap, mp.told[-1][1].rechecks) == (0, ("F1",))
     lp = c.loops[PLAN]
-    assert (c.step.kind, lp.round, lp.ended, lp.unreviewed, lp.findings[0].state) == (
-        K.BUILD, 1, "count" if unreviewed else "clean", unreviewed, "standing"
+    assert (c.questions, c.step.kind, lp.round, lp.ended, lp.unreviewed, lp.findings[0].state) == (
+        [], K.BUILD, 1, ended, unreviewed, state
     )  # fmt: skip
     assert c.plan.version == 2
-    assert lp.verdicts == [Verdict(round=1, version=1), Verdict(round=1, version=2, recheck=True, repair=True)]
-
-
-def test_a_plan_resubmitted_unchanged_after_the_last_round_is_no_unreviewed_revision(store, change_repo, mp):
-    """TD-330: a last round at the maximum gets its rejections judged too; the owner only with many findings."""
-    c = store.read("c1")
-    c.loops[PLAN].policy = RoundPolicy(max_rounds=1, max_findings=5, last_round_at=0, ask_owner_at=2)
-    store.write(Lock("c1"), c)
-    mp.plans += [plan(1), plan(1, {"F1": "no"})]
-    mp.reviews += [review("t1"), review(upheld={"F1": False})]
-    step(store, change_repo)
-    c = step(store, change_repo)
-    assert (mp.told[-1][1].cap, mp.told[-1][1].rechecks) == (0, ("F1",))
-    lp = c.loops[PLAN]
-    assert (c.step.kind, lp.round, lp.ended, lp.unreviewed, lp.findings[0].state) == (
-        K.BUILD,
-        1,
-        "clean",
-        [],
-        "standing",
-    )
+    assert lp.verdicts == [
+        Verdict(round=1, version=1),
+        Verdict(round=1, version=2, recheck=True, upheld=int(upheld), repair=revision != 1),
+    ]
 
 
 def test_a_wrong_premise_in_the_check_is_revised_for_and_the_check_never_runs_again(store, change_repo, mp):
@@ -268,50 +257,27 @@ def test_a_wrong_premise_in_the_check_is_revised_for_and_the_check_never_runs_ag
     )
 
 
-def test_a_check_at_the_maximum_whose_upheld_rejection_is_left_open_ends_at_max(store, change_repo, mp):
-    c = store.read("c1")
-    c.loops[PLAN].policy = RoundPolicy(max_rounds=1, max_findings=5, last_round_at=0, ask_owner_at=2)
-    store.write(Lock("c1"), c)
-    mp.plans += [plan(1), plan(2, {"F1": "no"})]
-    mp.reviews += [review("t1"), review(upheld={"F1": True})]
-    step(store, change_repo)
-    c = step(store, change_repo)
-    lp = c.loops[PLAN]
-    assert (c.questions, lp.findings[0].state, lp.round, lp.unreviewed, lp.ended, c.step.kind) == (
-        [], "left-open", 1, ["r1"], "max", K.BUILD
-    )  # fmt: skip
-
-
-def test_after_the_last_round_many_findings_stop_without_asking_for_another_round(store, change_repo, mp):
+@pytest.mark.parametrize("rejected", [False, True])
+def test_plan_round_limit_stops_with_the_plan_and_attempt_kept(store, change_repo, mp, rejected):
     c = store.read("c1")
     c.loops[PLAN].policy = RoundPolicy(max_rounds=1, max_findings=5, last_round_at=0, ask_owner_at=1)
     store.write(Lock("c1"), c)
-    mp.plans += [plan(1), plan(1, {"F1": "no"})]
-    mp.reviews += [review("t1"), review(upheld={"F1": False})]
+    mp.plans += [plan(1), plan(1, {"F1": "no"} if rejected else None)]
+    mp.reviews += [review("t1"), *([review(upheld={"F1": False})] if rejected else [])]
     step(store, change_repo)
     c = step(store, change_repo)
-    assert (mp.told[-1][1].cap, mp.told[-1][1].rechecks) == (0, ("F1",))
     assert (c.outcome.exit, c.questions, c.stop.action) == (Exit.STOP, [], "Run the step again")
     assert c.stop.reason.startswith(plan_rounds.LAST_STOP)
-    assert "F1 rejected; the challenger accepted that (no)" in c.stop.reason
-    assert (c.loops[PLAN].findings[0].state, c.loops[PLAN].round) == ("standing", 1)
-    assert loop.next_step(c, datetime.now(UTC)) is None
-
-
-def test_a_last_round_stop_keeps_the_plan_and_attempt_instead_of_starting_a_new_plan(store, change_repo, mp):
-    c = store.read("c1")
-    c.loops[PLAN].policy = RoundPolicy(max_rounds=1, max_findings=5, last_round_at=0, ask_owner_at=1)
-    store.write(Lock("c1"), c)
-    mp.plans += [plan(1), plan(1)]
-    mp.reviews += [review("t1")]
-    step(store, change_repo)
-    c = step(store, change_repo)
     lp = c.loops[PLAN]
     assert (c.outcome.exit, c.questions, lp.attempt, lp.round, lp.history) == (Exit.STOP, [], 1, 1, [])
-    assert c.stop.reason.startswith(plan_rounds.LAST_STOP)
-    assert "F1 revised for, not challenged again" in c.stop.reason
     assert (c.plan.version, len(c.plan.tasks)) == (2, 1)
-    assert mp.kinds() == ["plan", "challenge", "plan"]
+    if rejected:
+        assert (mp.told[-1][1].cap, mp.told[-1][1].rechecks) == (0, ("F1",))
+        assert "F1 rejected; the challenger accepted that (no)" in c.stop.reason
+        assert lp.findings[0].state == "standing"
+    else:
+        assert "F1 revised for, not challenged again" in c.stop.reason
+    assert mp.kinds() == ["plan", "challenge", "plan"] + (["challenge"] if rejected else [])
     assert loop.next_step(c, datetime.now(UTC)) is None
 
 
@@ -324,11 +290,15 @@ def asked(store: Store) -> None:
     store.write(Lock("c1"), c)
 
 
-def test_an_already_asked_dispute_is_reconsidered_once_and_an_unsure_one_is_left_open(store, change_repo, mp):
+@pytest.mark.parametrize("premise", [False, True])
+def test_persisted_plan_reconsideration_left_unsure_is_recorded_once(store, change_repo, mp, premise):
     mp.plans += [plan(1, scope="lib"), plan(1, {"F1": "no"})]
     mp.reviews += [review("t1"), review(upheld={"F1": True})]
+    why = "premise: AC-1 contradicts AC-2" if premise else "only the owner knows"
     mp.reconsiders += [
-        ReconsiderResult(reconsidered=[{"finding": "F1", "verdict": "unsure", "reason": "only the owner knows"}])
+        tools.WrongPremise(stage="brief", reason="AC-1 contradicts AC-2", evidence=["brief"])
+        if premise
+        else ReconsiderResult(reconsidered=[{"finding": "F1", "verdict": "unsure", "reason": why}])
     ]
     step(store, change_repo)
     step(store, change_repo)
@@ -342,26 +312,11 @@ def test_an_already_asked_dispute_is_reconsidered_once_and_an_unsure_one_is_left
     assert (loop.open_question(c), len(c.questions)) == (None, 1)  # reconsidered once, then left open, never asked
     f = c.loops[PLAN].findings[0]
     assert (f.state, f.clarified) == ("left-open", "")
-    assert f.judgement == "see t1 A second challenger was unsure: only the owner knows"
+    assert f.judgement == f"see t1 A second challenger was unsure: {why}"
     assert [(e.id, e.judgement) for e in c.left] == [("F1", f.judgement)]
     c = step(store, change_repo)
     assert mp.kinds() == ["plan", "challenge", "plan", "challenge", "reconsider"]  # no planner revises for it
     assert c.step.kind == K.BUILD
-
-
-def test_an_already_asked_disputes_reconsidered_premise_leaves_it_open_as_unsure(store, change_repo, mp):
-    mp.plans += [plan(1), plan(1, {"F1": "no"})]
-    mp.reviews += [review("t1"), review(upheld={"F1": True})]
-    mp.reconsiders += [tools.WrongPremise(stage="brief", reason="AC-1 contradicts AC-2", evidence=["brief"])]
-    step(store, change_repo)
-    step(store, change_repo)
-    asked(store)
-    answer(store, "reconsider", "look again")
-    c = step(store, change_repo)
-    f = c.loops[PLAN].findings[0]
-    assert [q for q in c.questions if q.answer is None] == []
-    assert (f.state, f.clarified) == ("left-open", "")
-    assert f.judgement.endswith("A second challenger was unsure: premise: AC-1 contradicts AC-2")
 
 
 def test_an_already_asked_disputes_clarified_finding_goes_to_the_planner_as_the_owners(store, change_repo, mp):
@@ -509,7 +464,7 @@ def test_a_continued_plan_challenge_records_its_start_before_its_challenger_runs
 
     monkeypatch.setattr(plan_round.worktree, "ensure", lambda *_a: tmp_path)
     monkeypatch.setattr(plan_round, "git_common_dir", lambda repo: repo)
-    monkeypatch.setattr(plan_round, "scopes", lambda *_a: {})
+    monkeypatch.setattr(plan_round.overlap, "scopes", lambda *_a: {})
     monkeypatch.setattr(plan_round, "challenge", challenge)
     assert plan_round.continued(store, Lock("c1"), store.read("c1"), tmp_path)
     assert seen == [True]

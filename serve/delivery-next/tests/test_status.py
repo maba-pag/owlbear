@@ -140,33 +140,32 @@ def test_spend_accumulates_every_usage_report_by_model():
     )
 
 
-def test_a_resumed_session_adds_only_the_growth_of_its_cumulative_usage():
-    spend = Spend().plus({"credits": 2.0, "models": {"gpt": {"credits": 2.0, "tokens": 10}}}, "s1")
-    spend = spend.plus({"credits": 5.0, "models": {"gpt": {"credits": 5.0, "tokens": 25}}}, "s1")
-    spend = spend.plus({"credits": 1.0, "models": {"gpt": {"credits": 1.0, "tokens": 4}}}, "s2")
-    assert (spend.credits, spend.models["gpt"]) == (6.0, ModelSpend(credits=6.0, tokens=29))
-    assert Spend.model_validate_json(spend.model_dump_json()) == spend  # the last reports survive a restart
+def test_resumed_usage_keeps_each_high_water_mark_across_reload_and_adds_distinct_sessions():
+    def report(n: int | None) -> dict:
+        weights = {"tokens": 11, "input": 10, "output": 1, "cache_read": 6, "cache_write": 3}
+        kinds = {key: None if n is None else weight * n for key, weight in weights.items()}
+        used = None if n is None else float(n)
+        return {"credits": used, "models": {"gpt": {"credits": used, **kinds}}}
 
-
-def test_a_missing_or_lower_usage_field_keeps_the_sessions_high_water_mark():
-    spend = Spend()
-    for used, tokens in ((2.0, 10), (None, None), (5.0, 25)):
-        spend = spend.plus({"credits": used, "models": {"gpt": {"credits": used, "tokens": tokens}}}, "s1")
-    assert (spend.credits, spend.models["gpt"]) == (5.0, ModelSpend(credits=5.0, tokens=25))
-    spend = Spend()
-    for used in (5.0, 3.0, 5.0):
-        spend = spend.plus({"credits": used, "models": {"gpt": {"credits": used, "tokens": 9}}}, "s1")
-    assert (spend.credits, spend.models["gpt"]) == (5.0, ModelSpend(credits=5.0, tokens=9))
-
-
-def test_each_token_kind_adds_up_like_the_total_across_a_resumed_session():
-    def report(n: int) -> dict:
-        kinds = {"tokens": 11 * n, "input": 10 * n, "output": n, "cache_read": 6 * n, "cache_write": 3 * n}
-        return {"credits": float(n), "models": {"opus": {"credits": float(n), **kinds}}}
-
-    spend = Spend().plus(report(1), "s1").plus(report(3), "s1").plus(report(2), "s2")
-    want = ModelSpend(credits=5.0, tokens=55, input=50, output=5, cache_read=30, cache_write=15)
-    assert spend.models["opus"] == want
+    spend = Spend().plus(report(2), "s1")
+    assert (spend.credits, spend.models["gpt"]) == (
+        2.0,
+        ModelSpend(credits=2.0, tokens=22, input=20, output=2, cache_read=12, cache_write=6),
+    )
+    spend = spend.plus(report(None), "s1")
+    assert (spend.credits, spend.models["gpt"].tokens) == (2.0, 22)
+    spend = spend.plus(report(5), "s1")
+    grown = ModelSpend(credits=5.0, tokens=55, input=50, output=5, cache_read=30, cache_write=15)
+    assert (spend.credits, spend.models["gpt"]) == (5.0, grown)
+    spend = Spend.model_validate_json(spend.model_dump_json())
+    spend = spend.plus(report(3), "s1").plus(report(5), "s1")
+    assert (spend.credits, spend.models["gpt"]) == (5.0, grown)
+    spend = spend.plus(report(1), "s2")
+    assert (spend.credits, spend.models["gpt"]) == (
+        6.0,
+        ModelSpend(credits=6.0, tokens=66, input=60, output=6, cache_read=36, cache_write=18),
+    )
+    assert Spend.model_validate_json(spend.model_dump_json()) == spend
 
 
 def running(started: datetime) -> Change:

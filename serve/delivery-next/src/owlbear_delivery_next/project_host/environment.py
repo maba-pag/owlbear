@@ -19,6 +19,17 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock
 
 
+def _prepared_env(h: Host, c: Change, errors: list[str]) -> dict[str, str] | None:
+    try:
+        env = prepare.environ(h.store, c)
+    except prepare.PrepareError as exc:
+        errors.append(exc.result.reason)
+        return None
+    if env is None:
+        errors.append("the check has no test preparation; nothing launches without one")
+    return env
+
+
 def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PLR0911 - one exit per refusal
     """Launch the check environment after the preparing Builder is gone; pending once it answers."""
     e = c.env
@@ -34,8 +45,7 @@ def launch(h: Host, lock: Lock, c: Change, now: datetime) -> Change:  # noqa: PL
     root = Path(c.names.worktree)
     recipe = tools.CheckRecipe(command=e.command, directory=e.directory, ready_url=e.ready_url, summary="host")
     errors = tools.check_recipe(recipe, tools.Worktree("", ""), root)
-    if (env := prepare.environ(h.store, c)) is None:  # the test copy's explicit environment (TD-96)
-        errors.append("the check has no test preparation; nothing launches without one")
+    env = _prepared_env(h, c, errors)
     if errors:
         c.env = c.recipe = None
         h.say(f"{c.slug}: check environment failed: {'; '.join(errors)}")
