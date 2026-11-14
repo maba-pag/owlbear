@@ -48,6 +48,7 @@ export function questionForm(q, d) {
   const clarifying = q.ordinary && mine.kind === "clarification";
   const confirm = (on) => { mine.confirmed = on; show(); };
   return panel(`Question ${q.id}`, key, text(questionText(q), { weight: "semibold", cls: "recorded" }), droppedLine(q),
+    q.diff ? html`<pre class="repair-diff" tabindex="0" aria-label="The repair patch">${q.diff}</pre>` : nothing,
     q.options.length ? choice(key, "option", "Choose an option", q.options) : nothing,
     field(key, "text", "Your answer in words"),
     q.ordinary ? choice(key, "kind", "How your answer bears on the brief", CLASSES) : nothing,

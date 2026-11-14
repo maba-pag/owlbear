@@ -75,6 +75,8 @@ def asked(c: Change, text: str, now: datetime) -> None:
         r.phase, r.question = "asked", asked.id
         if r.fix == "preparation" and c.outcome is not None:
             c.outcome.reason = "Approve the proposed test preparation"
+        elif r.fix == "patch" and c.outcome is not None:
+            c.outcome.reason = "Approve the proposed repair"
 
 
 def owned(c: Change, question: str) -> bool:

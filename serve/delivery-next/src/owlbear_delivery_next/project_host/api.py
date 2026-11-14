@@ -368,6 +368,9 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         q = loop.open_question(c) if not merge else None
         q = q.model_copy(update={"options": held.offered(store, c, q)}) if q else None
         shown = q and q.model_dump(mode="json", include={"id", "text", "cause", "options"}) | answers.shown(q, events)
+        r = c.repairs.current
+        if q and shown and r and r.phase == "asked" and r.question == q.id and r.fix == "patch":
+            shown |= {"text": q.text.removesuffix(f"\n\nThe fix:\n{r.diff}"), "diff": r.diff}
         waiting = o and o.exit == Exit.PENDING and o.waiting == Waiting.PERSON_CHECK and o.who == "you"
         unread = q and q.cause == failures.cause_key(ErrorKind.STATE, q.step, failures.READ_ONLY_UNREAD)
         checks = [
