@@ -231,9 +231,9 @@ user-invocable: {true|false}
 
 ### Naming Grammar
 
-- **Agent names** are **role nouns** or role compounds (knowledge-ingestor, knowledge-enricher).
+- **Agent names** are **role nouns** or role compounds (planner, design-judge).
 - **Skill names** are **domain-action compounds** — use verbs/actions, not plural nouns. E.g., `test-curation` not `test-curations`, `decision-routing` not `decision-requests`, `task-decomposition` not `task-workflow`.
-- The `w-` prefix replaces the word "workflow" — don't use both (e.g., `w-knowledge-enrichment` not `w-knowledge-enrichment-workflow`).
+- The `w-` prefix replaces the word "workflow" — don't use both (e.g., `w-research` not `w-research-workflow`).
 
 ### Workflow Skill Structure
 

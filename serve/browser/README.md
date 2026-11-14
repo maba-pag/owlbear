@@ -72,7 +72,7 @@ Successful content is normalized Markdown, not plain text. The request supports 
 selector, readiness selector, and bounded navigation/readiness timeouts. It does not follow discovered
 links, execute caller-supplied scripts, accept credentials, or ingest content into Knowledge.
 The Browser-to-Knowledge path is agent-mediated: an agent can combine Browser captures for a
-registered source in one bound `knowledge_ingest` round. See the [Knowledge operations guide](../../share/skills/h-knowledge-ops/SKILL.md)
+registered source in one bound `knowledge_ingest` round. See the [Knowledge MCP guide](../knowledge-mcp/README.md)
 for that contract.
 
 Authentication-required failures retain the page for a retry within the same fetcher. Callers must
@@ -81,8 +81,7 @@ managed-SSO workflow or concurrent session ownership model. Any main-document st
 other than 401 and 403 returns `http_error`. A 401 or 403 page with a
 login-form or authentication-title signal returns `authentication_required` before the fallback
 `access_denied` classification. See the [acquisition tests](tests/test_acquisition.py) for synthetic
-acquisition behavior and the [Browser-to-Knowledge vertical test](../../tests/test_browser_knowledge_vertical.py)
-for the agent-mediated round.
+acquisition behavior.
 
 `AcquisitionSuccess` applies URL redaction at construction: userinfo and fragments are removed;
 values for exact sensitive keys and normalized keys ending in `token`, `secret`, `signature`,

@@ -549,14 +549,7 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entry point.  Accepts agent file paths; no args = all agents."""
     args = argv if argv is not None else sys.argv[1:]
 
-    if not args:
-        agent_files = _discover_agent_files()
-        if not agent_files:
-            roots = ", ".join(str(root) for root in _AGENT_ROOTS)
-            sys.stderr.write(f"No agent files found in active roots: {roots}\n")
-            return 1
-    else:
-        agent_files = [Path(p) for p in args]
+    agent_files = _discover_agent_files() if not args else [Path(p) for p in args]
 
     has_errors = False
     mcp_servers = _DEFAULT_MCP_SERVERS
