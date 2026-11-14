@@ -187,7 +187,8 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
         ),
     }.items():
         (repo / name).write_text(text)
-    worktree.git(repo, "add", "fixture.py", "unused_fixture.py", "mypy_scope.py", "retained.py")
+    (repo / "replaced.py").symlink_to("not-present.py")
+    worktree.git(repo, "add", "fixture.py", "unused_fixture.py", "mypy_scope.py", "retained.py", "replaced.py")
     worktree.git(repo, "commit", "-qm", "existing line suppression")
     head = worktree.git(repo, "rev-parse", "HEAD")
     witness = (
@@ -210,10 +211,12 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
 
     def model_result(_store, cfg):
         copies.append(cfg.worktree)
+        (cfg.worktree / "replaced.py").unlink()
         for name, text in {
             "tests/test_a.py": fixed,
             "fixture.py": "# ruff: noqa: F401\nimport os\n# fmt: off\nfirst=1\nsecond=2\n",
             "mypy_scope.py": "\ufeff# type: ignore\nvalue = 1\n",
+            "replaced.py": "# ruff: noqa: F401\nimport os\n",
             "retained.py": (
                 "inserted = 0\nvalue = 1  # noqa: F401\nshifted = 3  # noqa: F841\n"
                 "typed = 1  # type: ignore[assignment]\npyrighted = 2  # pyright: ignore[reportAssignmentType]\n"
@@ -248,6 +251,7 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
     assert "fixture.py:5: removes a suppression terminator: # fmt: on" in q.text
     assert not any("unused_fixture.py:" in reason for reason in kept.held)
     assert "mypy_scope.py:1: # type: ignore" in q.text
+    assert "replaced.py:1: # ruff: noqa: F401" in q.text
     assert "makes missing.py a link or submodule" in q.text
     assert not any("retained.py:" in reason for reason in kept.held)
     assert not copies[0].exists()
@@ -270,6 +274,7 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
     assert (repo / "tests/test_a.py").read_text() == fixed
     assert not (repo / "unused_fixture.py").exists()
     assert (repo / "missing.py").is_symlink()
+    assert not (repo / "replaced.py").is_symlink()
     assert after.repairs.done[-1].diff == kept.diff
 
 

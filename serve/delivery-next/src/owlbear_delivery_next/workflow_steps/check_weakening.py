@@ -11,7 +11,7 @@ import ast
 import re
 from collections import Counter
 from difflib import SequenceMatcher
-from itertools import takewhile, zip_longest
+from itertools import zip_longest
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
 
@@ -109,12 +109,12 @@ def weakened(run: Git, at: Path, head: str, path: str, how: str) -> tuple[str, s
 def suppressions(run: Git, at: Path, head: str, path: str) -> list[str]:
     """Added directives or removed terminators, with exact lines; corresponding unchanged directives stay exempt."""
     lines = run(at, ["diff", "--cached", "--unified=0", head, "--", path]).splitlines()
-    headers = list(takewhile(lambda line: not HUNK.match(line), lines))
-    if "+++ /dev/null" in headers or not (hunks := list(_hunks(lines))):
+    regular = ("100644 ", "100755 ")
+    if not run(at, ["ls-files", "--stage", "--", path]).startswith(regular) or not (hunks := list(_hunks(lines))):
         return []
     removed: list[tuple[int, str]] = []
     added: list[tuple[int, str]] = []
-    found = _scope_changes(run, at, head, path, created="--- /dev/null" in headers)
+    found = _scope_changes(run, at, head, path, created=not run(at, ["ls-tree", head, "--", path]).startswith(regular))
 
     def finish() -> None:
         found.extend(_suppression_edits(path, removed, added))
@@ -139,8 +139,6 @@ def suppressions(run: Git, at: Path, head: str, path: str) -> list[str]:
 
 
 def _scope_changes(run: Git, at: Path, head: str, path: str, *, created: bool) -> list[str]:
-    if not run(at, ["ls-files", "--stage", "--", path]).startswith(("100644 ", "100755 ")):
-        return []
     before = "" if created else run(at, ["show", f"{head}:{path}"])
     after = run(at, ["show", f":{path}"])
     found = _block_edits(path, before, after)
