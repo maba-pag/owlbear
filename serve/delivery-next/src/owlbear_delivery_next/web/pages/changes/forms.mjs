@@ -372,6 +372,7 @@ export function stopNotice(d) {
   };
   return html`<p-inline-notification class="recorded" state="error" heading="Stopped" heading-tag="h3"
     dismiss-button="false" action-label=${held ? nothing : "Done: run the step again"}
-    action-icon=${held ? nothing : "refresh"} @action=${held ? nothing : clear}>${said}</p-inline-notification>
+    action-icon=${held ? nothing : "refresh"} @action=${held ? nothing : clear}>${
+      kept ? text(said, { cls: "repair-reason" }) : said}</p-inline-notification>
     ${kept ? text("The fix kept (not applied):") : nothing}${repairPatch(kept?.diff, "The retained repair patch")}`;
 }
