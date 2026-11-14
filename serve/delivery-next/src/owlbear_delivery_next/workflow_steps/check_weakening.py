@@ -33,7 +33,7 @@ SUPPRESSIONS = re.compile(
     r"\bnoqa(?:\s*:\s*[A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)?"
     r"|\b(?:type|pyright):\s*ignore(?:\s*\[[^\]]*\])?"
     r"|\bpragma:\s*no\s*cover|\bfmt:\s*(?:off|skip)"
-    r"|\bbiome-ignore(?:\s+[\w/()]+)+"
+    r"|\bbiome-ignore(?:-all|-start|-end)?(?:\s+[\w/()*-]+)*"
     r"|\beslint-disable(?:-next-line|-line)?(?:\s+[\w@/-]+(?:\s*,\s*[\w@/-]+)*)?"
     r"|@ts-(?:ignore|nocheck|expect-error)"
 )

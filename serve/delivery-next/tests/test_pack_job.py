@@ -1267,20 +1267,27 @@ def test_a_suppression_repair_keeps_and_shows_the_whole_candidate_before_approva
     edited = f"import flaky  # noqa: F401 - required by the fixture\n\n\n{TESTED}"
     on_main(checkout, "tests/test_page.py", TESTED)
     fakes, job, _ = ci_failed(
-        tmp_path, checkout, clone, {"extra.txt": "the other edit\n", "tests/test_page.py": edited}
+        tmp_path,
+        checkout,
+        clone,
+        {
+            "fixture.mjs": "// biome-ignore-all lint/style/useConst: fixture mutates in replay\nlet value = 1;\n",
+            "tests/test_page.py": edited,
+        },
     )
     state = answered(job, "repair")
     (q,) = state["questions"]
-    assert q["paths"] == ["extra.txt", "tests/test_page.py"]
+    assert q["paths"] == ["fixture.mjs", "tests/test_page.py"]
     assert [o["id"] for o in q["options"]] == PUSHED
     assert all(part in q["text"] for part in ("tests/test_page.py:1:", "required by the fixture", "complete patch"))
-    assert all(part in q["diff"] for part in ("extra.txt", "+import flaky"))
+    assert all(part in q["diff"] for part in ("fixture.mjs", "+import flaky"))
     repair = json.loads((job.store.root / pack_job.FILE).read_text())["context"]["repair"]
+    assert any("biome-ignore-all" in line for line in repair["suppressions"])
     assert repair["patch"] == q["diff"]
     assert not (job.store.root / pack_state.RUNS / f"{state['run']}-ci-repair").exists()
     fakes.github.checks = ["success"]
     assert answered(job, "push-reviewed")["state"] == "passed"
-    assert git(checkout.parents[1], "show", f"{landed(checkout)}:extra.txt") == "the other edit"
+    assert "let value = 1;" in git(checkout.parents[1], "show", f"{landed(checkout)}:fixture.mjs")
 
 
 @pytest.mark.parametrize(
