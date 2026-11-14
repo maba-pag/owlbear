@@ -186,7 +186,9 @@ def _directives(line: str, pattern: re.Pattern[str] = SUPPRESSIONS) -> Counter[s
     found = []
     for match in pattern.finditer(line):
         token = re.sub(r"\s+", "", match[0])
-        if "noqa:" in token:
+        if token.startswith(("type:ignore[", "pyright:ignore[")):
+            token = token.replace("[", ":", 1).removesuffix("]")
+        if "noqa:" in token or token.startswith(("type:ignore:", "pyright:ignore:")):
             family, _, rules = token.rpartition(":")
             found.extend(f"{family}:{rule}" for rule in rules.split(","))
         else:
