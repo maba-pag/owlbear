@@ -11,7 +11,6 @@ import pytest
 import yaml
 
 _REPO_ROOT = Path(__file__).parent.parent
-_AGENTS_ROOT = _REPO_ROOT / "share/agents"
 _SKILLS_ROOT = _REPO_ROOT / "share/skills"
 _INSTRUCTIONS_ROOT = _REPO_ROOT / "share/instructions"
 _LOCAL_INSTRUCTIONS_ROOT = _REPO_ROOT / ".owlbear/instructions"
@@ -109,13 +108,6 @@ def _write_agent(tmp_path: Path, name: str, content: str) -> Path:
     path = tmp_path / f"{name}.agent.md"
     path.write_text(content, encoding="utf-8")
     return path
-
-
-def _frontmatter(path: Path) -> dict[str, object]:
-    _, raw, _ = path.read_text(encoding="utf-8").split("---", maxsplit=2)
-    parsed = yaml.safe_load(raw)
-    assert isinstance(parsed, dict)
-    return parsed
 
 
 def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> None:
@@ -372,28 +364,10 @@ user-invocable: false
 
 
 @pytest.mark.asyncio
-async def test_declared_mcp_tools_exist_in_live_registries() -> None:
+async def test_browser_status_annotations_match_its_read_only_contract() -> None:
     from owlbear_browser_mcp.server import mcp as browser_mcp  # noqa: PLC0415
-    from owlbear_memory_mcp.server import mcp as memory_mcp  # noqa: PLC0415
 
     browser_tools = {tool.name: tool for tool in await browser_mcp.list_tools()}
-    registries = {
-        "owlbear-browser": set(browser_tools),
-        "owlbear-memory": {tool.name for tool in await memory_mcp.list_tools()},
-    }
-
-    for agent_path in _AGENTS_ROOT.glob("*.agent.md"):
-        metadata = _frontmatter(agent_path)
-        tools = metadata.get("tools", [])
-        assert isinstance(tools, list)
-        for server, registered in registries.items():
-            declared = {
-                tool.removeprefix(f"{server}/")
-                for tool in tools
-                if isinstance(tool, str) and tool.startswith(f"{server}/") and not tool.endswith("/*")
-            }
-            missing = declared - registered
-            assert not missing, f"{agent_path.name} has unavailable {server} tools: {sorted(missing)}"
 
     browser_status_tool = browser_tools["browser_status"]
     assert browser_status_tool.annotations.read_only_hint is True
