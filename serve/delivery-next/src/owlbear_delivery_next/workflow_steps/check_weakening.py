@@ -105,6 +105,11 @@ def weakened(run: Git, at: Path, head: str, path: str, how: str) -> tuple[str, s
 def suppressions(run: Git, at: Path, head: str, path: str) -> list[str]:
     """Added directives or removed terminators, with exact lines; corresponding unchanged directives stay exempt."""
     lines = run(at, ["diff", "--cached", "--unified=0", head, "--", path]).splitlines()
+    for line in lines:
+        if HUNK.match(line):
+            break
+        if line == "+++ /dev/null":
+            return []
     removed: list[tuple[int, str]] = []
     added: list[tuple[int, str]] = []
     found: list[str] = []
