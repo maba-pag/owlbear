@@ -102,7 +102,7 @@ def apply(step: Path, branch: str, base: str, fix: str, message: str) -> str:
     drop(step, clean)
     git(step, ["worktree", "add", "--quiet", "--detach", str(clean), head])
     try:
-        delta = git(step, ["diff", "--binary", base, fix]) + "\n"
+        delta = git(step, ["diff", "--binary", base, fix])
         try:
             git(clean, ["apply", "--index", "--whitespace=nowarn", "-"], stdin=delta)
         except RepairError as exc:
