@@ -1271,7 +1271,10 @@ def test_a_suppression_repair_keeps_and_shows_the_whole_candidate_before_approva
         checkout,
         clone,
         {
-            "fixture.mjs": "// biome-ignore-all lint/style/useConst: fixture mutates in replay\nlet value = 1;\n",
+            "fixture.mjs": (
+                "// biome-ignore-all lint/style/useConst: fixture mutates in replay\n"
+                "let value = 1;\n++value; // eslint-disable-line no-plusplus\n"
+            ),
             "tests/test_page.py": edited,
         },
     )
@@ -1283,6 +1286,7 @@ def test_a_suppression_repair_keeps_and_shows_the_whole_candidate_before_approva
     assert all(part in q["diff"] for part in ("fixture.mjs", "+import flaky"))
     repair = json.loads((job.store.root / pack_job.FILE).read_text())["context"]["repair"]
     assert any("biome-ignore-all" in line for line in repair["suppressions"])
+    assert any("fixture.mjs:3: ++value; // eslint-disable-line no-plusplus" in line for line in repair["suppressions"])
     assert repair["patch"].rstrip("\n") == q["diff"]
     assert not (job.store.root / pack_state.RUNS / f"{state['run']}-ci-repair").exists()
     fakes.github.checks = ["success"]
