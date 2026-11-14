@@ -83,7 +83,6 @@ SUITES: dict[str, tuple[str, ...]] = {
         "share/skills/**",
         "tests/test_agent_ecosystem_validation.py",
         "serve/knowledge/**",
-        "tests/test_knowledge_ops_contract.py",
     ),
     "security": (  # TD-382: Snyk Code on every change to code; .snyk can exclude paths from it
         ".github/workflows/security.yml",

@@ -136,19 +136,11 @@ def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> N
         ".github/workflows/tooling.yml",
         "serve/tools/src/owlbear_tools/dependency_ci.py",
         "serve/knowledge-mcp/**",
-        "share/agents/knowledge-ingestor.agent.md",
-        "share/skills/h-knowledge-ops/SKILL.md",
         "tests/test_dependency_verification_workflow.py",
     } & set(paths)
     assert job["timeout-minutes"] == 5
     assert "if" not in job
-    assert all(
-        path in pytest_run
-        for path in (
-            "tests/test_agent_ecosystem_validation.py",
-            "tests/test_knowledge_ops_contract.py",
-        )
-    )
+    assert "tests/test_agent_ecosystem_validation.py" in pytest_run
     assert "tests/test_dependency_verification_workflow.py" not in pytest_run
 
 
@@ -325,6 +317,19 @@ def test_agent_validator_discovers_project_local_root(tmp_path: Path, monkeypatc
     assert _AGENT_VALIDATOR._discover_agent_files() == [path]  # noqa: SLF001
 
 
+def test_agent_validator_checks_mcp_surface_without_standalone_agents(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_AGENT_ROOTS", (tmp_path / "agents",))
+
+    assert _AGENT_VALIDATOR.main([]) == 0
+
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_MCP_CONFIG", tmp_path / "missing.json")
+
+    assert _AGENT_VALIDATOR.main([]) == 1
+    assert "MCP configuration file does not exist" in capsys.readouterr().err
+
+
 def test_skill_validator_discovers_project_local_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     local_root = tmp_path / ".owlbear/skills"
     skill_dir = local_root / "h-local"
@@ -369,13 +374,11 @@ user-invocable: false
 @pytest.mark.asyncio
 async def test_declared_mcp_tools_exist_in_live_registries() -> None:
     from owlbear_browser_mcp.server import mcp as browser_mcp  # noqa: PLC0415
-    from owlbear_knowledge_mcp.server import mcp as knowledge_mcp  # noqa: PLC0415
     from owlbear_memory_mcp.server import mcp as memory_mcp  # noqa: PLC0415
 
     browser_tools = {tool.name: tool for tool in await browser_mcp.list_tools()}
     registries = {
         "owlbear-browser": set(browser_tools),
-        "owlbear-knowledge": {tool.name for tool in await knowledge_mcp.list_tools()},
         "owlbear-memory": {tool.name for tool in await memory_mcp.list_tools()},
     }
 
@@ -392,12 +395,6 @@ async def test_declared_mcp_tools_exist_in_live_registries() -> None:
             missing = declared - registered
             assert not missing, f"{agent_path.name} has unavailable {server} tools: {sorted(missing)}"
 
-    metadata = {path.stem.removesuffix(".agent"): _frontmatter(path) for path in _AGENTS_ROOT.glob("*.agent.md")}
-    knowledge_ingestor_tools = set(metadata["knowledge-ingestor"]["tools"])
-    assert {tool for tool in knowledge_ingestor_tools if tool.startswith("owlbear-browser/")} == {
-        "owlbear-browser/acquire",
-        "owlbear-browser/browser_status",
-    }  # no interactive browser tool: sign-in stays with the operator
     browser_status_tool = browser_tools["browser_status"]
     assert browser_status_tool.annotations.read_only_hint is True
     assert browser_status_tool.annotations.idempotent_hint is True

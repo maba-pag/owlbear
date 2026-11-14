@@ -89,12 +89,7 @@ of the portable map.
 
 ### Agents
 
-| Agent | Required reading | Delegates |
-| --- | --- | --- |
-| `knowledge-ingestor` | `h-knowledge-ops` | None |
-| `knowledge-enricher` | `w-knowledge-enrichment`, `h-knowledge-ops` | None |
-
-No shared agent delegates to a subagent or declares hooks. Tool allowlists and models stay in agent frontmatter.
+No shared agents are currently shipped. Delivery's role agents live in its package.
 
 ### Repository skills
 
