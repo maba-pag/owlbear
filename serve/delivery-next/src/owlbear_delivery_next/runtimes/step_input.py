@@ -257,15 +257,6 @@ def check(
 ) -> str:
     """Return the first message of a check-preparation session that ends with a launch recipe and its preparation."""
     ctx = ctx or Preparing()
-    previous = shaping_capture.starting(change.brief)
-    if (r := change.recipe) is not None and r.check == person.id:
-        previous = [
-            (
-                f"This check last launched with command `{r.command}`, directory `{r.directory}`, ready_url "
-                f"`{r.ready_url}`. Verify it against this worktree and choose a currently permitted preparation; "
-                "this is source-discovery context, not proof that the current code or preparation still works."
-            )
-        ]
     return "\n".join(
         [
             f"You prepare the owner's check `{person.id}` of the Change `{change.slug}` in the worktree {worktree}.",
@@ -283,7 +274,7 @@ def check(
             *_options(ctx),
             "",
             "## Launch recipe",
-            *previous,
+            *shaping_capture.starting(change, person.id),
             SOURCE_ONLY,
             "",
             "## Finish",
