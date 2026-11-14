@@ -189,11 +189,8 @@ Browser-to-Knowledge round is ready.
    `list_knowledge_sources` again to check its health.
 
    **Expected result:** a fully successful round reports `ok`. See the
-   [Knowledge operations guide](../../share/skills/h-knowledge-ops/SKILL.md) for the source and
+   [Knowledge MCP guide](../knowledge-mcp/README.md) for the source and
    capture contract, including other health outcomes.
-
-See the [Browser-to-Knowledge vertical test](../../tests/test_browser_knowledge_vertical.py) for the
-exercised end-to-end workflow.
 
 ### Managed Mac pilot
 
@@ -240,9 +237,7 @@ the repository or in a Change's brief, answers, or status.
 Knowledge MCP server. An agent can acquire each URL from a registered Browser source, then submit
 the captures together in one bound `knowledge_ingest` round. This is an agent-mediated capture
 workflow, not an automatic refresh path; the Knowledge process does not own a live Browser session.
-See the [Knowledge operations guide](../../share/skills/h-knowledge-ops/SKILL.md) for the ingest
-contract and the [Browser-to-Knowledge vertical test](../../tests/test_browser_knowledge_vertical.py)
-for the exercised workflow.
+See the [Knowledge MCP guide](../knowledge-mcp/README.md) for the ingest contract.
 
 See the [Browser package guide](../browser/README.md), the [acquisition tests](tests/test_acquire.py),
 and the [SSRF policy tests](tests/test_ssrf_preflight.py) for the exercised browser boundary.

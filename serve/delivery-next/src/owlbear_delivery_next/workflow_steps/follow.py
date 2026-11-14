@@ -74,7 +74,7 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
         entry = profile.ci_entries({n: profile.workflow(t) for n, t in texts.items()}, digest)[profile.DECLARED]
     if entry and entry.state == "known":
         return profile.listed(entry), None
-    cause = failures.cause_key(ErrorKind.GATE, step, f"declared-{digest}")
+    cause = failures.cause_key(ErrorKind.GATE, F, f"declared-{digest}")  # the same inventory gates Follow and Merge
     answers = [q.answer for q in c.questions if q.cause == cause and q.answer]
     names = ", ".join(n.strip() for n in answers[-1].text.split(",") if n.strip()) if answers else ""
     read = entry.value if entry and entry.value else "none"  # what the workflow files name, as far as they say
@@ -91,7 +91,7 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
     if value:
         return () if value == "none" else tuple(n.strip() for n in value.split(",")), None
     options = [Option(id="yes", label="Yes: merge once those pass", next=step), engine.PAUSE]
-    changed = " (its CI files changed in this Change)" if digest != bound else ""
+    changed = " (the CI check-detection evidence changed)" if digest != bound else ""
     text = (
         f"Delivery could not read the names of every check this project's CI runs before a merge{changed}. "
         "It waits for the checks GitHub requires, for every check that starts on the pull request, and for those it "

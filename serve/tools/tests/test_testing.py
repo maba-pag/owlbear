@@ -279,17 +279,6 @@ def test_testmon_runs_sharing_a_data_file_wait_for_each_other(tmp_path: Path, mo
     assert len(blocked[0]) == 1  # and handed to its process tree
 
 
-def test_knowledge_source_routes_importing_root_and_invariant_tests() -> None:
-    scope = testing_module._python_scope("serve/knowledge/src/owlbear_knowledge/query.py")  # noqa: SLF001
-
-    assert scope is not None
-    assert "tests/test_query_facade.py" in scope
-    assert "tests/test_query_facade_search.py" in scope
-    assert "tests/test_ingest_coordinator_delete.py" in scope
-    assert "tests/test_source_fetcher.py" in scope
-    assert "tests/test_package_boundary.py" in scope
-
-
 def test_memory_source_routes_confirmation_cycle() -> None:
     scope = testing_module._python_scope("serve/memory/src/owlbear_memory/engine.py")  # noqa: SLF001
 

@@ -7,11 +7,8 @@ agent-facing source, search, and enrichment tools.
 
 Package map: [serve/README.md](../README.md) · Project README: [README.md](../../README.md)
 
-**Status:** Alpha. Deterministic assembled proof covers bounded fixture ingestion, persisted-vector
-retrieval, and fixture-content search through the Knowledge MCP path. An opt-in model proof covers
-the real BGE-M3 embedding provider and filesystem-backed Qdrant for that same bounded fixture; it
-does not establish model quality, performance, arbitrary external-site validation, or broad
-production readiness.
+**Status:** Frozen alpha. The runtime and MCP server remain available, but dedicated Knowledge tests,
+standalone agents and skills are retired. Choosing a replacement product is deferred.
 
 ---
 
@@ -84,9 +81,7 @@ not an active browser `url_list`, or `text` supplied with `source_id` raise `Too
 browser source, read `urls` from `list_knowledge_sources`, call Browser `acquire` for each URL, then
 submit one bound `knowledge_ingest` round with that `source_id` and `captures`. Do not call
 `refresh_knowledge_source` for a browser source; for an active, refreshable source, the call returns
-acquisition-stage `agent_capture_required` without acquiring pages. The
-[Browser-to-Knowledge vertical test](../../tests/test_browser_knowledge_vertical.py)
-exercises this round, health reporting, and last-good-document behavior.
+acquisition-stage `agent_capture_required` without acquiring pages.
 
 `refresh_knowledge_source` always retains its source and additive outcome fields. Each item in
 `errors` is a structured refresh failure with `source_id`, `stage`, `code`, `retryable`,
@@ -112,26 +107,7 @@ ingest coordinator, and composite source fetcher. Production lifespan wiring sup
 HTTP response-fetcher and BGE-M3 embedding factories plus a filesystem Qdrant factory. Without the
 opt-in `embedding` and `qdrant` extras, which the runtime install leaves out, storing, deleting or
 searching embeddings fails with `embedding_dependency_missing`, naming
-`owlbear-knowledge[embedding,qdrant]`. The default
-assembled proof is deterministic and replaces the HTTP response-fetcher, embedding, and vector-store
-factories with test adapters, while keeping source registration, SSRF validation, SQLite persistence,
-and MCP tool calls on the same path as production.
-
-### Opt-in model proof
-
-The opt-in smoke proof requires installed `owlbear-knowledge[full]` (`uv sync --locked --all-packages --all-extras`
-from the repository root), an available BGE-M3 model, and
-writable filesystem-Qdrant state. The model may download approximately 2.3 GB on first use. Model
-tests are excluded by default; from the repository root, opt in with:
-
-```bash
-uv run --locked pytest tests/test_mcp_knowledge_static_refresh.py -m model -n 0 -q --tb=short
-```
-
-Support for this runtime path requires the model test itself to run and pass without a skip or
-deselection. The positive observations are bounded fixture ingestion, persisted-vector retrieval,
-and a search result containing fixture content. Exit status alone, a skipped model test, or a
-deselected model test is not support evidence.
+`owlbear-knowledge[embedding,qdrant]`.
 
 ## Dependencies
 

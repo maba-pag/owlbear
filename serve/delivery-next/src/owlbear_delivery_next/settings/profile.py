@@ -39,7 +39,7 @@ OBSERVED = "; observed: "
 DIGEST = "; workflows "  # declared-CI evidence ends with the digest of the workflow files it was read from
 FLOWS = ".github/workflows"
 CI_EVENTS = frozenset({"pull_request", "pull_request_target", "merge_group"})
-HEAD_EVENTS = frozenset({"pull_request", "pull_request_target"})  # their checks report on the PR head
+HEAD_EVENTS = frozenset({"pull_request"})  # pull_request_target runs in the base context, not on the PR head
 NODE_LOCKS = (("package-lock.json", "npm", "npm ci"), ("pnpm-lock.yaml", "pnpm", "pnpm install --frozen-lockfile"))
 NO_TEST = 'echo "Error: no test specified"'
 
@@ -213,8 +213,9 @@ def workflow_texts_at(repo: Path, rev: str) -> dict[str, str] | None:
 
 
 def flows_digest(texts: dict[str, str]) -> str:
-    """A short digest of workflow file names and contents."""
-    return hashlib.sha256(json.dumps(sorted(texts.items())).encode()).hexdigest()[:16]
+    """Bind workflow evidence to its head-check detection policy as well as file names and contents."""
+    evidence = [sorted(HEAD_EVENTS), sorted(texts.items())]
+    return hashlib.sha256(json.dumps(evidence).encode()).hexdigest()[:16]
 
 
 def digest_of(entry: ProfileEntry | None) -> str:

@@ -80,8 +80,6 @@ def test_the_projects_memory_folder_and_global_memory_are_given_to_the_memory_se
         "challenger",
         "shaper",
         "spotter",
-        "knowledge-ingestor",
-        "knowledge-enricher",
     } <= agents
     assert not any(name.startswith("owlbear-") for name in agents)
 

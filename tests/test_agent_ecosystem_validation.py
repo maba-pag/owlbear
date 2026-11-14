@@ -11,7 +11,6 @@ import pytest
 import yaml
 
 _REPO_ROOT = Path(__file__).parent.parent
-_AGENTS_ROOT = _REPO_ROOT / "share/agents"
 _SKILLS_ROOT = _REPO_ROOT / "share/skills"
 _INSTRUCTIONS_ROOT = _REPO_ROOT / "share/instructions"
 _LOCAL_INSTRUCTIONS_ROOT = _REPO_ROOT / ".owlbear/instructions"
@@ -111,13 +110,6 @@ def _write_agent(tmp_path: Path, name: str, content: str) -> Path:
     return path
 
 
-def _frontmatter(path: Path) -> dict[str, object]:
-    _, raw, _ = path.read_text(encoding="utf-8").split("---", maxsplit=2)
-    parsed = yaml.safe_load(raw)
-    assert isinstance(parsed, dict)
-    return parsed
-
-
 def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> None:
     document = yaml.safe_load(_AGENT_WORKFLOW_PATH.read_text(encoding="utf-8"))
     trigger = document.get("on", document.get(True))
@@ -136,19 +128,11 @@ def test_agent_workflow_covers_its_contract_tests_without_duplicate_paths() -> N
         ".github/workflows/tooling.yml",
         "serve/tools/src/owlbear_tools/dependency_ci.py",
         "serve/knowledge-mcp/**",
-        "share/agents/knowledge-ingestor.agent.md",
-        "share/skills/h-knowledge-ops/SKILL.md",
         "tests/test_dependency_verification_workflow.py",
     } & set(paths)
     assert job["timeout-minutes"] == 5
     assert "if" not in job
-    assert all(
-        path in pytest_run
-        for path in (
-            "tests/test_agent_ecosystem_validation.py",
-            "tests/test_knowledge_ops_contract.py",
-        )
-    )
+    assert "tests/test_agent_ecosystem_validation.py" in pytest_run
     assert "tests/test_dependency_verification_workflow.py" not in pytest_run
 
 
@@ -203,6 +187,8 @@ def test_agent_validator_checks_mcp_configuration_keys(tmp_path: Path, monkeypat
 
     assert any("MCP servers are missing" in error for error in errors)
     assert any("MCP servers have no validator registry: ['ddgs']" in error for error in errors)
+    monkeypatch.setattr(_AGENT_VALIDATOR, "_AGENT_ROOTS", ())
+    assert _AGENT_VALIDATOR.main([]) == 1
 
 
 def test_agent_validator_reads_mcp_servers_from_the_root_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -367,37 +353,11 @@ user-invocable: false
 
 
 @pytest.mark.asyncio
-async def test_declared_mcp_tools_exist_in_live_registries() -> None:
+async def test_browser_status_annotations_match_its_read_only_contract() -> None:
     from owlbear_browser_mcp.server import mcp as browser_mcp  # noqa: PLC0415
-    from owlbear_knowledge_mcp.server import mcp as knowledge_mcp  # noqa: PLC0415
-    from owlbear_memory_mcp.server import mcp as memory_mcp  # noqa: PLC0415
 
     browser_tools = {tool.name: tool for tool in await browser_mcp.list_tools()}
-    registries = {
-        "owlbear-browser": set(browser_tools),
-        "owlbear-knowledge": {tool.name for tool in await knowledge_mcp.list_tools()},
-        "owlbear-memory": {tool.name for tool in await memory_mcp.list_tools()},
-    }
 
-    for agent_path in _AGENTS_ROOT.glob("*.agent.md"):
-        metadata = _frontmatter(agent_path)
-        tools = metadata.get("tools", [])
-        assert isinstance(tools, list)
-        for server, registered in registries.items():
-            declared = {
-                tool.removeprefix(f"{server}/")
-                for tool in tools
-                if isinstance(tool, str) and tool.startswith(f"{server}/") and not tool.endswith("/*")
-            }
-            missing = declared - registered
-            assert not missing, f"{agent_path.name} has unavailable {server} tools: {sorted(missing)}"
-
-    metadata = {path.stem.removesuffix(".agent"): _frontmatter(path) for path in _AGENTS_ROOT.glob("*.agent.md")}
-    knowledge_ingestor_tools = set(metadata["knowledge-ingestor"]["tools"])
-    assert {tool for tool in knowledge_ingestor_tools if tool.startswith("owlbear-browser/")} == {
-        "owlbear-browser/acquire",
-        "owlbear-browser/browser_status",
-    }  # no interactive browser tool: sign-in stays with the operator
     browser_status_tool = browser_tools["browser_status"]
     assert browser_status_tool.annotations.read_only_hint is True
     assert browser_status_tool.annotations.idempotent_hint is True
