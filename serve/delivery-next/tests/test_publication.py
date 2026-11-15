@@ -1944,10 +1944,14 @@ def test_ignored_files_are_archived_unless_regenerable_and_large_ones_keep_the_w
 ):
     clone, wt = worktree_with_work
     git(wt, "config", "core.excludesFile", str(tmp_path / "ignore"))
-    (tmp_path / "ignore").write_text(".env\nnode_modules/\n")
+    (tmp_path / "ignore").write_text(".env\nnode_modules/\n.cache/\n")
     (wt / ".env").write_text("SECRET=1\n")
     (wt / "node_modules").mkdir()
     (wt / "node_modules" / "x.js").write_text("x\n")
+    cache = wt / ".cache/uv/sdists-v10"
+    cache.mkdir(parents=True)
+    for name in (".git", ".gitignore"):
+        (cache / name).touch()
     c = change(StepKind.CLEANUP, worktree=str(wt))
     c.names.branch, c.names.pr = "owlbear/c2", None
     monkeypatch.setattr(cleanup, "LARGE", 1)
@@ -1958,6 +1962,10 @@ def test_ignored_files_are_archived_unless_regenerable_and_large_ones_keep_the_w
     assert (result.exit, wt.exists()) == (Exit.DONE, False)
     with tarfile.open(result.preserved[-1]) as tar:
         assert tar.extractfile("files/.env").read() == b"SECRET=1\n"
+        for name in (".git", ".gitignore"):
+            marker = tar.getmember(f"files/.cache/uv/sdists-v10/{name}")
+            assert marker.isreg()
+            assert tar.extractfile(marker).read() == b""
         assert not any("node_modules" in n for n in tar.getnames())
 
 

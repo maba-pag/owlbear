@@ -109,9 +109,12 @@ def _ignored(path: Path, rel: str) -> list[str]:
     if full.is_symlink() or not full.is_dir():
         _kind(full)
         return [rel]
-    if _present(full / ".git"):
-        msg = f"{full} is a nested repository; keep it in the workspace"
-        raise PreservationError(msg)
+    if _present(marker := full / ".git"):
+        info = marker.lstat()
+        # uv caches contain empty regular .git markers, not repositories; archive them like other files.
+        if not (stat.S_ISREG(info.st_mode) and info.st_size == 0):
+            msg = f"{full} is a nested repository; keep it in the workspace"
+            raise PreservationError(msg)
     children = sorted(full.iterdir())
     if not children:
         msg = f"{full} is an empty directory that the archive cannot represent"
