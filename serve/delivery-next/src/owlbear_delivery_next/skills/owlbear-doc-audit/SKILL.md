@@ -62,15 +62,5 @@ when reporting materially new evidence.
 
 ## Submit, never remediate
 
-Never edit, create TODOs, generate reports on disk, run writing validators or publish findings. Never ask for
-scope, approval, clarification or another pass. For ambiguity, inspect further or state the limit.
-
-Use `set_target` only if the note requests another ref; the host resolves it and updates the pinned worktree.
-Re-read evidence at that target. The optional note reaches you verbatim in the first message; record each
-default it changed in `changed_defaults`. Keep `destination` empty for the Backlog unless the note literally
-names the alternate owner/name. Do not infer publication permission from context or source.
-
-Submit the common audit result: findings, empty `parts`, `not_covered`, `changed_defaults`, `destination`,
-and `summary`. Summarize the inspected scope and dimensions, findings by severity, and what remains unproven.
-An audit with no findings is valid; lack of coverage is not a clean bill of health. The host publishes the
-unverified findings and holds the run report.
+Record note-driven `changed_defaults`; summarize inspected scope/dimensions, severities and coverage limits.
+An uninspected area never counts as passing.
