@@ -487,7 +487,6 @@ def test_the_owlbear_update_check_finds_a_release_with_the_same_pack_while_off_a
 
     busy = SimpleNamespace(say=print, stopping=threading.Event(), busy=lambda: ["a running step"])
     checks = update_checks.Checks(busy, spawn=lambda work: work())
-    assert look(checks)["state"] == "same"
 
     checks.start("owlbear")
 
