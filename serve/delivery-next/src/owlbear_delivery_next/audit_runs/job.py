@@ -117,7 +117,7 @@ class Audits:
             return failure(exc)
         return ""
 
-    def start(self, audit: str, note: str = "", *, drop_unpublished: bool = False) -> dict[str, Any]:
+    def start(self, audit: str, note: str = "", *, discard_report: str = "") -> dict[str, Any]:
         """Pin the selected branch and launch one auditor, refusing an undisposed partial publication."""
         with self.lock:
             if why := self.refusal(audit):
@@ -126,7 +126,10 @@ class Audits:
                 msg = "the audit note exceeds 2000 characters"
                 raise ValueError(msg)
             old = self.read(audit)
-            if old and record.unpublished(old) and not drop_unpublished:
+            if discard_report and (not old or discard_report != old["id"]):
+                msg = "the last audit report changed; review it and start again"
+                raise AuditBusyError(msg)
+            if old and record.unpublished(old) and not discard_report:
                 msg = "the last audit has unpublished findings; finish publishing or explicitly drop them"
                 raise AuditBusyError(msg)
             prof = self.store.read_profile() or Profile()
