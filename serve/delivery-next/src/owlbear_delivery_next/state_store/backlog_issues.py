@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github import gh_client
 from owlbear_delivery_next.github.account import Origin, Writer
-from owlbear_delivery_next.github.gh_client import GhClient, Json, Missing, repo
+from owlbear_delivery_next.github.gh_client import GhClient, Json, Missing, invalid, repo
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.local_system import data_repo
 
@@ -106,6 +106,23 @@ class Issues(GhClient):
         self.private()
         endpoint = f"{repo(self.repository)}/issues/{number}/comments"
         self._api("comment_issue", "POST", endpoint, body={"body": body}, write=True)
+
+    def archive(self, number: int, text: str, identity: str) -> None:
+        """Find the archive's identity before posting, including after a lost comment receipt."""
+        marker = f"<!-- owlbear-audit-archive {identity} -->" if identity else ""
+        if marker:
+            page = 1
+            while True:
+                endpoint = f"{repo(self.repository)}/issues/{number}/comments?per_page={PAGE}&page={page}"
+                comments = self._api("list_comments", "GET", endpoint)
+                if not isinstance(comments, list):
+                    invalid("list_comments", "the issue comments are not a list")
+                if any(marker in str(comment.get("body") or "") for comment in comments):
+                    return
+                if len(comments) < PAGE:
+                    break
+                page += 1
+        self.comment(number, f"Earlier observation:\n\n{text}" + (f"\n\n{marker}" if marker else ""))
 
     def ensure_labels(self, names: list[str]) -> None:
         """Create the labels the repository lacks, in OwlBear's colour; one already there stays as it is."""

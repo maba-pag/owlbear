@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING, Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.github.gh_client import invalid, repo
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.state_store import backlog_issues
@@ -133,36 +132,13 @@ def _linked(entry: Entry, other: str, now: datetime) -> Entry:
     return _valid(entry.model_dump() | {"links": [*entry.links, other], "updated_at": now})
 
 
-class _AuditIssues(Issues):
-    """The backlog client with recoverable audit observation archives."""
-
-    def archive(self, number: int, text: str, identity: str) -> None:
-        """Find the archive's identity before posting, including after a lost comment receipt."""
-        marker = f"<!-- owlbear-audit-archive {identity} -->" if identity else ""
-        if marker:
-            page = 1
-            while True:
-                endpoint = (
-                    f"{repo(self.repository)}/issues/{number}/comments?per_page={backlog_issues.PAGE}&page={page}"
-                )
-                comments = self._api("list_comments", "GET", endpoint)
-                if not isinstance(comments, list):
-                    invalid("list_comments", "the issue comments are not a list")
-                if any(marker in str(comment.get("body") or "") for comment in comments):
-                    return
-                if len(comments) < backlog_issues.PAGE:
-                    break
-                page += 1
-        self.comment(number, f"Earlier observation:\n\n{text}" + (f"\n\n{marker}" if marker else ""))
-
-
 class Backlog:
     """The backlog issues of the shared repository, seen from one project."""
 
     def __init__(self, shared: DataRepo, project: str = "", clock: Callable[[], datetime] | None = None) -> None:
         """The issues of ``shared``'s GitHub remote; ``project`` is where new findings are found."""
         try:
-            self.issues = _AuditIssues(shared)
+            self.issues = Issues(shared)
         except DataRepoError as exc:
             raise BacklogError(409, failure(exc)) from exc
         except ValueError as exc:  # its origin names no GitHub repository: the owner's setup, said as it is
