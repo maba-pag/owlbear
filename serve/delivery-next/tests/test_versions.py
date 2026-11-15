@@ -471,7 +471,7 @@ def test_release_discovery_is_read_only_and_channel_changes_withdraw_the_offer(o
 
     said, row = discovery.release(), owlbear()
     assert (said["state"], said["detail"]) == ("unknown", impeccable.MOVED)
-    assert (row["state"], row["detail"], checks.read()["available"]) == ("unknown", impeccable.MOVED, 0)
+    assert (row["state"], row["detail"], discovery.read()["available"]) == ("unknown", impeccable.MOVED, 0)
     discovery.start("owlbear")
     assert (discovery.release()["state"], owlbear()["state"]) == ("none", "current")
     assert not (local_home.root() / local_home.VERSIONS).exists()
