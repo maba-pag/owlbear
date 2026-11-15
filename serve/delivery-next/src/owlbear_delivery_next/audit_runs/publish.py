@@ -41,6 +41,7 @@ def findings(store: Store, state: dict[str, Any], save: Callable[[], None]) -> N
         text = _text(state, finding)
         labels = (f"type:{finding['type']}", f"severity:{finding['severity']}")
         if external:
+            text += f"\n\n<!-- {identity} -->\n"
             if previous:
                 issue = external.retry_audit(
                     finding["title"], text, marker=identity, labels=labels, pending_since=previous
