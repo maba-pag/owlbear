@@ -31,12 +31,14 @@ class RepairResult(Args):
 
     cause: str = bounded(3000, "Why the step stopped, with the evidence", "The diff's .pre-commit-config.yaml ...")
     tried: list[Try] = Field(
-        max_length=20, description="Every attempted remedy in order; empty only for retry, never invent a fix",
+        max_length=20,
+        description="Every attempted remedy in order; empty only for retry and check-later, never invent a fix",
         examples=[[{"fix": "Route web/vendor/ like pages", "outcome": "passed in 212 s"}]],
     )  # fmt: skip
-    fix: Literal["none", "patch", "profile-check", "retry", "preparation"] = Field(
+    fix: Literal["none", "patch", "profile-check", "check-later", "retry", "preparation"] = Field(
         description="patch: your edits in this copy make the checks pass; profile-check: the step needs a project "
-        "check the profile lacks, proven here; retry: the cause no longer reproduces, no change needed; "
+        "check the profile lacks, proven here; check-later: it needs one, and none can pass until this Change has "
+        "built the project; retry: the cause no longer reproduces, no change needed; "
         "none: you tried remedies but none worked",
         examples=["patch"],
     )
@@ -51,8 +53,8 @@ class RepairResult(Args):
 
     @model_validator(mode="after")
     def _check(self) -> RepairResult:
-        if self.fix != "retry" and not self.tried:
-            msg = "tried: list the remedies actually attempted; only retry may report no attempted fix"
+        if self.fix not in {"retry", "check-later"} and not self.tried:
+            msg = "tried: list the remedies actually attempted; only retry and check-later may report none"
             raise ValueError(msg)
         if self.fix == "profile-check" and not (self.package.strip() and self.command.strip()):
             msg = "package and command: a profile-check needs both, e.g. package '.' and command 'uv run pytest -q'"
@@ -72,11 +74,12 @@ class PreparationResult(RepairResult):
 class AttemptResult(RepairResult):
     """The diagnostic or real rerun failed: reproduce that operation and try remedies, not another no-change retry."""
 
-    fix: Literal["none", "patch", "profile-check", "retry", "preparation"] = Field(
-        description="patch: a proven edit; profile-check: a proven missing project check; none: remedies failed",
-        json_schema_extra={"enum": ["none", "patch", "profile-check", "preparation"]},
+    fix: Literal["none", "patch", "profile-check", "check-later", "retry", "preparation"] = Field(
+        description="patch: a proven edit; profile-check: a proven missing project check; check-later: no check can "
+        "pass until this Change has built the project; none: remedies failed",
+        json_schema_extra={"enum": ["none", "patch", "profile-check", "check-later", "preparation"]},
     )
-    tried: list[Try] = Field(min_length=1, max_length=20, description="Actual attempted remedies, never diagnostics")
+    tried: list[Try] = Field(max_length=20, description="Actual attempted remedies, never diagnostics")
 
     @model_validator(mode="after")
     def _attempted(self) -> AttemptResult:

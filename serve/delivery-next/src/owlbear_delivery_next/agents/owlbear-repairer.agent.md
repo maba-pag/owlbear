@@ -80,9 +80,13 @@ Call `submit_result` once, with:
 
 - `cause`: why the step stopped, with the evidence that shows it (command output, paths and lines).
 - `tried`: every remedy actually attempted, in order, with what happened. When none was tried,
-  return an empty list with `retry`; do not list "No change" or a diagnostic as an attempted fix.
+  return an empty list with `retry` or `check-later`; do not list "No change" or a diagnostic as an
+  attempted fix.
 - `fix`: `patch` when your edits in this copy make the checks pass; `profile-check` when the step needs
   a project check the profile lacks and you proved its command here (then `package` and `command`);
+  `check-later` only when your message offers it: the step needs a project check, and nothing a check
+  could run on exists until this Change has built the project (the evidence goes in `cause`; `tried`
+  may be empty; it is no defect);
   `retry` when the cause no longer reproduces and no change is needed; `none` only when actual
   remedies were tried and none worked.
 - `defect`, only when the cause is in OwlBear's code: a title, what is wrong for any project, and the

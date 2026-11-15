@@ -25,7 +25,7 @@ from owlbear_delivery_next.change_contracts.failures import ENVIRONMENT, WRONG_M
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Outcome, StepKind, Stop
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.repair_records import KEPT, Tried, Witness
-from owlbear_delivery_next.change_flow import budgets, curation_flow, loop, rebuilds, stuck, worktree
+from owlbear_delivery_next.change_flow import budgets, curation_flow, loop, moves, rebuilds, stuck, worktree
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.settings import profile, roles
@@ -36,6 +36,7 @@ from owlbear_delivery_next.workflow_steps import (
     engine,
     lookup,
     preparation_repair,
+    project_checks,
     repair_copy,
     repair_messages,
     sessions,
@@ -50,6 +51,10 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 LABEL = repair_messages.LABEL
+REPLAN = (
+    "The project had no check when this Change was planned, so its tasks name none. The owner has now confirmed "
+    "`{check}` for {package}. Plan the work that is still open again, on the existing code, with checks."
+)
 
 
 def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -119,8 +124,8 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
         r.tried.extend(Tried(fix=t.fix, outcome=t.outcome) for t in p.tried)
         if p.defect is not None:
             r.defect = defect_issue.file(store, path, p.defect)
-        if p.fix == "none":
-            _stopped(store, lock, change, "nothing it tried worked")
+        if p.fix in {"none", project_checks.LATER}:
+            _unfixed(store, lock, change, at)
             return
         if preparing or p.fix == "preparation":
             _preparation(
@@ -141,6 +146,27 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
             repair_copy.drop(path, at)
         else:  # its processes may still use it: the next repair's copy replaces it
             _log(store, lock, change, f"kept its copy {at}: its session's processes are not confirmed gone")
+
+
+def _unfixed(store: Store, lock: Lock, change: Change, at: Path) -> None:
+    """The repair ends without a fix: nothing worked, or no check can pass until the Change built the project (#1275).
+
+    A deferred check lets the Change plan and build its first task without one; the gate then returns.
+    """
+    r = change.repairs.current
+    assert r is not None  # noqa: S101 - _repair() checked it
+    if r.fix == "none":
+        _stopped(store, lock, change, "nothing it tried worked")
+        return
+    if why := project_checks.defers(change):
+        _stopped(store, lock, change, why)
+        return
+    if repair_copy.changed(at, r.base):
+        _stopped(store, lock, change, "it deferred the project check but left edits; none were applied")
+        return
+    _log(store, lock, change, f"the project check waits until the first task is built: {r.found}; the step runs again")
+    stuck.applied(change, "check deferred", datetime.now(UTC))
+    store.write(lock, change)
 
 
 def _preparation(
@@ -283,6 +309,7 @@ def _offered(  # noqa: PLR0913, PLR0917 - the Change, its copy, what changed the
 def _apply(store: Store, lock: Lock, change: Change, path: Path, prof: Profile) -> None:
     r = change.repairs.current
     assert r is not None  # noqa: S101 - run() checked it
+    replan = False
     if r.fix == "preparation":
         made = preparation_repair.apply(store, change)
     elif r.fix == "profile-check":
@@ -290,15 +317,29 @@ def _apply(store: Store, lock: Lock, change: Change, path: Path, prof: Profile) 
         if (entry := prof.entries.get(key)) is not None and profile.is_confirmed(entry):  # confirmed while it waited
             _stopped(store, lock, change, f"{r.package}'s check `{entry.value}` was confirmed meanwhile; nothing added")
             return
-        store.write_profile(profile.confirm(prof, key, r.command, datetime.now(UTC)))
+        confirmed = profile.confirm(prof, key, r.command, datetime.now(UTC))
+        store.write_profile(confirmed)
         made = f"profile {key}"
+        replan = project_checks.deferred(change) and project_checks.covered(confirmed, change) and _open(change)
     else:
         message = f"fix: {stuck.obstruction(r.found)}\n\nRepaired by an agent; applied by Delivery (#1066)."
         made = repair_copy.apply(path, change.names.branch, r.base, r.commit, message)
         repair_copy.git(path, ["update-ref", "-d", f"{KEPT}{change.slug}"])
+    now = datetime.now(UTC)
+    if replan:  # the plan named no check: the open tasks are planned again with it
+        _log(store, lock, change, f"applied {made}; the remaining work is planned again.{repair_messages.defect(r)}")
+        stuck.applied(change, made, now)
+        moves.go(change, StepKind.PLAN)
+        change.outcome = Outcome(exit=Exit.BACK, reason=REPLAN.format(check=r.command, package=r.package), at=now)
+        store.write(lock, change)
+        return
     _log(store, lock, change, f"applied {made}; the step runs again.{repair_messages.defect(r)}")
-    stuck.applied(change, made, datetime.now(UTC))
+    stuck.applied(change, made, now)
     store.write(lock, change)
+
+
+def _open(change: Change) -> bool:
+    return change.plan is not None and any(not t.done for t in change.plan.tasks)
 
 
 def _stopped(store: Store, lock: Lock, change: Change, why: str) -> None:

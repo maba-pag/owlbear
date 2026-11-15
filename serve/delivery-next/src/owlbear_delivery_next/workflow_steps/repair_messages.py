@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts import permissions, repair_tools, tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_flow import stuck
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import sdk_adapter, step_input
 from owlbear_delivery_next.settings import roles
-from owlbear_delivery_next.workflow_steps import engine, preparation_repair, sessions, watched
+from owlbear_delivery_next.workflow_steps import engine, preparation_repair, project_checks, sessions, watched
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -26,6 +26,17 @@ ASKED = {
     "patch": "Apply it to this Change and run the step again?",
     "profile-check": "Add this check to the project profile and run the step again?",
 }
+FIND = (
+    "- none yet: the project profile has no check command for this Change's packages. Find the command that checks "
+    "this project (its tests, else its build), run it here, and report `profile-check` with its package and command "
+    "once it passes. A command that passes on nothing (no tests collected, an empty build) proves nothing."
+)
+LATER = (
+    " When nothing a check could run on exists yet because this Change is to create it (see the brief below), "
+    "report `check-later` with that evidence in `cause`: the Change is planned and its first task built without a "
+    "check, and you are asked again on what it built."
+)
+BUILT = " This Change created the project and its first task is built in this copy: `check-later` is refused now."
 
 
 def session(
@@ -101,9 +112,12 @@ def message(change: Change, witness: tuple[str, ...], at: Path) -> str:
         msg = "only a running repair has a session"
         raise ValueError(msg)
     task = f" task {r.task}" if r.task else ""
+    gate = project_checks.gates(r.cause) and not witness  # no check yet: the repair finds one, or defers it (#1275)
     checks = "\n".join(f"- `{c}`" for c in witness) or (
         "- the preparation's restore, seed, verification and cleanup trial described below"
         if r.cause in preparation_repair.CAUSES
+        else f"{FIND}{BUILT if project_checks.defers(change) else LATER}"
+        if gate
         else "- none: the step has no check; say so and fix nothing"
     )
     scope = "\n".join(f"- {s}" for s in change.brief.scope) or "- the whole repository"
@@ -131,6 +145,7 @@ def message(change: Change, witness: tuple[str, ...], at: Path) -> str:
             "",
             "## The brief's scope (a fix outside it, or in your owner's configuration, is his yes or no)",
             scope,
+            *(["", *step_input.brief(change)] if gate else []),
             "",
             "## Finish",
             "Call `submit_result` once with the cause, every fix you tried and what you proved.",
