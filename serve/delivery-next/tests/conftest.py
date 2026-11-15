@@ -458,11 +458,17 @@ class FakeGitHub:
         if number not in self.issues:
             return 404, "Not Found"
         if parts[2:] == ["comments"]:
-            self.comments.append((number, body["body"]))
-            return 0, {"id": len(self.comments)}
+            return self.comment(number, method, params, body)
         if method == "GET":  # one issue, as it is now: never hidden
             return 0, self.issues[number]
         return 0, self.edit(self.issues[number], body)
+
+    def comment(self, number, method, params, body):
+        if method == "GET":
+            comments = [{"body": text} for issue, text in self.comments if issue == number]
+            return 0, self._page(comments, params)
+        self.comments.append((number, body["body"]))
+        return 0, {"id": len(self.comments)}
 
     def edit(self, issue, body):
         for name in body.get("labels", []):  # GitHub makes a missing label itself, in its own colour

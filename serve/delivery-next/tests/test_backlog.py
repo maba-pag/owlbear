@@ -149,7 +149,10 @@ def test_audit_publication_keeps_current_observation_owner_notes_and_identity_ac
     def lost(number, fields):
         answer = edit(number, fields)
         if "audit:run-b:1" in fields.get("body", ""):
-            assert github.comments[-1] == (1, "Earlier observation:\n\nold commit")
+            assert github.comments[-1] == (
+                1,
+                "Earlier observation:\n\nold commit\n\n<!-- owlbear-audit-archive audit:run-b:1 -->",
+            )
             monkeypatch.setattr(backlog.issues, "edit", edit)
             raise ProviderError(FailureCode.RESPONSE_UNKNOWN, "edit_issue", "response lost", retry_safe=False)
         return answer
@@ -178,7 +181,9 @@ def test_audit_publication_keeps_current_observation_owner_notes_and_identity_ac
         2,
     )
     assert repeated.evidence == ["audit:run-b:1", "audit:run-a:1"]
-    assert github.comments == [(1, "Earlier observation:\n\nold commit")]
+    assert github.comments == [
+        (1, "Earlier observation:\n\nold commit\n\n<!-- owlbear-audit-archive audit:run-b:1 -->")
+    ]
     assert {"type:defect", "severity:high"} <= set(names(github.issues[1]))
     assert "severity:low" not in names(github.issues[1])
 
@@ -192,6 +197,47 @@ def test_audit_publication_keeps_current_observation_owner_notes_and_identity_ac
         assert (new, repeated.id, repeated.status, repeated.count) == (True, str(index), "inbox", 1)
         assert repeated.links == [str(n) for n in range(1, index)]
         assert all(repeated.id in backlog.current(str(n)).links for n in range(1, index))
+
+
+def test_audit_archive_is_recovered_after_a_lost_comment_receipt_and_a_failed_entry_save(shared, github, monkeypatch):
+    title, identity = "Missing instructions", "audit:retry:1"
+    view(shared[0]).add(title, "Earlier commit", "audit", ["audit:original:1"])
+    view(shared[0]).update("1", {"notes": "Owner context"})
+    # Force recovery past the first page, where an identity-prefix collision is not our archive.
+    github.comments[:] = [(1, f"comment {n}") for n in range(99)]
+    github.comments.append((1, "<!-- owlbear-audit-archive audit:retry:10 -->"))
+    answer = github.answer
+    fail = {"comment", "edit"}
+
+    def interrupted(method, parts, params, body):
+        if method == "PATCH" and "edit" in fail:
+            fail.remove("edit")
+            return 502, "entry save failed"
+        result = answer(method, parts, params, body)
+        if method == "POST" and parts[2:] == ["comments"] and "comment" in fail:
+            fail.remove("comment")
+            return 502, "comment receipt lost"
+        return result
+
+    monkeypatch.setattr(github, "answer", interrupted)
+    with pytest.raises(BacklogError, match="comment receipt lost"):
+        view(shared[0]).add(title, "Current commit", "audit", [identity])
+    assert view(shared[0]).current("1").text == "Earlier commit"
+    with pytest.raises(BacklogError, match="entry save failed"):
+        view(shared[0]).add(title, "Current commit", "audit", [identity])
+    assert view(shared[0]).current("1").evidence == ["audit:original:1"]
+    entry, new = view(shared[0]).add(title, "Current commit", "audit", [identity])
+    assert (new, entry.count, entry.text, entry.notes, entry.evidence[0]) == (
+        False,
+        2,
+        "Current commit",
+        "Owner context",
+        identity,
+    )
+    assert github.comments[100:] == [
+        (1, "Earlier observation:\n\nEarlier commit\n\n<!-- owlbear-audit-archive audit:retry:1 -->")
+    ]
+    assert len([1 for method, endpoint, _ in github.calls if method == "POST" and endpoint.endswith("/comments")]) == 1
 
 
 @pytest.mark.usefixtures("github")
