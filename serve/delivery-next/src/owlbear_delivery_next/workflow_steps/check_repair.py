@@ -140,9 +140,8 @@ def adopt(store: Store, change: Change, repair: Repair, repo: Path) -> None:
         return where == repair.package and not check_hint.offered(check, offered)
 
     tasks = [t for t in change.plan.tasks if any(stale(c) for c in t.checks)]
-    for t in tasks:
-        if t.done:  # the repair tasks that copy it get the current checks whole
-            t.checks = list(offered)
+    for t in tasks:  # whole: finished tasks for the repair tasks that copy them, open ones that a new plan carries
+        t.checks = list(offered)
     if any(not t.done for t in tasks):
         new = f"`{repair.command}` replaces it" if repair.fix != LATER else "no check exists until the project is built"
         why = f"The check of {_of(repair.package)}, `{repair.replaces}`, cannot pass: {new}."
