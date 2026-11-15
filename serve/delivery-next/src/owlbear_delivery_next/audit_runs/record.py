@@ -37,7 +37,6 @@ class Report(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     id: str
-    host: str
     audit: Literal["doc", "agent"]
     state: Literal["running", "publishing", "done", "failed"]
     phase: str
