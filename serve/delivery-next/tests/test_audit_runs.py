@@ -7,6 +7,9 @@ from types import SimpleNamespace
 from owlbear_delivery_next.audit_runs import job, publish, record
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
+from owlbear_delivery_next.github.provider import FailureCode, ProviderError
+from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.state_store import backlog
 from owlbear_delivery_next.state_store.store import Store
 
 
@@ -45,22 +48,24 @@ def _report():
     }
 
 
-def test_finish_recovers_a_lost_receipt_without_duplicate_issue(tmp_path, monkeypatch):
-    store = Store(tmp_path / "store", name="fixture")
-    state, written, listing = _report(), [], []
+def test_finish_recovers_a_lost_receipt_without_duplicate_issue(tmp_path, monkeypatch, shared_repo, github):
+    store = Store(tmp_path / "store", DataRepo(shared_repo[0]), "fixture")
+    state, book = _report(), backlog.Backlog.of(store)
+    earlier, _ = book.add(state["findings"][0]["title"], "earlier observation", "audit", ["audit:earlier:1"])
+    book.update(earlier.id, {"kind": "defect", "status": "done"})
+    edit = book.issues.edit
 
-    def add(*_args, **kwargs):
+    def lost(number, fields):
+        if number != int(earlier.id):
+            return edit(number, fields)
         persisted = record.load(store)["doc"]["findings"][0]
         assert persisted["pending"]
-        written.append(kwargs["evidence"][0])
-        msg = "GitHub accepted the write but its response was lost"
-        raise OSError(msg)
+        monkeypatch.setattr(book.issues, "edit", edit)
+        github.hidden.add(2)
+        backlog._recent.clear()  # noqa: SLF001 - simulate restart before GitHub lists the new issue
+        raise ProviderError(FailureCode.RESPONSE_UNKNOWN, "edit_issue", "response lost", retry_safe=False)
 
-    book = SimpleNamespace(
-        repository="fixture/private",
-        add=add,
-        read=lambda **_kw: ({e.id: e for e in listing}, []),
-    )
+    monkeypatch.setattr(book.issues, "edit", lost)
     monkeypatch.setattr(job.backlog.Backlog, "of", lambda _store: book)
     record.save(store, "doc", state)
     audits = job.Audits(store)
@@ -69,18 +74,20 @@ def test_finish_recovers_a_lost_receipt_without_duplicate_issue(tmp_path, monkey
     partial = audits.read("doc")
     assert partial["state"] == "publishing"
     assert partial["findings"][0]["pending"]
-    assert "response was lost" in partial["reason"]
+    assert "response lost" in partial["reason"]
     audits.publish("doc")
     audits.thread.join()
     assert "two minutes" in audits.read("doc")["reason"]
-    assert written == ["audit:run-one:1"]
-    listing.append(SimpleNamespace(id="42", evidence=["audit:run-one:1"]))
+    assert len(github.issues) == 2
+    github.hidden.clear()
     audits.finish("doc")
     audits.thread.join()
     finished = audits.read("doc")
     assert finished["state"] == "done"
-    assert finished["findings"][0]["number"] == 42
-    assert written == ["audit:run-one:1"]
+    assert finished["findings"][0]["number"] == 2
+    assert len(github.issues) == 2
+    assert book.current("1").links == ["2"]
+    assert book.current("2").links == ["1"]
 
 
 def test_shared_git_mutation_voids_even_an_errored_session(tmp_path, monkeypatch):
