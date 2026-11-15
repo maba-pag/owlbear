@@ -55,7 +55,8 @@ def _mapped(attribution: SessionContextAttribution) -> Context:
     parts = {p: int(getattr(attribution.categories, c)) for p, c in CATEGORIES.items()}
     total = int(attribution.total_tokens)
     if any(v < 0 for v in parts.values()) or sum(parts.values()) != total:
-        raise ValueError(f"categories {parts} do not add up to totalTokens {total}")
+        msg = f"categories {parts} do not add up to totalTokens {total}"
+        raise ValueError(msg)
     entries = {e.id: e for e in attribution.entries}
     taken = dict.fromkeys(TAKEN.values(), 0)
     kept = []
@@ -63,10 +64,11 @@ def _mapped(attribution: SessionContextAttribution) -> Context:
         tops = [e for e in entries.values() if e.kind == kind and not _nested(e, entries)]
         found = [(_bucket(e, entries), int(e.tokens)) for e in tops]
         need = {b: sum(t for x, t in found if x == b) for b, _ in found}
+        held = sum(t for _, t in found)
         if None in need:
-            kept.append(f"{part}: {sum(t for _, t in found)} tokens stay in their category, which nesting does not name")
+            kept.append(f"{part}: {held} tokens stay in their category, which nesting does not name")
         elif any(parts[b] < t for b, t in need.items()):  # type: ignore[index]
-            kept.append(f"{part}: {sum(t for _, t in found)} tokens stay in their category, which holds fewer")
+            kept.append(f"{part}: {held} tokens stay in their category, which holds fewer")
         else:
             for b, t in need.items():
                 parts[b] -= t  # type: ignore[index]
