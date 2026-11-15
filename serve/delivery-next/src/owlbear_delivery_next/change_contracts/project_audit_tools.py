@@ -89,9 +89,7 @@ SET_TARGET = tools.Spec(
 def check(args: AuditFindings, root: Path) -> list[str]:
     """Refuse an invented publication destination while the report's author can still correct it."""
     note = json.loads((root / "context" / "run.json").read_text(encoding="utf-8"))["note"]
-    named = re.search(
-        rf"(?<![A-Za-z0-9_.-]){re.escape(args.destination)}(?![A-Za-z0-9_-]|\.[A-Za-z0-9_.-])", note
-    )
+    named = re.search(rf"(?<![A-Za-z0-9_.-]){re.escape(args.destination)}(?![A-Za-z0-9_-]|\.[A-Za-z0-9_.-])", note)
     if args.destination and not named:
         return ["destination: use an empty string for the Backlog, or owner/name occurring literally in the run's note"]
     return []
