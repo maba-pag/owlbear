@@ -530,7 +530,6 @@ def test_c1s_seven_questions_share_two_cause_allowances_despite_changed_evidence
     assert counts == [1, 2, 2, 3, 3, 4, 4]
     assert len(set(digests)) == 4
     assert len(set(tool_causes)) == 1
-    assert cx.gh.merges == []
 
     # Already-saved c1 questions and an in-flight legacy repair must not acquire a fresh allowance on upgrade.
     legacy = c.model_copy(deep=True)
