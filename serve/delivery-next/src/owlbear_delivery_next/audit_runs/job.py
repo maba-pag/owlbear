@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess
 import threading
 import uuid
 from typing import TYPE_CHECKING, Any
@@ -200,34 +199,16 @@ class Audits:
                 save()
             publish.findings(self.store, state, save)
             state.update(state="done", phase="", reason="", ended_at=record.now())
-        except (
-            RuntimeError,
-            OSError,
-            ValueError,
-            TypeError,
-            subprocess.SubprocessError,
-            StoreError,
-            SettingsUnset,
-            ProviderError,
-            backlog.BacklogError,
-            session_result.ReturnedRunError,
-        ) as exc:
-            self._failed(audit, state, exc)
         except Exception as exc:
-            self._failed(audit, state, exc)
-            raise
+            state.update(reason=failure(exc), ended_at=record.now())
+            if state["state"] != "publishing":
+                state.update(state="failed", phase="")
+            _log.exception("%s audit failed", audit)
         finally:
             try:
                 save()
             finally:
                 record.active(self.store, audit, running=False)
-
-    @staticmethod
-    def _failed(audit: str, state: dict[str, Any], exc: Exception) -> None:
-        state.update(reason=failure(exc), ended_at=record.now())
-        if state["state"] != "publishing":
-            state.update(state="failed", phase="")
-        _log.exception("%s audit failed", audit)
 
     def _audit(self, audit: str, state: dict[str, Any], save: Callable[[], None]) -> None:
         if self.repo is None or self.maintenance is None:
