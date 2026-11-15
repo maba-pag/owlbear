@@ -17,7 +17,7 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.impeccable_runs import pack_state
 from owlbear_delivery_next.local_system import codebase, local_home
-from owlbear_delivery_next.machine_host import app, impeccable, update_checks, versions
+from owlbear_delivery_next.machine_host import app, update_checks, versions
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.machine_host.update_checks import CHECKS, Checks, Failed
 from owlbear_delivery_next.project_host import pages
@@ -381,8 +381,7 @@ def test_a_check_ending_after_its_home_moved_writes_only_in_the_home_its_host_st
     move(monkeypatch, b)  # the teardown
     release.set()
     assert checks.drain(10)
-    released = Path(pack_files.PACKS) / impeccable.RELEASED
-    assert [(home / f).exists() for home in (b, a) for f in (update_checks.STATE, released)] == [False] * 2 + [True] * 2
+    assert [(home / update_checks.STATE).exists() for home in (b, a)] == [False, True]
     assert json.loads((a / update_checks.STATE).read_text())["owlbear"]["failures"] == 1
 
 

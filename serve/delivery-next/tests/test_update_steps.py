@@ -70,7 +70,7 @@ def stepping(monkeypatch) -> SimpleNamespace:
     monkeypatch.setattr(versions, "_sync", sync)
     monkeypatch.setattr(versions, "selfcheck", lambda _f: said.check)
     monkeypatch.setattr(versions, "pack", lambda _f: said.pack)
-    monkeypatch.setattr(versions, "target", lambda: Choice("v0.2", "c2c2c2c2c2c2c2c2"))
+    monkeypatch.setattr(versions, "target", lambda _channel=None: Choice("v0.2", "c2c2c2c2c2c2c2c2"))
     monkeypatch.setattr(handover, "Standby", FakeStandby)
     monkeypatch.setattr(alias, "activate", lambda f, t: said.activated.append((f, t)))
     monkeypatch.setattr(update, "RECHECK", 0.0)

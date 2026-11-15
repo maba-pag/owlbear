@@ -2111,7 +2111,7 @@ def test_updates_owlbear_marks_the_menu_refuses_start_while_work_runs_and_the_ma
         page.goto(f"{base}/updates/pds")
         expect(page.locator("#check-failure")).to_contain_text("The last 2 checks failed")
         expect(page.locator("#check-failure")).to_contain_text("npm did not answer.")
-        expect(page.locator("#check-latest")).to_have_text("4.11.0, found by the last successful check")
+        expect(page.locator("#check-latest")).to_have_text("4.11.0, last known available")
         found["updates"][2] = checked("impeccable", "current", "4.8.0.1", failures=2, reason="GitHub answered 503")
         page.goto(f"{base}/updates/impeccable")
         expect(page.locator("#check-failure")).to_contain_text("GitHub answered 503")

@@ -9,6 +9,10 @@ failure shows only once two come in a row; until then the last success stands, e
 current. What is shown is read against the version installed now, so an update applied since is no longer offered;
 a newer version stays available through failed checks until a check finds it withdrawn.
 
+Idle-update, updater and legacy pack lookups publish their release observations here too, before announcing or
+preparing a version. They do not change scheduled/manual check history or cadence. The page, menu and bundled-pack
+banner all read this knowledge; a running update keeps its own selected target.
+
 A newer PDS release is the Updates page's to take (#777): while a project's update of it runs or waits for the owner,
 or once one merged it, it is shown so and not counted; a failed update leaves it available.
 
@@ -76,18 +80,18 @@ def _time(value: object) -> datetime | None:
 def owlbear() -> dict[str, Any]:
     """The version this machine would take, newer whether or not it pins another Impeccable; never installs.
 
-    It also keeps that version's pack for the pages' Impeccable banner (``impeccable.release``).
+    Its selected commit and pack travel together into the shared release record.
 
     Raises:
-        Failed: The versions could not be read, or their channel is unset.
+        versions.VersionError: The versions could not be read, or their channel is unset.
     """
-    found, running = impeccable.checked(), versions.running()
+    channel = machine_settings.current().channel
+    choice = versions.target(channel)
+    found, running = impeccable.found(choice, channel), versions.running()
     tag = str(found.get("version", ""))
-    if found.get("state") == "unknown" and not tag:
-        raise Failed(str(found.get("detail", "")))
     newer = bool(tag) and (versions.number(tag) or (0, 0)) > (versions.number(running) or (-1, -1))
-    latest, channel = tag if newer else running, found.get("channel")
-    return {"newer": newer, "current": running, "latest": latest, "detail": found.get("detail", ""), "channel": channel}
+    return {"newer": newer, "current": running, "latest": tag if newer else running,
+            "detail": found["detail"], "channel": channel, "release": found}  # fmt: skip
 
 
 def pds(fetch: Callable[[str, float], bytes] | None = None) -> dict[str, Any]:
@@ -216,6 +220,35 @@ class Checks:
             self.machine.say(f"update checks: {self.unkept}")
         else:
             self.unkept = ""
+
+    def look(self) -> versions.Choice | None:
+        """Discover and publish the host's next release, without changing scheduled/manual check timing."""
+        if self.machine.stopping.is_set():
+            msg = "OwlBear is stopping"
+            raise versions.VersionError(msg)
+        found = owlbear()
+        with self.lock:
+            kept = self.kept.setdefault("owlbear", {})
+            kept["discovery"] = {"at": _iso(self.now()), **found}
+            self._keep()
+        selected = found["release"]
+        if selected["version"] or selected["notes"]:
+            return versions.Choice(selected["version"], selected["commit"], tuple(selected["notes"]))
+        return None
+
+    def _known(self, name: str) -> dict[str, Any]:
+        kept = self.kept.get(name, {})
+        success = kept.get("success")
+        success = success if isinstance(success, dict) else {}
+        discovery = kept.get("discovery", {})
+        return discovery if discovery.get("at", "") > success.get("at", "") else success
+
+    def release(self) -> dict[str, Any]:
+        """The bundled-pack banner, derived from the same observation as OwlBear's Newest."""
+        with self.lock:
+            known = self._known("owlbear")
+            kept = known.get("release", {}) | {"checked_at": known.get("at")}
+        return impeccable.release(kept)
 
     def start(self, name: str) -> bool:
         """Check *name* now, unless it is being checked or the machine is stopping; whether a check started."""
@@ -357,7 +390,7 @@ class Checks:
     def _shown(self, name: str, hours: int | None, installed: str, channel: str | None) -> dict[str, Any]:
         kept = self.kept.get(name, {})
         success, failures = kept.get("success"), int(kept.get("failures", 0))
-        found = success if isinstance(success, dict) else {}
+        found = self._known(name)
         # OwlBear's version to take depends on the channel: one found on another channel is unknown until checked again
         moved = name == "owlbear" and bool(found) and found.get("channel") != channel
         current, latest = installed or found.get("current", ""), found.get("latest", "")
@@ -376,7 +409,8 @@ class Checks:
             "available": offered,  # until applied or found withdrawn, whatever a failure says
             "current": current, "latest": latest if offered else current,
             "detail": impeccable.MOVED if moved else found.get("detail", ""),
-            "checked_at": found.get("at"), "attempted_at": kept.get("attempt_at"), "failures": failures,
+            "checked_at": success.get("at") if isinstance(success, dict) else None,
+            "attempted_at": kept.get("attempt_at"), "failures": failures,
             "reason": kept.get("reason", "") if failures >= SHOWN else "", "checking": name in self.checking,
             "hours": hours, "next_at": _iso(due) if due else None,
         }  # fmt: skip

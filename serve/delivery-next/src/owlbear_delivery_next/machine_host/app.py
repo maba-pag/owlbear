@@ -25,7 +25,6 @@ from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, leases, local_home
 from owlbear_delivery_next.machine_host import (
     control,
-    impeccable,
     improvement_routes,
     onboarding_routes,
     update_routes,
@@ -433,7 +432,7 @@ def _pack_routes(routes: APIRouter, machine: Machine) -> None:
     @routes.post(f"{pack_routes.OLD}/look", include_in_schema=False)
     def look_pack() -> dict[str, Any]:
         """Look now whether a released version pins a newer pack; it fetches, and never installs anything."""
-        impeccable.look()
+        machine.checks.look()
         return machine.impeccable.read()
 
     pack_routes.moved(routes, "")

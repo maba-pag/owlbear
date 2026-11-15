@@ -361,7 +361,7 @@ def test_a_switch_that_fails_says_the_whole_failure_on_the_page_and_in_the_log(w
     def failing(_folder: Path, _tag: str) -> bool:
         raise error
 
-    monkeypatch.setattr(versions, "target", lambda: Choice("v0.2", TAGS["v0.2"]))
+    monkeypatch.setattr(versions, "target", lambda _channel=None: Choice("v0.2", TAGS["v0.2"]))
     updating = host(monkeypatch)
     updater = updating.machine.updater
     monkeypatch.setattr(updater, "_prepared", lambda _choice: local_home.root() / local_home.VERSIONS / "v0.2")
@@ -425,35 +425,45 @@ def at_v0_2(origin: Path) -> Path:
     return runtime
 
 
-def test_upstream_ahead_without_an_owlbear_release_shows_no_newer_pack(origin):
+@pytest.fixture
+def discovery():
+    return update_checks.Checks(SimpleNamespace(say=print, stopping=threading.Event()), spawn=lambda work: work())
+
+
+def look(checks):
+    checks.look()
+    return checks.release()
+
+
+def test_upstream_ahead_without_an_owlbear_release_shows_no_newer_pack(origin, discovery):
     at_v0_2(origin)
     released(origin, "", '{"pack": "p-new"}')
 
-    assert impeccable.look()["state"] == "none"
+    assert look(discovery)["state"] == "none"
 
 
-def test_release_discovery_is_read_only_and_channel_changes_withdraw_the_offer(origin, monkeypatch):
+def test_release_discovery_is_read_only_and_channel_changes_withdraw_the_offer(origin, discovery, monkeypatch):
     runtime = at_v0_2(origin)
     head = git(runtime, "rev-parse", "HEAD")
     released(origin, "v0.3", '{"pack": "p-new"}')
     fetched, target = [], versions.target
     monkeypatch.setattr(versions, "target", lambda channel=None: fetched.append(1) or target(channel))
 
-    said = impeccable.look()
+    said = look(discovery)
 
     assert (said["state"], said["version"], said["pack"]) == ("newer", "v0.3", "p-new")
     assert said["running_pack"] == pack_files.manifest()["pack"]
-    assert impeccable.release() == said  # kept for the pages, which never fetch
+    assert discovery.release() == said  # kept for the pages, which never fetch
     assert fetched == [1]
-    assert impeccable.look()["checked_at"] is not None  # each look fetches; the update checks say when
+    assert look(discovery)["checked_at"] is not None  # each look fetches; the update checks say when
     assert fetched == [1, 1]
-    checks = update_checks.Checks(SimpleNamespace(say=print, stopping=threading.Event()), spawn=lambda work: work())
+    checks = discovery
     checks.start("owlbear")
 
     def owlbear() -> dict:
         return next(u for u in checks.read()["updates"] if u["name"] == "owlbear")
 
-    assert (impeccable.release()["state"], owlbear()["state"], owlbear()["latest"]) == ("newer", "newer", "v0.3")
+    assert (checks.release()["state"], owlbear()["state"], owlbear()["latest"]) == ("newer", "newer", "v0.3")
     assert checks.read()["available"] == 1
 
     with registry.locked():
@@ -461,11 +471,11 @@ def test_release_discovery_is_read_only_and_channel_changes_withdraw_the_offer(o
         saved.settings = saved.settings.model_copy(update={"channel": "major"})  # v0.1 until v1: v0.3 is not taken
         registry.save(saved)
 
-    said, row = impeccable.release(), owlbear()
+    said, row = checks.release(), owlbear()
     assert (said["state"], said["detail"]) == ("unknown", impeccable.MOVED)
     assert (row["state"], row["detail"], checks.read()["available"]) == ("unknown", impeccable.MOVED, 0)
     checks.start("owlbear")
-    assert (impeccable.release()["state"], owlbear()["state"]) == ("none", "current")
+    assert (checks.release()["state"], owlbear()["state"]) == ("none", "current")
     assert not (local_home.root() / local_home.VERSIONS).exists()
     assert git(runtime, "rev-parse", "HEAD") == head
 
@@ -476,38 +486,38 @@ def test_the_owlbear_update_check_finds_a_release_with_the_same_pack_while_off_a
     head = git(runtime, "rev-parse", "HEAD")
     released(origin, "v0.3", json.dumps(pack_files.manifest()))  # the same pack: the banner says nothing
 
-    assert impeccable.look()["state"] == "same"
     busy = SimpleNamespace(say=print, stopping=threading.Event(), busy=lambda: ["a running step"])
     checks = update_checks.Checks(busy, spawn=lambda work: work())
+    assert look(checks)["state"] == "same"
 
     checks.start("owlbear")
 
     said = next(u for u in checks.read()["updates"] if u["name"] == "owlbear")
     assert (said["state"], said["latest"], checks.read()["available"]) == ("newer", "v0.3", 1)
-    assert impeccable.release()["state"] == "same"
+    assert checks.release()["state"] == "same"
     assert not (local_home.root() / local_home.VERSIONS).exists()  # nothing installed
     assert git(runtime, "rev-parse", "HEAD") == head
 
 
-def test_a_release_with_an_unreadable_pack_is_unknown_but_owlbear_remains_available(origin):
+def test_a_release_with_an_unreadable_pack_is_unknown_but_owlbear_remains_available(origin, discovery):
     at_v0_2(origin)
     released(origin, "v0.4", None)
-    said = impeccable.look()
+    said = look(discovery)
     assert (said["state"], said["version"]) == ("unknown", "v0.4")
     assert "Impeccable is unreadable" in said["detail"]
-    checks = update_checks.Checks(SimpleNamespace(say=print, stopping=threading.Event()), spawn=lambda work: work())
+    checks = discovery
     checks.start("owlbear")
     row = next(u for u in checks.read()["updates"] if u["name"] == "owlbear")
     assert (row["state"], row["latest"], "Impeccable is unreadable" in row["detail"]) == ("newer", "v0.4", True)
 
 
-def test_a_runtime_from_before_the_rename_sees_a_renamed_release_as_unknown_not_failed(origin, monkeypatch):
+def test_a_runtime_from_before_the_rename_sees_a_renamed_release_as_unknown_not_failed(origin, discovery, monkeypatch):
     """D-01M63CB9WFXBV3TDXGG295QCST: a reader that knows only design_pack.json shows unknown until it updates once."""
     at_v0_2(origin)
     released(origin, "v0.3", '{"pack": "p-new"}')  # the renamed tree: impeccable.json only
     monkeypatch.setattr(versions, "MANIFEST", versions.OLD_MANIFEST)  # the older runtime's one manifest path
 
-    said = impeccable.look()
+    said = look(discovery)
 
     assert (said["state"], said["version"]) == ("unknown", "v0.3")
     assert "Impeccable is unreadable" in said["detail"]

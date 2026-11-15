@@ -94,7 +94,7 @@ class Auto:
         if now >= self.next_look:
             self.next_look = now + LOOK
             try:
-                choice = versions.target()
+                choice = self.machine.checks.look()
             except (versions.VersionError, registry.RegistryError) as exc:
                 self._problem("looking for a version", failure(exc))
                 choice = None

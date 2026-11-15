@@ -154,7 +154,7 @@ class Updater:
         self.steps.mark("looking", "running", "fetching the versions")
         self._set("looking", "fetching the versions")
         try:
-            choice = versions.target()
+            choice = self.machine.checks.look()
         except (versions.VersionError, registry.RegistryError) as exc:
             self._set("failed", f"the versions could not be read: {failure(exc)}")
             return

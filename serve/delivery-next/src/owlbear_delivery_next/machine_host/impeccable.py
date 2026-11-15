@@ -4,15 +4,13 @@ A version counts as installed only once its pack is in place (``versions.install
 running version's pack missing, gives every page a banner with Install. Install puts the running version's pinned
 pack in place even when no newer version exists, and the pack of a version whose update failed on it.
 
-A separate look, the OwlBear update check's (``update_checks``) whatever updating by itself is set to, reads the
-pack the version this machine would take pins (``versions.target``, then its ``impeccable.json`` from ``repo.git``):
-it never installs or activates anything. Pages read only what the last look kept. ``notice.json`` stays upstream's
-view of Impeccable's releases, for whoever updates the pack.
+Every host release discovery publishes through ``update_checks``. The bundled-pack banner derives from that same
+observation, never a separate lookup or cache. ``notice.json`` stays upstream's view of Impeccable's releases,
+for whoever updates the pack.
 """
 
 from __future__ import annotations
 
-import contextlib
 import json
 import threading
 import time
@@ -30,7 +28,6 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.machine_host.machine import Machine
 
-RELEASED = "released.json"  # beside the installed packs: the last look at the pack of the version to take
 FAILED = "failed.json"  # beside it: the last pack that failed, kept across restarts until it is installed
 PRESENT = 60.0  # seconds a look whether the running pack is in place holds: it hashes the engine
 ANY = object()  # _keep without an expected failure
@@ -41,14 +38,6 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
-def _kept() -> dict[str, Any]:
-    try:
-        kept = json.loads((local_home.root() / pack_files.PACKS / RELEASED).read_text(encoding="utf-8"))
-    except OSError, ValueError:
-        return {}
-    return kept if isinstance(kept, dict) else {}
-
-
 def _channel() -> str | None:
     """This machine's update channel as resolved now; None when its settings cannot be read."""
     try:
@@ -57,46 +46,27 @@ def _channel() -> str | None:
         return None
 
 
-def _found() -> dict[str, Any]:
-    """One look: the version this machine would take on its channel and the pack it pins; fetches."""
-    channel = _channel()
-    try:
-        choice = versions.target(channel)  # the channel kept with the look is the one it ran on
-    except (versions.VersionError, registry.RegistryError) as exc:
-        return {"state": "unknown", "detail": f"the versions could not be read: {command_failure.failure(exc)}"}
+def found(choice: versions.Choice | None, channel: str | None) -> dict[str, Any]:
+    """The selected release's pack, read at its selected commit without another release lookup."""
+    selected = {"version": choice.tag if choice else "", "commit": choice.commit if choice else "",
+                "notes": list(choice.notes) if choice else [], "channel": channel}  # fmt: skip
     if choice is None or not choice.tag:
-        return {"state": "none", "detail": "; ".join(choice.notes) if choice else "", "channel": channel}
+        return selected | {"state": "none", "detail": "; ".join(choice.notes) if choice else ""}
     try:
         pins = versions.pins(choice.commit)
     except versions.VersionError as exc:
         detail = f"{choice.tag}'s Impeccable is unreadable: {command_failure.failure(exc)}"
-        return {"state": "unknown", "version": choice.tag, "detail": detail, "channel": channel}
-    return {"state": "found", "version": choice.tag, "commit": choice.commit, "pins": pins, "channel": channel}
+        return selected | {"state": "unknown", "detail": detail}
+    return selected | {"state": "found", "pins": pins, "detail": ""}
 
 
-def checked() -> dict[str, Any]:
-    """Look now and keep it for the pages; what was found: ``state``, the ``version`` to take and ``detail``."""
-    path = local_home.root() / pack_files.PACKS / RELEASED  # before the fetch: the home may move while it runs
-    kept = _found() | {"running": versions.running(), "running_pack": pack_files.manifest()["pack"]}
-    with contextlib.suppress(OSError):  # a hint: unwritten, it is looked at again by the next check
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(kept | {"checked_at": _now()}) + "\n", encoding="utf-8")
-    return kept
-
-
-def look() -> dict[str, Any]:
-    """Look now; what the pages show (``release``)."""
-    checked()
-    return release()
-
-
-def release() -> dict[str, Any]:
-    """The last look, never fetching: ``newer`` when the version to take pins another pack than the running one.
+def release(kept: dict[str, Any]) -> dict[str, Any]:
+    """Project shared release knowledge: ``newer`` when it pins another pack than the running one.
 
     ``same`` (that version pins this pack) and ``none`` (no version to take) show nothing; ``unknown`` stays unknown,
     and so does a look on another channel than this machine's now, until the next look.
     """
-    kept, running = _kept(), pack_files.manifest()
+    running = pack_files.manifest()
     said = {"state": "unknown", "version": kept.get("version", ""), "pack": "", "running_pack": running["pack"],
             "checked_at": kept.get("checked_at"), "detail": kept.get("detail", "")}  # fmt: skip
     state, pins = kept.get("state"), kept.get("pins")
@@ -217,7 +187,7 @@ class Impeccable:
             install = {"state": "missing", "version": running, "pack": pack, "detail": pack_files.status(), "at": None}
         else:
             install = None
-        return {"install": install, "release": release(), "unkept": unkept}
+        return {"install": install, "release": self.machine.checks.release(), "unkept": unkept}
 
     def install(self) -> dict[str, Any]:
         """Install: the running version's pack when missing, and a failed version's own; refused while updating."""
