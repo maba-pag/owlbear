@@ -59,6 +59,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.permissions import Policy
     from owlbear_delivery_next.change_contracts.preparation import Preparing
     from owlbear_delivery_next.local_system.processes import Pids
+    from owlbear_delivery_next.runtimes import context_start
     from owlbear_delivery_next.runtimes.session_result import Ending
 
 DEADLINES = {StepKind.PLAN: 1800.0, StepKind.BUILD: 2400.0, StepKind.REVIEW: 1200.0, StepKind.CHECK: 1800.0}  # TD-286
@@ -148,6 +149,7 @@ class Session:
 class _Step(StepTools):
     actor: spotter_act.StepActor | None = None  # its Spotter's actuator, once the session is open
     aborted = False  # the Spotter aborted the turn: its idle is no wrong choice (``step_budget.idled``)
+    start: context_start.Start | None = None  # its context measurement, once a session it created is metered
 
     def __init__(self, cfg: Session, loop: asyncio.AbstractEventLoop) -> None:
         self.cfg, self.loop, self.run, self.proc = cfg, loop, Run(cfg.session_id, checks=cfg.checks), None
@@ -189,10 +191,8 @@ class _Step(StepTools):
 
     def on_event(self, ev: Any) -> None:  # noqa: ANN401, C901 - an SDK session event; one branch per family
         kind = getattr(ev.type, "value", str(ev.type))
-        if self.feed is not None:
-            self.feed.seen(kind, ev)
-        if self.actor is not None:
-            self.actor.seen(kind, ev)  # a Spotter note the runtime took
+        for seer in filter(None, (self.feed, self.actor, self.start)):  # its watcher, a Spotter note, its context
+            seer.seen(kind, ev)
         if kind == "assistant.turn_start":
             self.turn = True
             self.preload_checked()

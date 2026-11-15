@@ -6,7 +6,8 @@ configuration, noted in the chatlogs manifest before it is created so it is neve
 noted does not start), and its teardown is bounded. Its billed calls are charged to the run's meter as they are
 reported (``runtimes.credit_limit.Limit``); once the meter closes the turn is aborted, and the session's share is
 reconciled with its reported total at its end. Like a look's, each session is its own run in the spend ledger
-(D-01M5XCDF6G60VG5GHTWF5QSSDE): its own usage, ending, the meter's limit and stop (``spotter_look.Spent``).
+(D-01M5XCDF6G60VG5GHTWF5QSSDE): its own usage, ending, the meter's limit and stop (``spotter_look.Spent``), with its
+context after its first model call (``context_start``).
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from copilot.rpc import PermissionDecisionReject
 
 from owlbear_delivery_next.improvement import chatlogs, spotter
 from owlbear_delivery_next.improvement.events import as_dict
-from owlbear_delivery_next.runtimes import spotter_look
+from owlbear_delivery_next.runtimes import context_start, spotter_look
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
 from owlbear_delivery_next.runtimes.credit_limit import Limit
 from owlbear_delivery_next.runtimes.model_choices import takes_effort
@@ -56,11 +57,13 @@ async def asked(
         d = as_dict(ev)
         if d.get("type") == "assistant.message" and (text := (d.get("data") or {}).get("content")):
             said.append(text)
+        measure.seen(d.get("type", ""), ev)
         limit.heard(ev)
 
     client, session, sid = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path())), None, ""
     confirmed = False
     spent = spotter_look.Spent(uuid.uuid4().hex, spend_ledger.where(), meter, role.model, agent=agent, job="")
+    measure = context_start.Start(spent.run, agent=agent, model=role.model, context=role.context, place=spent.place)
     try:
         await client.start()
         effort = role.effort if role.effort and await takes_effort(client, role.model) else None
@@ -83,16 +86,18 @@ async def asked(
             )  # fmt: skip
             limit.part.started(sid)
             spent.started(sid)
+            measure.opened(session, sid)
             confirmed = await limit.turn(
                 session.send_and_wait(message, timeout=seconds), partial(_abort, session), spotter.TEARDOWN
             )
     finally:
-        await spotter.through(asyncio.ensure_future(_end(client, session, limit, spent, confirmed=confirmed)))
+        await spotter.through(asyncio.ensure_future(_end(client, session, limit, spent, measure, confirmed=confirmed)))
     return said[-1] if said else ""
 
 
-async def _end(
-    client: Any, session: Any, limit: Limit, spent: spotter_look.Spent, *, confirmed: bool,  # noqa: ANN401
+async def _end(  # noqa: PLR0913 - the session's runtime, session, meter, run and measurement
+    client: Any, session: Any, limit: Limit, spent: spotter_look.Spent,  # noqa: ANN401
+    measure: context_start.Start, *, confirmed: bool,
 ) -> None:  # fmt: skip
     """Reconcile the session's share with its reported total, record its run, then tear it down; each bounded."""
     if session is None:
@@ -100,6 +105,7 @@ async def _end(
     else:
         await limit.settle(partial(spent.metrics, session), confirmed=confirmed, bound=spotter.TEARDOWN)
     spent.ended(limit.part, confirmed=confirmed)
+    await measure.ended()  # its context read, within its bound, before the session goes
     await spotter_look.teardown(client, session, spent.sid)
 
 

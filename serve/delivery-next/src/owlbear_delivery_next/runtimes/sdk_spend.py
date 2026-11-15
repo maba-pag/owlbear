@@ -1,6 +1,7 @@
-"""A step session's lines in the spend ledger (D-01M5XCDF6G60VG5GHTWF5QSSDE): its start and its end.
+"""A step session's lines in the spend ledger (D-01M5XCDF6G60VG5GHTWF5QSSDE): its start, its context and its end.
 
-The start comes before the first send, the end whatever ended the run. Both are queued for the ledger's writer
+The start comes before the first send, the context after a created session's first model call (``context_start``),
+the end whatever ended the run. Both are queued for the ledger's writer
 thread, so the step's event loop never waits for them.
 """
 
@@ -11,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.git.command_failure import rpc_failure as failed  # an SDK request's failure, whole
-from owlbear_delivery_next.runtimes import missing
+from owlbear_delivery_next.runtimes import context_start, missing
 from owlbear_delivery_next.runtimes.sdk_usage import unexpected_models
 from owlbear_delivery_next.runtimes.session_result import limit_reached
 from owlbear_delivery_next.state_store import spend_ledger
@@ -25,6 +26,8 @@ if TYPE_CHECKING:
 
 async def meter(client: CopilotClient, st: _Step, sid: str, agent: str) -> None:
     """The run's ``start`` line in the spend ledger, before its first send: from here it may spend credits.
+
+    A session it created is measured after its first model call (``st.start``, fed the session's events).
 
     It names the Copilot CLI the session runs, read from the runtime itself. That read is a request of its own, so
     its failure says nothing of the session: it is journalled and recorded whole, and the step goes on.
@@ -41,6 +44,10 @@ async def meter(client: CopilotClient, st: _Step, sid: str, agent: str) -> None:
     before = None if "error" in st.billed else st.billed
     spend_ledger.started(st.metered, sid, agent=agent, job=st.cfg.job, model=st.cfg.model, before=before, cli=cli,
                          cli_error=error)  # fmt: skip
+    if st.created:  # a resumed session is not measured: its first model call was an earlier run's
+        st.start = context_start.Start(st.metered, agent=agent, model=st.cfg.model or "", context=st.cfg.context,
+                                       place=spend_ledger.where(), tasks=st.requests)  # fmt: skip
+        st.start.opened(st.session, sid)
 
 
 def final(st: _Step, usage: dict[str, Any], *, settled: bool = True) -> None:

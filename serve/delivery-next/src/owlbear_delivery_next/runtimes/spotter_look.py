@@ -14,7 +14,8 @@ starts no session (D-01M5XCD49YHHR1NQKKY8TQD0C3). The session's reported total i
 Each invocation is its own run in the spend ledger (D-01M5XCDF6G60VG5GHTWF5QSSDE): a ``start`` once its session
 exists and an ``end`` with that session's own usage as read then, never the meter's aggregate (when the read failed,
 its billed calls' sum; either marked incomplete, a lower bound, when not final), the meter's limit and stop, and
-``look`` = the meter's id, which the look's record carries as its ``id``.
+``look`` = the meter's id, which the look's record carries as its ``id``; and a ``context`` line after its first model
+call (``context_start``), whose read its teardown waits for within its bound.
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ from copilot.rpc import PermissionDecisionReject
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import cases, chatlogs, credit_meter, spotter
 from owlbear_delivery_next.improvement.events import as_dict
-from owlbear_delivery_next.runtimes import sdk_usage
+from owlbear_delivery_next.runtimes import context_start, sdk_usage
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
 from owlbear_delivery_next.runtimes.credit_limit import Limit
 from owlbear_delivery_next.runtimes.model_choices import takes_effort
@@ -62,6 +63,7 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context, meter: credit_m
         d = as_dict(ev)
         if d.get("type") == "assistant.message" and (text := (d.get("data") or {}).get("content")):
             said.append(text)
+        measure.seen(d.get("type", ""), ev)
         limit.heard(ev)
 
     card_json = json.dumps(the_card, ensure_ascii=False)
@@ -69,6 +71,8 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context, meter: credit_m
     client, session, sid = CopilotClient(connection=RuntimeConnection.for_stdio(path=cli_path())), None, ""
     confirmed = False  # the turn's end was seen, so the session's reported total is final
     spent = Spent(uuid.uuid4().hex, spend_ledger.where(), meter, ctx.model, look=meter.id)  # its ledger run
+    measure = context_start.Start(spent.run, agent=spent.agent, model=ctx.model, context=ctx.context,
+                                  place=spent.place)  # what fills its context after its first call  # fmt: skip
     try:
         await client.start()
         effort = ctx.effort if ctx.effort and await takes_effort(client, ctx.model) else None
@@ -91,11 +95,12 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context, meter: credit_m
             )  # fmt: skip
             limit.part.started(sid)
             spent.started(sid)
+            measure.opened(session, sid)
             confirmed = await limit.turn(
                 session.send_and_wait(message, timeout=spotter.LOOK), partial(_abort, session), spotter.TEARDOWN
             )
     finally:
-        await spotter.through(asyncio.ensure_future(_end(client, session, limit, spent, confirmed=confirmed)))
+        await spotter.through(asyncio.ensure_future(_end(client, session, limit, spent, measure, confirmed=confirmed)))
     return said[-1] if said else ""
 
 
@@ -156,13 +161,16 @@ class Spent:
                            place=self.place, look=self.look, read_error=read_error)  # fmt: skip
 
 
-async def _end(client: Any, session: Any, limit: Limit, spent: Spent, *, confirmed: bool) -> None:  # noqa: ANN401
+async def _end(  # noqa: PLR0913 - the look's runtime, session, meter, run and measurement
+    client: Any, session: Any, limit: Limit, spent: Spent, measure: context_start.Start, *, confirmed: bool,  # noqa: ANN401
+) -> None:  # fmt: skip
     """Reconcile the look's share with the session's reported total, then tear the session down; each bounded."""
     if session is None:
         limit.part.ended(0.0, confirmed=True)  # no session, no turn: nothing was billed
     else:
         await limit.settle(partial(spent.metrics, session), confirmed=confirmed, bound=spotter.TEARDOWN)
     spent.ended(limit.part, confirmed=confirmed)
+    await measure.ended()  # its context read, within its bound, before the session goes
     await teardown(client, session, spent.sid)
 
 
