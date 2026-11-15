@@ -86,7 +86,6 @@ class Audits:
                     "role": {key: role.get(key) for key in ("model", "effort")},
                     "last": last,
                     "blocked": problem or self.refusal(audit),
-                    "unpublished": record.unpublished(last or {}),
                 }
             )
         return {"audits": rows}
