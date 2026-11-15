@@ -231,7 +231,11 @@ def test_a_check_that_cannot_finish_is_repaired_and_a_network_failure_of_it_stil
     r = to_result(timed_out, K.BUILD, NOW)  # c1 case 1: retried as "failed temporarily" three times
     assert (r.exit, r.setup, r.cause) == (Exit.RETRY, True, "project-env:build:check-uv-run-test-changed")
     c = loop.apply(change(), r, NOW)
-    assert (c.repairs.current.cause, c.step.kind, loop.next_step(c, NOW)) == (r.cause, K.BUILD, c.step)  # repaired
+    assert (c.repairs.current.cause, c.step.kind, loop.next_step(c, NOW)) == (
+        "project-env:build:missing-tool:build:plan-1:t1",
+        K.BUILD,
+        c.step,
+    )
     for error in ("npm ERR! request to https://registry.npmjs.org failed, reason: connect ETIMEDOUT 104.16.1.35:443",
                   "Error: read ECONNRESET",
                   "socket.gaierror: [Errno -3] Temporary failure in name resolution",

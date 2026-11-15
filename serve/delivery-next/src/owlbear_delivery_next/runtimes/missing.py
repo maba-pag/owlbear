@@ -102,6 +102,13 @@ def _ask(enclosing: StepKind, text: str, cause: str, options: list[Option]) -> S
 
 def classify(run: Run, p: MissingTool, enclosing: StepKind, now: datetime) -> StepResult:
     """The step result for one missing-tool report; *enclosing* is the step the session ran for."""
+    result = _classify(run, p, enclosing, now)
+    if result.setup or result.exit == Exit.ASK:
+        return result.model_copy(update={"root": f"missing-tool:{enclosing}"})
+    return result
+
+
+def _classify(run: Run, p: MissingTool, enclosing: StepKind, now: datetime) -> StepResult:
     tool, subject = p.tool.strip(), f"tool-{slug(p.tool)}"
     said = f"{tool} for {p.need}: {p.error}"
     if denied := next((run.denied[n] for n in names(tool) if n in run.denied), None):

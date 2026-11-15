@@ -5,7 +5,8 @@ reserves for him; a question about Delivery's own problem (``subject="internal"`
 repaired (``stuck.start``), else the Change stops with the whole evidence. D-01M6RT531EE3GHW2QGQQT63GZH: one cause
 reaches him at most twice; its second question names the answer that did not resolve it, and its third goes the
 internal way. A cause is a question's root: the question a worker's re-ask follows, else its engine cause (a
-read-back of typed commands is part of the question it reads back), else the question itself.
+read-back of typed commands is part of the question it reads back), else the question itself. CI inventory counts
+across workflow digests; missing tools count by the stopped check/task, never by the worker's description.
 """
 
 from __future__ import annotations
@@ -19,26 +20,66 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from owlbear_delivery_next.change_contracts.models import Change, Question
+    from owlbear_delivery_next.change_flow.loop import StepResult
 
 READ_BACK = "-typed-"  # the cause infix of a project-check read-back (``project_checks``): never a question of its own
 LIMIT = 2  # questions one cause may put to the owner
 RERUN = "Run the step again"
 TERMINAL = frozenset({"pause", "abandon"})
+DECLARED = "gate:follow:declared-"
+TOOLS = "missing-tool:"
 
 
 def root(q: Question) -> str:
     """The cause *q* asks about, as the limit counts it."""
-    return q.follows or (q.cause or "").split(READ_BACK, 1)[0] or q.id
+    key = q.follows or (q.cause or "").split(READ_BACK, 1)[0] or q.id
+    return DECLARED.rstrip("-") if key.startswith(DECLARED) else key
+
+
+def _legacy_tool(cause: str) -> str:
+    """Old missing reports kept the step but not which check/task they stopped."""
+    kind, _, rest = cause.partition(":")
+    step, _, subject = rest.partition(":")
+    return step if kind in {"scope", "project-env"} and subject.startswith(("tool-", "check-")) else ""
+
+
+def _tool_root(c: Change) -> str:
+    s = c.step
+    generation = f"plan-{c.plan.version}" if c.plan else f"brief-{c.brief.version}"
+    context = s.task or s.mode or "step"
+    if s.kind != "check":
+        context = f"{generation}:{context}" if s.kind != "plan" else f"brief-{c.brief.version}"
+    return f"{TOOLS}{s.kind}:{context}"
+
+
+def scoped(c: Change, result: StepResult) -> StepResult:
+    """Bind a missing report's marker to the engine-owned check/task before recording its repair."""
+    if result.root != f"{TOOLS}{c.step.kind}":
+        return result
+    key = _tool_root(c)
+    cause = cause_key(ErrorKind(kind_of(result.cause or "")), c.step.kind, key)
+    question = result.question
+    if question is not None:
+        question = question.model_copy(update={"cause": cause, "follows": key})
+    return result.model_copy(update={"cause": cause, "root": key, "question": question})
 
 
 def _counted(c: Change, key: str) -> list[Question]:
-    return [x for x in c.questions if root(x) == key and READ_BACK not in (x.cause or "")]
+    step = key.removeprefix(TOOLS).partition(":")[0] if key.startswith(TOOLS) else ""
+    return [
+        x
+        for x in c.questions
+        if (root(x) == key or (step and not x.follows.startswith(TOOLS) and _legacy_tool(x.cause or "") == step))
+        and READ_BACK not in (x.cause or "")
+    ]
 
 
 def offered(c: Change, q: Question, now: datetime) -> Question | None:
     """The question to record, with its preface on a cause's second question; None when it went elsewhere."""
     if c.brief.approved_version is None or READ_BACK in (q.cause or "") or _terminal(q):
         return q
+    if _legacy_tool(q.cause or "") and not q.follows.startswith(TOOLS):
+        q = q.model_copy(update={"follows": _tool_root(c)})
     if q.subject == "internal":
         routed(c, q.cause or "", q.text, now, root(q))
         return None
@@ -47,10 +88,19 @@ def offered(c: Change, q: Question, now: datetime) -> Question | None:
     if len(earlier) >= LIMIT:
         twice = ", ".join(x.id for x in earlier)
         said = f"{q.text}\n\nIt reached you twice already ({twice}): Delivery handles it now."
+        if any(_legacy_tool(x.cause or "") for x in earlier):
+            said += " Earlier tooling questions did not save their check/task identity; their allowance is kept."
         routed(c, q.cause or cause_key(ErrorKind.PROJECT_ENV, c.step.kind, f"question-{key}"), said, now, key)
         return None
     if earlier and q.cause:  # a worker's re-ask says itself why (worker_questions.admitted)
-        return q.model_copy(update={"text": f"{_led(earlier[-1])}\n\n{q.text}"})
+        previous = earlier[-1]
+        changed = ""
+        if (q.cause or "").startswith(DECLARED) and q.cause != previous.cause:
+            changed = (
+                f" The workflow evidence changed from {(previous.cause or '').removeprefix(DECLARED)} "
+                f"to {q.cause.removeprefix(DECLARED)}; the earlier answer covered different workflows."
+            )
+        return q.model_copy(update={"text": f"{_led(previous)}{changed}\n\n{q.text}"})
     return q
 
 
@@ -84,7 +134,7 @@ def routed(c: Change, cause: str, evidence: str, now: datetime, key: str = "") -
     from owlbear_delivery_next.change_flow import stuck  # noqa: PLC0415 - stuck asks through moves, which asks here
 
     if (r := c.repairs.current) is not None and r.cause == cause:  # the repair's own proposal, a third time
-        stuck.stopped(c, "its fix would put the same problem to you a third time", now)
+        stuck.stopped(c, f"its fix would put the same problem to you a third time. {evidence}", now)
         return
     if stuck.repaired(c):
         stuck.start(c, cause, evidence, now, root=key)
