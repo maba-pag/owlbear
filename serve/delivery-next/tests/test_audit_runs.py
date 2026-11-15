@@ -102,6 +102,7 @@ def test_shared_git_mutation_voids_even_an_errored_session(tmp_path, monkeypatch
     repo = tmp_path / "clone"
     repo.mkdir()
     worktree.git(repo, "init", "--quiet")
+    worktree.git(repo, "remote", "add", "origin", "https://github.com/acme/tools.git")
     worktree.git(repo, "config", "user.name", "Fixture")
     worktree.git(repo, "config", "user.email", "fixture@example.invalid")
     (repo / "README.md").write_text("Fixture\n")

@@ -6,20 +6,21 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_flow import worktree
-from owlbear_delivery_next.workflow_steps import disposable
+from owlbear_delivery_next.workflow_steps import disposable, engine
 from owlbear_delivery_next.workflow_steps.disposable import _refs, _shared
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
+    from owlbear_delivery_next.github.account import Access
     from owlbear_delivery_next.local_system.maintenance import Maintenance
 
 
-def pin(repo: Path, branch: str) -> str:
+def pin(repo: Path, branch: str, access: Access) -> str:
     """Fetch the selected branch and resolve the fetched commit, without moving the clone."""
-    worktree.git(repo, "fetch", "--no-tags", "origin", branch)
-    return worktree.git(repo, "rev-parse", "--verify", "FETCH_HEAD^{commit}").strip()
+    engine.fetch(repo, branch, access)
+    return worktree.git(repo, "rev-parse", "--verify", f"refs/remotes/origin/{branch}^{{commit}}").strip()
 
 
 @contextmanager
