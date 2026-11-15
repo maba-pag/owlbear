@@ -55,6 +55,38 @@ def _report():
     }
 
 
+def test_discard_consent_only_replaces_the_report_the_owner_reviewed(tmp_path, monkeypatch):
+    store = Store(tmp_path / "store", name="fixture")
+    store.write_profile(Profile(entries={profile.DEFAULT: ProfileEntry(state="known", value="main")}))
+    audits = job.Audits(store)
+    monkeypatch.setattr(job.Audits, "refusal", lambda *_args: "")
+    launched = []
+
+    def launch(audit, state, *, resume):
+        assert not resume
+        launched.append(state)
+        record.save(store, audit, state)
+
+    monkeypatch.setattr(audits, "_launch", launch)
+    record.save(store, "doc", _report())
+    displayed = audits.read("doc")["id"]
+    newer = {**_report(), "id": "run-two", "summary": "Newer unpublished findings."}
+    record.save(store, "doc", newer)
+    before = (store.root / record.FILE).read_bytes()
+    with pytest.raises(job.AuditBusyError, match="the last audit report changed; review it and start again"):
+        audits.start("doc", discard_report=displayed)
+    assert not launched
+    assert (store.root / record.FILE).read_bytes() == before
+    with pytest.raises(job.AuditBusyError, match="the last audit has unpublished findings"):
+        audits.start("doc")
+    assert not launched
+    assert (store.root / record.FILE).read_bytes() == before
+    replacement = audits.start("doc", discard_report=newer["id"])
+    assert launched == [replacement]
+    assert replacement["id"] != newer["id"]
+    assert record.load(store)["doc"] == replacement
+
+
 def test_finish_recovers_a_lost_receipt_without_duplicate_issue(tmp_path, monkeypatch, shared_repo, github):
     store = Store(tmp_path / "store", DataRepo(shared_repo[0]), "fixture")
     state, book = _report(), backlog.Backlog.of(store)
