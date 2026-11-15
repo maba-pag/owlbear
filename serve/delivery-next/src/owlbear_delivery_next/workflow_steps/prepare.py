@@ -1,12 +1,10 @@
 """TD-96, TD-107: run a check's chosen test preparation and keep the preparer's setup edits as a patch.
 
-Per check, a live copy is exported and masked once into a frozen snapshot outside every repository. Before the
-"before" capture and again before the host launches the check, that same snapshot is restored into the isolated test
-environment, test data is seeded and the preparer's setup patch applied. The end of the check runs the cleanup command
-with the patch still applied, then discards it and deletes the snapshot unless the owner keeps a masked one; a failed
-cleanup or deletion is ended again by the next runner. Restore, seed, cleanup and the launch run with an explicit
-environment: the process essentials (``preparation.BASE``) and the option's isolation, never Delivery's own; only
-export and masking see that, and they run only the project's committed scripts, never one the preparer edited.
+Export and mask one frozen live-copy snapshot per check outside repositories. Restore it separately before the
+"before" capture and host launch, seed test data and apply the setup patch. Cleanup runs with that patch, then
+discards it and deletes the snapshot unless retention keeps it; failed cleanup/deletion remains owed.
+Restore, seed, cleanup and launch get only BASE, declared isolation and snapshot. Export/masking alone see Delivery's
+environment and run committed, unedited scripts. Failed preparation keeps recipe context but invalidates reuse.
 """
 
 from __future__ import annotations
@@ -495,6 +493,8 @@ def ran(store: Store, lock: Lock, c: Change, repo: Path, *, runnable: bool) -> b
     result, at = launch(store, c, store.settings(), log), datetime.now(UTC)
     if result.exit != Exit.PENDING:  # every such result says why
         c.env = None
+        if c.recipe is not None:
+            c.recipe.inputs = None
         log({"event": "step", "at": at.isoformat(), "kind": c.step.kind, "exit": result.exit, "reason": result.reason})
     store.write(lock, loop.apply(c, result, at))
     return True

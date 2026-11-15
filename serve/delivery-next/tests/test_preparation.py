@@ -1017,7 +1017,11 @@ def test_a_failed_preparation_logs_its_whole_reason_and_keeps_the_last_launched_
     s = settings(chosen)
     monkeypatch.setattr(store, "settings", lambda: s)
     c = change(repo, "pc1")
-    c.recipe = Recipe(check=c.env.check, command=c.env.command, directory=c.env.directory, ready_url=c.env.ready_url)
+    c.recipe = Recipe(
+        check=c.env.check, command=c.env.command, directory=c.env.directory, ready_url=c.env.ready_url,
+        inputs=runner.worktree.launch_inputs(repo, "."),
+    )  # fmt: skip
+    assert c.recipe.inputs
     rec = prepare.Prepared(check="pc1", option=chosen, paths=["fixtures/users.json"] if how == "apply" else [])
     prepare._write(store, "c1", rec, b"a patch" if how == "apply" else None)  # noqa: SLF001 - as accepted
     store.write(Lock("c1"), c)
@@ -1037,7 +1041,12 @@ def test_a_failed_preparation_logs_its_whole_reason_and_keeps_the_last_launched_
         else f"TimeoutExpired: Command 'git apply' timed out after 60 seconds\n{whole_error}"
     )
     after = store.read("c1")
-    assert (after.outcome.reason, after.env, after.recipe) == (expected, None, c.recipe)
+    assert (after.outcome.reason, after.env, after.recipe) == (
+        expected,
+        None,
+        c.recipe.model_copy(update={"inputs": None}),
+    )
+    assert not runner._reused(store, Lock("c1"), after)  # noqa: SLF001 - failed preparation needs a preparer
     assert events(store, "step", "reason") == [expected]
 
 
