@@ -377,7 +377,6 @@ def _others(others: Mapping[str, Sequence[str]]) -> list[str]:
 
 def plan(change: Change, profile: Profile, worktree: Path, others: Mapping[str, Sequence[str]]) -> str:
     """Return the first message of a read-only planning session."""
-    offered = bool(wt.plan_checks(profile, worktree))
     lines = [
         f"You plan the Change `{change.slug}` from its approved brief in the worktree {worktree}. You only read.",
         READ_ONLY,
@@ -387,7 +386,7 @@ def plan(change: Change, profile: Profile, worktree: Path, others: Mapping[str, 
         "",
         "## Packages (project profile)",
         *(_packages(profile, worktree) or ["- none: no package has a confirmed check command"]),
-        *([] if offered else [NO_CHECK]),
+        *([] if wt.plan_checks(profile, worktree) else [NO_CHECK]),
         "Keep each check's runner and directory prefix; append only literal test targets, including consumers.",
         (
             "Inspect the runner's targeting interface. If it cannot select touched tests, report setup; never run the "

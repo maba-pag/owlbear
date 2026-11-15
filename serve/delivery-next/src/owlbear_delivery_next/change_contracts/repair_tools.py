@@ -79,7 +79,6 @@ class AttemptResult(RepairResult):
         "pass until this Change has built the project; none: remedies failed",
         json_schema_extra={"enum": ["none", "patch", "profile-check", "check-later", "preparation"]},
     )
-    tried: list[Try] = Field(max_length=20, description="Actual attempted remedies, never diagnostics")
 
     @model_validator(mode="after")
     def _attempted(self) -> AttemptResult:
