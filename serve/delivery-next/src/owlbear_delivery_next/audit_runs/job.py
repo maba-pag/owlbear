@@ -51,6 +51,7 @@ class Audits:
 
     def __init__(self, store: Store) -> None:
         self.store = store
+        self.project = str(store.root)
         self.repo: Path | None = None
         self.maintenance: Maintenance | None = None
         self.run: Callable[[Session], Run] = _unbound
@@ -103,7 +104,7 @@ class Audits:
             why = "an audit is running for this project"
         elif self.maintenance is None or self.repo is None or self.run is _unbound:
             why = UNBOUND
-        elif self.maintenance.pending(kind="audit"):
+        elif self.project in self.maintenance.holding("audit"):
             why = "an earlier audit session is unproven; recover it on the Maintenance page first"
         if why:
             return why

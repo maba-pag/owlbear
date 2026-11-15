@@ -309,6 +309,7 @@ def pds(host: Host | None, store: Store) -> tuple[hand_audit.Hand, pds_job.Job]:
 def audits(host: Host, store: Store) -> audit_job.Audits:
     """Project audits whose read-only sessions hold a durable maintenance lease and a project slot."""
     job = audit_job.Audits(store)
+    job.project = project(host)
     job.repo = host.repo
     job.maintenance = host.maintenance
     job.run = owned(host, lambda _said: None, lambda cfg: step_sessions.run(store, cfg), "audit")
