@@ -80,7 +80,7 @@ def test_network_episodes_wait_reset_on_a_new_failure_and_repair_after_a_day():
     assert (c.outcome.exit, c.questions) == (Exit.RETRY, [])
     assert c.repairs.current.cause == cause
     assert "Service Unavailable" in c.repairs.current.evidence
-    stuck.applied(c, "a" * 40)
+    stuck.applied(c, "a" * 40, day)
     assert cause not in c.budgets.causes
     c = loop.apply(c, retry(ErrorKind.NETWORK, HTTP_503), day)
     assert budgets.episode(c).attempts == 1

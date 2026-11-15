@@ -83,6 +83,7 @@ class Repair(BaseModel):
     target: str = ""  # the actual configured target commit this diagnosis must compare with
     commit: str = ""  # the fix, committed by Delivery on that baseline; kept under ``KEPT`` until it ends
     applied: str = ""  # its commit on the Change's branch
+    applied_at: datetime | None = None
     witness: Witness | None = None
     held: list[str] = Field(default_factory=list)  # why the owner is asked before it is applied
     diff: str = ""  # what he is shown

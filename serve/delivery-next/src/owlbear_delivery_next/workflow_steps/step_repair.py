@@ -297,7 +297,7 @@ def _apply(store: Store, lock: Lock, change: Change, path: Path, prof: Profile) 
         made = repair_copy.apply(path, change.names.branch, r.base, r.commit, message)
         repair_copy.git(path, ["update-ref", "-d", f"{KEPT}{change.slug}"])
     _log(store, lock, change, f"applied {made}; the step runs again.{repair_messages.defect(r)}")
-    stuck.applied(change, made)
+    stuck.applied(change, made, datetime.now(UTC))
     store.write(lock, change)
 
 
