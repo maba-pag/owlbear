@@ -8,10 +8,11 @@ from typing import TYPE_CHECKING
 
 from owlbear_decisions import Scope, State
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.github.account import Origin
 from owlbear_delivery_next.github.gh_client import GhClient, repo
-from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
 from owlbear_delivery_next.github.provider import ProviderError
-from owlbear_delivery_next.state_store import backlog, decision_store
+from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.state_store import backlog, decision_store, github_writer
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps.lookup import _unresolved
 
@@ -103,8 +104,13 @@ def _issues(store: Store, repository: str) -> list[object]:
     if not repository:
         msg = "the project profile has no GitHub repository"
         raise ValueError(msg)
-    writer = OwlbearIssues(repository, store.root).writer
-    client, found, page = IssueContext(store.root, writer=writer), [], 1
+    host = profile.value(store.read_profile(), profile.HOST, "")
+    if not host:
+        msg = "the project profile has no GitHub host"
+        raise ValueError(msg)
+    owner, name = repository.split("/")
+    writer = github_writer.of(store, Origin(host, owner, name))
+    client, found, page = IssueContext(store.root, writer=writer, host=host), [], 1
     while True:
         rows = client.page(repository, page)
         if not isinstance(rows, list):
