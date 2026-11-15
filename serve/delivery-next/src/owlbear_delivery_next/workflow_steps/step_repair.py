@@ -25,7 +25,7 @@ from owlbear_delivery_next.change_contracts.failures import ENVIRONMENT, WRONG_M
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Outcome, StepKind, Stop
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.repair_records import KEPT, Tried, Witness
-from owlbear_delivery_next.change_flow import budgets, curation_flow, loop, moves, rebuilds, stuck, worktree
+from owlbear_delivery_next.change_flow import budgets, curation_flow, loop, rebuilds, stuck, worktree
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.settings import profile, roles
@@ -299,7 +299,6 @@ def _offered(  # noqa: PLR0913, PLR0917 - the Change, its copy, what changed the
 def _apply(store: Store, lock: Lock, change: Change, path: Path, prof: Profile) -> None:
     r = change.repairs.current
     assert r is not None  # noqa: S101 - run() checked it
-    replan = False
     if r.fix == "preparation":
         made = preparation_repair.apply(store, change)
     elif r.fix == "profile-check":
@@ -307,20 +306,14 @@ def _apply(store: Store, lock: Lock, change: Change, path: Path, prof: Profile) 
         if (entry := prof.entries.get(key)) is not None and profile.is_confirmed(entry):  # confirmed while it waited
             _stopped(store, lock, change, f"{r.package}'s check `{entry.value}` was confirmed meanwhile; nothing added")
             return
-        confirmed = profile.confirm(prof, key, r.command, datetime.now(UTC))
-        store.write_profile(confirmed)
+        store.write_profile(profile.confirm(prof, key, r.command, datetime.now(UTC)))
         made = f"profile {key}"
-        replan = project_checks.replans(confirmed, change)  # the plan named no check: planned again with it
     else:
         message = f"fix: {stuck.obstruction(r.found)}\n\nRepaired by an agent; applied by Delivery (#1066)."
         made = repair_copy.apply(path, change.names.branch, r.base, r.commit, message)
         repair_copy.git(path, ["update-ref", "-d", f"{KEPT}{change.slug}"])
-    now, then = datetime.now(UTC), "the remaining work is planned again" if replan else "the step runs again"
-    _log(store, lock, change, f"applied {made}; {then}.{repair_messages.defect(r)}")
-    stuck.applied(change, made, now)
-    if replan:
-        moves.go(change, StepKind.PLAN)
-        change.outcome = Outcome(exit=Exit.BACK, reason=repair_messages.replan(r), at=now)
+    _log(store, lock, change, f"applied {made}; the step runs again.{repair_messages.defect(r)}")
+    stuck.applied(change, made, datetime.now(UTC))
     store.write(lock, change)
 
 

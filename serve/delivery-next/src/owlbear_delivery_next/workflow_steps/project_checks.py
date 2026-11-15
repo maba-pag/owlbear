@@ -15,11 +15,12 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.change_contracts import check_hint
 from owlbear_delivery_next.change_contracts.failures import cause_key
-from owlbear_delivery_next.change_contracts.models import Answer, ErrorKind, Option, StepKind
+from owlbear_delivery_next.change_contracts.models import Answer, ErrorKind, Exit, Option, Outcome, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import asking, loop, moves, worktree
 from owlbear_delivery_next.github.provider import ProviderError
@@ -29,7 +30,6 @@ from owlbear_delivery_next.workflow_steps import engine
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.models import Change, Question
     from owlbear_delivery_next.state_store.store import Lock, Store
@@ -61,13 +61,40 @@ def defers(change: Change) -> str:
     return "it deferred the project check a second time" if deferred(change) else ""
 
 
-def replans(prof: Profile, change: Change) -> bool:
-    """Whether *prof* now covers a deferred Change whose open tasks were planned without a check."""
-    return deferred(change) and not _uncovered(prof, change.brief.scope) and moves.open_task(change) is not None
+REPLAN = (
+    "The project had no check when this Change was planned, so its tasks name none. A check is confirmed now (the "
+    "package list shows it). Plan the work that is still open again, on the existing code, with checks."
+)
 
 
 def _built(change: Change) -> bool:
     return change.plan is not None and any(t.done for t in change.plan.tasks)
+
+
+def _prefix(change: Change, prof: Profile, *, built: bool) -> str:
+    """The gate's cause prefix; once a task is built, each check confirmed since moves it on, so the next is asked."""
+    held = f"{_BUILT}{len(worktree.checks(profile.vouched(prof)))}-"
+    return cause_key(ErrorKind.GATE, change.step.kind, held) if built else PREFIX
+
+
+def _caught_up(store: Store, lock: Lock, change: Change, prof: Profile, repo: Path) -> bool:
+    """A deferred Change whose scope is covered now; True once its open work, planned without a check, goes to Plan.
+
+    Finished tasks get the confirmed checks whole, for the repair tasks that copy them.
+    """
+    tasks = [t for t in (change.plan.tasks if change.plan else []) if not t.checks]
+    if not tasks or change.step.kind == StepKind.PLAN:
+        return False
+    if any(not t.done for t in tasks):
+        moves.go(change, StepKind.PLAN)
+        change.outcome = Outcome(exit=Exit.BACK, reason=REPLAN, at=datetime.now(UTC))
+    else:
+        path = Path(change.names.worktree or repo)
+        offered = [check_hint.qualified(p, c) for p, c in worktree.plan_checks(profile.vouched(prof), path)]
+        for t in tasks:
+            t.checks = list(offered)
+    store.write(lock, change)
+    return change.step.kind == StepKind.PLAN
 
 
 def profile_for(store: Store, lock: Lock, change: Change, repo: Path) -> Profile | None:
@@ -88,20 +115,21 @@ def profile_for(store: Store, lock: Lock, change: Change, repo: Path) -> Profile
         _save(store, lock, change.slug, prof, [])
     scope = change.brief.scope
     given = profile.vouched(prof) if planning else prof
-    if not (missing := _uncovered(prof, scope)) or (later and not built):
-        return given  # confirmed, or deferred until the first task is built
-    # Each check confirmed since is progress: the gate asks for the next under a cause of its own.
-    held = f"{_BUILT}{len(worktree.checks(profile.vouched(prof)))}-"
-    step = cause_key(ErrorKind.GATE, change.step.kind, held) if built else PREFIX
-    cause = _cause(prof, missing, step)
+    if later and not built:
+        return given  # deferred until the first task is built
+    if not (missing := _uncovered(prof, scope)):
+        return None if later and _caught_up(store, lock, change, prof, repo) else given
+    cause = _cause(prof, missing, _prefix(change, prof, built=built))
     latest = next((q for q in reversed(change.questions) if q.answer and (q.cause or "").startswith(cause)), None)
     if commands := _answered(change, prof, missing, latest, cause):
         for home, command in commands.items():
             prof = profile.confirm(prof, f"check:{home}", command, now)
         _save(store, lock, change.slug, prof, [f"check:{home}" for home in commands])
         if not (missing := _uncovered(prof, scope)):
-            return profile.vouched(prof) if planning else prof
-        cause, latest = _cause(prof, missing, step), None  # typed lines that left part of the scope unconfirmed
+            caught = later and _caught_up(store, lock, change, prof, repo)
+            return None if caught else profile.vouched(prof) if planning else prof
+        # typed lines that left part of the scope unconfirmed
+        cause, latest = _cause(prof, missing, _prefix(change, prof, built=built)), None
     typed = latest is not None and latest.cause == cause and latest.answer.option == "typed"
     question = _read_back(prof, missing, latest, cause) if typed else _first(prof, missing, cause)
     store.write(lock, loop.apply(change, question, now))
