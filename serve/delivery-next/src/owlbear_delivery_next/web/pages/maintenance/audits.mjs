@@ -107,11 +107,11 @@ export function auditActions(show) {
   function lastRun(a) {
     const last = a.last;
     if (!last) return html`<p-text size="sm">Never run.</p-text>`;
-    if (!last.commit) return html`<p-text class="audit-text" size="sm">Failed: ${last.reason}</p-text>`;
     const pending = unpublished(last), published = last.findings.length - pending;
-    const pin = `${last.branch} at ${last.commit.slice(0, 7)}`;
+    const pin = last.commit ? `${last.branch} at ${last.commit.slice(0, 7)}` : `fetching ${last.branch}`;
     if (last.state === "running") return html`<p-text size="sm">Running since ${when(last.started_at)} · ${pin} · ${
       last.phase}</p-text>`;
+    if (!last.commit) return html`<p-text class="audit-text" size="sm">Failed: ${last.reason}</p-text>`;
     return html`
       <p-text size="sm">Last run: ${when(last.ended_at || last.started_at)} · ${pin} · ${last.state}${
         last.state === "done" ? ` · ${published} findings ${last.destination ? "published" : "in the Backlog"} · `
