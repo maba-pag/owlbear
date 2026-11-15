@@ -2438,6 +2438,7 @@ def test_it_refuses_a_dirty_checkout_and_a_package_outside_git_before_any_downlo
 
 
 class Host:
+    repo = None
     wake = SimpleNamespace(set=lambda: None)
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
     paused = staticmethod(lambda: False)

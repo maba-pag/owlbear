@@ -306,12 +306,13 @@ def pds(host: Host | None, store: Store) -> tuple[hand_audit.Hand, pds_job.Job]:
     return hand, pds_packed(host, pds_job.Job(store))
 
 
-def audits(host: Host, store: Store) -> audit_job.Audits:
+def audits(host: Host | None, store: Store) -> audit_job.Audits:
     """Project audits whose read-only sessions hold a durable maintenance lease and a project slot."""
     job = audit_job.Audits(store)
-    job.project = project(host)
-    job.repo = host.repo
-    job.maintenance = host.maintenance
+    job.maintenance = host.maintenance if host is not None else None
+    if host is not None and job.maintenance is not None:
+        job.project = host.record.project or str(store.root)
+        job.repo = host.repo
     job.run = owned(host, lambda _said: None, lambda cfg: step_sessions.run(store, cfg), "audit")
     return job
 
