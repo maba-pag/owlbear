@@ -250,7 +250,7 @@ def complete_layer():
     )  # fmt: skip
     agents = base.agents | {
         role: base.agents["curator"].model_copy(update={"model": "gpt-6.1-sol", "effort": "medium"})
-        for role in ("retro", "retro-review", "auditor")
+        for role in ("retro", "retro-review", "auditor", "project-auditor")
     }
     agents["shaper"] = base.agents["shaper"].model_copy(update={"challenge_wait": 15})
     agents["repairer"] = Agent(minutes=40, subagents=True)  # its model, effort and context are the builder's
