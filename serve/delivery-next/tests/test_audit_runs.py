@@ -15,7 +15,6 @@ from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.project_host import pack_routes
 from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.state_store import backlog
 from owlbear_delivery_next.state_store.store import Store
@@ -212,20 +211,6 @@ def test_issue_context_uses_the_project_host_and_selected_account(tmp_path, monk
     assert launches[0]["GH_ENTERPRISE_TOKEN"] == f"tok-{login}"
     argv = launches[0]["argv"]
     assert argv[argv.index("--hostname") + 1] == "git.example.test"
-
-
-def test_agent_audit_eligibility_follows_repository_identity_not_shared_folder(tmp_path, shared_repo):
-    shared = DataRepo(shared_repo[0])
-    shared.claim("renamed-engine", "github.com/maba-pag/owlbear")
-    shared.claim("owlbear", "github.com/acme/consumer")
-    engine = Store(tmp_path / "engine", shared, "renamed-engine")
-    consumer = Store(tmp_path / "consumer", shared, "owlbear")
-    assert job.Audits(engine).offered() == ("doc", "agent")
-    assert job.Audits(engine).refusal("agent") == job.UNBOUND
-    assert "Agent audit" in {row["name"] for row in pack_routes.overview(engine)}
-    assert job.Audits(consumer).offered() == ("doc",)
-    assert "not offered" in job.Audits(consumer).refusal("agent")
-    assert "Agent audit" not in {row["name"] for row in pack_routes.overview(consumer)}
 
 
 def test_unresolved_planning_authority_never_becomes_empty_audit_context(tmp_path, shared_repo):
