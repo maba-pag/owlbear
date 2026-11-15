@@ -362,10 +362,21 @@ class _Selection:
         own = source in self.consumers.tests and (self.root / source).is_file()
         if own:
             self.add(source, f"changed test module consumes its own unobserved blocks: {source}")
+        associated = (
+            self.consumers.tests_for({source})
+            if source.endswith(".py")
+            and source not in self.consumers.tests
+            and Path(source).name != "conftest.py"
+            and (source.startswith("tests/") or "/tests/" in source)
+            else set()
+        )
+        for test in associated:
+            self.add(test, f"unobserved test helper current importing consumer: {source}")
         if (
             not mapped
             and not direct
             and not own
+            and not associated
             and not (source in self.local and (source not in self.consumers.texts or measured))
         ):
             msg = f"Unobserved task blocks in {self.root}/{source} have no resolved current consumers"
