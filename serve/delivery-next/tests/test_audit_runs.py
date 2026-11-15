@@ -1,10 +1,12 @@
 """Audit publication custody and shared-Git read-only boundaries."""
 
 import contextlib
+import subprocess
 from types import SimpleNamespace
 
-from owlbear_delivery_next.audit_runs import job, record
+from owlbear_delivery_next.audit_runs import job, publish, record
 from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
 from owlbear_delivery_next.state_store.store import Store
 
 
@@ -123,3 +125,32 @@ def test_shared_git_mutation_voids_even_an_errored_session(tmp_path, monkeypatch
     assert not published
     assert worktree.git(repo, "rev-parse", "refs/tags/audit-mutation").strip() == commit
     assert not (root / "repo").exists()
+
+
+def test_redirected_finding_recovers_its_actual_issue_after_a_lost_receipt(tmp_path, monkeypatch, github):
+    store, state = Store(tmp_path / "store", name="fixture"), _report()
+    state.update(destination="acme/owlbear-data", note="File findings in acme/owlbear-data.")
+
+    def transport(argv, data, timeout, cwd, env):
+        answer = github(argv, data, timeout, cwd, env)
+        if github.calls[-1][:2] == ("POST", "repos/acme/owlbear-data/issues"):
+            github.hidden.add(1)
+            return subprocess.CompletedProcess(argv, 1, b"", b"gh: connection reset")
+        return answer
+
+    monkeypatch.setattr(publish, "OwlbearIssues", lambda repo, root: OwlbearIssues(repo, root, runner=transport))
+    record.save(store, "doc", state)
+    audits = job.Audits(store)
+    audits.publish("doc")
+    audits.thread.join()
+    assert audits.read("doc")["state"] == "publishing"
+    assert "<!-- audit:run-one:1 -->" in github.issues[1]["body"]
+    audits.publish("doc")
+    audits.thread.join()
+    assert "two minutes" in audits.read("doc")["reason"]
+    github.hidden.clear()
+    audits.publish("doc")
+    audits.thread.join()
+    assert audits.read("doc")["findings"][0]["number"] == 1
+    assert audits.read("doc")["state"] == "done"
+    assert len(github.issues) == 1
