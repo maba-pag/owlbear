@@ -32,7 +32,7 @@ def test_the_maintenance_page_lists_each_action_and_says_when_delivery_stops(tmp
         page.set_viewport_size({"width": 1280, "height": 720})
         page.goto(f"{base}/maintenance?project={entry.id}#token=t")
         actions = page.locator("#actions > li")
-        expect(actions).to_have_count(5)
+        expect(actions).to_have_count(6)
         expect(actions.nth(1)).to_contain_text("Impeccable update")
         expect(page.get_by_role("link", name="Open Memory curation in Memory")).to_have_attribute(
             "href", f"/memory?project={entry.id}"
@@ -75,7 +75,7 @@ def test_the_maintenance_page_lists_each_action_and_says_when_delivery_stops(tmp
         page.route("**/api/next/**", lambda r: r.abort())
         page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
         expect(page.locator("#error")).to_have_text("Delivery is not running. Start it, then reload this page.")
-        expect(actions).to_have_count(5)  # what it showed stays
+        expect(actions).to_have_count(6)  # what it showed stays
 
 
 @pytest.mark.browser
