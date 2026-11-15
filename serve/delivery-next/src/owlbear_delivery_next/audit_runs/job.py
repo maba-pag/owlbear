@@ -16,7 +16,7 @@ from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.settings.config import SettingsUnset
-from owlbear_delivery_next.state_store import backlog, spend_ledger, work_block
+from owlbear_delivery_next.state_store import backlog, github_writer, spend_ledger, work_block
 from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
@@ -212,7 +212,7 @@ class Audits:
     def _audit(self, audit: str, state: dict[str, Any], save: Callable[[], None]) -> None:
         if self.repo is None or self.maintenance is None:
             raise AuditBusyError(UNBOUND)
-        state["commit"] = workspace.pin(self.repo, state["branch"])
+        state["commit"] = workspace.pin(self.repo, state["branch"], github_writer.of(self.store, self.repo).access())
         save()
         prof = self.store.read_profile() or Profile()
         repository = profile.value(prof, profile.REPO, "")
