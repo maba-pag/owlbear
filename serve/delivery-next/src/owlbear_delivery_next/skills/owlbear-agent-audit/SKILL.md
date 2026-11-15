@@ -11,8 +11,6 @@ the right time without contradiction or unnecessary context?
 
 ## Boundary and scope
 
-This is a report-only Maintenance run. Never edit, create, rename or delete files, including scratch and reports.
-Never publish, run writing validators, generators, formatters or tests, or prepare an implementation handoff.
 Do not treat the absence of a hard write-denial hook as an ecosystem defect.
 
 Default scope under `repo/`: Delivery's role agents and skills in
