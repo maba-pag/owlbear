@@ -72,7 +72,7 @@ def asked(c: Change, text: str, now: datetime) -> None:
     assert r is not None  # noqa: S101 - only a running repair asks
     kind = "replace" if r.fix == "profile-check" and r.replaces else r.fix
     options = [
-        Option(id="yes", label=YES.get(kind, YES["patch"]), next=APPLY),
+        Option(id="yes", label=YES[kind], next=APPLY),
         Option(id="no", label="Don't apply it; stop with what was tried", next=DECLINE),
     ]
     q = Question(step=c.step.kind, text=text, options=options, cause=r.cause, subject="reserved", follows=r.root)

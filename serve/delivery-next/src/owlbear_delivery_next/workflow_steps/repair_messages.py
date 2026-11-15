@@ -130,7 +130,7 @@ def message(change: Change, witness: tuple[str, ...], at: Path) -> str:
     task = f" task {r.task}" if r.task else ""
     gate = project_checks.gates(r.cause) and not witness  # no check yet: the repair finds one, or defers it (#1275)
     removable = not (project_checks.deferred(change) or project_checks.has_built(change))
-    asks = bool(witness) and not gate and r.cause not in preparation_repair.CAUSES
+    asks = bool(witness) and r.cause not in preparation_repair.CAUSES
     wrong = [WRONG + (REMOVE if removable else "")] if asks else []
     checks = "\n".join(f"- `{c}`" for c in witness) or (
         "- the preparation's restore, seed, verification and cleanup trial described below"
