@@ -154,8 +154,7 @@ def _unfixed(store: Store, lock: Lock, change: Change, at: Path) -> None:
     A deferred check lets the Change plan and build its first task without one; the gate then returns.
     """
     r = change.repairs.current
-    assert r is not None  # noqa: S101 - _repair() checked it
-    if r.fix == "none":
+    if r is None or r.fix == "none":
         _stopped(store, lock, change, "nothing it tried worked")
         return
     if why := project_checks.defers(change):
@@ -320,26 +319,19 @@ def _apply(store: Store, lock: Lock, change: Change, path: Path, prof: Profile) 
         confirmed = profile.confirm(prof, key, r.command, datetime.now(UTC))
         store.write_profile(confirmed)
         made = f"profile {key}"
-        replan = project_checks.deferred(change) and project_checks.covered(confirmed, change) and _open(change)
+        covered = project_checks.deferred(change) and project_checks.covered(confirmed, change)
+        replan = covered and moves.open_task(change) is not None  # the plan named no check: planned again with it
     else:
         message = f"fix: {stuck.obstruction(r.found)}\n\nRepaired by an agent; applied by Delivery (#1066)."
         made = repair_copy.apply(path, change.names.branch, r.base, r.commit, message)
         repair_copy.git(path, ["update-ref", "-d", f"{KEPT}{change.slug}"])
-    now = datetime.now(UTC)
-    if replan:  # the plan named no check: the open tasks are planned again with it
-        _log(store, lock, change, f"applied {made}; the remaining work is planned again.{repair_messages.defect(r)}")
-        stuck.applied(change, made, now)
+    now, then = datetime.now(UTC), "the remaining work is planned again" if replan else "the step runs again"
+    _log(store, lock, change, f"applied {made}; {then}.{repair_messages.defect(r)}")
+    stuck.applied(change, made, now)
+    if replan:
         moves.go(change, StepKind.PLAN)
         change.outcome = Outcome(exit=Exit.BACK, reason=REPLAN.format(check=r.command, package=r.package), at=now)
-        store.write(lock, change)
-        return
-    _log(store, lock, change, f"applied {made}; the step runs again.{repair_messages.defect(r)}")
-    stuck.applied(change, made, now)
     store.write(lock, change)
-
-
-def _open(change: Change) -> bool:
-    return change.plan is not None and any(not t.done for t in change.plan.tasks)
 
 
 def _stopped(store: Store, lock: Lock, change: Change, why: str) -> None:
