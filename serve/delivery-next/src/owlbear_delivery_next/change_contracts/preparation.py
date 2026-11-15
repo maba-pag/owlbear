@@ -211,5 +211,9 @@ def check(recipe: tools.CheckRecipe, tree: tools.Worktree, root: Path, ctx: Prep
         errors.append(f"changes: {', '.join(run)} is run by the export or masking, which read live and run only "
                       "the project's committed scripts - revert it")  # fmt: skip
     if "{port}" not in recipe.command:  # TD-40: a check gets no PORT variable; without it the server answers elsewhere
-        errors.append('command: no `{port}` - pass the port Delivery picks, e.g. "npm run preview -- --port {port}"')
+        errors.append(
+            'command: no `{port}` - pass the port Delivery picks, e.g. "npm run preview -- --port {port}". '
+            "Inspect the Change's diff for preview scripts in tests or fixtures and their docstring recipes, "
+            "not only package console entrypoints"
+        )
     return errors + tools.check_recipe(recipe, tree, root, option.setup_globs if option else ())

@@ -179,11 +179,11 @@ REVIEW_FINISH = (
     "Delivery covers the changed paths itself. If it is rejected, fix what each error names and call it again."
 )
 SOURCE_ONLY = (
-    "Find the command, directory and URL from the project's files only (scripts, package manifests, a test "
-    "runner's web-server configuration, and preview scripts in tests or fixtures). Do not start the app: outside a "
-    "prepared test copy it may reach live data. "
-    "Delivery prepares the option you choose, launches the recipe on that test copy and verifies readiness; a "
-    "launch that fails comes back to you."
+    "Find the command, directory and URL in manifests, scripts and test-runner web-server configuration. Inspect "
+    "the Change's diff and added preview scripts in tests/fixtures, including docstring recipes, before concluding "
+    "no launch takes `{port}`; package console entrypoints are not the only candidates. Do not start the app: "
+    "outside a prepared test copy it may reach live data. Delivery prepares your chosen option, launches the "
+    "recipe on that copy and verifies readiness; a launch that fails comes back to you."
 )
 BOUNDARY = (
     "You change no Change code and commit nothing. You may edit only the setup files of the option you choose "
