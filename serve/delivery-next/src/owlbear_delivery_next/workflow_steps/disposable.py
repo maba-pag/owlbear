@@ -139,12 +139,13 @@ def changed(copy: Copy) -> list[str]:
     except (OSError, subprocess.SubprocessError) as exc:
         return [f"its refs could not be read: {worktree.failure(exc)}"]
     found = []
-    for ref, oid in sorted(now.items()):
-        if copy.refs.get(ref) == oid or ref.startswith(OWN) or ref in held:
+    for ref in sorted(copy.refs.keys() | now.keys()):
+        if copy.refs.get(ref) == now.get(ref) or ref.startswith(OWN) or ref in held:
             continue
         kind = "tag" if ref.startswith("refs/tags/") else "branch"
         name = ref.removeprefix("refs/tags/").removeprefix("refs/heads/")
-        found.append(f"{'moved' if ref in copy.refs else 'created'} {kind} {name}")
+        action = "deleted" if ref not in now else "moved" if ref in copy.refs else "created"
+        found.append(f"{action} {kind} {name}")
     return found
 
 
