@@ -96,11 +96,11 @@ def decided(c: Change, target: str, now: datetime) -> None:
         stopped(c, "you declined the fix", now)
 
 
-def applied(c: Change, commit: str) -> None:
+def applied(c: Change, commit: str, now: datetime) -> None:
     """The fix is on the Change's branch (or in the profile): the cause's count starts again and the step reruns."""
     r = c.repairs.current
     assert r is not None  # noqa: S101 - only a repair applies
-    r.phase, r.applied = "applied", commit
+    r.phase, r.applied, r.applied_at = "applied", commit, now
     c.repairs.done.append(r)
     c.repairs.current = None
     c.budgets.causes.pop(r.cause, None)

@@ -36,11 +36,14 @@ def disappeared(prior: Change, rec: RunnerRecord, now: datetime) -> bool:
     """Whether the runner ended without committing an exit while its step was runnable.
 
     A person check's environment means its preparer already exited; the visual runner captures while one exists.
-    A "before" capture the runner recorded counts as its exit (TD-24).
+    A "before" capture (TD-24) or a repair application the runner recorded counts as its exit.
     """
     o, env, b = prior.outcome, prior.env, prior.before
+    repair = prior.repairs.done[-1] if prior.repairs.done else None
+    applied = bool(repair and repair.phase == "applied" and repair.applied_at and repair.applied_at >= rec.started_at)
     runner = env is None or env.check == VISUAL
-    return not any(r and r.at >= rec.started_at for r in (o, b)) and runner and loop.next_step(prior, now) is not None
+    exited = applied or any(r and r.at >= rec.started_at for r in (o, b))
+    return not exited and runner and loop.next_step(prior, now) is not None
 
 
 def gone(kind: StepKind) -> loop.StepResult:

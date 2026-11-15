@@ -456,7 +456,7 @@ def test_a_clarification_still_unchecked_after_network_repair_is_checked_before_
     c = run.step(c.outcome.wake_at)
     assert (c.outcome.exit, loop.open_question(c), run.held) == (Exit.RETRY, None, [])
     assert c.repairs.current.cause == cause
-    stuck.applied(c, "a" * 40)
+    stuck.applied(c, "a" * 40, c.outcome.at)
     picking.store.write(Lock(picking.slug), c)
     picking.picks.append(verdict())
 

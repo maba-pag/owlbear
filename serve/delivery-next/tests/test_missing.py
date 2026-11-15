@@ -88,7 +88,7 @@ def test_an_absent_tool_starts_setup_repair_on_its_first_report(tool, error) -> 
     c = loop.apply(change(), r, NOW)
     assert error in c.repairs.current.evidence
     assert (c.step.kind, c.repairs.current.step, c.questions) == (K.BUILD, K.BUILD, [])
-    stuck.applied(c, "fixed-setup")
+    stuck.applied(c, "fixed-setup", NOW)
     assert (c.step.kind, c.step.task, loop.next_step(c, NOW)) == (K.BUILD, "t1", c.step)
 
 
@@ -178,7 +178,7 @@ def test_a_tool_no_runtime_has_changes_the_work_that_asked_for_it(enclosing, exi
     if exit_ == Exit.RETRY:
         assert (c.repairs.current.step, c.questions) == (enclosing, [])
     if enclosing == K.CHECK:
-        stuck.applied(c, "fixed-setup")
+        stuck.applied(c, "fixed-setup", NOW)
         assert (c.step.kind, c.step.task, c.plan, loop.next_step(c, NOW)) == (K.CHECK, "visual", completed, c.step)
 
 
