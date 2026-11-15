@@ -106,6 +106,7 @@ def question(r: Repair, defect: str) -> str:
 def apply(store: Store, lock: Lock, change: Change, prof: Profile, path: Path) -> tuple[str, str]:
     """Write the approved proposal to the profile; (what was made, "") or ("", why the profile no longer fits it)."""
     r = _current(change)
+    prof = store.read_profile() or prof  # the profile as it is now, not the pass's earlier reading
     key, now = f"check:{r.package}", datetime.now(UTC)
     if (held := _confirmed(prof, r.package)) != r.replaces:  # changed while the question waited
         said = f"`{held}` was confirmed" if held else "was removed"
