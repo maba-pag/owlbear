@@ -136,7 +136,6 @@ class Audits:
                 raise AuditBusyError(msg)
             state = {
                 "id": uuid.uuid4().hex,
-                "audit": audit,
                 "state": "running",
                 "phase": "auditing",
                 "started_at": record.now(),

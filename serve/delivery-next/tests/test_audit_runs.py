@@ -25,7 +25,6 @@ from .test_decision_lookup import make
 def _report():
     return {
         "id": "run-one",
-        "audit": "doc",
         "state": "publishing",
         "phase": "opening issues",
         "started_at": record.now(),
