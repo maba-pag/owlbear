@@ -12,6 +12,8 @@ a newer version stays available through failed checks until a check finds it wit
 Idle-update, updater and legacy pack lookups publish their release observations here too, before announcing or
 preparing a version. They do not change scheduled/manual check history or cadence. The page, menu and bundled-pack
 banner all read this knowledge; a running update keeps its own selected target.
+Successful lookups replace this knowledge under the same lock in completion order; display timestamps never
+arbitrate freshness. A failed look retains the offer and supplies the pack's unknown-state diagnostic.
 
 A newer PDS release is the Updates page's to take (#777): while a project's update of it runs or waits for the owner,
 or once one merged it, it is shown so and not counted; a failed update leaves it available.
@@ -249,10 +251,8 @@ class Checks:
 
     def _known(self, name: str) -> dict[str, Any]:
         kept = self.kept.get(name, {})
-        success = kept.get("success")
-        success = success if isinstance(success, dict) else {}
-        discovery = kept.get("discovery", {})
-        return discovery if discovery.get("at", "") > success.get("at", "") else success
+        found = kept.get("discovery", kept.get("success"))
+        return found if isinstance(found, dict) else {}
 
     def release(self) -> dict[str, Any]:
         """The bundled-pack banner, derived from the same observation as OwlBear's Newest."""
@@ -312,6 +312,8 @@ class Checks:
                          "offline": failure.offline}  # fmt: skip
             if name == "owlbear":
                 kept["release_failure"] = {"at": _iso(self.now()), "detail": str(failure)} if failure else None
+                if found is not None:
+                    kept["discovery"] = {"at": _iso(self.now()), **found}
             self.kept[name] = kept
             self.checking.discard(name)
             self._keep()

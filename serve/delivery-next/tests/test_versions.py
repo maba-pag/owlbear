@@ -445,6 +445,8 @@ def test_upstream_ahead_without_an_owlbear_release_shows_no_newer_pack(origin, d
 def test_release_discovery_is_read_only_and_channel_changes_withdraw_the_offer(origin, discovery, monkeypatch):
     runtime = at_v0_2(origin)
     head = git(runtime, "rev-parse", "HEAD")
+    monkeypatch.setattr(discovery, "now", lambda: datetime(2026, 11, 15, 20, tzinfo=UTC))
+    discovery.start("owlbear")
     released(origin, "v0.3", '{"pack": "p-new"}')
     fetched, target = [], versions.target
     monkeypatch.setattr(versions, "target", lambda channel=None: fetched.append(1) or target(channel))
