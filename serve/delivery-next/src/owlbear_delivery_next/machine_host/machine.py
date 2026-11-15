@@ -37,7 +37,11 @@ RETRY = 60.0  # seconds between loads of a project that failed to load
 IDLE = 2.0  # seconds between looks whether a stop when idle may stop OwlBear
 CURATE_EVERY = 60.0  # seconds between looks whether idle time may curate memory (item 5 slice 4)
 UNPROVEN_PACK = "an Impeccable session not confirmed ended; the Maintenance page shows it"
-UNPROVEN = {"pack": UNPROVEN_PACK, "pds": "a PDS session not confirmed ended; the Maintenance page shows it"}
+UNPROVEN = {
+    "pack": UNPROVEN_PACK,
+    "pds": "a PDS session not confirmed ended; the Maintenance page shows it",
+    "audit": "an audit session not confirmed ended; the Maintenance page shows it",
+}
 
 
 class MachineError(Exception):

@@ -16,6 +16,7 @@ import threading
 import uuid
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.audit_runs import job as audit_job
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, StepKind
 from owlbear_delivery_next.change_flow import shaping_capture
@@ -48,7 +49,7 @@ if TYPE_CHECKING:
 NO_AGENT = frozenset({StepKind.PUBLISH, StepKind.FOLLOW, StepKind.MERGE, StepKind.CLEANUP})
 ALL = 1_000  # as many as the project's limit and the machine's free slots allow
 WAIT = 2.0  # seconds between a pack session's checks for a stop while it waits
-WHO: dict[Kind, str] = {"pack": "Impeccable", "pds": "PDS"}  # whose sessions, in a refusal
+WHO: dict[Kind, str] = {"pack": "Impeccable", "pds": "PDS", "audit": "the audit"}  # whose sessions, in a refusal
 
 
 def wanted(c: Change, step: Step | None) -> int:
@@ -303,6 +304,15 @@ def pds(host: Host | None, store: Store) -> tuple[hand_audit.Hand, pds_job.Job]:
     hand.maintenance = host.maintenance if host is not None else None
     hand.run = owned(host, lambda _said: None, lambda cfg: step_sessions.run(hand.store, cfg), "pds")
     return hand, pds_packed(host, pds_job.Job(store))
+
+
+def audits(host: Host, store: Store) -> audit_job.Audits:
+    """Project audits whose read-only sessions hold a durable maintenance lease and a project slot."""
+    job = audit_job.Audits(store)
+    job.repo = host.repo
+    job.maintenance = host.maintenance
+    job.run = owned(host, lambda _said: None, lambda cfg: step_sessions.run(store, cfg), "audit")
+    return job
 
 
 def pds_packed(host: Host | None, job: pds_job.Job) -> pds_job.Job:
