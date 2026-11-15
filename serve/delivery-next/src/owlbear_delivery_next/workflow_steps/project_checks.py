@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import Answer, ErrorKind, Option, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile
-from owlbear_delivery_next.change_flow import asking, loop, worktree
+from owlbear_delivery_next.change_flow import asking, loop, moves, worktree
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import github_writer
@@ -61,9 +61,9 @@ def defers(change: Change) -> str:
     return "it deferred the project check a second time" if deferred(change) else ""
 
 
-def covered(prof: Profile, change: Change) -> bool:
-    """Whether every package the brief's scope touches has a confirmed check."""
-    return not _uncovered(prof, change.brief.scope)
+def replans(prof: Profile, change: Change) -> bool:
+    """Whether *prof* now covers a deferred Change whose open tasks were planned without a check."""
+    return deferred(change) and not _uncovered(prof, change.brief.scope) and moves.open_task(change) is not None
 
 
 def _built(change: Change) -> bool:

@@ -51,10 +51,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 LABEL = repair_messages.LABEL
-REPLAN = (
-    "The project had no check when this Change was planned, so its tasks name none. The owner has now confirmed "
-    "`{check}` for {package}. Plan the work that is still open again, on the existing code, with checks."
-)
 
 
 def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
@@ -149,19 +145,14 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
 
 
 def _unfixed(store: Store, lock: Lock, change: Change, at: Path) -> None:
-    """The repair ends without a fix: nothing worked, or no check can pass until the Change built the project (#1275).
-
-    A deferred check lets the Change plan and build its first task without one; the gate then returns.
-    """
+    """Without a fix: nothing worked, or the check waits until the Change's first task built the project (#1275)."""
     r = change.repairs.current
     if r is None or r.fix == "none":
         _stopped(store, lock, change, "nothing it tried worked")
         return
-    if why := project_checks.defers(change):
+    edits = "it deferred the project check but left edits; none were applied"
+    if why := project_checks.defers(change) or (edits if repair_copy.changed(at, r.base) else ""):
         _stopped(store, lock, change, why)
-        return
-    if repair_copy.changed(at, r.base):
-        _stopped(store, lock, change, "it deferred the project check but left edits; none were applied")
         return
     _log(store, lock, change, f"the project check waits until the first task is built: {r.found}; the step runs again")
     stuck.applied(change, "check deferred", datetime.now(UTC))
@@ -319,8 +310,7 @@ def _apply(store: Store, lock: Lock, change: Change, path: Path, prof: Profile) 
         confirmed = profile.confirm(prof, key, r.command, datetime.now(UTC))
         store.write_profile(confirmed)
         made = f"profile {key}"
-        covered = project_checks.deferred(change) and project_checks.covered(confirmed, change)
-        replan = covered and moves.open_task(change) is not None  # the plan named no check: planned again with it
+        replan = project_checks.replans(confirmed, change)  # the plan named no check: planned again with it
     else:
         message = f"fix: {stuck.obstruction(r.found)}\n\nRepaired by an agent; applied by Delivery (#1066)."
         made = repair_copy.apply(path, change.names.branch, r.base, r.commit, message)
@@ -330,7 +320,7 @@ def _apply(store: Store, lock: Lock, change: Change, path: Path, prof: Profile) 
     stuck.applied(change, made, now)
     if replan:
         moves.go(change, StepKind.PLAN)
-        change.outcome = Outcome(exit=Exit.BACK, reason=REPLAN.format(check=r.command, package=r.package), at=now)
+        change.outcome = Outcome(exit=Exit.BACK, reason=repair_messages.replan(r), at=now)
     store.write(lock, change)
 
 

@@ -39,6 +39,14 @@ LATER = (
 BUILT = " This Change created the project and its first task is built in this copy: `check-later` is refused now."
 
 
+def replan(r: Repair) -> str:
+    """The Planner's reason once the deferred check is confirmed (#1275)."""
+    return (
+        "The project had no check when this Change was planned, so its tasks name none. The owner has now confirmed "
+        f"`{r.command}` for {r.package}. Plan the work that is still open again, on the existing code, with checks."
+    )
+
+
 def session(
     store: Store,
     lock: Lock,
