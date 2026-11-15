@@ -55,6 +55,47 @@ def _report():
     }
 
 
+@pytest.fixture
+def audit_job(tmp_path, monkeypatch):
+    root = tmp_path / "workspace"
+    (root / "context").mkdir(parents=True)
+    audits = job.Audits(Store(tmp_path / "store", name="fixture"))
+    audits.repo = tmp_path / "clone"
+    audits.maintenance = SimpleNamespace()
+    monkeypatch.setattr(job.github_writer, "of", lambda *_args: SimpleNamespace(access=lambda: None))
+    monkeypatch.setattr(job.workspace, "pin", lambda *_args: "abc")
+    monkeypatch.setattr(job.context, "prepare", lambda *_args: [])
+    state = {**_report(), "state": "running", "phase": "auditing", "findings": []}
+    return audits, state, root
+
+
+def test_target_consent_rejects_a_release_prefix_before_moving_the_worktree(audit_job, monkeypatch):
+    audits, state, root = audit_job
+    state["note"] = "Audit `v1.20`."
+    moved = []
+    monkeypatch.setattr(
+        job.workspace, "opened", lambda *_args: contextlib.nullcontext(SimpleNamespace(path=root / "repo"))
+    )
+
+    def move(_copy, ref):
+        moved.append(ref)
+        return "requested"
+
+    monkeypatch.setattr(job.workspace, "target", move)
+
+    def configure(*_args, helper):
+        with pytest.raises(ValueError, match="complete ref"):
+            helper(project_audit_tools.Target(ref="v1.2", reason="The note names this release."))
+        assert not moved
+        assert helper(project_audit_tools.Target(ref="v1.20", reason="The note names this release.")) == "requested"
+        raise StopIteration
+
+    monkeypatch.setattr(job.sessions, "auditor", configure)
+    with pytest.raises(StopIteration):
+        audits._audit("doc", state, lambda: None)  # noqa: SLF001 - exercise the session-bound target callback
+    assert moved == ["v1.20"]
+
+
 def test_discard_consent_only_replaces_the_report_the_owner_reviewed(tmp_path, monkeypatch):
     store = Store(tmp_path / "store", name="fixture")
     store.write_profile(Profile(entries={profile.DEFAULT: ProfileEntry(state="known", value="main")}))

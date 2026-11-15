@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import uuid
 from typing import TYPE_CHECKING, Any
@@ -227,8 +228,11 @@ class Audits:
                 if not isinstance(args, project_audit_tools.Target):
                     msg = "set_target requires a ref and reason"
                     raise TypeError(msg)
-                if not state["note"] or args.ref not in state["note"]:
-                    msg = "set_target.ref must occur literally in the owner's note"
+                if not re.search(
+                    rf"(?<![\w./@{{}}~^:+-]){re.escape(args.ref)}(?![\w/@{{}}~^:+-]|\.[\w./@{{}}~^:+-])",
+                    state["note"],
+                ):
+                    msg = "set_target.ref must occur as a complete ref in the owner's note"
                     raise ValueError(msg)
                 state["commit"] = workspace.target(copy, args.ref)
                 state["changed_defaults"].append({"default": "commit", "to": state["commit"], "reason": args.reason})
