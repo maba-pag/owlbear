@@ -1,10 +1,12 @@
 """Audit publication custody and shared-Git read-only boundaries."""
 
 import contextlib
+import json
 import subprocess
 from types import SimpleNamespace
 
 from owlbear_delivery_next.audit_runs import job, publish, record
+from owlbear_delivery_next.change_contracts import project_audit_tools
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
@@ -160,3 +162,20 @@ def test_redirected_finding_recovers_its_actual_issue_after_a_lost_receipt(tmp_p
     assert audits.read("doc")["findings"][0]["number"] == 1
     assert audits.read("doc")["state"] == "done"
     assert len(github.issues) == 1
+
+
+def test_redirected_destination_must_be_named_in_full(tmp_path):
+    (tmp_path / "context").mkdir()
+    (tmp_path / "context" / "run.json").write_text(json.dumps({"note": "File in acme/private-audit-reports."}))
+    report = project_audit_tools.AuditFindings(
+        findings=[],
+        not_covered=[],
+        changed_defaults=[],
+        destination="acme/private-audit-reports",
+        summary="No findings.",
+    )
+    assert project_audit_tools.check(report, tmp_path) == []
+    report.destination = "acme/private"
+    assert project_audit_tools.check(report, tmp_path)
+    report.destination = "me/private-audit-reports"
+    assert project_audit_tools.check(report, tmp_path)
