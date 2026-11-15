@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts import project_audit_tools, tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.commands import mcp_server, setup
@@ -25,7 +25,7 @@ from owlbear_delivery_next.workflow_steps import sessions
 
 AGENTS = (
     "builder", "planner", "reviewer", "challenger", "design-judge", "preparer", "updater", "test-reviewer",
-    "test-curator", "picker", "curator", "auditor", "repairer",
+    "test-curator", "picker", "curator", "auditor", "project-auditor", "repairer",
 )  # fmt: skip
 PENDING: set[str] = {"spotter", "retro", "retro-review"}  # every worker role has its own agent file (TD-106);
 # Improvement's come with their slices (item 9)
@@ -54,6 +54,7 @@ CHAT_TOOLS |= {"complete_decision"}  # the lead's finite OwlBear completion, not
 WINDOW_TOOLS = {"ask_user"}  # a window chat's structured question (live probe, TD-109)
 VOCABULARY = SDK_TOOLS | MEMORY_TOOLS | CURATOR_TOOLS | CHAT_TOOLS | WINDOW_TOOLS | {s.name for s in tools.SPECS}
 VOCABULARY |= {tools.FIRST_LOOK, tools.SCAN_DESIGN, tools.LOOKUP} | COPILOT_MEMORY
+VOCABULARY |= {project_audit_tools.SET_TARGET.name}
 ALIASES = (f"{preload.MEMORY}/", f"{setup.SERVER}/")  # a server's tool is named bare or as <server>/<tool>
 SHAPER_TOOLS = [  # the names a window chat's agent file grants, each verified live (TD-109)
     *("view", "glob", "grep", "web_fetch", "ask_user", "owlbear-memory/recall_memory", "owlbear-memory/save_memory"),
@@ -153,7 +154,17 @@ def test_roles_within_approved_work_carry_the_boundary_and_change_workers_the_lo
 def test_judges_are_never_offered_or_told_of_a_question() -> None:
     for role in AGENTS:
         asks = tools.ASK.name in tools.results(role)
-        never = {"challenger", "design-judge", "updater", "test-reviewer", "picker", "curator", "auditor", "repairer"}
+        never = {
+            "challenger",
+            "design-judge",
+            "updater",
+            "test-reviewer",
+            "picker",
+            "curator",
+            "auditor",
+            "project-auditor",
+            "repairer",
+        }
         assert asks == (role not in never), role
         # the updater's stops are the job's; a test reviewer only reports (TD-339); the picker only picks
         assert (tools.ASK.name in step_input.reminder(role)) == asks

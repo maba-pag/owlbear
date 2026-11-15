@@ -44,6 +44,8 @@ SESSIONS: dict[str, Role] = {
     "clarification-check": "picker",  # an owner's clarification against the approved brief (TD-461)
     "question-admission": "picker",  # exact executable options and checked recommendations (#1063)
     "pds-audit": "auditor",  # a PDS deprecation audit, of a candidate or of the installed pages (#777)
+    "doc-audit": "project-auditor",
+    "agent-audit": "project-auditor",
     "pds-update": "updater",  # the PDS update's page edits
     "pds-challenge": "challenger",  # a PDS update, before it is published
     "step-repair": "repairer",  # a stuck step's repair in a throwaway copy (#1066)

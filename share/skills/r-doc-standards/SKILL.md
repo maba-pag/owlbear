@@ -58,7 +58,7 @@ Discipline`) use the pattern `{skill-name} § {section-heading}`. Section headin
 
 ## 4. Audit Dimensions
 
-These eight dimensions are applied by doc-audit. Each maps to one or more rule sections.
+Delivery's documentation audit on the Maintenance page applies these eight dimensions. Each maps to one or more rule sections.
 
 `DIM-1` **D1 — Structural**: Does the doc contain all required sections for its type? (`STR-*` rules from project-defined doc-type instructions)
 
