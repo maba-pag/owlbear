@@ -74,7 +74,8 @@ def profile_for(store: Store, lock: Lock, change: Change, repo: Path) -> Profile
     """The profile the step runs with; None once the step recorded its result: a question or a provider failure."""
     prof = store.read_profile()
     planning, later = change.step.kind == StepKind.PLAN, deferred(change)
-    if not planning and (prof is None or not later or not _built(change) or covered(prof, change)):
+    built = later and _built(change)
+    if not planning and (prof is None or not built):
         return prof or Profile()  # only a deferred check returns here, once a task is built
     now = datetime.now(UTC)
     if prof is None:
@@ -85,11 +86,13 @@ def profile_for(store: Store, lock: Lock, change: Change, repo: Path) -> Profile
             store.write(lock, loop.apply(change, engine.failed(change, exc, now), now))
             return None
         _save(store, lock, change.slug, prof, [])
-    scope, built = change.brief.scope, later and _built(change)
+    scope = change.brief.scope
     given = profile.vouched(prof) if planning else prof
     if not (missing := _uncovered(prof, scope)) or (later and not built):
         return given  # confirmed, or deferred until the first task is built
-    step = cause_key(ErrorKind.GATE, change.step.kind, _BUILT) if built else PREFIX
+    # Each check confirmed since is progress: the gate asks for the next under a cause of its own.
+    held = f"{_BUILT}{len(worktree.checks(profile.vouched(prof)))}-"
+    step = cause_key(ErrorKind.GATE, change.step.kind, held) if built else PREFIX
     cause = _cause(prof, missing, step)
     latest = next((q for q in reversed(change.questions) if q.answer and (q.cause or "").startswith(cause)), None)
     if commands := _answered(change, prof, missing, latest, cause):
@@ -142,7 +145,7 @@ def _uncovered(prof: Profile, scope: Sequence[str]) -> list[str]:
     return sorted((_packages(prof) | (homes & {ROOT})) - covered)
 
 
-def _cause(prof: Profile, missing: list[str], prefix: str = PREFIX) -> str:
+def _cause(prof: Profile, missing: list[str], prefix: str) -> str:
     """The question's cause, bound to what was detected for each home it names: a new detection asks again."""
     seen = [[h, *((e.state, e.value) if (e := prof.entries.get(f"check:{h}")) else ("absent", ""))] for h in missing]
     return prefix + hashlib.sha256(json.dumps(seen).encode()).hexdigest()[:12]
