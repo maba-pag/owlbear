@@ -136,6 +136,66 @@ def test_a_repeat_merges_only_with_an_entry_naming_the_same_projects_and_is_link
     assert docs.read(fresh=True)[0]["2"].links == ["1", "3", "4"]
 
 
+def test_audit_publication_keeps_current_observation_owner_notes_and_identity_across_a_lost_edit(
+    shared, github, monkeypatch
+):
+    backlog = view(shared[0])
+    first, _ = backlog.add(
+        "Missing instructions", "old commit", "audit", ["audit:run-a:1"], labels=iter(["type:defect", "severity:low"])
+    )
+    backlog.update(first.id, {"kind": "defect", "notes": "Owner context"})
+    edit = backlog.issues.edit
+
+    def lost(number, fields):
+        answer = edit(number, fields)
+        if "audit:run-b:1" in fields.get("body", ""):
+            assert github.comments[-1] == (1, "Earlier observation:\n\nold commit")
+            monkeypatch.setattr(backlog.issues, "edit", edit)
+            raise ProviderError(FailureCode.RESPONSE_UNKNOWN, "edit_issue", "response lost", retry_safe=False)
+        return answer
+
+    monkeypatch.setattr(backlog.issues, "edit", lost)
+    with pytest.raises(BacklogError, match="response lost"):
+        backlog.add(
+            "Missing instructions",
+            "current commit",
+            "audit",
+            ["audit:run-b:1"],
+            labels=["type:defect", "severity:high"],
+        )
+    repeated, new = backlog.add(
+        "Missing instructions",
+        "current commit",
+        "audit",
+        ["audit:run-b:1"],
+        labels=["type:defect", "severity:high"],
+    )
+    assert (new, repeated.id, repeated.text, repeated.notes, repeated.count) == (
+        False,
+        first.id,
+        "current commit",
+        "Owner context",
+        2,
+    )
+    assert repeated.evidence == ["audit:run-b:1", "audit:run-a:1"]
+    assert github.comments == [(1, "Earlier observation:\n\nold commit")]
+    assert {"type:defect", "severity:high"} <= set(names(github.issues[1]))
+    assert "severity:low" not in names(github.issues[1])
+
+    for index, status in enumerate(("done", "dropped"), start=2):
+        backlog.update(repeated.id, {"status": status})
+        # A retry returns even a closed receipt; a different audit goes back to triage.
+        assert backlog.add("Missing instructions", "current commit", "audit", repeated.evidence[:1])[
+            0
+        ] == backlog.current(repeated.id)
+        repeated, new = backlog.add("Missing instructions", f"commit {index}", "audit", [f"audit:run-{index}:1"])
+        assert (new, repeated.id, repeated.status, repeated.count) == (True, str(index), "inbox", 1)
+        assert repeated.links == [str(n) for n in range(1, index)]
+        assert all(repeated.id in backlog.current(str(n)).links for n in range(1, index))
+    backlog.update(repeated.id, {"kind": "defect"})
+    assert {"type:defect", "severity:high"} <= set(names(github.issues[1]))
+
+
 @pytest.mark.usefixtures("github")
 def test_a_repeat_reads_its_matches_afresh_completes_a_one_sided_link_and_links_an_entry_with_many(shared, monkeypatch):
     """Sol: a lagging listing never merges into an entry the owner re-scoped; a save that failed is completed later."""

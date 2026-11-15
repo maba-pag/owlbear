@@ -4,6 +4,7 @@ import dataclasses
 import gzip
 import json
 import subprocess
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
@@ -327,6 +328,60 @@ def test_a_missing_issue_list_cannot_repeat_a_filing_or_erase_a_recovered_issue(
     with pytest.raises(ProviderError):
         client().create("ordering", ordering, marker=ordering)
     assert control.posts == 2
+
+
+def test_audit_retry_requires_old_pending_and_a_complete_absent_listing_and_never_recreates_known(world, tmp_path):
+    marker, now = "audit:run:1", datetime.now(UTC)
+    old = now - timedelta(minutes=3)
+    control = SimpleNamespace(lose=True, listing_error=False)
+
+    def run(argv, data, timeout, cwd, env):
+        method = argv[argv.index("--method") + 1]
+        if method == "POST" and control.lose:
+            return subprocess.CompletedProcess((), 1, b"", b"gh: connection reset")
+        if method == "GET" and control.listing_error:
+            return subprocess.CompletedProcess((), 1, b"", b"gh: connection reset")
+        return world.gh(argv, data, timeout, cwd, env)
+
+    def client():
+        return OwlbearIssues("o/r", tmp_path, runner=run)
+
+    with pytest.raises(ProviderError):
+        client().create("audit finding", marker, marker=marker, labels=["type:defect", "severity:high"])
+    with pytest.raises(ProviderError):
+        client().find(marker)
+    assert client().listed(marker) is None
+    with pytest.raises(ProviderError):
+        client().retry_audit("audit finding", marker, marker=marker, pending_since=now)
+    control.listing_error = True
+    with pytest.raises(ProviderError):
+        client().retry_audit("audit finding", marker, marker=marker, pending_since=old)
+
+    control.lose, control.listing_error = False, False
+    # A prefix collision on a full first page cannot hide absence on the next page.
+    world.gh.issues.extend({"number": n, "body": "audit:run:10"} for n in range(2, 102))
+    made = client().retry_audit(
+        "audit finding",
+        marker,
+        marker=marker,
+        pending_since=old,
+        labels=["type:defect", "severity:high"],
+    )
+    assert world.gh.issues[-1]["labels"] == ["type:defect", "severity:high"]
+    world.gh.issues[-1]["state"] = "closed"
+    recovered = client().retry_audit("audit finding", marker, marker=marker, pending_since=now)
+    assert (recovered.number, recovered.state) == (made.number, "closed")
+    world.gh.issues.pop()
+    before = len(world.gh.issues)
+    for call in (
+        lambda: client().find(marker),
+        lambda: client().listed(marker),
+        lambda: client().create("audit finding", marker, marker=marker),
+        lambda: client().retry_audit("audit finding", marker, marker=marker, pending_since=now - timedelta(days=30)),
+    ):
+        with pytest.raises(ProviderError):
+            call()
+    assert len(world.gh.issues) == before
 
 
 def test_a_failure_longer_than_any_cut_is_kept_whole_and_masked(world, whole_error):
