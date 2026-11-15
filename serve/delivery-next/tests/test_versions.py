@@ -457,24 +457,23 @@ def test_release_discovery_is_read_only_and_channel_changes_withdraw_the_offer(o
     assert fetched == [1]
     assert look(discovery)["checked_at"] is not None  # each look fetches; the update checks say when
     assert fetched == [1, 1]
-    checks = discovery
 
     def owlbear() -> dict:
-        return next(u for u in checks.read()["updates"] if u["name"] == "owlbear")
+        return next(u for u in discovery.read()["updates"] if u["name"] == "owlbear")
 
-    assert (checks.release()["state"], owlbear()["state"], owlbear()["latest"]) == ("newer", "newer", "v0.3")
-    assert checks.read()["available"] == 1
+    assert (discovery.release()["state"], owlbear()["state"], owlbear()["latest"]) == ("newer", "newer", "v0.3")
+    assert discovery.read()["available"] == 1
 
     with registry.locked():
         saved = registry.load()
         saved.settings = saved.settings.model_copy(update={"channel": "major"})  # v0.1 until v1: v0.3 is not taken
         registry.save(saved)
 
-    said, row = checks.release(), owlbear()
+    said, row = discovery.release(), owlbear()
     assert (said["state"], said["detail"]) == ("unknown", impeccable.MOVED)
     assert (row["state"], row["detail"], checks.read()["available"]) == ("unknown", impeccable.MOVED, 0)
-    checks.start("owlbear")
-    assert (checks.release()["state"], owlbear()["state"]) == ("none", "current")
+    discovery.start("owlbear")
+    assert (discovery.release()["state"], owlbear()["state"]) == ("none", "current")
     assert not (local_home.root() / local_home.VERSIONS).exists()
     assert git(runtime, "rev-parse", "HEAD") == head
 
