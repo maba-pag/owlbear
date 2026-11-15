@@ -183,11 +183,5 @@ recommendation and confidence. Include these in evidence and recommendation fiel
 loading, safety, silent-failure or direct-conflict defects; medium for structural or authority problems with
 credible behavioral cost; low for small cleanups with concrete context or maintenance value. Omit cosmetics.
 
-Use `set_target` only for a ref requested by the note; the host moves the worktree and records the commit.
-Re-read affected files afterwards. Record note-driven changes in `changed_defaults`; destination stays empty
-unless the note literally names its owner/name.
-
-Submit findings, empty `parts`, `not_covered`, `changed_defaults`, `destination` and summary. Never ask the owner
-to pick a mode or approve a finding, wait for an answer, propose a follow-up command, or produce edits.
-Zero findings and an exhausted inspection are valid terminal results. The host owns the unverified report,
-issue identities and publication.
+Record note-driven `changed_defaults`. Never propose a follow-up command.
+Zero findings and an exhausted inspection are valid terminal results.
