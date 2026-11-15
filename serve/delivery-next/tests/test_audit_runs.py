@@ -106,6 +106,7 @@ def test_shared_git_mutation_voids_even_an_errored_session(tmp_path, monkeypatch
     worktree.git(repo, "add", "README.md")
     worktree.git(repo, "commit", "--quiet", "-m", "Fixture")
     commit = worktree.git(repo, "rev-parse", "HEAD").strip()
+    worktree.git(repo, "tag", "audit-mutation")
     root = tmp_path / "workspace"
     root.mkdir()
 
@@ -125,7 +126,7 @@ def test_shared_git_mutation_voids_even_an_errored_session(tmp_path, monkeypatch
     monkeypatch.setattr(job.publish, "findings", lambda *_args: published.append(True))
 
     def session(_root):
-        worktree.git(repo, "tag", "audit-mutation")
+        worktree.git(repo, "tag", "--delete", "audit-mutation")
         msg = "session connection ended"
         raise OSError(msg)
 
@@ -134,9 +135,9 @@ def test_shared_git_mutation_voids_even_an_errored_session(tmp_path, monkeypatch
     audits.thread.join()
     saved = audits.read("doc")
     assert saved["state"] == "failed"
-    assert "created tag audit-mutation" in saved["reason"]
+    assert "deleted tag audit-mutation" in saved["reason"]
     assert not published
-    assert worktree.git(repo, "rev-parse", "refs/tags/audit-mutation").strip() == commit
+    assert not worktree.git(repo, "tag", "--list", "audit-mutation").strip()
     assert not (root / "repo").exists()
 
 
