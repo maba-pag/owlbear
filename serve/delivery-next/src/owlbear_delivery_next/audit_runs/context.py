@@ -6,12 +6,14 @@ import json
 import shutil
 from typing import TYPE_CHECKING
 
+from owlbear_decisions import Scope, State
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.gh_client import GhClient, repo
 from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
 from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.state_store import backlog, decision_store
 from owlbear_delivery_next.state_store.store import StoreError
+from owlbear_delivery_next.workflow_steps.lookup import _unresolved
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -27,9 +29,16 @@ def prepare(store: Store, root: Path, state: dict[str, Any], repository: str) ->
     at.mkdir()
     view = decision_store.load(store.shared, store.name)
     decisions = [
-        e.decision.model_dump(mode="json") for e in view.snapshot.entries if view.snapshot.active(e.decision.id)
+        e.decision
+        for e in view.snapshot.entries
+        if e.decision.state is State.IN_FORCE and e.decision.scope is not Scope.CHANGE
     ]
-    (at / "decisions.md").write_text(json.dumps(decisions, indent=2) + "\n", encoding="utf-8")
+    if blocked := _unresolved(view.snapshot, decisions):
+        msg = "audit planning authority is unresolved:\n" + json.dumps(blocked, indent=2)
+        raise ValueError(msg)
+    (at / "decisions.md").write_text(
+        json.dumps([d.model_dump(mode="json") for d in decisions], indent=2) + "\n", encoding="utf-8"
+    )
     (at / "run.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
     limits: list[str] = []
 

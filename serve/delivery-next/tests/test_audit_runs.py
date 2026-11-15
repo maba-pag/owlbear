@@ -5,7 +5,10 @@ import json
 import subprocess
 from types import SimpleNamespace
 
-from owlbear_delivery_next.audit_runs import job, publish, record
+import pytest
+
+from owlbear_decisions import write
+from owlbear_delivery_next.audit_runs import context, job, publish, record
 from owlbear_delivery_next.change_contracts import project_audit_tools
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
@@ -13,6 +16,8 @@ from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.state_store import backlog
 from owlbear_delivery_next.state_store.store import Store
+
+from .test_decision_lookup import make
 
 
 def _report():
@@ -179,3 +184,15 @@ def test_redirected_destination_must_be_named_in_full(tmp_path):
     assert project_audit_tools.check(report, tmp_path)
     report.destination = "me/private-audit-reports"
     assert project_audit_tools.check(report, tmp_path)
+
+
+def test_unresolved_planning_authority_never_becomes_empty_audit_context(tmp_path, shared_repo):
+    shared = DataRepo(shared_repo[0])
+    shared.claim("shop-site", "github.com/acme/shop-site")
+    rule = make(conflict=True)
+    write(rule, shared.root / "shop-site")
+    store = Store(tmp_path / "store", shared, "shop-site")
+    with pytest.raises(ValueError, match="flagged conflict") as failed:
+        context.prepare(store, tmp_path, _report(), "acme/shop-site")
+    assert rule.id in str(failed.value)
+    assert not (tmp_path / "context" / "decisions.md").exists()
