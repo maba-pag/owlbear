@@ -44,6 +44,7 @@ from owlbear_delivery_next.change_flow import (
     amend_apply,
     amending,
     answer_kinds,
+    asking,
     brief_rounds,
     budgets,
     curation_flow,
@@ -402,6 +403,7 @@ def apply(change: Change, result: StepResult, now: datetime) -> Change:
         ValueError: The exit is not defined for the current step kind or lacks its record.
     """
     c = change.model_copy(deep=True)
+    result = asking.scoped(c, result)
     kind = c.step.kind
     if result.exit not in EXITS[kind]:
         msg = f"{kind} has no {result.exit} exit"

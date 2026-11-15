@@ -39,7 +39,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_contracts.round_records import LeftOpen, RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_flow import budgets, delivery_target, loop, round_flow, worktree
+from owlbear_delivery_next.change_flow import asking, budgets, delivery_target, loop, round_flow, stuck, worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.git import access as git_access
@@ -458,6 +458,102 @@ def test_unknown_declared_checks_ask_the_owner_once_per_workflow_digest_before_m
     names, held = follow.declared(cx, c, gh.pr, StepKind.MERGE)
     assert (names, held, profile.value(cx.profile, profile.DECLARED)) == ((), None, "none")
     assert profile.known(cx.store.read_profile(), profile.DECLARED)
+
+
+def _c1_missing(c, tool, causes):
+    c.step = Step(kind=StepKind.CHECK, task="visual")
+    payload = tools.MissingTool(tool=tool, need="capture Metrics", error="No preview command found")
+    run = Run("c1-preparer", ending="missing-tool", payload=payload, termination=processes.Termination(confirmed=True))
+    c = loop.apply(c, session_result.to_result(run, StepKind.CHECK, NOW), NOW)
+    repair = c.repairs.current
+    assert repair is not None
+    assert payload.tool in repair.evidence
+    assert payload.error in repair.evidence
+    causes.append((repair.cause, repair.root))
+    repair.fix = "patch"
+    stuck.asked(c, "Apply the proven preview setup fix?", NOW)
+    if len(causes) <= 2:
+        q = loop.open_question(c)
+        assert q is not None
+        assert q.subject == "reserved"
+        c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option="no")], NOW)
+    else:
+        assert c.repairs.current is None
+        assert c.outcome.exit == Exit.STOP
+        assert loop.open_question(c) is None
+        assert "third time" in c.stop.reason
+    return c
+
+
+def test_c1s_seven_questions_share_two_cause_allowances_despite_changed_evidence(tmp_path, clone):
+    head, entries = ci_head(clone, "${{ inputs.n }}")
+    cx = ctx(tmp_path, FakeGh(pr(head=head)), prof(**entries))
+    c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
+    c.brief.approved_version = 1
+    counts, digests, tool_causes = [], [], []
+    reports = iter(
+        (
+            "launch recipe for Metrics on a port",
+            "OwlBear launch recipe accepting port for Metrics",
+            "launch recipe for serve/delivery-next Metrics preview",
+        )
+    )
+    # q13, q16, q17, q18, q19, q20, q21, in the incident's recorded order.
+    for event in ("ci", "ci", "ci", "tool", "ci", "tool", "tool"):
+        c.outcome, c.stop = None, None  # the next incident observation, not an automatic recovery
+        if event == "ci":
+            c.step = Step(kind=StepKind.FOLLOW)
+            if digests:
+                head, _ = ci_head(clone, f"${{{{ inputs.n }}}} {len(digests)}")
+                cx.gh.pr = pr(head=head)
+            _, result = follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW)
+            digests.append(result.cause.removeprefix(asking.DECLARED))
+            c = loop.apply(c, result, NOW)
+            if len(digests) <= 2:
+                q = loop.open_question(c)
+                assert q is not None
+                if len(digests) == 2:
+                    assert c.questions[0].id in q.text
+                    assert "Yes: merge once those pass" in q.text
+                    assert all(digest in q.text for digest in digests)
+                    assert "earlier answer covered different workflows" in q.text
+                c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option="yes")], NOW)
+                assert follow.declared(cx, c, cx.gh.pr, StepKind.MERGE) == ((), None)
+            else:
+                assert c.outcome.exit == Exit.STOP
+                assert loop.open_question(c) is None
+                assert "twice already" in c.stop.reason
+        else:
+            c = _c1_missing(c, next(reports), tool_causes)
+        c = Change.model_validate_json(c.model_dump_json())
+        counts.append(len(c.questions))
+    assert counts == [1, 2, 2, 3, 3, 4, 4]
+    assert len(set(digests)) == 4
+    assert len(set(tool_causes)) == 1
+
+    # Already-saved c1 questions and an in-flight legacy repair must not acquire a fresh allowance on upgrade.
+    legacy = c.model_copy(deep=True)
+    legacy.questions = [
+        Question(
+            id=qid,
+            step=StepKind.CHECK,
+            text="Missing Metrics launch recipe",
+            options=[],
+            cause=f"scope:check:tool-{name}",
+            answer=Answer(option="replan", at=NOW),
+        )
+        for qid, name in (
+            ("q18", "launch-recipe-for-metrics-on-a-port"),
+            ("q20", "owlbear-launch-recipe-accepting-port-for"),
+        )
+    ]
+    stuck.start(legacy, "scope:check:tool-launch-recipe-for-serve-delivery-next-me", "No preview command", NOW)
+    legacy.repairs.current.fix = "patch"
+    legacy = Change.model_validate_json(legacy.model_dump_json())
+    stuck.asked(legacy, "Apply the proven preview setup fix?", NOW)
+    assert len(legacy.questions) == 2
+    assert legacy.repairs.current is None
+    assert "did not save their check/task identity" in legacy.stop.reason
 
 
 def _commit_workflow(clone, name, text):

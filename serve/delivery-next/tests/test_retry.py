@@ -105,7 +105,8 @@ def test_the_same_delivery_defect_three_times_stops_its_existing_repair_with_the
     assert (c.questions, c.repairs.current, c.stop.action) == ([], None, "Run the step again")
     assert c.repairs.done[-1].evidence == evidence
     assert evidence in c.stop.reason
-    assert c.repairs.done[-1].stopped == "its fix would put the same problem to you a third time"
+    assert c.repairs.done[-1].stopped.startswith("its fix would put the same problem to you a third time.")
+    assert said in c.repairs.done[-1].stopped
 
 
 def test_a_day_of_remote_git_timeouts_that_printed_different_words_repairs_with_the_last_whole_error():
