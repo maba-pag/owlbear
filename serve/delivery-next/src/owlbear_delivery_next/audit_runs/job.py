@@ -29,17 +29,17 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.runtimes.session_result import Run
     from owlbear_delivery_next.state_store.store import Store
 
-_log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 UNBOUND = "maintenance ownership and the audit session runner must be bound before starting"
 NOTE_LIMIT = 2000
 
 
-class Busy(RuntimeError):
+class AuditBusyError(RuntimeError):
     """An audit cannot start; the message gives the complete reason."""
 
 
 def _unbound(_cfg: Session) -> Run:
-    raise Busy(UNBOUND)
+    raise AuditBusyError(UNBOUND)
 
 
 class Audits:
@@ -122,19 +122,19 @@ class Audits:
         """Pin the selected branch and launch one auditor, refusing an undisposed partial publication."""
         with self.lock:
             if why := self.refusal(audit):
-                raise Busy(why)
+                raise AuditBusyError(why)
             if len(note) > NOTE_LIMIT:
                 msg = "the audit note exceeds 2000 characters"
                 raise ValueError(msg)
             old = self.read(audit)
             if old and record.unpublished(old) and not drop_unpublished:
                 msg = "the last audit has unpublished findings; finish publishing or explicitly drop them"
-                raise Busy(msg)
+                raise AuditBusyError(msg)
             prof = self.store.read_profile() or Profile()
             branch = profile.value(prof, profile.DEFAULT, "")
             if not branch:
                 msg = "the project profile has no target branch"
-                raise Busy(msg)
+                raise AuditBusyError(msg)
             state = {
                 "id": uuid.uuid4().hex,
                 "audit": audit,
@@ -163,11 +163,11 @@ class Audits:
         with self.lock:
             if audit not in self.offered() or self.busy():
                 msg = "the audit is not offered or an audit is running"
-                raise Busy(msg)
+                raise AuditBusyError(msg)
             state = self.read(audit)
             if not state or state["state"] != "publishing":
                 msg = "this audit has no publication to finish"
-                raise Busy(msg)
+                raise AuditBusyError(msg)
             self._launch(audit, state, resume=True)
             return state.copy()
 
@@ -203,7 +203,7 @@ class Audits:
             state.update(reason=failure(exc), ended_at=record.now())
             if state["state"] != "publishing":
                 state.update(state="failed", phase="")
-            _log.exception("%s audit failed", audit)
+            logger.exception("%s audit failed", audit)
         finally:
             try:
                 save()
@@ -212,7 +212,7 @@ class Audits:
 
     def _audit(self, audit: str, state: dict[str, Any], save: Callable[[], None]) -> None:
         if self.repo is None or self.maintenance is None:
-            raise Busy(UNBOUND)
+            raise AuditBusyError(UNBOUND)
         state["commit"] = workspace.pin(self.repo, state["branch"])
         save()
         prof = self.store.read_profile() or Profile()

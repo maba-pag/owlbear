@@ -41,7 +41,7 @@ def router(audits: audit_job.Audits, host: Host) -> APIRouter:
         try:
             with admitted(host):
                 return audits.start(audit, body.note, drop_unpublished=body.drop_unpublished)
-        except audit_job.Busy as exc:
+        except audit_job.AuditBusyError as exc:
             raise HTTPException(409, str(exc)) from exc
 
     @routes.post("/maintenance/audits/{audit}/publish", dependencies=[Depends(decision_routes.owner)])
@@ -49,7 +49,7 @@ def router(audits: audit_job.Audits, host: Host) -> APIRouter:
         try:
             with admitted(host):
                 return audits.publish(audit)
-        except audit_job.Busy as exc:
+        except audit_job.AuditBusyError as exc:
             raise HTTPException(409, str(exc)) from exc
 
     return routes
