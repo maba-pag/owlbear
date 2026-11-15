@@ -503,9 +503,7 @@ def test_a_release_with_an_unreadable_pack_is_unknown_but_owlbear_remains_availa
     said = look(discovery)
     assert (said["state"], said["version"]) == ("unknown", "v0.4")
     assert "Impeccable is unreadable" in said["detail"]
-    checks = discovery
-    checks.start("owlbear")
-    row = next(u for u in checks.read()["updates"] if u["name"] == "owlbear")
+    row = next(u for u in discovery.read()["updates"] if u["name"] == "owlbear")
     assert (row["state"], row["latest"], "Impeccable is unreadable" in row["detail"]) == ("newer", "v0.4", True)
 
 
