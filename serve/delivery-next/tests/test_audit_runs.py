@@ -79,7 +79,7 @@ def test_finish_recovers_a_lost_receipt_without_duplicate_issue(tmp_path, monkey
     assert "two minutes" in audits.read("doc")["reason"]
     assert len(github.issues) == 2
     github.hidden.clear()
-    audits.finish("doc")
+    audits.publish("doc")
     audits.thread.join()
     finished = audits.read("doc")
     assert finished["state"] == "done"
