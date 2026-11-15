@@ -1015,6 +1015,13 @@ def test_updates_say_a_release_look_that_could_not_read_the_versions_whole(
                 expect(shown).to_be_visible()
                 told = r"The last\s+2 checks failed; the latest at [^\n]*?: "
                 assert re.fullmatch(told + re.escape(f"{detail}."), shown.text_content())
+                before = next(u for u in machine.checks.read()["updates"] if u["name"] == "owlbear")
+                for prefix in ("/impeccable", pack_routes.OLD):
+                    response = page.request.post(f"{base}/api/next{prefix}/look", headers={"Authorization": "Bearer t"})
+                    assert response.ok, response.text()
+                    assert response.json()["release"]["state"] == "unknown"
+                    assert response.json()["release"]["detail"] == detail
+                assert next(u for u in machine.checks.read()["updates"] if u["name"] == "owlbear") == before
             else:
                 shown = page.locator("#check-latest")
                 expect(shown).to_be_visible()

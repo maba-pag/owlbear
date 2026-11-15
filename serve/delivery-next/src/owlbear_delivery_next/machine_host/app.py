@@ -432,7 +432,10 @@ def _pack_routes(routes: APIRouter, machine: Machine) -> None:
     @routes.post(f"{pack_routes.OLD}/look", include_in_schema=False)
     def look_pack() -> dict[str, Any]:
         """Look now whether a released version pins a newer pack; it fetches, and never installs anything."""
-        machine.checks.look()
+        try:
+            machine.checks.look()
+        except (versions.VersionError, registry.RegistryError):
+            return machine.impeccable.read()  # the shared record carries the whole lookup failure as unknown
         return machine.impeccable.read()
 
     pack_routes.moved(routes, "")

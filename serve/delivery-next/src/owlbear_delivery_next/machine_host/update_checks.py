@@ -226,10 +226,21 @@ class Checks:
         if self.machine.stopping.is_set():
             msg = "OwlBear is stopping"
             raise versions.VersionError(msg)
-        found = owlbear()
+        try:
+            found = owlbear()
+        except (versions.VersionError, registry.RegistryError) as exc:
+            with self.lock:
+                kept = self.kept.setdefault("owlbear", {})
+                kept["release_failure"] = {
+                    "at": _iso(self.now()),
+                    "detail": f"the versions could not be read: {command_failure.failure(exc)}",
+                }
+                self._keep()
+            raise
         with self.lock:
             kept = self.kept.setdefault("owlbear", {})
             kept["discovery"] = {"at": _iso(self.now()), **found}
+            kept["release_failure"] = None
             self._keep()
         selected = found["release"]
         if selected["version"] or selected["notes"]:
@@ -248,9 +259,8 @@ class Checks:
         with self.lock:
             known = self._known("owlbear")
             kept = known.get("release", {}) | {"checked_at": known.get("at")}
-            record = self.kept.get("owlbear", {})
-            if record.get("reason") and record.get("attempt_at", "") >= known.get("at", ""):
-                kept = {"detail": record["reason"], "checked_at": record.get("attempt_at")}
+            if failed := self.kept.get("owlbear", {}).get("release_failure"):
+                kept = {"detail": failed["detail"], "checked_at": failed["at"]}
         return impeccable.release(kept)
 
     def start(self, name: str) -> bool:
@@ -300,6 +310,8 @@ class Checks:
             else:
                 kept |= {"failures": int(kept.get("failures", 0)) + 1, "reason": str(failure),
                          "offline": failure.offline}  # fmt: skip
+            if name == "owlbear":
+                kept["release_failure"] = {"at": _iso(self.now()), "detail": str(failure)} if failure else None
             self.kept[name] = kept
             self.checking.discard(name)
             self._keep()
