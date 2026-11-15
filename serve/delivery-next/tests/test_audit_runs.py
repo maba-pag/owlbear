@@ -16,7 +16,6 @@ from owlbear_delivery_next.state_store.store import Store
 def _report():
     return {
         "id": "run-one",
-        "host": "fixture",
         "audit": "doc",
         "state": "publishing",
         "phase": "opening issues",

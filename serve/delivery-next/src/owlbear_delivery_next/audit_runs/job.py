@@ -141,7 +141,6 @@ class Audits:
                 raise Busy(msg)
             state = {
                 "id": uuid.uuid4().hex,
-                "host": str(self.store.root.resolve()),
                 "audit": audit,
                 "state": "running",
                 "phase": "auditing",
