@@ -159,7 +159,7 @@ def overview(store: Store) -> list[dict[str, Any]]:
 
 def _audits(store: Store) -> list[dict[str, Any]]:
     reports = audit_record.read(store)
-    offered = ["doc", "agent"] if store.name == "owlbear" else ["doc"]
+    offered = audit_record.offered(store)
     notes = {
         "doc": "Checks the documentation against the code and itself: accuracy, staleness, broken links, "
         "duplication, structure, audience. Reads a pinned commit and never edits.",

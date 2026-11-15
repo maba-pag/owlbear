@@ -55,8 +55,8 @@ class Audits:
         self.thread: threading.Thread | None = None
 
     def offered(self) -> tuple[str, ...]:
-        """Only OwlBear's shared project folder offers an agent audit."""
-        return record.NAMES if self.store.name == "owlbear" else ("doc",)
+        """Only the canonical OwlBear repository offers an agent audit."""
+        return record.offered(self.store)
 
     def busy(self) -> bool:
         """Whether the project's stop must wait for an audit or its publication."""
