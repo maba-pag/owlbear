@@ -458,7 +458,6 @@ def test_release_discovery_is_read_only_and_channel_changes_withdraw_the_offer(o
     assert look(discovery)["checked_at"] is not None  # each look fetches; the update checks say when
     assert fetched == [1, 1]
     checks = discovery
-    checks.start("owlbear")
 
     def owlbear() -> dict:
         return next(u for u in checks.read()["updates"] if u["name"] == "owlbear")
