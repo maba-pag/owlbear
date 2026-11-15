@@ -20,16 +20,15 @@ WAIT = "GitHub may still be listing the last entry; press again in two minutes"
 def findings(store: Store, state: dict[str, Any], save: Callable[[], None]) -> None:
     """Persist intent before every issue write and each receipt before attempting the next finding."""
     destination = state["destination"]
-    external = OwlbearIssues(destination, store.root) if destination else None
-    book = None if external else backlog.Backlog.of(store)
+    book = OwlbearIssues(destination, store.root) if destination else backlog.Backlog.of(store)
     for index, finding in enumerate(state["findings"], 1):
         if finding.get("number") is not None:
             continue
         identity = f"audit:{state['id']}:{index}"
         pending = finding.get("pending")
         previous = datetime.fromisoformat(pending) if pending else None
-        found = external.listed(identity) if external else _listed(book, identity)
-        if found is not None and external:
+        found = _listed(book, identity) if isinstance(book, backlog.Backlog) else book.listed(identity)
+        if found is not None and not isinstance(book, backlog.Backlog):
             finding.update(number=found.number, url=found.url, pending=None)
             save()
             continue
@@ -40,29 +39,21 @@ def findings(store: Store, state: dict[str, Any], save: Callable[[], None]) -> N
             save()
         text = _text(state, finding)
         labels = (f"type:{finding['type']}", f"severity:{finding['severity']}")
-        if external:
-            text += f"\n\n<!-- {identity} -->\n"
-            if previous:
-                issue = external.retry_audit(
-                    finding["title"], text, marker=identity, labels=labels, pending_since=previous
-                )
-            else:
-                issue = external.create(finding["title"], text, marker=identity, labels=labels)
-            number, url = issue.number, issue.url
-        else:
-            if book is None:
-                msg = "the audit has no Backlog publication client"
-                raise RuntimeError(msg)
+        if isinstance(book, backlog.Backlog):
             entry, _ = book.add(finding["title"], text, source="audit", evidence=[identity], labels=labels)
             number, url = int(entry.id), f"https://github.com/{book.repository}/issues/{entry.id}"
+        else:
+            text += f"\n\n<!-- {identity} -->\n"
+            if previous:
+                issue = book.retry_audit(finding["title"], text, marker=identity, labels=labels, pending_since=previous)
+            else:
+                issue = book.create(finding["title"], text, marker=identity, labels=labels)
+            number, url = issue.number, issue.url
         finding.update(number=number, url=url, pending=None)
         save()
 
 
-def _listed(book: backlog.Backlog | None, identity: str) -> tuple[int, str] | None:
-    if book is None:
-        msg = "the audit has no Backlog publication client"
-        raise RuntimeError(msg)
+def _listed(book: backlog.Backlog, identity: str) -> tuple[int, str] | None:
     entries, invalid = book.read(fresh=True)
     if invalid:
         msg = "cannot establish publication custody; unreadable Backlog entries: " + ", ".join(invalid)
