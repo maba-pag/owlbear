@@ -40,7 +40,7 @@ LINKS = backlog_issues.LONGEST // 10  # more than an issue body holds: each link
 PROBE = "9" * 9  # the longest id, for the room a new entry's link takes before GitHub numbers it
 READ_SECONDS = 10.0  # how long a listing is reused
 RECENT_SECONDS = 120.0  # GitHub lists a new or edited issue only seconds later; until then the write's answer counts
-type Source = Literal["owner", "watcher", "spotter", "retro", "assistant", "review", "run"]  # "watcher": older entries
+type Source = Literal["owner", "watcher", "spotter", "retro", "assistant", "review", "run", "audit"]
 type Kind = Literal["untriaged", "defect", "improvement", "idea", "question"]
 type Status = Literal["inbox", "open", "in-change", "done", "dropped"]
 type Folder = Annotated[str, Field(min_length=1, max_length=100)]  # a project's folder in the shared repository
@@ -184,33 +184,69 @@ class Backlog:
         return ordered(self.read()[0].values())
 
     def add(
-        self, title: str, text: str = "", source: Source = "owner", evidence: Iterable[str] = ()
+        self,
+        title: str,
+        text: str = "",
+        source: Source = "owner",
+        evidence: Iterable[str] = (),
+        *,
+        labels: Iterable[str] = (),
     ) -> tuple[Entry, bool]:
-        """Add a finding, or count up the entry it repeats; the entry and whether it is new."""
+        """Add or repeat a finding; audit evidence starts with its identity, making a write retry idempotent."""
         refs = list(dict.fromkeys(r.strip() for r in evidence if r.strip()))
+        extra = list(dict.fromkeys(labels))
+        identity = refs[0] if source == "audit" and refs and refs[0].startswith("audit:") else ""
 
         def work(found: dict[str, Entry], now: datetime) -> tuple[Entry, bool]:
             match = key(source, title)
-            listed = [e.id for e in found.values() if key(e.source, e.title) == match]  # read again: the listing lags
-            fresh = [e for e in (self._fetch(found, i) for i in listed) if e and key(e.source, e.title) == match]
-            same = next((e for e in fresh if repeats(e, self.project, source, title)), None)
+            listed = [
+                e.id for e in found.values() if key(e.source, e.title) == match or (identity and identity in e.evidence)
+            ]
+            fresh = [e for e in (self._fetch(found, i) for i in listed) if e]
+            observed = next((e for e in fresh if identity and identity in e.evidence), None)
+            fresh = [e for e in fresh if key(e.source, e.title) == match]
+            same = observed or next(
+                (
+                    e
+                    for e in fresh
+                    if repeats(e, self.project, source, title)
+                    and (source != "audit" or e.status not in {"done", "dropped"})
+                ),
+                None,
+            )
             if same is None:  # TD-405: linked both ways at once, to every match
                 alike = sorted(fresh, key=lambda e: int(e.id))
                 self._room([_linked(e, PROBE, now) for e in alike])
                 fields = {"id": "1", "title": title.strip(), "text": text.strip(), "source": source}
-                fields |= {"evidence": refs[-EVIDENCE:], "origin": self.project, "links": [e.id for e in alike]}
-                entry = self.put(_valid(fields | {"first_seen": now, "last_seen": now, "updated_at": now}))
+                fields |= {
+                    "evidence": refs[:EVIDENCE] if source == "audit" else refs[-EVIDENCE:],
+                    "origin": self.project,
+                    "links": [e.id for e in alike],
+                }
+                entry = self.put(
+                    _valid(fields | {"first_seen": now, "last_seen": now, "updated_at": now}), labels=extra
+                )
                 self._save(*(_linked(e, entry.id, now) for e in alike))
                 return entry, True
             new = [r for r in refs if r not in same.evidence]
             seen = {"count": same.count + 1, "last_seen": now, "updated_at": now}
             entry = _valid(same.model_dump() | seen | {"evidence": (same.evidence + new)[-EVIDENCE:]})
+            if source == "audit":
+                current = {"text": text.strip(), "evidence": list(dict.fromkeys(refs + same.evidence))[:EVIDENCE]}
+                entry = same if observed else _valid(entry.model_dump() | current)
             read = {e.id: e for e in fresh}  # each issue is read once per add: many matches cost no second read
             others = [read.get(i) or self._fetch(found, i) for i in entry.links]  # a one-sided link is completed
             lacking = [_linked(e, entry.id, now) for e in others if e and entry.id not in e.links]
             self._room(lacking)
-            self._save(entry, *lacking)
-            if new:
+            if not observed:
+                self._body(entry.model_dump())
+                if source == "audit":
+                    self._github(
+                        "save", lambda: self.issues.comment(int(entry.id), f"Earlier observation:\n\n{same.text}")
+                    )
+                self._save(entry, labels=extra)
+            self._save(*lacking)
+            if new and source != "audit":
                 said = "\n".join(f"- {' '.join(r.split())}" for r in new)
                 self._github("save", lambda: self.issues.comment(int(entry.id), f"New evidence:\n\n{said}"))
             return entry, False
@@ -267,13 +303,15 @@ class Backlog:
 
         return self._apply(work)
 
-    def put(self, entry: Entry, made: Callable[[str], None] = lambda _number: None) -> Entry:
+    def put(
+        self, entry: Entry, made: Callable[[str], None] = lambda _number: None, *, labels: Iterable[str] = ()
+    ) -> Entry:
         """Open one issue holding ``entry`` as it is (its id aside), closed when it is done or dropped.
 
         ``made`` gets the issue's number as soon as GitHub confirms it, before the issue is closed.
         """
         fields = entry.model_dump()
-        text, names = self._body(fields), backlog_issues.labels(fields)
+        text, names = self._body(fields), list(dict.fromkeys([*backlog_issues.labels(fields), *labels]))
         self._github("save", lambda: self.issues.ensure_labels(names))
         issue = self._remember(self._github("save", lambda: self.issues.create(entry.title, text, names)))
         made(str(issue["number"]))
@@ -287,14 +325,19 @@ class Backlog:
             said = ", ".join(full)
             raise BacklogError(422, f"no room for another link in the GitHub issue of {said}: unlink or shorten it")
 
-    def _save(self, *entries: Entry) -> None:
+    def _save(self, *entries: Entry, labels: Iterable[str] = ()) -> None:
         """Write each entry over its issue, keeping the labels OwlBear does not own; none when one is too long."""
+        extra = list(labels)
         bodies = [self._body(entry.model_dump()) for entry in entries]
         for entry, text in zip(entries, bodies, strict=True):
             fields = entry.model_dump()
-            names = backlog_issues.labels(fields)
+            names = list(dict.fromkeys([*backlog_issues.labels(fields), *extra]))
             change = {"title": entry.title, "body": text, **backlog_issues.state(entry.status)}
-            change["labels"] = backlog_issues.kept_labels(self.raw.get(entry.id, {})) + names
+            kept = backlog_issues.kept_labels(self.raw.get(entry.id, {}))
+            replaced = {n.split(":", 1)[0] for n in extra if n.startswith(("type:", "severity:"))}
+            if entry.source == "audit":
+                kept = [n for n in kept if n.split(":", 1)[0] not in replaced]
+            change["labels"] = list(dict.fromkeys(kept + names))
             self._github("save", lambda names=names: self.issues.ensure_labels(names))
             self._remember(self._github("save", lambda change=change, n=int(entry.id): self.issues.edit(n, change)))
 
