@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
 from owlbear_delivery_next.change_contracts.project_audit_tools import AuditFinding, ChangedDefault
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.local_system import codebase, data_repo
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
@@ -57,6 +58,12 @@ class Report(BaseModel):
 
 
 REPORTS = TypeAdapter(dict[Literal["doc", "agent"], Report])
+
+
+def offered(store: Store) -> tuple[str, ...]:
+    """Offer agent audits only to the canonical OwlBear repository, under any shared-folder name."""
+    identity = data_repo.remote_identity(codebase.URL)
+    return NAMES if store.shared is not None and store.shared.claimed(identity) == store.name else ("doc",)
 
 
 def now() -> str:
