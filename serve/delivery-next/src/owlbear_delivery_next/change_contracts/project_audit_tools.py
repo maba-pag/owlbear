@@ -60,7 +60,7 @@ class AuditFindings(tools.Args):
     destination: str = Field(
         max_length=200,
         pattern=r"^(?:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)?$",
-        description="Empty for the Backlog; otherwise owner/name, at most 200 characters, literally in the note",
+        description="Empty for the Backlog; otherwise github.com owner/name, at most 200 characters, named in the note",
         examples=["example/project"],
     )
     summary: str = tools.bounded(
@@ -89,7 +89,16 @@ SET_TARGET = tools.Spec(
 def check(args: AuditFindings, root: Path) -> list[str]:
     """Refuse an invented publication destination while the report's author can still correct it."""
     note = json.loads((root / "context" / "run.json").read_text(encoding="utf-8"))["note"]
-    named = re.search(rf"(?<![A-Za-z0-9_.-]){re.escape(args.destination)}(?![A-Za-z0-9_-]|\.[A-Za-z0-9_.-])", note)
+    named = re.search(
+        rf"(?<![A-Za-z0-9_./:@-])(?i:https?://github\.com/)?{re.escape(args.destination)}"
+        r"(?![A-Za-z0-9_-]|\.[A-Za-z0-9_.-])",
+        note,
+    )
     if args.destination and not named:
-        return ["destination: use an empty string for the Backlog, or owner/name occurring literally in the run's note"]
+        return [
+            (
+                "destination: name a github.com owner/name from the note, or use an empty string for the Backlog; "
+                "other hosts are unsupported"
+            )
+        ]
     return []

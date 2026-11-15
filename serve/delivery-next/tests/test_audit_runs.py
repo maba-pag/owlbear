@@ -219,6 +219,12 @@ def test_redirected_destination_must_be_named_in_full(tmp_path):
     assert project_audit_tools.check(report, tmp_path)
     report.destination = "me/private-audit-reports"
     assert project_audit_tools.check(report, tmp_path)
+    report.destination = "acme/private-audit-reports"
+    note = tmp_path / "context" / "run.json"
+    note.write_text(json.dumps({"note": "File in https://git.example.test/acme/private-audit-reports."}))
+    assert project_audit_tools.check(report, tmp_path)
+    note.write_text(json.dumps({"note": "File in https://github.com/acme/private-audit-reports."}))
+    assert project_audit_tools.check(report, tmp_path) == []
 
 
 def test_issue_context_uses_the_project_host_and_selected_account(tmp_path, monkeypatch, shared_repo, github, fake_gh):
