@@ -16,6 +16,20 @@ if TYPE_CHECKING:
 WORD = r"""(?:[\w@%+=:,./-]|'[^']*'|"[^"\\$`]*")+"""
 CD_CHECK = re.compile(rf"cd[ \t]+({WORD})[ \t]*&&[ \t]*(\S.*)", re.DOTALL)
 WORDS = re.compile(rf"{WORD}(?:[ \t]+{WORD})*")
+# What the Planner and the plan challenger read when the profile offers no check: only a Change that creates the
+# project plans so (#1275).
+UNCHECKED = (
+    "- none. This Change creates the project, so no check command exists yet: give `checks: []` in every task and "
+    "never report that as a setup problem. The first task must leave something that builds or runs, with the "
+    "project's own way to check it (its test or build command) in the repository, and its goal names that real run; "
+    "keep it small. Once it is built, Delivery settles the check command with the owner and has the remaining work "
+    "planned again with it."
+)
+UNCHECKED_JUDGE = (
+    "- none. This Change creates the project, so no check command exists yet and its tasks name none: that is no "
+    "finding. Judge instead that the first task leaves something that builds or runs with the project's own way to "
+    "check it, and that its goal names that real run. The remaining work is planned again once the check is confirmed."
+)
 
 
 def _form(command: str) -> tuple[str | None, str]:

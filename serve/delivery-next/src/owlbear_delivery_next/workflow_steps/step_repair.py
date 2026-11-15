@@ -36,6 +36,7 @@ from owlbear_delivery_next.workflow_steps import (
     engine,
     lookup,
     preparation_repair,
+    project_checks,
     repair_copy,
     repair_messages,
     sessions,
@@ -119,8 +120,8 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
         r.tried.extend(Tried(fix=t.fix, outcome=t.outcome) for t in p.tried)
         if p.defect is not None:
             r.defect = defect_issue.file(store, path, p.defect)
-        if p.fix == "none":
-            _stopped(store, lock, change, "nothing it tried worked")
+        if p.fix in {"none", project_checks.LATER}:
+            _unfixed(store, lock, change, at)
             return
         if preparing or p.fix == "preparation":
             _preparation(
@@ -141,6 +142,21 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
             repair_copy.drop(path, at)
         else:  # its processes may still use it: the next repair's copy replaces it
             _log(store, lock, change, f"kept its copy {at}: its session's processes are not confirmed gone")
+
+
+def _unfixed(store: Store, lock: Lock, change: Change, at: Path) -> None:
+    """Without a fix: nothing worked, or the check waits until the Change's first task built the project (#1275)."""
+    r = change.repairs.current
+    if r is None or r.fix == "none":
+        _stopped(store, lock, change, "nothing it tried worked")
+        return
+    edits = "it deferred the project check but left edits; none were applied"
+    if why := project_checks.defers(change) or (edits if repair_copy.changed(at, r.base) else ""):
+        _stopped(store, lock, change, why)
+        return
+    _log(store, lock, change, f"the project check waits until the first task is built: {r.found}; the step runs again")
+    stuck.applied(change, "check deferred", datetime.now(UTC))
+    store.write(lock, change)
 
 
 def _preparation(

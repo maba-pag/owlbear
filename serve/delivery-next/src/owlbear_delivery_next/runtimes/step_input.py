@@ -350,12 +350,6 @@ def _flat(text: str) -> str:
     return " ".join(text.split())
 
 
-def _packages(profile: Profile, path: Path) -> list[str]:
-    inst = {k.removeprefix("install:"): e.value for k, e in profile.entries.items() if k.startswith("install:")}
-    chk = {p: check_hint.qualified(p, c) for p, c in wt.plan_checks(profile, path)}
-    return [f"- `{p}`: install `{inst.get(p, 'none')}`, check `{chk.get(p, 'none')}`" for p in sorted({*inst, *chk})]
-
-
 def _others(others: Mapping[str, Sequence[str]]) -> list[str]:
     if not others:
         return []
@@ -373,7 +367,7 @@ def plan(change: Change, profile: Profile, worktree: Path, others: Mapping[str, 
         f"Scope: {', '.join(change.brief.scope) or 'not limited'}",
         "",
         "## Packages (project profile)",
-        *(_packages(profile, worktree) or ["- none: no package has a confirmed check command"]),
+        *wt.package_lines(profile, worktree, check_hint.UNCHECKED),
         "Keep each check's runner and directory prefix; append only literal test targets, including consumers.",
         (
             "Inspect the runner's targeting interface. If it cannot select touched tests, report setup; never run the "
@@ -405,7 +399,7 @@ def plan_challenge(
             *_brief(change, own=disputes.PLAN_FOUND, complete=True),
             "",
             "## Packages (project profile; check choices are complete repository-root commands)",
-            *(_packages(profile, worktree) or ["- none known"]),
+            *wt.package_lines(profile, worktree, check_hint.UNCHECKED_JUDGE),
             *_others(others),
             "",
             "## Judge",

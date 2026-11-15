@@ -284,7 +284,7 @@ class PlanTask(Args):
     title: str = _f(200, "What the task delivers", "Add farewell(name)")
     goal: str = _f(3000, "The criteria it meets and how the Builder knows it is done", "AC-1: farewell('Ada')")
     scope: list[str] = _f(20, "Repository-relative paths or directories it may change", ["packages/app"])
-    checks: list[str] = _f(100, "Package checks with literal test targets of the confirmed runner", [EXAMPLE_CHECK])
+    checks: list[str] = _f(100, "Package checks with literal test targets of the confirmed runner", [EXAMPLE_CHECK], 0)
 
 
 class PlanResult(Args):
@@ -319,11 +319,13 @@ def within(path: str, scope: Sequence[str]) -> bool:
 def check_plan(
     plan: PlanResult, tree: Worktree, checks: Sequence[str], scope: Sequence[str] = (), _packages: Pairs = ()
 ) -> list[str]:
-    """Return field errors for selections outside the offered check commands and scopes outside the brief."""
+    """Return field errors: checks the profile doesn't offer, a task naming none of them, scopes outside the brief."""
     errors = [f"changes: uncommitted files ({_few(tree.dirty)}); planning changes nothing"] if tree.dirty else []
     listed = ", ".join(f'"{c}"' for c in checks) or "none - the owner confirmed no check command for this package"
     brief = ", ".join(scope)
     for i, task in enumerate(plan.tasks):
+        if checks and not task.checks:  # none offered: only a Change that creates the project plans so (#1275)
+            errors.append(f"tasks[{i}].checks: name at least one check of the project profile - one of {listed}")
         errors += [
             f'tasks[{i}].checks: "{c}" is not a check of the project profile - ' + f"use one of {listed}"
             for c in task.checks
