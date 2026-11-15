@@ -37,7 +37,7 @@ from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import impeccable, versions
 from owlbear_delivery_next.project_host import pack_overview, pages
-from owlbear_delivery_next.state_store import machine_settings, pds_run_record
+from owlbear_delivery_next.state_store import machine_settings, pds_run_record, registry
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -248,6 +248,9 @@ class Checks:
         with self.lock:
             known = self._known("owlbear")
             kept = known.get("release", {}) | {"checked_at": known.get("at")}
+            record = self.kept.get("owlbear", {})
+            if record.get("reason") and record.get("attempt_at", "") >= known.get("at", ""):
+                kept = {"detail": record["reason"], "checked_at": record.get("attempt_at")}
         return impeccable.release(kept)
 
     def start(self, name: str) -> bool:
@@ -285,6 +288,8 @@ class Checks:
             found = CHECKS[name]()
         except Failed as exc:
             failure = exc
+        except (versions.VersionError, registry.RegistryError) as exc:
+            failure = Failed(f"the versions could not be read: {command_failure.failure(exc)}")
         except Exception as exc:  # noqa: BLE001 - a check that broke is one more failure, never the loop's end
             failure = Failed(command_failure.failure(exc))
         with self.lock:
