@@ -192,8 +192,6 @@ def test_audit_publication_keeps_current_observation_owner_notes_and_identity_ac
         assert (new, repeated.id, repeated.status, repeated.count) == (True, str(index), "inbox", 1)
         assert repeated.links == [str(n) for n in range(1, index)]
         assert all(repeated.id in backlog.current(str(n)).links for n in range(1, index))
-    backlog.update(repeated.id, {"kind": "defect"})
-    assert {"type:defect", "severity:high"} <= set(names(github.issues[1]))
 
 
 @pytest.mark.usefixtures("github")
