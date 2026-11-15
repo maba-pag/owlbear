@@ -3,7 +3,7 @@ import { view } from "./view.mjs";
 
 export const KINDS = ["untriaged", "defect", "improvement", "idea", "question"];
 export const SOURCES = { owner: "you", watcher: "the watcher", assistant: "the assistant", review: "a review",
-  run: "a run" };
+  run: "a run", audit: "an audit" };
 export const TAGS = { untriaged: "secondary", defect: "error", improvement: "info", idea: "success",
   question: "warning" };
 export const DIALOG = "{ 'aria-haspopup': 'dialog' }";

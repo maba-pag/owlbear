@@ -17,6 +17,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from owlbear_delivery_next.audit_runs import record as audit_record
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.impeccable.detector import DetectorError
@@ -150,9 +151,33 @@ def overview(store: Store) -> list[dict[str, Any]]:
                  "updates at once. When it updates is set in Settings, This machine."},
         {"name": "Review Tests", "where": "Maintenance", "href": "#tests", "built": True, "recorded": False,
          "last": None, "note": "Reviewers judge shares of the tests; a curator applies what holds in a Change."},
+        *_audits(store),
         {"name": "Backlog triage", "where": "Backlog", "href": "/backlog", "built": True, "recorded": False,
          "last": None, "note": "Triage items in the Backlog tab; Delivery keeps no run record for it."},
     ]  # fmt: skip
+
+
+def _audits(store: Store) -> list[dict[str, Any]]:
+    reports = audit_record.read(store)
+    offered = ["doc", "agent"] if store.name == "owlbear" else ["doc"]
+    notes = {
+        "doc": "Checks the documentation against the code and itself: accuracy, staleness, broken links, "
+        "duplication, structure, audience. Reads a pinned commit and never edits.",
+        "agent": "Checks the instructions, agents and skills that steer agents in OwlBear's repository. "
+        "Reads a pinned commit and never edits.",
+    }
+    return [
+        {
+            "name": f"{name.title()} audit",
+            "where": "Maintenance",
+            "href": f"#audit-{name}",
+            "built": True,
+            "recorded": True,
+            "last": reports.get(name),
+            "note": notes[name],
+        }
+        for name in offered
+    ]
 
 
 def _ran(event: dict[str, Any]) -> list[dict[str, Any]]:
@@ -174,6 +199,9 @@ def subagent_use(store: Store) -> list[dict[str, Any]]:
             key, kind = (slug, str(e.get("session") or id(e))), str(e.get("label") or e.get("kind", ""))
             before = steps.get(key, ("", []))
             steps[key] = kind if kind in roles.SESSIONS else before[0], _ran(e) or before[1]
+    for name, last in audit_record.read(store).items():
+        if last.get("session"):
+            steps[(f"audit:{name}", last["session"])] = (f"{name}-audit", _ran(last))
     use: dict[str, dict[str, Any]] = {}
     for kind, ran in steps.values():
         if kind not in roles.SESSIONS:

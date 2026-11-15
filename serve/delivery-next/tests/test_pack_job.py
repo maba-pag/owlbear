@@ -2811,7 +2811,14 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
     assert 'from "/assets/lit-html/3.3.3/lit-html.js"' in page.text
 
     got = {a["name"]: a for a in c.get("/api/next/maintenance").json()}
-    assert list(got) == ["Memory curation", "Impeccable update", "Engine update", "Review Tests", "Backlog triage"]
+    assert list(got) == [
+        "Memory curation",
+        "Impeccable update",
+        "Engine update",
+        "Review Tests",
+        "Doc audit",
+        "Backlog triage",
+    ]
     assert (got["Memory curation"]["href"], got["Memory curation"]["last"]) == ("/memory", None)
     assert (got["Impeccable update"]["href"], got["Impeccable update"]["last"]) == ("/updates/impeccable", None)
     assert (got["Engine update"]["built"], got["Engine update"]["href"]) == (True, "/updates/owlbear")
