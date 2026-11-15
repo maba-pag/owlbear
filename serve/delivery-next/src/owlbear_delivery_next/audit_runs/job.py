@@ -197,8 +197,6 @@ class Audits:
             if not resume:
                 with spend_ledger.at(spend_ledger.Where.of(self.store, job=f"{audit.title()} audit")):
                     self._audit(audit, state, save)
-                state.update(state="publishing", phase="opening issues")
-                save()
             publish.findings(self.store, state, save)
             state.update(state="done", phase="", reason="", ended_at=record.now())
         except Exception as exc:
@@ -264,3 +262,5 @@ class Audits:
             data["changed_defaults"] = [*state["changed_defaults"], *data["changed_defaults"]]
             data["findings"] = [{**f, "number": None, "url": "", "pending": None} for f in data["findings"]]
             state.update(data)
+            state.update(state="publishing", phase="opening issues")
+            save()

@@ -96,6 +96,39 @@ def test_target_consent_rejects_a_release_prefix_before_moving_the_worktree(audi
     assert moved == ["v1.20"]
 
 
+def test_accepted_findings_remain_publishable_after_workspace_cleanup_fails(audit_job, monkeypatch):
+    audits, state, root = audit_job
+    observation = _report()["findings"][0]
+    result = project_audit_tools.AuditFindings(
+        findings=[{key: observation[key] for key in project_audit_tools.AuditFinding.model_fields}],
+        summary="Checked docs.",
+        not_covered=[],
+        changed_defaults=[],
+        destination="",
+    )
+
+    @contextlib.contextmanager
+    def opened(*_args):
+        yield SimpleNamespace(path=root / "repo")
+        msg = "fixture workspace cleanup failed"
+        raise OSError(msg)
+
+    monkeypatch.setattr(job.workspace, "opened", opened)
+    monkeypatch.setattr(job.workspace, "inspect", lambda *_args: None)
+    monkeypatch.setattr(job.sessions, "auditor", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(job.sessions, "accepted", lambda *_args: result)
+    audits.run = lambda _cfg: SimpleNamespace(session_id="auditor-one", subagents=[])
+    audits._work("doc", state, resume=False)  # noqa: SLF001 - exercise the worker's cleanup/publication boundary
+    saved = audits.read("doc")
+    assert saved["state"] == "publishing"
+    assert saved["findings"] == _report()["findings"]
+    assert "fixture workspace cleanup failed" in saved["reason"]
+    launched = []
+    monkeypatch.setattr(audits, "_launch", lambda audit, state, *, resume: launched.append((audit, state, resume)))
+    assert audits.publish("doc") == saved
+    assert launched == [("doc", saved, True)]
+
+
 def test_discard_consent_only_replaces_the_report_the_owner_reviewed(tmp_path, monkeypatch):
     store = Store(tmp_path / "store", name="fixture")
     store.write_profile(Profile(entries={profile.DEFAULT: ProfileEntry(state="known", value="main")}))
