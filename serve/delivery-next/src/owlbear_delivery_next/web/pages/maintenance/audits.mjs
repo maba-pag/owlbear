@@ -9,18 +9,20 @@ const unpublished = (last) => (last?.findings ?? []).filter((f) => !f.number).le
 
 export function auditActions(show) {
   const state = { rows: [], notes: new Map(), errors: new Map(), opened: new Set(),
-    reading: "", starting: "", generation: 0 };
+    reading: "", starting: "", generation: 0, applied: 0 };
   let again;
 
   async function refresh() {
     const generation = ++state.generation;
     try {
       const read = await call("/maintenance/audits", { timeout: 15000 });
-      if (generation !== state.generation) return;
+      if (generation < state.applied) return;
+      state.applied = generation;
       state.rows = read.audits;
       state.reading = "";
     } catch (e) {
-      if (generation !== state.generation) return;
+      if (generation < state.applied) return;
+      state.applied = generation;
       state.reading = e.message;
     }
     show();
