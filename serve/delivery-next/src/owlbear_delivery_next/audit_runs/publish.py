@@ -41,7 +41,7 @@ def findings(store: Store, state: dict[str, Any], save: Callable[[], None]) -> N
         labels = (f"type:{finding['type']}", f"severity:{finding['severity']}")
         if isinstance(book, backlog.Backlog):
             entry, _ = book.add(finding["title"], text, source="audit", evidence=[identity], labels=labels)
-            number, url = int(entry.id), f"https://github.com/{book.repository}/issues/{entry.id}"
+            number, url = int(entry.id), f"https://{book.issues.host}/{book.repository}/issues/{entry.id}"
         else:
             text += f"\n\n<!-- {identity} -->\n"
             if previous:
