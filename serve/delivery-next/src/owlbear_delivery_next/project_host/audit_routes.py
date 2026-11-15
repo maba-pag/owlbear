@@ -25,7 +25,7 @@ class StartBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     note: str = Field(default="", max_length=2000)
-    drop_unpublished: bool = False
+    discard_report: str = Field(default="", max_length=32)
 
 
 def router(audits: audit_job.Audits, host: Host) -> APIRouter:
@@ -40,7 +40,7 @@ def router(audits: audit_job.Audits, host: Host) -> APIRouter:
     def start(audit: str, body: StartBody) -> dict[str, Any]:
         try:
             with admitted(host):
-                return audits.start(audit, body.note, drop_unpublished=body.drop_unpublished)
+                return audits.start(audit, body.note, discard_report=body.discard_report)
         except audit_job.AuditBusyError as exc:
             raise HTTPException(409, str(exc)) from exc
 
