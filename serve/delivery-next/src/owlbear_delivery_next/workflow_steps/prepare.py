@@ -494,7 +494,7 @@ def ran(store: Store, lock: Lock, c: Change, repo: Path, *, runnable: bool) -> b
         return False
     result, at = launch(store, c, store.settings(), log), datetime.now(UTC)
     if result.exit != Exit.PENDING:  # every such result says why
-        c.env = c.recipe = None
+        c.env = None
         log({"event": "step", "at": at.isoformat(), "kind": c.step.kind, "exit": result.exit, "reason": result.reason})
     store.write(lock, loop.apply(c, result, at))
     return True
