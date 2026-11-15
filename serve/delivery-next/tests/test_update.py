@@ -216,7 +216,7 @@ def updating(monkeypatch) -> SimpleNamespace:
     """A machine whose versions, install, standby and alias are faked: v0.2 is next."""
     said = SimpleNamespace(activated=[], stopped=0, left=[])
     folder = version("v0.2")
-    monkeypatch.setattr(versions, "target", lambda: Choice("v0.2", "c2"))
+    monkeypatch.setattr(versions, "target", lambda _channel=None: Choice("v0.2", "c2"))
     monkeypatch.setattr(versions, "install", lambda _c, _report=None: folder)
     monkeypatch.setattr(handover, "Standby", FakeStandby)
     monkeypatch.setattr(alias, "activate", lambda f, t: said.activated.append((f, t)))
@@ -383,7 +383,7 @@ def test_an_install_ends_only_the_failure_it_set_out_to_repair(updating, monkeyp
 
 def test_install_puts_a_missing_pack_in_place_with_no_newer_version(updating, monkeypatch):
     pinned_pack(monkeypatch)
-    monkeypatch.setattr(versions, "target", lambda: None)
+    monkeypatch.setattr(versions, "target", lambda _channel=None: None)
     m = updating.machine
     client = TestClient(app.create(m), base_url="http://127.0.0.1")
     auth = {"authorization": f"Bearer {TOKEN}"}
@@ -524,7 +524,7 @@ def test_run_updates_now_hands_a_running_host_over_to_the_new_version_end_to_end
     python.parent.mkdir(parents=True)
     python.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
     python.chmod(0o755)
-    monkeypatch.setattr(versions, "target", lambda: Choice("v0.2", "c2"))
+    monkeypatch.setattr(versions, "target", lambda _channel=None: Choice("v0.2", "c2"))
     monkeypatch.setattr(versions, "install", lambda _c, _report=None: folder)
     old = threading.Thread(target=serve.serve, kwargs={"run": True}, daemon=True)
     old.start()
