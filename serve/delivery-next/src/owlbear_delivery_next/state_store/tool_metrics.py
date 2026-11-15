@@ -16,6 +16,7 @@ from owlbear_delivery_next.change_contracts.tool_use import WRONG, ToolUse
 from owlbear_delivery_next.state_store import spend_ledger, spend_metrics, spend_shares
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from datetime import date
     from zoneinfo import ZoneInfo
 
@@ -72,7 +73,8 @@ def of_change(clone: str, slug: str) -> ToolUse:
     return changes.get((clone, slug), ToolUse())
 
 
-def _time(run: dict[str, Any]) -> datetime | None:
+def run_time(run: dict[str, Any]) -> datetime | None:
+    """When a run ended, else when it started; None when neither is known."""
     text = run.get("at") or run.get("started")
     if not text:
         return None
@@ -95,22 +97,20 @@ def _rate(row: dict[str, Any]) -> dict[str, Any]:
     return row | {"success": math.floor(100 * row["accepted"] / row["calls"] + 0.5) if row["calls"] else None}
 
 
-def query(  # noqa: PLR0913 - one value per filter the page offers
-    found: list[dict[str, Any]], *, tz: ZoneInfo, start: date | None = None, end: date | None = None, project: str = "",
-    agent: str = "", model: str = "", change: str = "", stopped: bool = False,
-) -> dict[str, Any]:  # fmt: skip
-    """The measured runs' tool use for the filters: one row per tool, the totals and the wrong tool choices.
+def key(run: dict[str, Any], field: str) -> str:
+    """A run's *field* as the filters and choices name it: unknown when it names none."""
+    return str(run.get(field) or "") or spend_metrics.UNKNOWN
 
-    Success is weighted: all accepted calls over all calls, so a tool called often counts as often as it was called.
-    """
+
+def keeps(  # noqa: PLR0913 - one value per filter the page offers
+    *, tz: ZoneInfo, start: date | None = None, end: date | None = None, project: str = "", agent: str = "",
+    model: str = "", change: str = "", stopped: bool = False,
+) -> Callable[[dict[str, Any]], bool]:  # fmt: skip
+    """Whether a run passes the page's filters: its period, project, agent, model, Change and stop."""
     since, until = spend_metrics.bounds(start, end, tz)
-    measured = [r for r in found if _measured(r)]
-
-    def key(r: dict[str, Any], field: str) -> str:
-        return str(r.get(field) or "") or spend_metrics.UNKNOWN
 
     def kept(r: dict[str, Any]) -> bool:
-        t = _time(r)
+        t = run_time(r)
         return (
             (not project or key(r, "project") == project)
             and (not agent or key(r, "agent") == agent)
@@ -121,6 +121,20 @@ def query(  # noqa: PLR0913 - one value per filter the page offers
             and (until is None or (t is not None and t < until))
         )
 
+    return kept
+
+
+def query(  # noqa: PLR0913 - one value per filter the page offers
+    found: list[dict[str, Any]], *, tz: ZoneInfo, start: date | None = None, end: date | None = None, project: str = "",
+    agent: str = "", model: str = "", change: str = "", stopped: bool = False,
+) -> dict[str, Any]:  # fmt: skip
+    """The measured runs' tool use for the filters: one row per tool, the totals and the wrong tool choices.
+
+    Success is weighted: all accepted calls over all calls, so a tool called often counts as often as it was called.
+    """
+    measured = [r for r in found if _measured(r)]
+    kept = keeps(tz=tz, start=start, end=end, project=project, agent=agent, model=model, change=change,
+                 stopped=stopped)  # fmt: skip
     chosen = [r for r in measured if kept(r)]
     rows: dict[str, dict[str, Any]] = {}
     wrong = dict.fromkeys(WRONG, 0)
@@ -131,7 +145,7 @@ def query(  # noqa: PLR0913 - one value per filter the page offers
         for k, n in (r.get("wrong") or {}).items():
             wrong[k] = wrong.get(k, 0) + int(n or 0)
     totals = {k: sum(row[k] for row in rows.values()) for k in FIELDS}
-    times = [t for r in measured if (t := _time(r)) is not None]
+    times = [t for r in measured if (t := run_time(r)) is not None]
     choices = {f"{k}s": sorted({key(r, k) for r in measured}) for k in ("agent", "model")}
     return {
         "since": min(times).isoformat() if times else None,

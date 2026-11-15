@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException, Query
 from owlbear_delivery_next.project_host.config_routes import resolved
 from owlbear_delivery_next.runtimes import compaction_report, spend_reconcile
 from owlbear_delivery_next.settings.config import ROLES, GlobalLayer, Layer, MachineLayer
-from owlbear_delivery_next.state_store import spend_metrics, tool_metrics
+from owlbear_delivery_next.state_store import context_metrics, spend_metrics, tool_metrics
 from owlbear_delivery_next.state_store.layers import read_layer
 from owlbear_delivery_next.state_store.store import StoreError
 
@@ -104,7 +104,7 @@ def _attach(answer: dict[str, Any], served: list[tuple[str, Store]]) -> None:
 
 
 def router(projects: Projects, served: Served = list) -> APIRouter:
-    """``GET /metrics``: totals, one split, the runs, the coverage, the tool use and compaction for the filters."""
+    """``GET /metrics``: totals, one split, the runs, the coverage, the tool use, compaction and context at start."""
     routes = APIRouter()
 
     @routes.get("/metrics")
@@ -142,15 +142,21 @@ def router(projects: Projects, served: Served = list) -> APIRouter:
         for k in ("agents", "models"):  # a main agent whose spend shows only as an unsplit subagent's is still chosen
             found["choices"][k] = sorted(set(found["choices"][k]) | set(used["choices"][k]))
         found["tool_use"] = used
+        part = "compaction report"
         try:
             found["compaction"] = compaction_report.report(
                 every, tz=zone, start=since, end=until, project=project, agent=agent, model=model, change=change,
                 stopped=stopped,
             )  # fmt: skip
             _attach(found["compaction"], served())
+            part = "context at start"
+            found["context"] = context_metrics.query(
+                tool_metrics.runs(), context_metrics.lines(), tz=zone, start=since, end=until, project=project,
+                agent=agent, model=model, change=change, stopped=stopped,
+            )  # fmt: skip
         except Exception as exc:
-            _log.exception("compaction report failed")
-            raise HTTPException(500, f"compaction report: {type(exc).__name__}: {exc}") from exc
+            _log.exception("%s failed", part)
+            raise HTTPException(500, f"{part}: {type(exc).__name__}: {exc}") from exc
         return found
 
     return routes
