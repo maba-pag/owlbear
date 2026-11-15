@@ -10,10 +10,12 @@ import pytest
 from owlbear_decisions import write
 from owlbear_delivery_next.audit_runs import context, job, publish, record
 from owlbear_delivery_next.change_contracts import project_audit_tools
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.state_store import backlog
 from owlbear_delivery_next.state_store.store import Store
 
@@ -185,6 +187,29 @@ def test_redirected_destination_must_be_named_in_full(tmp_path):
     assert project_audit_tools.check(report, tmp_path)
     report.destination = "me/private-audit-reports"
     assert project_audit_tools.check(report, tmp_path)
+
+
+def test_issue_context_uses_the_project_host_and_selected_account(tmp_path, monkeypatch, shared_repo, github, fake_gh):
+    endpoint = "repos/acme/tools/issues?state=open&per_page=100&page=1"
+    issues = [{"number": 7, "title": "Enterprise planning context", "body": "Full issue body", "labels": []}]
+    fake_gh.set(
+        {"github.com": {"acme": "success"}, "git.example.test": {"acme": "success", "octo-writer": "success"}},
+        {"github.com": "acme", "git.example.test": "acme"},
+        [{"has": ["api", endpoint], "out": issues}],
+    )
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"github_account": "octo-writer"}))
+    store = Store(tmp_path / "store", DataRepo(shared_repo[0]), "fixture")
+    store.write_profile(Profile(entries={profile.HOST: ProfileEntry(state="known", value="git.example.test")}))
+    limits = context.prepare(store, tmp_path, _report(), "acme/tools")
+    assert not any(line.startswith("issues:") for line in limits)
+    assert json.loads((tmp_path / "context" / "issues.md").read_text()) == issues
+    assert not github.issues
+    launches = [call for call in fake_gh.calls() if call["argv"][0] == "api"]
+    assert len(launches) == 1
+    login = "octo-writer"
+    assert launches[0]["GH_ENTERPRISE_TOKEN"] == f"tok-{login}"
+    argv = launches[0]["argv"]
+    assert argv[argv.index("--hostname") + 1] == "git.example.test"
 
 
 def test_unresolved_planning_authority_never_becomes_empty_audit_context(tmp_path, shared_repo):
