@@ -78,3 +78,4 @@ def test_the_preview_serves_its_fixture_and_never_the_owners_data(tmp_path, monk
     assert [r for r, x in context.items() if not x["latest"]] == ["updater"]
     assert {x["latest"]["project"] for x in context.values() if x["latest"]} == {"shop", "owlbear"}
     assert [r for r, x in context.items() if x["errors"]] == ["preparer"]
+    assert [r for r, x in context.items() if (x["latest"] or {}).get("kept") == metrics_preview.KEPT] == ["reviewer"]
