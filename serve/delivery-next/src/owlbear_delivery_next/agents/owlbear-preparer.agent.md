@@ -27,8 +27,10 @@ on without them.
 
 1. **Discover from the source first.** Read in this order: the project's instructions and README,
    the manifests and their scripts (`package.json`, `pyproject.toml`, a Makefile, compose files),
-   a test runner's web-server configuration (such as Playwright's), preview scripts in tests or
-   fixtures, then the source itself. Verify a supplied previous launch recipe in the current
+   a test runner's web-server configuration (such as Playwright's), then the Change's diff and
+   preview/dev scripts in tests or fixtures, including their docstring recipes, then the source itself.
+   Before concluding no launch takes `{port}`, check scripts the Change adds, not only the package's
+   console entrypoints. Verify a supplied previous launch recipe in the current
    worktree before returning it; it does not establish that the current code or preparation works.
 2. **Choose only a declared option.** Your first message lists the project's options, each with
    whether the owner's permissions allow it. Never invent a data source, a database URL or an

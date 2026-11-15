@@ -180,7 +180,9 @@ REVIEW_FINISH = (
 )
 SOURCE_ONLY = (
     "Find the command, directory and URL from the project's files only (scripts, package manifests, a test "
-    "runner's web-server configuration, and preview scripts in tests or fixtures). Do not start the app: outside a "
+    "runner's web-server configuration, and preview scripts in tests or fixtures). Inspect the Change's diff for "
+    "added preview/dev scripts and read their docstring recipes before concluding no launch takes `{port}`; "
+    "package console entrypoints are not the only candidates. Do not start the app: outside a "
     "prepared test copy it may reach live data. "
     "Delivery prepares the option you choose, launches the recipe on that test copy and verifies readiness; a "
     "launch that fails comes back to you."
