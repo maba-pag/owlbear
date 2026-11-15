@@ -11,6 +11,8 @@ serves also seeds that token itself (``SEED``), so a capture that opens a state 
 the fixture, never the page's missing-token notice. The fixture holds 8 agents in 2 projects, 4 models, 5 steps and
 "No step", 14 days of 2 runs each, 7 tools covering every outcome, and session logs: compactions with timing shares
 for 4 agents, a compacted session without a share, and an agent whose sessions are readable but never compacted.
+Context at start is measured for every role but the updater, in both projects, over the last 10 days only (older
+sessions ran before measuring began), with one failed read and a reviewer whose skills stay in their category.
 """
 
 from __future__ import annotations
@@ -43,6 +45,9 @@ TOOLS = {  # one run's tally per tool: together every outcome (accepted, invalid
     "scan_design": {"calls": 3, "rejected": 1, "checks": 1, "lint": 1},
     "record_decision": {"calls": 2, "late": 1},
 }
+WINDOWS = {"claude-opus-5.5": 952_000, "gpt-6.1-sol": 400_000, "claude-haiku-5.5": 200_000, "gpt-6-luna": 272_000}
+MEASURED = 10  # days back that context at start was measured: older sessions ran before this release
+KEPT = "skills: 2100 tokens stay in their category, which nesting does not name"
 
 
 def _isolate() -> Path:
@@ -75,6 +80,19 @@ def _log(session: str, calls: int, before: int | None) -> None:
     path = chatlogs.state() / session / "events.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(lines))
+
+
+def _context(place: dict, at: str, model: str, *, size: tuple[int, int], failed: bool) -> dict:
+    """A run's context line (``spend_ledger.context``): seven parts that add up to its total, or a failed read."""
+    (i, k), agent = size, place["agent"]
+    line = place | {"id": f"context:{place['run']}", "type": "context", "at": at, "model": model, "tier": "standard"}
+    if failed:
+        return line | {"measured": False, "error": "TimeoutError: the context attribution read took over 10 s"}
+    parts = {"system_prompt": 7_000 + i * 300, "custom_instructions": 3_500 + i * 500, "skills": 2_000 * (i % 3),
+             "subagents": 900 * (i % 2), "built_in_tools": 12_000 + i * 400, "mcp_tools": 4_000 + 1_500 * (i % 4),
+             "messages": 3_000 + k * 370 % 5_000}  # fmt: skip
+    return line | {"measured": True, "window": WINDOWS[model], "total": sum(parts.values()), "parts": parts,
+                   "kept": KEPT if agent == "reviewer" else ""}  # fmt: skip
 
 
 def seed() -> None:
@@ -113,6 +131,8 @@ def seed() -> None:
                     _log(f"s-{rid}", 0, 0)
                 else:
                     _log(f"s-{rid}", calls, None if logs == "never" else 1 + k * 5 % calls)
+            if agent != "updater" and day < MEASURED:
+                lines.append(_context(place, at, model, size=(i, k), failed=agent == "preparer" and day == 3))
     assert not spend_ledger.append(lines), "the fixture ledger could not be written"
 
 

@@ -184,7 +184,7 @@ def test_metrics_orders_its_sections_folds_its_tables_and_loads_the_vendored_ech
         page.goto(f"{base}/metrics#token=t")
         expect(page.locator("#split p-table-row")).to_have_count(4)
         assert page.locator("#page h2, #exact").evaluate_all("hs => hs.map(h => h.id)") == [
-            "totals-title", "exact", "split-title", "compaction-title", "tool-use-title", "runs-title",
+            "totals-title", "exact", "split-title", "compaction-title", "context-title", "tool-use-title", "runs-title",
             "coverage-title"]  # fmt: skip
         assert page.locator("script[src*=echarts]").evaluate_all("s => s.map(e => e.getAttribute('src'))") == [
             "/assets/echarts/6.1.0/echarts.min.js"

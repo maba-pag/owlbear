@@ -5,6 +5,7 @@ import { PERIODS, SPLITS, filter, state, show, kept, query, preselect } from "./
 import { credits, count, head, runs } from "./runs.mjs";
 import { toolUse, toolsChart } from "./tools.mjs";
 import { compaction, compactionChart } from "./compaction.mjs";
+import { contextAtStart, contextChart } from "./context.mjs";
 import { folded } from "./fold.mjs";
 import { creditsChart, creditsControls } from "./credits.mjs";
 
@@ -216,6 +217,7 @@ function coverage() {
 export function drawn() {
   creditsChart(state.data?.rows ?? [], filter.by, drill);
   compactionChart(state.data?.compaction, (agent) => changed(() => { filter.agent = agent; })());
+  contextChart(state.data?.context, (agent) => changed(() => { filter.agent = agent; })());
   toolsChart(state.data?.tool_use);
 }
 
@@ -224,5 +226,5 @@ export function view() {
     description=${state.error} dismiss-button="false"></p-inline-notification>` : nothing;
   if (!state.data) return html`${error}${filters()}<p-text id="loading">Reading the spend…</p-text>`;
   return html`${error}${filters()}${totals()}${split()}${compaction(state.data.compaction)}
-    ${toolUse(state.data.tool_use)}${runs()}${coverage()}`;
+    ${contextAtStart(state.data.context)}${toolUse(state.data.tool_use)}${runs()}${coverage()}`;
 }
