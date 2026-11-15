@@ -53,15 +53,12 @@ def findings(store: Store, state: dict[str, Any], save: Callable[[], None]) -> N
         save()
 
 
-def _listed(book: backlog.Backlog, identity: str) -> tuple[int, str] | None:
+def _listed(book: backlog.Backlog, identity: str) -> backlog.Entry | None:
     entries, invalid = book.read(fresh=True)
     if invalid:
         msg = "cannot establish publication custody; unreadable Backlog entries: " + ", ".join(invalid)
         raise ValueError(msg)
-    for entry in entries.values():
-        if identity in entry.evidence:
-            return int(entry.id), f"https://github.com/{book.repository}/issues/{entry.id}"
-    return None
+    return next((entry for entry in entries.values() if identity in entry.evidence), None)
 
 
 def _text(state: dict[str, Any], finding: dict[str, Any]) -> str:
