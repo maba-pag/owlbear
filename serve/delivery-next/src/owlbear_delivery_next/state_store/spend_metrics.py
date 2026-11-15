@@ -8,6 +8,7 @@ Credits never read count as unknown runs, never as zero; credits whose time or a
 
 from __future__ import annotations
 
+import math
 import threading
 from datetime import UTC, date, datetime, time
 from typing import TYPE_CHECKING, Any
@@ -143,6 +144,35 @@ def _why(group: list[dict[str, Any]]) -> dict[str, list[str]]:
     } | ({"read_errors": history} if history else {})
 
 
+def _rounded(parts: list[dict[str, Any]], total: float) -> list[dict[str, Any]]:
+    """*parts* at four decimals that add up to *total* (already at four): largest remainders take the spare units."""
+    raw = [part["credits"] * 10_000 for part in parts]
+    units = [math.floor(r) for r in raw]
+    spare = round(total * 10_000) - sum(units)
+    for i in sorted(range(len(raw)), key=lambda i: units[i] - raw[i])[:spare]:
+        units[i] += 1
+    return [part | {"credits": round(u / 10_000, 4)} for part, u in zip(parts, units, strict=True)]
+
+
+def _parts(group: list[dict[str, Any]], tz: ZoneInfo) -> dict[str, list[dict[str, Any]]]:
+    """A row's known credits broken down by model and by step, largest first: the credits chart's stacks.
+
+    Each list adds up to the row's rounded ``credits`` exactly, so a stack never disagrees with its row.
+    """
+    out: dict[str, list[dict[str, Any]]] = {}
+    total = round(sum(p["credits"] for p in group if p["credits"] is not None), 4)
+    for by in ("model", "step"):
+        parts: dict[str, dict[str, Any]] = {}
+        for p in group:
+            if p["credits"] is not None:
+                key = _key(p, by, tz)
+                part = parts.setdefault(key, {"key": key or UNKNOWN, "label": _label(p, by, key, {}), "credits": 0.0})
+                part["credits"] += p["credits"]
+        listed = _rounded(list(parts.values()), total)
+        out[f"by_{by}"] = sorted(listed, key=lambda r: (-r["credits"], r["label"]))
+    return out
+
+
 def query(  # noqa: PLR0913 - one value per filter the page offers
     found: list[dict[str, Any]], *, tz: ZoneInfo, start: date | None = None, end: date | None = None, project: str = "",
     agent: str = "", model: str = "", change: str = "", stopped: bool = False, by: str = "agent", cursor: int = 0,
@@ -163,7 +193,7 @@ def query(  # noqa: PLR0913 - one value per filter the page offers
         key = _key(p, by, tz)
         groups.setdefault(key, []).append(p)
         rows.setdefault(key, {"key": key or UNKNOWN, "label": _label(p, by, key, names)})
-    listed = [rows[k] | _sum(g) for k, g in groups.items()]
+    listed = [rows[k] | _sum(g) | _parts(g, tz) for k, g in groups.items()]
     listed.sort(key=(lambda r: r["key"]) if by == "day" else (lambda r: (-r["credits"], r["label"])))
     return {
         "totals": _sum(inside) | _why(inside),

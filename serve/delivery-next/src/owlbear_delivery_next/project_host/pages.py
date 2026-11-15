@@ -33,6 +33,7 @@ ASK = "<!-- ask -->"  # where a page with consequential buttons takes the shared
 PDS = {"index.css": "text/css", "load.mjs": "text/javascript"}  # the pinned Porsche Design System's served files
 RELEASE = "<!-- pds -->"  # where each page's PDS URLs take the pinned release (#777)
 LIT = "vendor/lit-html"  # the vendored lit-html release; its SHA256SUMS names every file it serves (TD-264)
+ECHARTS = "vendor/echarts"  # the vendored ECharts release; its SHA256SUMS names the one file it serves
 OWN = {"mjs": "text/javascript", "css": "text/css"}  # a page's own modules and styles under web/pages/<page>/ (C-28)
 
 
@@ -48,16 +49,36 @@ def page_files() -> dict[tuple[str, str], str]:
     }
 
 
-def lit_files() -> dict[str, str]:
-    """Each vendored lit-html file with its recorded SHA-256, from ``SHA256SUMS``."""
-    sums = files("owlbear_delivery_next").joinpath("web", LIT, "SHA256SUMS").read_text(encoding="utf-8")
+def _sums(vendor: str) -> dict[str, str]:
+    """Each file of a vendored release with its recorded SHA-256, from its ``SHA256SUMS``."""
+    sums = files("owlbear_delivery_next").joinpath("web", vendor, "SHA256SUMS").read_text(encoding="utf-8")
     return {name: digest for digest, name in (line.split("  ", 1) for line in sums.splitlines() if line)}
 
 
+def _version(vendor: str, package: str) -> str:
+    """A vendored release, as its URLs name it, so a browser never mixes files of two releases."""
+    first = files("owlbear_delivery_next").joinpath("web", vendor, "VERSION").read_text(encoding="utf-8")
+    return first.splitlines()[0].removeprefix(f"{package} ")
+
+
+def lit_files() -> dict[str, str]:
+    """Each vendored lit-html file with its recorded SHA-256, from ``SHA256SUMS``."""
+    return _sums(LIT)
+
+
 def lit_version() -> str:
-    """The vendored release, as its URLs name it, so a browser never mixes files of two releases."""
-    first = files("owlbear_delivery_next").joinpath("web", LIT, "VERSION").read_text(encoding="utf-8")
-    return first.splitlines()[0].removeprefix("lit-html ")
+    """The vendored lit-html release, as its URLs name it."""
+    return _version(LIT, "lit-html")
+
+
+def echarts_files() -> dict[str, str]:
+    """The vendored ECharts file the host serves, ``echarts.min.js``, with its recorded SHA-256."""
+    return _sums(ECHARTS)
+
+
+def echarts_version() -> str:
+    """The vendored ECharts release, as its URLs name it."""
+    return _version(ECHARTS, "echarts")
 
 
 def pds_version() -> str:
@@ -66,9 +87,9 @@ def pds_version() -> str:
 
 
 def assets(app: FastAPI) -> None:
-    """Serve the design system, lit-html and the pages' scripts: fixed names only, never a path from the URL."""
+    """Serve PDS, lit-html, ECharts and the pages' scripts: fixed names only, never a path from the URL."""
     web, lit, release, own = files("owlbear_delivery_next").joinpath("web"), lit_files(), lit_version(), page_files()
-    pds_release = pds_version()
+    pds_release, charts, charts_release = pds_version(), echarts_files(), echarts_version()
 
     @app.get("/assets/pds/{version}/{name}")
     def pds(version: str, name: str) -> Response:
@@ -82,6 +103,13 @@ def assets(app: FastAPI) -> None:
         if version != release or name not in lit:
             raise HTTPException(404, "no such asset")
         body = web.joinpath(LIT, *name.split("/")).read_bytes()
+        return Response(body, media_type="text/javascript", headers={"Cache-Control": "max-age=3600"})
+
+    @app.get("/assets/echarts/{version}/{name:path}")
+    def echarts(version: str, name: str) -> Response:
+        if version != charts_release or name not in charts:
+            raise HTTPException(404, "no such asset")
+        body = web.joinpath(ECHARTS, name).read_bytes()
         return Response(body, media_type="text/javascript", headers={"Cache-Control": "max-age=3600"})
 
     @app.get("/assets/ui.mjs")

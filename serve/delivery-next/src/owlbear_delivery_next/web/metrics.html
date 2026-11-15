@@ -10,6 +10,7 @@
   import { load } from "/assets/pds/<!-- pds -->/load.mjs";
   load();
 </script>
+<script src="/assets/echarts/6.1.0/echarts.min.js" defer></script>
 <!-- base -->
 <style>
   #filters > p-select { flex: 1 1 11rem; min-width: 0; }
@@ -26,6 +27,16 @@
   }
   .notes { margin: 0; }
   .notes .why { display: block; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .fold { margin-block-start: var(--p-spacing-static-sm); }
+  .fold > summary { min-block-size: 24px; }
+  /* A chart takes its section's width and never widens it; ECharts sizes its canvas to it. */
+  .chart { inline-size: 100%; min-inline-size: 0; overflow: hidden; contain: inline-size; }
+  /* The switch's middle meets the middle of the compact Model / Step buttons (34px) under their label. */
+  #split-controls { align-items: end; }
+  #split-controls > p-switch { margin-block-end: 5px; }
+  .chart-keys { display: none; max-inline-size: 75ch; margin: 0; }
+  section:has(.chart:focus-visible) .chart-keys { display: block; }
+  #tools p-table-row.marked { outline: 2px solid var(--p-color-primary); outline-offset: -2px; }
   #compaction a { display: inline-block; min-block-size: 24px; line-height: 24px; }
 </style>
 </head>

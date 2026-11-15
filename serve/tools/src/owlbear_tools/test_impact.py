@@ -143,22 +143,25 @@ def _download(root: Path, run: dict[str, object], required: set[str]) -> list[Ev
     return maps
 
 
+def _successful_runs(root: Path, query: str) -> list[dict[str, object]]:
+    reply: dict[str, object] = json.loads(
+        _gh(root, ["api", f"repos/{REPOSITORY}/actions/workflows/ci.yml/runs?status=success&per_page=100&{query}"])
+    )
+    runs = reply["workflow_runs"]
+    if not isinstance(runs, list):
+        msg = f"GitHub returned an invalid successful CI run inventory for {REPOSITORY}"
+        raise TypeError(msg)
+    return runs
+
+
 def _load(root: Path, target: str, directory: Path | None, required: set[str]) -> list[Evidence]:
     target = git(root, "rev-parse", "--verify", f"{target}^{{commit}}").strip()
     if directory is not None:
         return _candidate(root, directory, required)
     ancestors = set(git(root, "rev-list", target).splitlines())
-    for page in range(1, 4):
-        reply: dict[str, object] = json.loads(
-            _gh(
-                root,
-                ["api", f"repos/{REPOSITORY}/actions/workflows/ci.yml/runs?status=success&per_page=100&page={page}"],
-            )
-        )
-        runs = reply["workflow_runs"]
-        if not isinstance(runs, list):
-            msg = f"GitHub returned an invalid successful CI run inventory for {REPOSITORY}"
-            raise TypeError(msg)
+    # The target's own runs first: later runs on other branches can push them out of the newest 300.
+    for query in (f"head_sha={target}", *(f"page={page}" for page in range(1, 4))):
+        runs = _successful_runs(root, query)
         for run in runs:
             if not isinstance(run, dict) or run.get("head_sha") not in ancestors:
                 continue
@@ -169,9 +172,12 @@ def _load(root: Path, target: str, directory: Path | None, required: set[str]) -
                 _validate(root, maps)
                 sys.stdout.write(f"CI dependency evidence: head {maps[0].head}, run {maps[0].run}\n")
                 return maps
-        if len(runs) < RUN_PAGE_SIZE:
+        if query.startswith("page=") and len(runs) < RUN_PAGE_SIZE:
             break
-    msg = f"No complete successful CI maps among the last 300 runs at ancestors of target {target}; required {required}"
+    msg = (
+        f"No complete successful CI maps among target {target}'s own runs and the last 300 runs at its ancestors; "
+        f"required {required}"
+    )
     raise RuntimeError(msg)
 
 
@@ -352,9 +358,14 @@ class _Selection:
             if not any(test == node or test.startswith((f"{node}[", f"{node}::")) for test in mapped):
                 self.add(node, f"unobserved block current named consumer: {source}")
         measured = self.measurement and source in self.reasons
+        # A current test module consumes its own blocks: retiring an unmapped test leaves the module to run whole.
+        own = source in self.consumers.tests and (self.root / source).is_file()
+        if own:
+            self.add(source, f"changed test module consumes its own unobserved blocks: {source}")
         if (
             not mapped
             and not direct
+            and not own
             and not (source in self.local and (source not in self.consumers.texts or measured))
         ):
             msg = f"Unobserved task blocks in {self.root}/{source} have no resolved current consumers"

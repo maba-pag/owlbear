@@ -1,0 +1,5 @@
+echarts 6.1.0
+https://registry.npmjs.org/echarts/-/echarts-6.1.0.tgz
+npm sha512-q0yaFPggC9FUdsWH4blavRWFmxdrIodbkoKNAjJudAI6CA9gNPxHtV2RcZNEepZVlk4yvBYkOkbk6HIVpIyHZA==
+Unmodified dist/echarts.min.js, LICENSE and licenses/LICENSE-d3 from the npm package; NOTICE unchanged but for a
+final newline. SHA256SUMS lists echarts.min.js. Update all of them together.

@@ -1,6 +1,6 @@
 import { render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { here, project } from "/assets/ui.mjs";
-import { view } from "./view.mjs";
+import { drawn, view } from "./view.mjs";
 
 export const PERIODS = [["today", "Today"], ["7", "Last 7 days"], ["30", "Last 30 days"], ["month", "This month"],
   ["last-month", "Last month"], ["all", "All time"], ["custom", "Chosen dates"]];
@@ -22,6 +22,7 @@ export const state = { data: null, error: "", reading: 0, runs: [], next: null, 
 
 export function show() {
   render(view(), document.getElementById("page"));
+  drawn();
 }
 
 export function kept() {

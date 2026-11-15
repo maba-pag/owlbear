@@ -22,6 +22,8 @@ dependencies = [
 ]
 
 [project.scripts]
+# `owlbear` picks its own port and reads the owner's home: never a visual check's launch. The Metrics page's is
+# `uv run python tests/metrics_preview.py {port}` in serve/delivery-next, on fixture data (tests/README.md).
 owlbear-next = "owlbear_delivery_next.commands.dispatch:main"
 owlbear = "owlbear_delivery_next.machine_host.command:main"
 
