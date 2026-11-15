@@ -35,11 +35,8 @@ UNBOUND = "maintenance ownership and the audit session runner must be bound befo
 NOTE_LIMIT = 2000
 
 
-class AuditBusyError(RuntimeError):
+class Busy(RuntimeError):
     """An audit cannot start; the message gives the complete reason."""
-
-
-Busy = AuditBusyError
 
 
 def _unbound(_cfg: Session) -> Run:
@@ -174,8 +171,6 @@ class Audits:
                 raise Busy(msg)
             self._launch(audit, state, resume=True)
             return state.copy()
-
-    finish = publish
 
     def _launch(self, audit: str, state: dict[str, Any], *, resume: bool) -> None:
         record.active(self.store, audit, running=True)
