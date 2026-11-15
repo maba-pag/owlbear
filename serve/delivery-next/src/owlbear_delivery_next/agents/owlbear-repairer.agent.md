@@ -83,10 +83,11 @@ Call `submit_result` once, with:
   return an empty list with `retry` or `check-later`; do not list "No change" or a diagnostic as an
   attempted fix.
 - `fix`: `patch` when your edits in this copy make the checks pass; `profile-check` when the step needs
-  a project check the profile lacks and you proved its command here (then `package` and `command`);
+  a project check the profile lacks, or another than its confirmed one, which cannot pass for this
+  project, and you proved the command here on the project's own code (then `package` and `command`);
   `check-later` only when your message offers it: the step needs a project check, and nothing a check
   could run on exists until this Change has built the project (the evidence goes in `cause`; `tried`
-  may be empty; it is no defect);
+  may be empty; it is no defect; name the `package` when a confirmed check is to be removed);
   `retry` when the cause no longer reproduces and no change is needed; `none` only when actual
   remedies were tried and none worked.
 - `defect`, only when the cause is in OwlBear's code: a title, what is wrong for any project, and the
