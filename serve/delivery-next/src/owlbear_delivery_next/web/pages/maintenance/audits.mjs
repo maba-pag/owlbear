@@ -30,6 +30,7 @@ export function auditActions(show) {
 
   async function start(a) {
     const note = state.notes.get(a.audit) ?? "", dropped = unpublished(a.last);
+    const discardReport = dropped ? a.last.id : "";
     const sure = await window.ask({
       title: `Start ${a.name.toLowerCase()}?`, yes: "Start audit", no: "Cancel",
       now: `Delivery fetches ${a.branch} and pins its head. One auditor session on ${a.role.model} at `
@@ -44,7 +45,7 @@ export function auditActions(show) {
         + "page and take them into a Change; issues your note sent to another repository are handled there.",
       instead: "Nothing starts.",
     });
-    if (sure) await write(a, "", { note, drop_unpublished: dropped > 0 });
+    if (sure) await write(a, "", { note, discard_report: discardReport });
   }
 
   async function finish(a) {
