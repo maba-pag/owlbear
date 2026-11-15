@@ -29,15 +29,15 @@ def findings(store: Store, state: dict[str, Any], save: Callable[[], None]) -> N
         pending = finding.get("pending")
         previous = datetime.fromisoformat(pending) if pending else None
         found = external.listed(identity) if external else _listed(book, identity)
-        if found is not None:
-            number, url = (found.number, found.url) if external else found
-            finding.update(number=number, url=url, pending=None)
+        if found is not None and external:
+            finding.update(number=found.number, url=found.url, pending=None)
             save()
             continue
-        if previous and (datetime.now(UTC) - previous).total_seconds() < backlog.RECENT_SECONDS:
-            raise RuntimeError(WAIT)
-        finding["pending"] = record.now()
-        save()
+        if found is None:
+            if previous and (datetime.now(UTC) - previous).total_seconds() < backlog.RECENT_SECONDS:
+                raise RuntimeError(WAIT)
+            finding["pending"] = record.now()
+            save()
         text = _text(state, finding)
         labels = (f"type:{finding['type']}", f"severity:{finding['severity']}")
         if external:
