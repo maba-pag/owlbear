@@ -114,6 +114,9 @@ checks do not acquire a separate file-reader requirement.
 Reflective module readers (`getattr`/`hasattr`/`vars`) retain named consumers, including computed attribute names.
 Changed test modules remain required and also feed dependency analysis for their imported helpers and fixtures.
 Deleted test modules cannot supply observed coverage; unresolved current consumers fail explicitly.
+Unobserved blocks in test helpers also resolve through their current importing test modules, including helpers
+launched via `__file__` in a child process without naming the changed functions. Those modules run in full.
+Conftest consumers retain fixture scoping; a helper with no resolved consumer still raises an error.
 Named browser/HTTP navigation consumers with an indirect, unresolved route remain selected;
 destination URL assertions also retain link-driven navigation. Dictionary lookups are not navigation.
 Users of source inventories that combine a wildcard with a
