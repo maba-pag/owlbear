@@ -344,6 +344,18 @@ PLAN_FINISH = (
     "`scope` (repository-relative paths or directories) and `checks` (commands from the package list). One task "
     "is right for a small Change. If it is rejected, fix what each error names and call it again."
 )
+NO_CHECK = (  # only a Change that creates the project plans without a confirmed check (#1275)
+    "This Change creates the project, so no check command exists yet: give `checks: []` in every task and never "
+    "report that as a setup problem. The first task must leave something that builds or runs, with the project's "
+    "own way to check it (its test or build command) in the repository, and its goal names that real run; keep "
+    "it small. Once it is built, Delivery settles the check command with the owner and has the remaining work "
+    "planned again with it."
+)
+NO_CHECK_JUDGE = (
+    "This Change creates the project, so no check command exists yet and its tasks name none: that is no finding. "
+    "Judge instead that the first task leaves something that builds or runs with the project's own way to check "
+    "it, and that its goal names that real run. The remaining work is planned again once the check is confirmed."
+)
 
 
 def _flat(text: str) -> str:
@@ -365,6 +377,7 @@ def _others(others: Mapping[str, Sequence[str]]) -> list[str]:
 
 def plan(change: Change, profile: Profile, worktree: Path, others: Mapping[str, Sequence[str]]) -> str:
     """Return the first message of a read-only planning session."""
+    offered = bool(wt.plan_checks(profile, worktree))
     lines = [
         f"You plan the Change `{change.slug}` from its approved brief in the worktree {worktree}. You only read.",
         READ_ONLY,
@@ -374,6 +387,7 @@ def plan(change: Change, profile: Profile, worktree: Path, others: Mapping[str, 
         "",
         "## Packages (project profile)",
         *(_packages(profile, worktree) or ["- none: no package has a confirmed check command"]),
+        *([] if offered else [NO_CHECK]),
         "Keep each check's runner and directory prefix; append only literal test targets, including consumers.",
         (
             "Inspect the runner's targeting interface. If it cannot select touched tests, report setup; never run the "
@@ -406,6 +420,7 @@ def plan_challenge(
             "",
             "## Packages (project profile; check choices are complete repository-root commands)",
             *(_packages(profile, worktree) or ["- none known"]),
+            *([] if wt.plan_checks(profile, worktree) else [NO_CHECK_JUDGE]),
             *_others(others),
             "",
             "## Judge",
