@@ -1,12 +1,12 @@
 """Context at start per Delivery role, from the spend ledger's ``context`` lines (``spend_ledger.context``).
 
-Each line belongs to the run that opened its session; that run's place, agent, model, time and stop decide whether
-it passes the page's filters, with the same meaning as tool use's (``tool_metrics.keeps``). Sessions are counted by
-their id, so a session's continuations and its resumed or repeated runs count once; a session passes when one of its
-runs does. A Change's residual spend is no session; a look imported from its Spotter record names its SDK sessions,
-counted with its own lines' (``look:<id>`` only when it names none and no own lines have its look). A session with a
-measured line is measured; any other is not: one that ran before measuring began, or whose read failed, with that
-read's error.
+Each line belongs to the run that opened its session; that run's place, agent, model, time and stop decide whether it
+passes the page's filters, with the same meaning as tool use's (``tool_metrics.keeps``). Sessions are counted by their
+id, so a session's continuations and its resumed or repeated runs count once; a session passes when one of its runs or
+their continuations (later log checkpoints, at their own time) does. A Change's residual spend is no session; a look
+imported from its Spotter record names its SDK sessions, counted with its own lines' (``look:<id>`` only when it names
+none and no own lines have its look). A session with a measured line is measured; any other is not: one that ran before
+measuring began, or whose read failed, with that read's error.
 """
 
 from __future__ import annotations
@@ -50,9 +50,9 @@ def query(  # noqa: PLR0913 - one value per filter the page offers
     by_run = {str(r["run"]): r for r in found if not r.get("continued")}
     sessions: dict[str, str] = {}  # each session in the filters to its role
     looks = {str(r["look"]) for r in by_run.values() if r.get("look") and r.get("source") != SPOTTER}
-    for r in by_run.values():
+    for r in found:  # a continuation's own time can pass the filters where its run's does not
         if kept(r):
-            for sid in _sessions(r, looks):
+            for sid in _sessions(by_run.get(str(r["run"]), r), looks):
                 sessions.setdefault(sid, tool_metrics.key(r, "agent"))
     best, errors = _read(measures, by_run, sessions)
     roles: dict[str, dict[str, Any]] = {}

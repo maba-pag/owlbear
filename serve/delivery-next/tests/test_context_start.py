@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from copilot.generated.rpc import SessionContextAttribution
 
 from owlbear_delivery_next.runtimes import context_start
-from owlbear_delivery_next.state_store import spend_ledger, spend_shares
+from owlbear_delivery_next.state_store import context_metrics, spend_ledger, spend_shares
 
 ANSWER = json.loads((Path(__file__).parent / "fixtures" / "context_attribution.json").read_text())
 
@@ -26,3 +28,19 @@ def test_a_real_answer_maps_to_seven_parts_that_add_up_to_its_total_and_is_writt
     (line,) = spend_ledger.lines()
     assert (line["type"], line["parts"]["messages"], line["measured"]) == ("context", 101, True)
     assert spend_shares.runs([line]) == []
+
+
+def test_a_session_whose_log_checkpoints_continue_into_the_period_counts_there() -> None:
+    def checkpoint(at: str, spent: float) -> dict:
+        return {"id": "log:s1", "type": "end", "at": at, "session": "s1", "agent": "builder",
+                "source": spend_shares.LOG, "usage": {"credits": spent}}  # fmt: skip
+
+    lines = [checkpoint("2026-11-13T23:30:00+00:00", 1), checkpoint("2026-11-14T00:30:00+00:00", 2),
+             checkpoint("2026-11-14T01:00:00+00:00", 3)]  # fmt: skip
+    measure = {"type": "context", "run": "log:s1", "session": "s1", "at": "2026-11-13T23:31:00+00:00",
+               "measured": True, "window": 100, "total": 10, "parts": {}, "kept": ""}  # fmt: skip
+    day = date(2026, 11, 14)
+    found = context_metrics.query(
+        spend_shares.runs(lines), [measure], tz=ZoneInfo("UTC"), start=day, end=date(2026, 11, 15)
+    )
+    assert [(r["role"], r["latest"]["session"]) for r in found["roles"]] == [("builder", "s1")]
