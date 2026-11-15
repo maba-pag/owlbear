@@ -334,6 +334,15 @@ def confirm(profile: Profile, key: str, value: str, now: datetime) -> Profile:
     return profile.model_copy(update={"entries": entries, "version": profile.version + 1, "confirmed_at": now})
 
 
+def withdraw(profile: Profile, key: str, observed: ProfileEntry | None) -> Profile:
+    """Take back the owner's value for *key*: what detection observes now, or no entry where it lists none.
+
+    A later confirmation then binds to a real observation and survives a fresh detection.
+    """
+    entries = {k: e for k, e in profile.entries.items() if k != key} | ({key: observed} if observed else {})
+    return profile.model_copy(update={"entries": entries, "version": profile.version + 1})
+
+
 def _differs(old: ProfileEntry | None, key: str, new: ProfileEntry) -> str:
     """How the read entry of *key* differs from the recorded one, or nothing."""
     if old is None:

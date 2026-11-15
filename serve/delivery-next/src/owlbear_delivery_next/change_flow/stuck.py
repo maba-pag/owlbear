@@ -24,7 +24,13 @@ if TYPE_CHECKING:
 
 APPLY, DECLINE = "repair-apply", "repair-stop"
 RERUN = "Run the step again"
-YES = ("Apply the fix", "Add the check to the project profile")  # the stop's action, once its cause is resolved
+YES = {  # the yes option, by fix; a confirmed check that changes is replaced or removed, and the Change continues
+    "patch": "Apply the fix and run the step again",
+    "profile-check": "Add the check to the project profile and run the step again",
+    "preparation": "Save this preparation and run the step again",
+    "replace": "Replace the check in the project profile and continue",
+    "check-later": "Remove the check from the project profile and continue",
+}
 REPAIRED = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHECK})  # agent steps
 
 
@@ -64,12 +70,11 @@ def asked(c: Change, text: str, now: datetime) -> None:
     """The proven fix is the owner's yes or no: it reaches outside the brief or touches a file reserved for him."""
     r = c.repairs.current
     assert r is not None  # noqa: S101 - only a running repair asks
+    kind = "replace" if r.fix == "profile-check" and r.replaces else r.fix
     options = [
-        Option(id="yes", label=f"{YES[r.fix == 'profile-check']} and run the step again", next=APPLY),
+        Option(id="yes", label=YES[kind], next=APPLY),
         Option(id="no", label="Don't apply it; stop with what was tried", next=DECLINE),
     ]
-    if r.fix == "preparation":
-        options[0].label = "Save this preparation and run the step again"
     q = Question(step=c.step.kind, text=text, options=options, cause=r.cause, subject="reserved", follows=r.root)
     if (asked := ask(c, q, now)) is not None:  # the gate stops a cause's third question (#1064)
         r.phase, r.question = "asked", asked.id

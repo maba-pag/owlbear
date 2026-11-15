@@ -85,6 +85,7 @@ class Repair(BaseModel):
     applied: str = ""  # its commit on the Change's branch
     applied_at: datetime | None = None
     witness: Witness | None = None
+    replaces: str = ""  # the confirmed check command the owner is asked to replace or remove, as it was then
     held: list[str] = Field(default_factory=list)  # why the owner is asked before it is applied
     diff: str = ""  # what he is shown
     question: str = ""  # his yes/no question's id

@@ -10,7 +10,14 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_flow import stuck
 from owlbear_delivery_next.runtimes import sdk_adapter, step_input
 from owlbear_delivery_next.settings import roles
-from owlbear_delivery_next.workflow_steps import engine, preparation_repair, project_checks, sessions, watched
+from owlbear_delivery_next.workflow_steps import (
+    check_repair,
+    engine,
+    preparation_repair,
+    project_checks,
+    sessions,
+    watched,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -22,10 +29,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.workflow_steps import lookup
 
 LABEL = "step-repair"
-ASKED = {
-    "patch": "Apply it to this Change and run the step again?",
-    "profile-check": "Add this check to the project profile and run the step again?",
-}
 FIND = (
     "- none yet: the project profile has no check command for this Change's packages. Find the command that checks "
     "this project (its tests, else its build), run it here, and report `profile-check` with its package and command "
@@ -37,6 +40,16 @@ LATER = (
     "check, and you are asked again on what it built."
 )
 BUILT = " This Change created the project and its first task is built in this copy: `check-later` is refused now."
+WRONG = (
+    "A check above that is the project's confirmed check and cannot pass for this project at all (the wrong tool "
+    "for it) is not yours to edit around: report `profile-check` with the right command for its package, proven "
+    "here on the project's own code; the owner is asked to replace it."
+)
+REMOVE = (
+    " When nothing a check could run on exists until this Change has built the project (see the brief below), "
+    "report `check-later` with that `package`: the owner is asked to remove the check, the Change is planned "
+    "without one, and you are asked again on what its first task built. Proof on anything but this project is none."
+)
 
 
 def session(
@@ -93,14 +106,17 @@ def question(r: Repair) -> str:
     """The proven fix, reserved approval, and unchanged original evidence."""
     if r.fix == "preparation":
         return preparation_repair.question(r)
+    if r.fix in {"profile-check", project_checks.LATER}:
+        return check_repair.question(r, defect(r))
     w, last = r.witness, r.tried[-1].outcome if r.tried else "nothing"
     proof = (f"{', '.join(w.commands)} passed in a throwaway copy (exit 0 in {w.seconds:.0f} s)" if w else
              f"the repairer reports it passed ({last}); Delivery runs it only once you confirm it")  # fmt: skip
-    what = f"`{r.command}` for {r.package}" if r.fix == "profile-check" else (r.tried[-1].fix if r.tried else "")
+    what = r.tried[-1].fix if r.tried else ""
     diff = f"\n\nThe fix:\n{r.diff}" if r.diff else ""
     return (
         f"Delivery found a fix for what stopped the work: {what.rstrip('.')}. It needs your yes because "
-        f"it {'; '.join(r.held)}. {ASKED[r.fix]}\n\nDetails: the step was stopped by: {r.evidence}\n"
+        f"it {'; '.join(r.held)}. Apply it to this Change and run the step again?\n\n"
+        f"Details: the step was stopped by: {r.evidence}\n"
         f"Delivery's repair found: {r.found}\nWith its fix, {proof}.{defect(r)}{diff}"
     )
 
@@ -113,6 +129,9 @@ def message(change: Change, witness: tuple[str, ...], at: Path) -> str:
         raise ValueError(msg)
     task = f" task {r.task}" if r.task else ""
     gate = project_checks.gates(r.cause) and not witness  # no check yet: the repair finds one, or defers it (#1275)
+    removable = not (project_checks.deferred(change) or project_checks.has_built(change))
+    asks = bool(witness) and r.cause not in preparation_repair.CAUSES
+    wrong = [WRONG + (REMOVE if removable else "")] if asks else []
     checks = "\n".join(f"- `{c}`" for c in witness) or (
         "- the preparation's restore, seed, verification and cleanup trial described below"
         if r.cause in preparation_repair.CAUSES
@@ -142,10 +161,11 @@ def message(change: Change, witness: tuple[str, ...], at: Path) -> str:
             "",
             "## The checks that must pass in this copy (run from the repository root)",
             checks,
+            *wrong,
             "",
             "## The brief's scope (a fix outside it, or in your owner's configuration, is his yes or no)",
             scope,
-            *(["", *step_input.brief(change)] if gate else []),
+            *(["", *step_input.brief(change)] if gate or (wrong and removable) else []),
             "",
             "## Finish",
             "Call `submit_result` once with the cause, every fix you tried and what you proved.",

@@ -67,7 +67,8 @@ REPLAN = (
 )
 
 
-def _built(change: Change) -> bool:
+def has_built(change: Change) -> bool:
+    """Whether a task of the Change's plan is done: something exists that a check can run on."""
     return change.plan is not None and any(t.done for t in change.plan.tasks)
 
 
@@ -101,7 +102,7 @@ def profile_for(store: Store, lock: Lock, change: Change, repo: Path) -> Profile
     """The profile the step runs with; None once the step recorded its result: a question or a provider failure."""
     prof = store.read_profile()
     planning, later = change.step.kind == StepKind.PLAN, deferred(change)
-    built = later and _built(change)
+    built = later and has_built(change)
     if not planning and (prof is None or not built):
         return prof or Profile()  # only a deferred check returns here, once a task is built
     now = datetime.now(UTC)

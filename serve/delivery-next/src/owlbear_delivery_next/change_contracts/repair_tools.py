@@ -37,12 +37,15 @@ class RepairResult(Args):
     )  # fmt: skip
     fix: Literal["none", "patch", "profile-check", "check-later", "retry", "preparation"] = Field(
         description="patch: your edits in this copy make the checks pass; profile-check: the step needs a project "
-        "check the profile lacks, proven here; check-later: it needs one, and none can pass until this Change has "
-        "built the project; retry: the cause no longer reproduces, no change needed; "
-        "none: you tried remedies but none worked",
+        "check the profile lacks, or another than its confirmed one that cannot pass, proven here; check-later: it "
+        "needs one, and none can pass until this Change has built the project; retry: the cause no longer "
+        "reproduces, no change needed; none: you tried remedies but none worked",
         examples=["patch"],
     )
-    package: str = Field(default="", max_length=300, description="profile-check only: its package", examples=["."])
+    package: str = Field(
+        default="", max_length=300, examples=["."],
+        description="profile-check: its package; check-later: the package whose confirmed check cannot pass yet",
+    )  # fmt: skip
     command: str = Field(
         default="", max_length=500, description="profile-check only: its command", examples=["uv run pytest -q"]
     )
@@ -75,8 +78,9 @@ class AttemptResult(RepairResult):
     """The diagnostic or real rerun failed: reproduce that operation and try remedies, not another no-change retry."""
 
     fix: Literal["none", "patch", "profile-check", "check-later", "retry", "preparation"] = Field(
-        description="patch: a proven edit; profile-check: a proven missing project check; check-later: no check can "
-        "pass until this Change has built the project; none: remedies failed",
+        description="patch: a proven edit; profile-check: a proven project check, missing or replacing a confirmed "
+        "one that cannot pass; check-later: no check can pass until this Change has built the project; "
+        "none: remedies failed",
         json_schema_extra={"enum": ["none", "patch", "profile-check", "check-later", "preparation"]},
     )
 
