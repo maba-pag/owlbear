@@ -85,7 +85,7 @@ def _log(session: str, calls: int, before: int | None) -> None:
 def _context(place: dict, at: str, model: str, *, size: tuple[int, int], failed: bool) -> dict:
     """A run's context line (``spend_ledger.context``): seven parts that add up to its total, or a failed read."""
     (i, k), agent = size, place["agent"]
-    line = place | {"id": f"context:{place['run']}", "type": "context", "at": at, "model": model, "tier": "standard"}
+    line = place | {"id": f"context:{place['run']}", "type": "context", "at": at, "model": model, "tier": "default"}
     if failed:
         return line | {"measured": False, "error": "TimeoutError: the context attribution read took over 10 s"}
     parts = {"system_prompt": 7_000 + i * 300, "custom_instructions": 3_500 + i * 500, "skills": 2_000 * (i % 3),
