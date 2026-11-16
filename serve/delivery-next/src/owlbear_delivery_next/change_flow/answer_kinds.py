@@ -61,7 +61,7 @@ def delivered_next(c: Change) -> Question | None:
     s = c.step
     return next(
         (q for q in reversed(c.questions) if q.step == s.kind and q.answer and not q.effect_observed_at
-         and q.answer.kind != "brief_change" and not unchecked(c, q)),
+         and q.answer.kind != "brief_change" and not q.answer.superseded_at and not unchecked(c, q)),
         None,
     )  # fmt: skip
 
@@ -96,7 +96,7 @@ def decision_id(c: Change, q: Question) -> str:
 
 def unchecked(c: Change, q: Question) -> bool:
     """Whether *q*'s answer is a clarification its check has not yet found within the brief: no role reads it."""
-    return bool(q.answer and q.answer.kind == "clarification" and not q.effect_observed_at) and all(
+    return bool(q.answer and q.answer.kind == "clarification" and not q.answer.superseded_at) and all(
         d.id != decision_id(c, q) for d in c.decisions
     )
 

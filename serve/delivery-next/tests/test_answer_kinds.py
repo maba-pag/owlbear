@@ -290,7 +290,21 @@ def test_a_new_request_supersedes_an_unchecked_clarification_without_losing_its_
     assert c.amending.id == ident
     assert [(a.source, a.state, a.reason) for a in c.amendments] == [("request", "proposed", request.text)]
     assert (answer_kinds.delivered_next(c), c.decisions) == (None, [])
-    assert (run.asked(c).answer.statement, run.asked(c).effect_observed_at) == (SAID, request.at)
+    assert (run.asked(c).answer.statement, run.asked(c).answer.superseded_at) == (SAID, request.at)
+    assert step_answers.answered(Change.model_validate_json(c.model_dump_json())) == []
+
+
+def test_retry_with_a_confirmed_clarification_still_records_its_intent(picking, monkeypatch):
+    options = (Option(id="again", label="Retry", next="retry", action="retry"),)
+    run = Asking(picking, monkeypatch, options=options)
+    response = run.answer(option="again", kind="clarification", text=WORDS, statement=SAID, confirmed=True)
+    assert response.status_code == 200
+    picking.picks.append(verdict())
+
+    c = run.step()
+
+    assert [d.text for d in c.decisions] == [SAID]
+    assert SAID in "\n".join(step_answers.answered(c))
 
 
 def test_a_check_that_fails_waits_and_runs_again_never_taken_for_a_pass(picking, monkeypatch):
