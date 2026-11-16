@@ -1,8 +1,9 @@
 """The brief's states rendered at a commit in a throwaway worktree: "before" at the check, the current pages in shaping.
 
 The visual check's "before" (TD-24): after the preparing Builder returned the check's recipe and before the host
-launches it, a runner checks out the merge-base, runs the profile's install commands for the Change's scope, launches
-the brief's recipe (else the check's) there on the check's test copy, captures every state and disposes of all it
+launches it, a runner checks out the merge-base, supplies missing committed helpers named by the checked recipe,
+runs the profile's install commands for the Change's scope, launches the checked recipe there on the check's test copy,
+captures every state and disposes of all it
 started. Each new check environment gets its own (D-01M6Q4B6VV4Z05WFQ1BD4X95HJ). The card shows these
 beside the "after" screenshots. The shaping capture (D-01M61V2GR0C6JV2R6KJ0WR4PNB) renders the target's tip the same
 way with the brief's recipe, on its own test copy, which ends in that checkout before it is removed. A failure is a
@@ -12,6 +13,7 @@ note on the card (B25); neither gates.
 from __future__ import annotations
 
 import contextlib
+import os
 import shlex
 import shutil
 import subprocess
@@ -80,6 +82,28 @@ type Prepare = Callable[[Path], dict[str, str]]
 type Inside = Callable[[Path, list[str]], bool | None]
 
 
+def _helpers(root: Path, head: str, recipe: Environment) -> None:
+    """Supply direct recipe files from the Change, never replacing baseline files or adding UI paths.
+
+    Only regular committed files named in the command are supplied, not their transitive dependencies. A helper
+    needing newer application APIs still fails explicitly rather than rendering the Change as its own baseline.
+    """
+    for arg in shlex.split(recipe.command):
+        if arg.startswith("-") or Path(arg).is_absolute():
+            continue
+        name = os.path.normpath(str(Path(recipe.directory) / arg))
+        if name == ".." or name.startswith("../") or visual.is_ui(name):
+            continue
+        entry = worktree.git(root, "--literal-pathspecs", "ls-tree", "-z", head, "--", name).rstrip("\0")
+        if not entry or entry.split(" ", 1)[0] not in {"100644", "100755"}:
+            continue
+        dest = root / name
+        dest.resolve().relative_to(root.resolve())
+        if dest.exists() or dest.is_symlink():
+            continue
+        worktree.git(root, "--literal-pathspecs", "restore", "--source", head, "--worktree", "--", name)
+
+
 def _serve(  # noqa: PLR0913, PLR0917 - the recipe, its states and where they render; widths from the settings
     recipe: Environment | BriefRecipe,
     states: Sequence[VisualState],
@@ -144,6 +168,7 @@ def _render(  # noqa: PLR0913, PLR0917 - what is rendered where, and the hooks a
     widths: Sequence[int],
     where: str,
     prepare: Prepare | None = None,
+    supply: Callable[[Path], None] | None = None,
     inside: Inside | None = None,
     finish: Inside | None = None,
     pack: Installed | None = None,
@@ -156,6 +181,8 @@ def _render(  # noqa: PLR0913, PLR0917 - what is rendered where, and the hooks a
         out.mkdir(parents=True, exist_ok=True)
         tmp = Path(tempfile.mkdtemp(prefix="owlbear-before-"))
         worktree.git(repo, "worktree", "add", "--quiet", "--detach", str(tmp), base)
+        if supply:
+            supply(tmp)
         for package, command in installs:
             if note := check.run(
                 shlex.split(command), tmp / package.strip("/") if package not in {"", "."} else tmp, log
@@ -212,15 +239,16 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
 ) -> VisualResult:
     """Render the brief's states at the merge-base; the findings say why any state is missing (B25).
 
-    The merge-base is read again at each capture, so a moved target is captured anew. The brief's recipe renders it
-    when the brief has one (it rendered the target in shaping), else the check's.
+    The merge-base is read again at each capture, so a moved target is captured anew. The checked recipe renders it,
+    with its directly named helpers supplied from that same Change head when absent from the baseline.
     """
     path, now, e = Path(c.names.worktree), datetime.now(UTC), c.env
     tried = {s.name: s.version for s in c.brief.visual}  # a failed attempt is one too: it is not due again (B25)
     if e is None:
         return VisualResult(head="", tree="", states=tried, findings=["no recipe to render"], at=now)
     try:
-        base = worktree.git(path, "merge-base", "HEAD", worktree.tracking(path, c.names.target)).strip()
+        head = worktree.head(path)
+        base = worktree.git(path, "merge-base", head, worktree.tracking(path, c.names.target)).strip()
         tree = visual.tree(path, base)
     except (subprocess.SubprocessError, OSError) as exc:
         why = f"the merge-base could not be read: {worktree.failure(exc)}"
@@ -228,15 +256,16 @@ def capture(  # noqa: PLR0913 - the capture's widths come from the settings, lik
     sources: list[DetectorScan] = []
 
     def scan(tmp: Path, _notes: list[str]) -> None:  # the Change's UI paths in the merge-base's whole tree
-        if found := design.sources(tmp, visual.ui_paths(c, worktree.head(path)), design.pack()):
+        if found := design.sources(tmp, visual.ui_paths(c, head), design.pack()):
             sources.append(found)
 
     scope = sorted({p for t in (c.plan.tasks if c.plan else []) for p in t.scope} | set(c.brief.scope))
     old = c.before if c.before is not None and c.before.head == base else None  # kept for the states it still holds
     states = [s for s in c.brief.visual if old is None or old.states.get(s.name) != s.version]
     shots, notes = _render(
-        repo, base, c.brief.recipe or e, states, out_for(base), log, installs=worktree.installs(profile, scope),
+        repo, base, e, states, out_for(base), log, installs=worktree.installs(profile, scope),
         widths=widths, where="the merge-base", prepare=prepare, inside=scan, finish=finish, pack=design.pack(),
+        supply=lambda root: _helpers(root, head, e),
     )  # fmt: skip
     new = _result(c, base, tree, shots, notes, widths, scans=sources, at=now)
     if old is None:
