@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol, override
@@ -165,10 +166,7 @@ def _continue(state: dict[str, Any], sink: Sink, save: Callable[[], None], body:
 
 
 def _compact(state: dict[str, Any], project: str, audit: str, *, complete: bool, links: list[str] | None = None) -> str:
-    counts = {
-        outcome: sum(row["verdict"] == outcome for row in state["verdicts"])
-        for outcome in ("accepted", "rejected", "unsure")
-    }
+    counts = Counter(row["verdict"] for row in state["verdicts"])
     detail = "The complete report will follow in this issue's comments."
     if links:
         detail = f"The complete report continues in {len(links)} comments: [first part]({links[0]})"
@@ -229,10 +227,7 @@ def _finding(state: dict[str, Any], finding: dict[str, Any]) -> str:
 
 def _summary(state: dict[str, Any], project: str, audit: str, *, complete: bool) -> str:
     verdicts = {row["finding"]: row for row in state["verdicts"]}
-    counts = {
-        outcome: sum(row["verdict"] == outcome for row in state["verdicts"])
-        for outcome in ("accepted", "rejected", "unsure")
-    }
+    counts = Counter(row["verdict"] for row in state["verdicts"])
     published = sum(
         finding["number"] is not None
         for index, finding in enumerate(state["findings"], 1)
