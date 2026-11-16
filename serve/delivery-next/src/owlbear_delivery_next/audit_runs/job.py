@@ -149,7 +149,7 @@ class Audits:
             state = {
                 "id": uuid.uuid4().hex,
                 "state": "running",
-                "phase": "pinning commit",
+                "phase": "auditing",
                 "started_at": record.now(),
                 "ended_at": "",
                 "branch": branch,
@@ -178,7 +178,6 @@ class Audits:
                 record.save(self.store, audit, state)
                 logger.exception("%s audit could not pin its initial commit", audit)
                 raise AuditBusyError(state["reason"]) from exc
-            state["phase"] = "auditing"
             started = state.copy()
             self._launch(audit, state, resume=False)
             return started
