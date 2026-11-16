@@ -155,7 +155,7 @@ def apply(pid: str, seams: Seams, gate: Callable[[], None] = lambda: None) -> di
     Raises:
         RetroError: The proposal is unknown, not accepted, or rests on a retired assumption.
     """
-    with _acting:
+    with _acting, store.locked():
         gate()
         snap = props.folded().get(pid)
         if snap is None or snap["state"] != "accepted":

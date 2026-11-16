@@ -1,8 +1,10 @@
 """Acting on an accepted Retro proposal (#716): each artefact made once, from what was accepted, and nothing unsafe."""
 
 import dataclasses
+import fcntl
 import gzip
 import json
+import multiprocessing
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -429,6 +431,53 @@ def test_a_spotter_case_becomes_a_candidate_with_its_check_queued(world):
     with pytest.raises(store.RetroError, match="grade evidence changed"):
         act.apply(pending, world.seams)
     assert world.checks == [cid]
+
+
+def _correct_during_application(result):
+    with (store.place() / "judged.lock").open("a") as lock:
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            result.send("application holds the writer")
+        else:
+            result.send("application left the writer unlocked")
+    result.close()
+    store.request_correction("owner", "p1:fix", "r1", {"rec-1": "rg-rec-1"})
+
+
+def test_a_correction_waits_for_an_inflight_case_application(world):
+    _record("rec-1")
+    store.add_grades([{"id": "rg-rec-1", "record": "rec-1", "grade": "wrong"}])
+    pid = _waiting("spotter-case", "look:handoff", ["rg-rec-1"], record="rec-1", call="hand-off-fitness")
+    children = []
+
+    def create(proposal, accepted):
+        spawn = multiprocessing.get_context("spawn")
+        result, send = spawn.Pipe(duplex=False)
+        child = spawn.Process(target=_correct_during_application, args=(send,))
+        child.start()
+        send.close()
+        children.append(child)
+        assert result.poll(10)
+        assert result.recv() == "application holds the writer"
+        result.close()
+        return act.intake(proposal, accepted)
+
+    seams = dataclasses.replace(world.seams, case=create)
+    act.decide(pid, "accepted", _seen(pid, world), "owner", places=world.places, shared_root=world.shared)
+    try:
+        assert act.apply(pid, seams)["apply_state"] == "done"
+    finally:
+        for child in children:
+            child.join(10)
+            if child.is_alive():
+                child.terminate()
+                child.join(10)
+                pytest.fail("the correction process did not finish")
+            assert child.exitcode == 0
+            child.close()
+    assert len(world.checks) == 1
+    assert store.grades(record="rec-1") == []
 
 
 # lost: the host ended after promoting, before the result; stopped: it ended before promoting; running: this host's
