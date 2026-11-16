@@ -103,9 +103,6 @@ def opened(w: Work) -> list[dict[str, Any]]:
     return out
 
 
-_open = opened
-
-
 def _shown(p: Part) -> dict[str, str]:
     """A part as the judge reads it: its session too, as event numbers restart with each one and records name it."""
     return {"ref": p.ref, "session": p.session, "text": p.text, "later": p.later}
