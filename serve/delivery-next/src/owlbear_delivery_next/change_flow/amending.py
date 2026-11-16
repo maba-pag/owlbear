@@ -273,7 +273,10 @@ def question_text(a: Amendment) -> str:
 
 
 _SOURCES = {
-    "worker": "a worker", "answer": "your answer", "allow": "your Allow it", "revert": "your revert",
+    "worker": "a worker",
+    "answer": "your answer",
+    "allow": "your Allow it",
+    "revert": "your revert",
     "request": "your request",
 }
 

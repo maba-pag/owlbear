@@ -335,8 +335,10 @@ def status(c: Change, activity: Activity, now: datetime, tool: dict[str, Any] | 
     return line
 
 
-def _repairing(c: Change, s: str) -> Status | None:
-    """#1066: the stuck step is being repaired, or the fix the owner approved is applied; None otherwise."""
+def _amendment_or_repair(c: Change, s: str) -> Status | None:
+    """Work that runs before the original step: its repair or a brief amendment."""
+    if c.amending and c.outcome is None:
+        return Status(f"{s} · brief amendment {c.amending.id} in progress", None, "delivery")
     if (r := c.repairs.current) is None:
         return None
     doing = "applying the approved fix for" if r.phase == "approved" else "repairing"
@@ -401,10 +403,8 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
         )
     if (stopped := _stopped(c, s)) is not None:
         return stopped
-    if (repairing := _repairing(c, s)) is not None:
+    if (repairing := _amendment_or_repair(c, s)) is not None:
         return repairing
-    if c.amending and o is None:
-        return Status(f"{s} · brief amendment {c.amending.id} in progress", None, "delivery")
     if o and o.exit == Exit.PENDING:
         if (yours := _owned(c, s, o, activity)) is not None:
             return yours
