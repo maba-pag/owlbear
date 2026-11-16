@@ -17,7 +17,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, session_result
+from owlbear_delivery_next.runtimes import loop_owner, ref_writes, sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.workflow_steps import disposable, ro_installs, watched
 
@@ -323,16 +323,17 @@ def _within(  # noqa: PLR0913, PLR0917 - the sessions run in the prepared copy
     *,
     keep: Keep | None = None,
 ) -> list[session_result.Run]:
-    disposable.begin(store.root / "changes" / change.slug, copy.path)
-    try:
-        runs = go(cfgs)
-    except UsageUnreadError as exc:
-        _closed(store, lock, change, copy, [exc.run], keep)
-        if len(cfgs) > 1 or unread(exc.run):
-            raise
-        return [exc.run]  # voided: the violation, not the unread usage, decides the step
-    _closed(store, lock, change, copy, runs, keep)
-    return runs
+    with ref_writes.watching(copy.watch):
+        disposable.begin(store.root / "changes" / change.slug, copy.path)
+        try:
+            runs = go(cfgs)
+        except UsageUnreadError as exc:
+            _closed(store, lock, change, copy, [exc.run], keep)
+            if len(cfgs) > 1 or unread(exc.run):
+                raise
+            return [exc.run]  # voided: the violation, not the unread usage, decides the step
+        _closed(store, lock, change, copy, runs, keep)
+        return runs
 
 
 def _closed(  # noqa: PLR0913, PLR0917 - the copy its runs ran in, and who keeps them before the cleanup
@@ -344,20 +345,7 @@ def _closed(  # noqa: PLR0913, PLR0917 - the copy its runs ran in, and who keeps
     failure is raised as it is.
     """
     at, ids = datetime.now(UTC).isoformat(timespec="seconds"), [r.session_id for r in runs]
-    events = []
-    ending: session_result.Ending | None = None
-    try:
-        changes = disposable.tampered(copy)
-    except (OSError, subprocess.SubprocessError) as exc:
-        ending, reason = "read-only-unread", f"the shared Git config and hooks could not be read: {failure(exc)}"
-        events.append({"event": "read-only-unread", "at": at, "reason": reason, "sessions": ids})
-    else:
-        if changes:
-            ending, reason = "shared-git-changed", f"a read-only step changed shared Git settings: {'; '.join(changes)}"
-            events.append({"event": "read-only-tampered", "at": at, "changes": changes, "sessions": ids})
-        elif moved := disposable.changed(copy):
-            ending, reason = "read-only-write", f"a read-only step changed the repository: {', '.join(moved)}"
-            events.append({"event": "read-only-violation", "at": at, "refs": moved, "sessions": ids})
+    ending, reason, event = _inspection(copy)
     if ending is not None:
         for r in runs:
             r.ending, r.payload, r.first, r.head, r.detail = ending, None, None, None, reason
@@ -365,10 +353,29 @@ def _closed(  # noqa: PLR0913, PLR0917 - the copy its runs ran in, and who keeps
         if keep is not None:
             keep(runs)
     finally:
-        for event in events:
-            store.log(lock, change.slug, event)
+        if event:
+            store.log(lock, change.slug, event | {"at": at, "sessions": ids})
         if all(r.termination and r.termination.confirmed for r in runs):
             disposable.settled(store.root / "changes" / change.slug)
+
+
+def _inspection(copy: disposable.Copy) -> tuple[session_result.Ending | None, str, dict[str, object]]:
+    try:
+        changes = disposable.tampered(copy)
+        moved = [] if changes else disposable.changed(copy)
+    except ref_writes.RefWatchError as exc:
+        reason = f"the read-only Git ref writes could not be read: {failure(exc)}"
+        return "read-only-unread", reason, {"event": "read-only-unread", "reason": reason}
+    except (OSError, subprocess.SubprocessError) as exc:
+        reason = f"the shared Git config and hooks could not be read: {failure(exc)}"
+        return "read-only-unread", reason, {"event": "read-only-unread", "reason": reason}
+    if changes:
+        reason = f"a read-only step changed shared Git settings: {'; '.join(changes)}"
+        return "shared-git-changed", reason, {"event": "read-only-tampered", "changes": changes}
+    if moved:
+        reason = f"a read-only step changed the repository: {', '.join(moved)}"
+        return "read-only-write", reason, {"event": "read-only-violation", "refs": moved}
+    return None, "", {}
 
 
 def _at() -> str:
