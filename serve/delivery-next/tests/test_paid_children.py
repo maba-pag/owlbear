@@ -332,6 +332,7 @@ def test_an_abandon_or_new_brief_after_a_failed_settlement_counts_the_child_once
     store.put_inbox("c1", IntentItem(at=datetime.now(UTC), intent=intent, text="a different greeting"))
     engine = []
     monkeypatch.setattr(runner, "_engine", lambda *a: engine.append(a[2].step.kind))  # the next step's own work
+    monkeypatch.setattr(runner.amendment, "run", lambda *a: engine.append(a[2].step.kind))
     for _ in range(2):  # a second restart changes nothing
         c = restart(tmp_path, change_repo).read("c1")
     assert c.pending_child is None
@@ -341,11 +342,11 @@ def test_an_abandon_or_new_brief_after_a_failed_settlement_counts_the_child_once
     if intent == "abandon":
         assert (c.intent.abandoned_at is not None, c.step.kind) == (True, K.CLEANUP)
     else:
-        assert (c.intent.words, c.step.kind) == ("a different greeting", K.SHAPE)
+        assert (c.intent.words, c.step.kind, c.amending.phase) == ("a different greeting", K.PLAN, "prepare")
     assert c.loops[PLAN].round == before.loops[PLAN].round  # the plan it challenged is gone: no round counted
     assert c.questions == before.questions
     assert engine
-    assert set(engine) <= {K.CLEANUP, K.SHAPE}
+    assert set(engine) <= {K.CLEANUP, K.PLAN}
 
 
 def ask_store(tmp_path, change_repo, monkeypatch) -> tuple[Paid, Store]:

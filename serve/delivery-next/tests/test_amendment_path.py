@@ -635,7 +635,8 @@ def test_reshaping_or_stopping_ends_a_waiting_amendment_and_a_late_yes_approves_
     c, _ = loop.schedule(c, [AnswerItem(question=q.id, option="yes", at=NOW)], NOW, dropped=dropped)
 
     assert [why for _, why in dropped] == [f"question {q.id}: the amendment it asks about has ended"]
-    assert (c.amendments[0].state, c.amending, c.brief.approved_version) == ("declined", None, 3)
+    assert (c.amendments[0].state, c.brief.approved_version) == ("declined", 3)
+    assert (amending.current(c).source if c.amending else None) == ("request" if intent == "change" else None)
 
 
 def test_removing_every_visual_state_while_the_visual_check_stopped_goes_on_to_the_next_check():
@@ -699,7 +700,8 @@ def test_a_yes_folded_after_reshaping_or_stopping_in_the_same_batch_approves_not
     c, _ = loop.schedule(c, items, NOW, dropped=dropped)
 
     assert [why for _, why in dropped] == [f"question {q.id}: the amendment it asks about has ended"]
-    assert (c.amendments[0].state, c.amending, c.brief.version) == ("declined", None, 3)
+    assert (c.amendments[0].state, c.brief.version) == ("declined", 3)
+    assert (amending.current(c).source if c.amending else None) == ("request" if intent == "change" else None)
 
 
 def test_repeated_objections_remove_a_queued_merge_each_time():

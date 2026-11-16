@@ -253,6 +253,8 @@ def fits(change: Change) -> bool:
         return False  # its own brief generation is gone, or it was never bound to one
     if pending.label in AMENDING:
         return pending.parent == amending(change)
+    if change.amending is not None:
+        return False
     if pending.label == "question-admission":
         q = change.pending_question
         return bool(

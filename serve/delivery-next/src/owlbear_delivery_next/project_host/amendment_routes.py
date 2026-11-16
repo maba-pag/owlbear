@@ -28,6 +28,7 @@ class ObjectionBody(BaseModel):
 def shown(c: Change) -> dict[str, Any]:
     """The versions and every amendment, each applied one with why he may not object to it now, or ""."""
     return {
+        "request": None if c.tests else amending.requestable(c),
         "version": c.brief.version,
         "reference": amend_apply.reference(c),
         "versions": [b.version for b in c.brief.approved],

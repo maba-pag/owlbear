@@ -1,6 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { statusLine } from "/assets/page/config/unset.mjs";
-import { state, show, several, formsOf, send, starts } from "./state.mjs";
+import { DIALOG, state, show, several, formsOf, send, starts } from "./state.mjs";
 import { toggle, button, hd, text, info, notice, refusal } from "./widgets.mjs";
 import {
   questionForm, retryForm, criteriaPanel, checkForm, mergeForm, restartButton, pullbackNote, stopNotice,
@@ -18,7 +18,7 @@ import { actionItems } from "./actions.mjs";
 function detailHead(d) {
   const back = html`<p-button-pure type="button" icon="arrow-left" class="back" @click=${() => choose(null)}>All
     Changes</p-button-pure>`;
-  let intent = nothing;
+  let intent = nothing, amend = nothing;
   if (!d.finished) {
     const body = { intent: d.paused ? "resume" : "pause" }, said = d.paused
       ? "Resumed: Delivery goes on once no question, check or stop holds the Change."
@@ -31,10 +31,31 @@ function detailHead(d) {
     };
     intent = button(d.paused ? "Resume" : "Pause", go, d.paused ? { icon: "play", ...starts(d) }
       : { variant: "secondary", icon: "pause" });
+    if (d.brief.approved === d.brief.version && d.amendments?.request != null) {
+      const request = async () => {
+        const words = await ask({
+          title: "Request a brief change?", yes: "Request amendment", no: "Keep the brief",
+          reason: "What do you want to change?", limit: 500,
+          now: "The running step finishes first. Its work is kept; the next step waits for this amendment.",
+          then: "The shaper prepares exact wording and an independent challenger checks it, using AI credits. "
+            + "What your request settles may apply by itself; anything beyond it or unclear comes back to you.",
+          after: "Earlier brief versions stay unchanged. A change to the outcome or non-goals needs reshaping. "
+            + "After an amendment applies, you can object on the Brief panel. Existing pauses stay in force.",
+          instead: "The approved brief and the Change stay as they are.",
+        });
+        if (!words || !(await send("/intent", { intent: "change", text: words }, d)) || state.selected !== d.key) return;
+        state.started = { text: "Brief change requested: Delivery prepares an amendment after the current step. "
+          + "Existing pauses are kept." };
+        show();
+      };
+      amend = button("Request a brief change", request, { variant: "secondary", aria: DIALOG,
+        disabled: Boolean(d.amendments?.request), title: d.amendments?.request || undefined });
+    }
   }
   const under = [d.brief.title && d.slug, several() && `in ${d.projectName}`].filter(Boolean).join(" \u00b7 ");
   return html`<div class="detail-head">${back}<div>${hd(2, d.brief.title || d.slug, "xl", { tabindex: "-1" })}${under
-    ? text(under, { size: "sm", color: "contrast-medium" }) : nothing}</div><div class="row">${detailsSwitch()}${intent}
+    ? text(under, { size: "sm", color: "contrast-medium" }) : nothing}</div><div class="row">${
+    detailsSwitch()}${amend}${intent}
     </div></div>`;
 }
 

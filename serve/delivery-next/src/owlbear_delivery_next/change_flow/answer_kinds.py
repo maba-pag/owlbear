@@ -73,6 +73,8 @@ def superseded(c: Change, q: Question) -> str:
     fold: at the merge step a change of intent waits, so its question still does.
     """
     o, i, s = c.outcome, c.intent, c.step.kind
+    if c.amending and not amending.owned(q):
+        return f"question {q.id} no longer waits on an answer: its intent changed"
     moving = i.abandoned_at or (i.hold and s != StepKind.MERGE)
     if q.cause is not None or (o is not None and o.exit == Exit.ASK and o.question == q.id and not moving):
         return ""

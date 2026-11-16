@@ -13,7 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from owlbear_delivery_next.change_contracts.visual_records import VisualStep
 
 type AmendField = Literal["criterion", "ui", "visual", "check", "scope", "decision"]
-type Source = Literal["worker", "answer", "allow", "revert"]
+type Source = Literal["worker", "answer", "allow", "revert", "request"]
 type AmendState = Literal["recorded", "proposed", "applied", "declined", "refused", "moved"]
 type Phase = Literal["prepare", "challenge", "recheck", "reconsider", "revise", "ask"]
 type Level = Literal["", "autonomous", "approved", "decided"]

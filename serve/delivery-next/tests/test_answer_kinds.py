@@ -660,7 +660,7 @@ def moved_on(run: Asking, how: str) -> str:
     if how == "change":
         run.p.store.put_inbox(run.p.slug, IntentItem(at=AT, intent="change", text="a different greeting"))
         c, _ = run.fold()
-        assert (c.step.kind, c.outcome) == (StepKind.SHAPE, None)
+        assert (c.step.kind, c.outcome, c.amending.phase) == (StepKind.BUILD, None, "prepare")
         return f"question {run.qid} {MOVED} its intent changed"
     c, _ = run.p.store.fold(Lock(run.p.slug), run.p.slug, datetime.now(UTC), pr_state="misdelivered")
     assert (c.step.kind, c.outcome.question == run.qid) == (StepKind.BUILD, False)
@@ -721,13 +721,14 @@ def test_the_chat_tool_reports_an_answer_the_change_no_longer_waits_on_as_not_an
     assert (out["answered"], out.get("error"), inbox(picking)) == (False, why, 0)
 
 
-@pytest.mark.parametrize("held", ["paused", "change-at-merge"])
+@pytest.mark.parametrize("held", ["paused", "unapproved-change-at-merge"])
 def test_a_question_the_change_still_waits_on_takes_its_answer(picking, monkeypatch, held):
-    """A pause, or a change of intent at the merge step (which waits for the merge), leaves the question waiting."""
+    """A pause, or a legacy unapproved change at merge, leaves the question waiting."""
     run = Asking(picking, monkeypatch)
-    if held == "change-at-merge":
+    if held == "unapproved-change-at-merge":
         c = picking.change()
         c.step = Step(kind=StepKind.MERGE)
+        c.brief.version += 1
         picking.store.write(Lock(picking.slug), c)
     intent = "pause" if held == "paused" else "change"
     picking.store.put_inbox(picking.slug, IntentItem(at=AT, intent=intent, text="later"))

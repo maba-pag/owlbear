@@ -8,14 +8,41 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.change_contracts.models import ErrorKind
 from owlbear_delivery_next.change_contracts.visual_records import OwnerDecision
-from owlbear_delivery_next.change_flow import amending, answer_kinds
+from owlbear_delivery_next.change_flow import amending, answer_kinds, stuck
+from owlbear_delivery_next.change_flow.moves import resume
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+    from owlbear_delivery_next.change_contracts.inbox import AnswerItem, IntentItem
     from owlbear_delivery_next.change_contracts.models import Change, Question
+
+
+def intent(c: Change, item: IntentItem) -> None:
+    """Fold an owner's intent; approved work changes through an amendment, not a fresh shaping session."""
+    match item.intent:
+        case "pause":
+            c.intent.paused_at, c.intent.pause_reason = item.at, item.text
+        case "resume":
+            resume(c)
+        case "abandon":
+            c.intent.abandoned_at = item.at
+        case "change":
+            c.intent.words = item.text
+            if c.tests or c.brief.approved_version != c.brief.version:
+                c.intent.hold = True
+                return
+            amending.left(c, "superseded by the owner's new request")
+            stuck.retire(c, "the owner requested a brief amendment")
+            stop, outcome = c.stop, c.outcome
+            c.intent.hold = False
+            amending.start(c, "request", reason=item.text, now=item.at)
+            if stop and stop.kind == ErrorKind.LIVENESS:
+                c.outcome = outcome  # the host must still verify that the previous step's processes ended
+            else:
+                c.stop = None
 
 
 def admitted(q: Question) -> bool:

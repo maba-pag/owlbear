@@ -55,6 +55,14 @@ def bound(c: Change) -> bool:
     return r is not None and (r.step, r.task) == (c.step.kind, c.step.task)
 
 
+def retire(c: Change, why: str) -> None:
+    """Keep a superseded repair's findings and patch without running or applying it again."""
+    if (r := c.repairs.current) is not None:
+        r.phase, r.stopped = "stopped", why
+        c.repairs.done.append(r)
+        c.repairs.current = None
+
+
 def obstruction(evidence: str) -> str:
     """The first sentence of what stopped the step, as the owner reads it in the status line."""
     first = evidence.strip().splitlines()[0] if evidence.strip() else "the step stopped"
