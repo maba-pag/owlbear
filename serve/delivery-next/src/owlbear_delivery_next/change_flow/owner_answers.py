@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.change_contracts.failures import READ_ONLY_UNREAD
 from owlbear_delivery_next.change_contracts.models import ErrorKind
 from owlbear_delivery_next.change_contracts.visual_records import OwnerDecision
 from owlbear_delivery_next.change_flow import amending, answer_kinds, stuck
@@ -38,12 +39,12 @@ def intent(c: Change, item: IntentItem) -> None:
             stop, outcome = c.stop, c.outcome
             held = bool(
                 stop and (stop.kind == ErrorKind.POLICY or (stop.kind == ErrorKind.LIVENESS and not stuck.exhausted(c)))
-            )
+            ) or bool(outcome and (outcome.cause or "").endswith(f":{READ_ONLY_UNREAD}"))
             stuck.retire(c, "the owner requested a brief amendment")
             c.intent.hold = False
             amending.start(c, "request", reason=item.text, now=item.at)
             if held:
-                c.outcome = outcome  # a brief request does not settle a policy or unknown-process gate
+                c.outcome = outcome  # a brief request does not settle policy, inspection or unknown-process gates
             else:
                 c.stop = None
 

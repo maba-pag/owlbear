@@ -640,18 +640,25 @@ def test_reshaping_or_stopping_ends_a_waiting_amendment_and_a_late_yes_approves_
     assert (amending.current(c).source if c.amending else None) == ("request" if intent == "change" else None)
 
 
-def test_a_brief_request_cannot_clear_the_shared_git_policy_gate():
+@pytest.mark.parametrize("ending", ["shared-git-changed", "read-only-unread"])
+def test_a_brief_request_cannot_clear_the_shared_git_policy_gate(ending):
     c = change()
     run = session_result.Run(
-        "fixture", "shared-git-changed", detail="Shared hooks changed", termination=Termination(confirmed=True)
+        "fixture", ending, detail="Shared Git needs inspection", termination=Termination(confirmed=True)
     )
     c = loop.apply(c, session_result.to_result(run, K.BUILD, NOW), NOW)
-    stop, outcome = c.stop.model_copy(), c.outcome.model_copy()
+    stop, outcome = c.stop.model_copy() if c.stop else None, c.outcome.model_copy()
 
     c, step = loop.schedule(c, [IntentItem(at=NOW, intent="change", text="greet in French")], NOW)
 
     assert (c.stop, c.outcome, step) == (stop, outcome, None)
     assert amending.current(c).source == "request"
+    if ending == "read-only-unread":
+        q, dropped = loop.open_question(c), []
+        c, step = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option="retry")], NOW, dropped=dropped)
+        assert dropped == []
+        assert step is not None
+        assert c.amending is not None
 
 
 def test_removing_every_visual_state_while_the_visual_check_stopped_goes_on_to_the_next_check():
