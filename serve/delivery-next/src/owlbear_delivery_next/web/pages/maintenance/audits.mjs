@@ -49,6 +49,7 @@ export function auditActions(show) {
     const discardReport = dropped ? a.last.id : "";
     const sure = await window.ask({
       title: `Start ${a.name.toLowerCase()}?`, yes: "Start audit", no: "Cancel",
+      destructive: !!dropped,
       now: `Delivery fetches ${a.branch} and pins its head. One auditor session on ${a.role.model} at `
         + `${a.role.effort} effort reads the project at that commit, read-only.`
         + (note ? " Your note goes to the auditor and verifier as written; it can change the scope, lenses, "
