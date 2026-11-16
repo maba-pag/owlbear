@@ -449,20 +449,23 @@ def _spent(r: Repair, run: Run) -> None:
 
 
 def _gated(store: Store, lock: Lock, change: Change, done: Run) -> bool:
-    """The gates every session's result passes first; True when they settled the repair for now.
-
-    Processes not confirmed gone or a credit limit stop it; a wrong model reruns it once after the wait
-    (D-01M5DW3X003TZZRSDCY027SP3C); a network or quota failure is temporary: the repair runs again later
-    (D-01M6RT5QHWHB0ZHBBY0BE34FBE).
-    """
+    """Apply process/credit holds or model/transient retries before a repair result; True when gated."""
     r, now = change.repairs.current, datetime.now(UTC)
     assert r is not None  # noqa: S101 - _repair() checked it
     seen = session_result.to_result(done, StepKind(r.step), now)
     wrong = (seen.cause or "").endswith(f":{WRONG_MODEL}")
     if seen.exit == Exit.STOP or (wrong and r.rerun):
-        _stopped(store, lock, change, f"its session's result was voided: {seen.reason}")
+        why = (
+            "its own step deadline ended the repair before it proved a fix"
+            if done.ending == "deadline"
+            else (f"its session's result was voided: {seen.reason}")
+        )
+        _stopped(store, lock, change, why)
         if seen.stop is not None:
-            change.stop = seen.stop
+            if seen.stop.kind == ErrorKind.LIVENESS:
+                change.blocked = seen.stop
+            else:
+                change.stop = seen.stop
             store.write(lock, change)
         return True
     temporary = kind_of(seen.cause) in ENVIRONMENT and not isinstance(done.payload, repair_tools.RepairResult)
