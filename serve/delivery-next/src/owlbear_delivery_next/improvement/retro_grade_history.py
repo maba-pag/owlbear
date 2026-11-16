@@ -37,7 +37,7 @@ def effective(
             continue
         corrected = first.get(corrected_id(gid))
         if corrected is not None and corrected.get("supersedes") == gid:
-            out.append(corrected | {"id": gid, "history_id": corrected["id"]})
+            out.append(corrected | {"id": gid})
         elif pending.get(grade["record"]) == gid:
             if include_pending:
                 out.append(

@@ -194,7 +194,6 @@ def test_grade_correction_preserves_history_and_never_trusts_or_counts_pending_o
     assert store.add_grades([corrected]) == [corrected["id"]]
     assert store.add_grades([corrected]) == []
     assert [(g["id"], g["grade"]) for g in store.grades()] == [("rg-r1", "worth-it")]
-    assert store.grades(record="r1")[0]["history_id"] == corrected["id"]
     assert [(g["id"], g["grade"]) for g in store.grades(include_pending=True)] == [
         ("rg-r1", "worth-it"),
         ("rg-r2", retro_grade_history.PENDING),
