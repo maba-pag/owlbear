@@ -2,6 +2,7 @@
 
 import asyncio
 import dataclasses
+import fcntl
 import gzip
 import json
 import os
@@ -818,7 +819,15 @@ def test_a_paused_automatic_run_waits_while_the_button_runs_and_is_taken_over_wi
 
 
 @pytest.mark.usefixtures("said")
-def test_capture_pruning_journey():
+def test_capture_pruning_journey(monkeypatch):
+    remove = chatlogs.prune
+
+    def prune(*args):
+        with (retro_store.place() / "judged.lock").open("a") as lock, pytest.raises(BlockingIOError):
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return remove(*args)
+
+    monkeypatch.setattr(chatlogs, "prune", prune)
     old = (datetime.now(UTC) - timedelta(days=40)).isoformat()
     for sid in ("s-find", "s-case", "s-prop", "c-two", "s-ctl", "s-rec", "s-pil", "s-correct"):
         retro_units.folder(sid).mkdir(parents=True)
