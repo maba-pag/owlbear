@@ -102,7 +102,11 @@ def test_the_same_delivery_defect_three_times_stops_its_existing_repair_with_the
             evidence = c.repairs.current.evidence
             assert evidence == said
     assert len(signatures) == 1
-    assert (c.questions, c.repairs.current, c.stop.action) == ([], None, "Run the step again")
+    assert (c.questions, c.repairs.current, c.stop.action) == (
+        [],
+        None,
+        "Review the repair evidence; pause or abandon the Change",
+    )
     assert c.repairs.done[-1].evidence == evidence
     assert evidence in c.stop.reason
     assert c.repairs.done[-1].stopped.startswith("its fix would put the same problem to you a third time.")
