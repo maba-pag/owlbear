@@ -35,11 +35,12 @@ def intent(c: Change, item: IntentItem) -> None:
                 c.intent.hold = True
                 return
             amending.left(c, "superseded by the owner's new request")
-            stuck.retire(c, "the owner requested a brief amendment")
             stop, outcome = c.stop, c.outcome
+            unverified = bool(stop and stop.kind == ErrorKind.LIVENESS and not stuck.exhausted(c))
+            stuck.retire(c, "the owner requested a brief amendment")
             c.intent.hold = False
             amending.start(c, "request", reason=item.text, now=item.at)
-            if stop and stop.kind == ErrorKind.LIVENESS:
+            if unverified:
                 c.outcome = outcome  # the host must still verify that the previous step's processes ended
             else:
                 c.stop = None
