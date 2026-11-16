@@ -417,6 +417,19 @@ def test_a_spotter_case_becomes_a_candidate_with_its_check_queued(world):
     assert cases.fact(cid)["provenance"]["record"]["id"] == "rec-1"
     assert world.checks == [cid]
 
+    _record("rec-2")
+    grade = {"id": "rg-rec-2", "record": "rec-2", "grade": "wrong", "should": "hand-off-fitness"}
+    store.add_grades([grade])
+    pending = _waiting("spotter-case", "look:build", ["rg-rec-2"], record="rec-2", call="hand-off-fitness")
+    act.decide(pending, "accepted", _seen(pending, world), "owner", places=world.places, shared_root=world.shared)
+    store.request_correction("owner", "p1:fix", "r1", {"rec-2": "rg-rec-2"})
+    with pytest.raises(store.RetroError, match="grade evidence changed"):
+        act.apply(pending, world.seams)
+    store.add_grades([grade | {"id": "rg-rec-2-persisted-event-1", "supersedes": "rg-rec-2", "should": "none"}])
+    with pytest.raises(store.RetroError, match="grade evidence changed"):
+        act.apply(pending, world.seams)
+    assert world.checks == [cid]
+
 
 # lost: the host ended after promoting, before the result; stopped: it ended before promoting; running: this host's
 # job runs it now; left: an ended host left it taken, not yet recorded stopped

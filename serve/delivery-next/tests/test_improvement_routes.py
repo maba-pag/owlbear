@@ -279,6 +279,27 @@ def test_a_case_shows_the_grade_it_rests_on_and_a_lost_redraft_is_asked_for_agai
     review = world.http.post(f"{API}/proposals/{pid}/redraft")
     assert (review.status_code, [q.get("redraft") for q in store.queued()]) == (200, [pid])
 
+    changed = grade | {"id": "rg-r2", "record": "r2", "should": "hand-off-fitness"}
+    store.add_grades([changed])
+    key = props.open_key("real", "spotter-case", "r2")
+    second = props.file(key, ["rg-r2"], kind="spotter-case", record="r2", call="hand-off-fitness",
+                        target="look:handoff", provenance="real")  # fmt: skip
+    props.reviewed(second, props.folded()[second]["evidence"], {"verdict": "survive", "publishable": TEXT})
+    old = next(p for p in world.http.get(API).json()["proposals"] if p["id"] == second)
+    store.request_correction("owner", "p1:fix", "r1", {"r2": "rg-r2"})
+    pending = next(p for p in world.http.get(API).json()["proposals"] if p["id"] == second)
+    assert "awaits evidence correction" in pending["destination"]["error"]
+    assert pending["token"] != old["token"]
+    url = f"{API}/proposals/{second}/decide"
+    assert world.http.post(url, json={"state": "accepted", "token": old["token"]}).status_code == 409
+    store.add_grades([changed | {"id": "rg-r2-persisted-event-1", "supersedes": "rg-r2", "should": "none"}])
+    current = next(p for p in world.http.get(API).json()["proposals"] if p["id"] == second)
+    assert world.http.post(url, json={"state": "accepted", "token": current["token"]}).status_code == 409
+    assert props.file(key, ["rg-r2"], call="none", mechanism="the corrected judgement") == second
+    fresh = props.folded()[second]
+    assert (fresh["state"], fresh["call"]) == ("drafted", "none")
+    assert fresh["review_digest"] != fresh["evidence"]
+
 
 def test_only_an_irreversible_stop_marks_a_stopped_step_and_looks_filter_by_project_id(world) -> None:
     _records(

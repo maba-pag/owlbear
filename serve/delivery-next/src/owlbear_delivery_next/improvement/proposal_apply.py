@@ -164,6 +164,9 @@ def apply(pid: str, seams: Seams, gate: Callable[[], None] = lambda: None) -> di
         store.require_real(str(snap.get("provenance") or "real"))
         if snap["apply_state"] == "done":
             return snap
+        if snap.get("grade_versions") and snap.get("review_digest") != snap["evidence"]:
+            msg = f"proposal {pid}'s grade evidence changed: nothing more is made of it"
+            raise store.RetroError(msg)
         accepted = snap["accepted"]
         done = {a["step"]: a["artefact"] for a in snap["applied"]}
         if not store.visible(snap, store.retired_ids(), synthetic=True):

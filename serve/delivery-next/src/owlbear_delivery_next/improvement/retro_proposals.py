@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement.cases import CALLS
+from owlbear_delivery_next.improvement.retro_grade_history import PENDING
 from owlbear_delivery_next.local_system import mask
 
 if TYPE_CHECKING:
@@ -57,8 +58,9 @@ def open_key(provenance: str, kind: str, *about: str) -> str:
 
 
 def evidence(snap: Mapping[str, Any]) -> str:
-    """The digest of a proposal's evidence: its findings and counterexample count. A review is bound to it."""
-    return store.digest([sorted(snap["findings"]), snap["counterexamples"].get("count", 0)])
+    """The findings, counterexample count and any grade corrections a review is bound to."""
+    held = [sorted(snap["findings"]), snap["counterexamples"].get("count", 0)]
+    return store.digest([*held, snap["grade_versions"]] if snap.get("grade_versions") else held)
 
 
 def _event(event: Mapping[str, Any]) -> bool:
@@ -99,6 +101,7 @@ def _opened(line: Mapping[str, Any]) -> dict[str, Any]:
 def _grown(snap: dict[str, Any], line: Mapping[str, Any]) -> None:
     snap["findings"] = [*snap["findings"], *(f for f in line["findings"] if f not in snap["findings"])]
     snap["counterexamples"] = line.get("counterexamples") or snap["counterexamples"]
+    snap.update(line.get("grade_fields") or {})
     if snap["state"] not in CLOSED and snap["state"] != "drafted":
         snap["state"] = "drafted"
         snap["history"].append({"state": "drafted", "by": "retro", "at": line["at"]})
@@ -156,7 +159,14 @@ def folded() -> dict[str, dict[str, Any]]:
             found[line["proposal"]] = _opened(line)
         elif snap is not None and kind in FOLDS:
             FOLDS[kind](snap, line)
+    corrections = {
+        g["id"]: PENDING if g["grade"] == PENDING else store.digest(g)
+        for g in store.grades(synthetic=True, include_pending=True)
+        if g["grade"] == PENDING or g.get("supersedes")
+    }
     for snap in found.values():
+        if versions := {gid: corrections[gid] for gid in snap["findings"] if gid in corrections}:
+            snap["grade_versions"] = versions
         snap["evidence"] = evidence(snap)
         snap["apply_state"] = _apply_state(snap)
         if (prior := found.get(snap["redraft_of"])) is not None:
@@ -189,9 +199,14 @@ def file(
         if live is not None:
             new = [f for f in findings if f not in live["findings"]]
             moved = counterexamples is not None and dict(counterexamples) != live["counterexamples"]
-            if not new and not moved:
+            corrected = (
+                live.get("grade_versions") and live["review_digest"] and live["review_digest"] != live["evidence"]
+            )
+            if not new and not moved and not corrected:
                 return live["id"]
             grown = {"findings": new} | ({"counterexamples": dict(counterexamples)} if moved else {})
+            if corrected:
+                grown["grade_fields"] = {k: fields[k] for k in ("call", "mechanism", "target") if k in fields}
             n = sum(line.get("proposal") == live["id"] for line in store.lines(FILE))  # growth back to an earlier
             eid = f"gr-{live['id']}-{n}-{store.digest(grown)}"  # state is a new event, never a replay of the old
             _event({"eid": eid, "proposal": live["id"], "type": "grown", **grown})
@@ -222,7 +237,13 @@ def due_reviews() -> list[dict[str, Any]]:
     rests on a retired assumption is listed.
     """
     gone = store.retired_ids()
-    return [p for p in folded().values() if p["state"] == "drafted" and store.visible(p, gone, synthetic=False)]
+    return [
+        p
+        for p in folded().values()
+        if p["state"] == "drafted"
+        and store.visible(p, gone, synthetic=False)
+        and PENDING not in (p.get("grade_versions") or {}).values()
+    ]
 
 
 def reviewed(proposal: str, digest: str, answer: Mapping[str, Any]) -> None:
