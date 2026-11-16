@@ -67,6 +67,15 @@ def test_each_role_has_its_skills_in_the_one_skills_folder_and_none_loads_the_ch
         assert sdk_adapter.agent(kind)["skills"] == list(preload.REQUIRED[sdk_adapter.ROLES[kind]])
 
 
+def test_code_audit_skill_loads_only_for_the_audit_and_verification_jobs() -> None:
+    jobs = {job for job, skills in preload.JOBS.items() if "owlbear-code-audit" in skills}
+    assert jobs == {"code-audit", "audit-verify"}
+    for role, job in (("project-auditor", "code-audit"), ("audit-verifier", "audit-verify")):
+        assert preload.required(role, job=job) == ("owlbear-code-audit",)
+        assert preload.missing(role, job=job) == []
+    assert not any("owlbear-code-audit" in skills for skills in preload.REQUIRED.values())
+
+
 def test_missing_misnamed_and_malformed_skills_are_reported(gap) -> None:
     assert preload.missing("builder") == ["owlbear-module-design", "owlbear-acceptance-criteria"]
     (gap / "owlbear-acceptance-criteria").mkdir()

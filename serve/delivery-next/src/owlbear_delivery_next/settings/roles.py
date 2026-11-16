@@ -46,6 +46,8 @@ SESSIONS: dict[str, Role] = {
     "pds-audit": "auditor",  # a PDS deprecation audit, of a candidate or of the installed pages (#777)
     "doc-audit": "project-auditor",
     "agent-audit": "project-auditor",
+    "code-audit": "project-auditor",
+    "audit-verify": "audit-verifier",
     "pds-update": "updater",  # the PDS update's page edits
     "pds-challenge": "challenger",  # a PDS update, before it is published
     "step-repair": "repairer",  # a stuck step's repair in a throwaway copy (#1066)

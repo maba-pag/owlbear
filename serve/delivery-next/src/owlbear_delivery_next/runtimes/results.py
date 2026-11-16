@@ -239,7 +239,9 @@ class Gate:
             return preparation.check(args, tree, cfg.policy.root, cfg.preparing or preparation.Preparing()), tree
         if isinstance(args, curation_tools.TestCurationResult):  # TD-339: committed, clean, only tests
             return curation_tools.check(args, tree), tree
-        if isinstance(args, audit_tools.AuditResult | project_audit_tools.AuditFindings):
+        if isinstance(
+            args, audit_tools.AuditResult | project_audit_tools.AuditFindings | project_audit_tools.AuditVerdicts
+        ):
             errors = (
                 audit_tools.check(args, cfg.policy.root)
                 if isinstance(args, audit_tools.AuditResult)

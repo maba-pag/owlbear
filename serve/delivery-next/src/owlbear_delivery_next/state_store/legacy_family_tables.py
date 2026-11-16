@@ -15,10 +15,10 @@ IMPORT_OVERRIDES_V151 = (
 )
 CURRENT_MODULES = (
     ("commands/chat_client.py", "e5656da3dfcf99cef47ffb138ed0794aed5b87306e99307650ed3608fa098141"),
-    ("commands/cli.py", "9cc00884946e85f8cd2d20559f296606fc9de6f5407397d0fce6fd88d8da39d5"),
+    ("commands/cli.py", "73977ad79fa720ab83a3bb9b019ea56b4925f22c2fb9d996e82acbd9d43bd201"),
     ("commands/dispatch.py", "8af7e2e296eae5cd7a70dd441af65472745988da535b558121d8ab3ccbc3851c"),
     ("commands/mcp_server.py", "85d057a0beda6f33bbf6946dc7b97ff6edc61ee51a7868983946d78b474a8ae9"),
-    ("commands/project_commands.py", "2c43e370e6f1cf0e68cb06788a9affeef837863007334de889aaaf2427702148"),
+    ("commands/project_commands.py", "73d20c25e84cb97d5790ee78edac3517ce8904b10592920200fa7336eb10888d"),
     ("commands/runner.py", "435c242a1029c8d4159b49a8ce3b04f581e4cae5f61f44dc17d0ba51c124850e"),
     ("commands/setup.py", "f539fb4d2b44c53abace17715eec2c7f4ddb563a0a2c596b05dace427056c267"),
     ("local_system/data_place.py", "cb0055fe9256259e85b9cb595f0ba23a159499519709dff1d97fde66eeec0e69"),
