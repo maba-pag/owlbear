@@ -278,6 +278,21 @@ def test_a_clarification_the_check_finds_changing_the_brief_starts_its_amendment
     assert WORDS not in picking.told[-1].message
 
 
+def test_a_new_request_supersedes_an_unchecked_clarification_without_losing_its_history(picking, monkeypatch):
+    run = Asking(picking, monkeypatch)
+    assert run.answer(kind="clarification", text=WORDS, statement=SAID, confirmed=True).status_code == 200
+    c, _ = run.fold()
+    request = IntentItem(at=datetime.now(UTC), intent="change", text="greet in French instead")
+    c, _ = loop.schedule(c, [request], request.at)
+    ident = c.amending.id
+
+    assert clarification.checked(picking.store, Lock(c.slug), c) is c
+    assert c.amending.id == ident
+    assert [(a.source, a.state, a.reason) for a in c.amendments] == [("request", "proposed", request.text)]
+    assert (answer_kinds.delivered_next(c), c.decisions) == (None, [])
+    assert (run.asked(c).answer.statement, run.asked(c).effect_observed_at) == (SAID, request.at)
+
+
 def test_a_check_that_fails_waits_and_runs_again_never_taken_for_a_pass(picking, monkeypatch):
     run = Asking(picking, monkeypatch)
     assert run.answer(kind="clarification", text=WORDS, statement=SAID, confirmed=True).status_code == 200

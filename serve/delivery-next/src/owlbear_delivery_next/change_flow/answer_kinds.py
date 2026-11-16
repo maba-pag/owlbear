@@ -96,7 +96,9 @@ def decision_id(c: Change, q: Question) -> str:
 
 def unchecked(c: Change, q: Question) -> bool:
     """Whether *q*'s answer is a clarification its check has not yet found within the brief: no role reads it."""
-    return bool(q.answer and q.answer.kind == "clarification") and all(d.id != decision_id(c, q) for d in c.decisions)
+    return bool(q.answer and q.answer.kind == "clarification" and not q.effect_observed_at) and all(
+        d.id != decision_id(c, q) for d in c.decisions
+    )
 
 
 def first_unchecked(c: Change) -> Question | None:

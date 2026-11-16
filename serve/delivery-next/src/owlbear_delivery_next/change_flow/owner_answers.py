@@ -36,6 +36,9 @@ def intent(c: Change, item: IntentItem) -> None:
                 c.intent.hold = True
                 return
             amending.left(c, "superseded by the owner's new request")
+            for q in c.questions:
+                if answer_kinds.unchecked(c, q):
+                    q.effect_observed_at = item.at  # superseded by this request, never delivered or made a decision
             stop, outcome = c.stop, c.outcome
             held = bool(
                 stop and (stop.kind == ErrorKind.POLICY or (stop.kind == ErrorKind.LIVENESS and not stuck.exhausted(c)))
