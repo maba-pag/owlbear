@@ -4,7 +4,11 @@ from copy import deepcopy
 
 import pytest
 
-from owlbear_delivery_next.audit_runs import report_publish
+from owlbear_delivery_next.audit_runs import publish, record, report_publish
+from owlbear_delivery_next.github.provider import ProviderError
+from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.state_store import backlog, backlog_issues
+from owlbear_delivery_next.state_store.store import Store
 
 from .test_audit_runs import _report
 
@@ -99,3 +103,109 @@ def test_summary_first_custody_survives_lost_creation_and_final_edit():
     publish()
     assert sink.opens == 3
     assert sink.edits == 2
+
+
+def _interrupt_backlog(store, book, monkeypatch, github):
+    create, edit = book.issues.create, book.issues.edit
+    fail_link = True
+
+    def lost_creation(title, body, labels):
+        assert record.load(store)["doc"]["summary_issue"]["pending"]
+        made = create(title, body, labels)
+        monkeypatch.setattr(book.issues, "create", create)
+        github.hidden.add(made["number"])
+        msg = "summary creation response lost"
+        raise OSError(msg)
+
+    def lost_edit(number, fields):
+        nonlocal fail_link
+        persisted = record.load(store)["doc"]
+        if number == 1 and fail_link:
+            fail_link = False
+            assert persisted["findings"][0]["pending"]
+            github.hidden.add(3)
+            monkeypatch.setattr(backlog, "_recent", {})
+            msg = "repeat-link edit interrupted"
+            raise OSError(msg)
+        answer = edit(number, fields)
+        if number == 2:
+            assert persisted["findings"][0]["number"] == 3
+            assert not persisted["summary_issue"]["complete"]
+            monkeypatch.setattr(book.issues, "edit", edit)
+            msg = "summary edit response lost"
+            raise OSError(msg)
+        return answer
+
+    monkeypatch.setattr(book.issues, "create", lost_creation)
+    monkeypatch.setattr(book.issues, "edit", lost_edit)
+
+
+def _check_backlog_report(state, book, github):
+    assert state["summary_issue"]["complete"]
+    assert len(github.issues) == 3
+    assert book.current("1").links == ["3"]
+    entry, summary = book.current("3"), github.issues[2]
+    assert entry.links == ["1"]
+    assert entry.count == 1
+    assert [label["name"] for label in summary["labels"]] == ["audit:summary"]
+    assert backlog_issues.fields(summary) is None
+    assert entry.evidence[:2] == ["audit:run-one:1", summary["html_url"]]
+    assert summary["html_url"] in entry.text
+    assert github.issues[3]["html_url"] in summary["body"]
+    assert summary["body"].endswith("<!-- audit:run-one:summary -->\n")
+    assert "Audit: doc" in summary["body"]
+
+
+def test_backlog_summary_recovery_finishes_repeat_links_and_refuses_public_zero_findings(
+    tmp_path, monkeypatch, shared_repo, github
+):
+    store = Store(tmp_path / "store", DataRepo(shared_repo[0]), "fixture")
+    state = _report()
+    state.update(
+        verified=True,
+        verifier_session="verifier-fixture",
+        session="auditor-fixture",
+        verdicts=[{"finding": 1, "verdict": "accepted", "reason": "Confirmed.", "decisions": [], "duplicate_of": ""}],
+        summary_issue={"number": None, "url": "", "pending": None, "complete": False},
+    )
+    book = backlog.Backlog.of(store)
+    earlier, _ = book.add(state["findings"][0]["title"], "earlier observation", "audit", ["audit:earlier:1"])
+    book.update(earlier.id, {"kind": "defect", "status": "done"})
+    monkeypatch.setattr(publish.backlog.Backlog, "of", lambda _store: book)
+    _interrupt_backlog(store, book, monkeypatch, github)
+
+    def attempt():
+        publish.findings(store, state, lambda: record.save(store, "doc", state), audit="doc")
+
+    with pytest.raises(OSError, match="summary creation response lost"):
+        attempt()
+    state = record.load(store)["doc"]
+    with pytest.raises(RuntimeError, match="two minutes"):
+        attempt()
+    assert len(github.issues) == 2
+    github.hidden.clear()
+    with pytest.raises(OSError, match="repeat-link edit interrupted"):
+        attempt()
+    state = record.load(store)["doc"]
+    with pytest.raises(RuntimeError, match="two minutes"):
+        attempt()
+    github.hidden.clear()
+    with pytest.raises(OSError, match="summary edit response lost"):
+        attempt()
+    state = record.load(store)["doc"]
+    assert not state["summary_issue"]["complete"]
+    attempt()
+    _check_backlog_report(record.load(store)["doc"], book, github)
+
+    state = dict(
+        state,
+        id="zero-accepted",
+        findings=[],
+        verdicts=[],
+        summary_issue={"number": None, "url": "", "pending": None, "complete": False},
+    )
+    github.visibility = "public"
+    monkeypatch.setattr(backlog_issues, "_private", {})
+    with pytest.raises(ProviderError, match="not private"):
+        attempt()
+    assert len(github.issues) == 3

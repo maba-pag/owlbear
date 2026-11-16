@@ -72,6 +72,22 @@ class Issues(GhClient):
         got = self._api("get_issue", "GET", f"{repo(self.repository)}/issues/{number}", absent={404, 410})
         return None if isinstance(got, Missing) or "pull_request" in got else got
 
+    def find(self, marker: str) -> Json | None:
+        """Find a plain audit summary by its exact marker, without filtering for Backlog blocks."""
+        page = 1
+        while True:
+            got = self._api(
+                "find_issue", "GET", f"{repo(self.repository)}/issues?state=all&per_page={PAGE}&page={page}"
+            )
+            if not isinstance(got, list):
+                invalid("find_issue", "the issues are not a list")
+            for item in got:
+                if "pull_request" not in item and f"<!-- {marker} -->" in (item.get("body") or ""):
+                    return item
+            if len(got) < PAGE:
+                return None
+            page += 1
+
     def private(self) -> None:
         """Refuse a write unless GitHub says the repository is private (TD-103: no public reports)."""
         where = f"{self.host}/{self.repository}"

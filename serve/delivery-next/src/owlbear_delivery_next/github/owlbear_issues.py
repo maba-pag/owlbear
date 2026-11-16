@@ -175,6 +175,11 @@ class OwlbearIssues(GhClient):
             _unavailable("retry_audit", pending, exc)
         return self.create(title, body, marker=marker, labels=labels)
 
+    def edit(self, number: int, body: str) -> Issue:
+        """Replace only the body, including the caller's final audit marker, as the selected writer."""
+        endpoint = f"{repo(self.repository)}/issues/{number}"
+        return _issue(self._api("edit_issue", "PATCH", endpoint, body={"body": body}, write=True), "edit_issue")
+
     def close(self, number: int) -> Issue:
         """Close one issue as not planned."""
         payload = {"state": "closed", "state_reason": "not_planned"}

@@ -131,6 +131,8 @@ def _backlog(tmp_path, monkeypatch):
 def _owlbear_issues(tmp_path, _monkeypatch):
     with contextlib.suppress(ProviderError):
         OwlbearIssues("acme/owlbear", tmp_path).find("<!-- marker -->")
+    with contextlib.suppress(ProviderError):
+        OwlbearIssues("acme/owlbear", tmp_path).edit(7, "Summary\n\n<!-- audit:run:summary -->\n")
 
 
 CASES = {  # entry, the project's setting, the active account, whose token the launch carries
