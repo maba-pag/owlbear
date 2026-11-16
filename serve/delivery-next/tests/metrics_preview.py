@@ -47,6 +47,7 @@ TOOLS = {  # one run's tally per tool: together every outcome (accepted, invalid
 }
 WINDOWS = {"claude-opus-5.5": 952_000, "gpt-6.1-sol": 400_000, "claude-haiku-5.5": 200_000, "gpt-6-luna": 272_000}
 MEASURED = 10  # days back that context at start was measured: older sessions ran before this release
+TIER = "default"  # a tier context_start.Start writes: "default" or "long"
 KEPT = "skills: 2100 tokens stay in their category, which nesting does not name"
 
 
@@ -85,7 +86,7 @@ def _log(session: str, calls: int, before: int | None) -> None:
 def _context(place: dict, at: str, model: str, *, size: tuple[int, int], failed: bool) -> dict:
     """A run's context line (``spend_ledger.context``): seven parts that add up to its total, or a failed read."""
     (i, k), agent = size, place["agent"]
-    line = place | {"id": f"context:{place['run']}", "type": "context", "at": at, "model": model, "tier": "default"}
+    line = place | {"id": f"context:{place['run']}", "type": "context", "at": at, "model": model, "tier": TIER}
     if failed:
         return line | {"measured": False, "error": "TimeoutError: the context attribution read took over 10 s"}
     parts = {"system_prompt": 7_000 + i * 300, "custom_instructions": 3_500 + i * 500, "skills": 2_000 * (i % 3),
