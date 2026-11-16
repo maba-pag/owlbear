@@ -272,7 +272,10 @@ def question_text(a: Amendment) -> str:
     return "\n\n".join([a.reason[:500], " ".join(ask), details])
 
 
-_SOURCES = {"worker": "a worker", "answer": "your answer", "allow": "your Allow it", "revert": "your revert"}
+_SOURCES = {
+    "worker": "a worker", "answer": "your answer", "allow": "your Allow it", "revert": "your revert",
+    "request": "your request",
+}
 
 
 def _item_line(i: AmendedItem) -> str:
