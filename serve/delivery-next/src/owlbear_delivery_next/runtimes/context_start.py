@@ -21,6 +21,8 @@ from owlbear_delivery_next.git.command_failure import rpc_failure
 from owlbear_delivery_next.state_store import spend_ledger
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
     from copilot.generated.rpc import Entry, SessionContextAttribution
 
 PARTS = ("system_prompt", "custom_instructions", "skills", "subagents", "built_in_tools", "mcp_tools", "messages")
@@ -54,14 +56,15 @@ class Start:
     """One session's measurement after its first model call, written as its own ledger line (``spend_ledger.context``).
 
     *tasks* is the session's set of outstanding requests, when its teardown cancels them; one whose teardown does not
-    calls ``ended``.
+    calls ``ended``. *skills* are the skills it preloaded, read when the measurement is mapped (``mapped``).
     """
 
     def __init__(  # noqa: PLR0913 - the run, what ran and where
         self, run: str, *, agent: str, model: str, context: str, place: spend_ledger.Where,
-        tasks: set[asyncio.Task[None]] | None = None,
+        tasks: set[asyncio.Task[None]] | None = None, skills: Collection[str] = (),
     ) -> None:  # fmt: skip
         self.run, self.agent, self.model, self.place, self.tasks = run, agent, model, place, tasks
+        self.skills = skills
         self.tier = "long" if context == "long" else "default"
         self.session: Any = None
         self.sid = ""
@@ -92,7 +95,7 @@ class Start:
         try:
             async with asyncio.timeout(BOUND):
                 answer = await self.session.rpc.metadata.get_context_attribution()
-            found = mapped(answer.context_attribution)
+            found = mapped(answer.context_attribution, self.skills)
         except asyncio.CancelledError:
             self._write(Context(measured=False, error="the session ended before its context attribution answered"))
             raise
@@ -107,17 +110,21 @@ class Start:
                              measurement=found.fields(), place=self.place)  # fmt: skip
 
 
-def mapped(attribution: SessionContextAttribution | None) -> Context:
-    """The seven parts of *attribution*; unmeasured when it is missing or its shape changed."""
+def mapped(attribution: SessionContextAttribution | None, preloaded: Collection[str] = ()) -> Context:
+    """The seven parts of *attribution*; unmeasured when it is missing or its shape changed.
+
+    *preloaded* names the skills the session loaded before its first turn: when the attribution itemizes no skill,
+    their tokens stay in their category and ``kept`` says so.
+    """
     if attribution is None:
         return Context(measured=False, error="no context attribution")
     try:
-        return _mapped(attribution)
+        return _mapped(attribution, preloaded)
     except (AttributeError, KeyError, TypeError, ValueError) as exc:
         return Context(measured=False, error=f"context attribution changed shape: {type(exc).__name__}: {exc}")
 
 
-def _mapped(attribution: SessionContextAttribution) -> Context:
+def _mapped(attribution: SessionContextAttribution, preloaded: Collection[str]) -> Context:
     parts = {p: int(getattr(attribution.categories, c)) for p, c in CATEGORIES.items()}
     total = int(attribution.total_tokens)
     if any(v < 0 for v in parts.values()) or sum(parts.values()) != total:
@@ -128,6 +135,9 @@ def _mapped(attribution: SessionContextAttribution) -> Context:
     kept = []
     for kind, part in TAKEN.items():
         tops = [e for e in entries.values() if e.kind == kind and not _nested(e, entries)]
+        if kind == "skill" and preloaded and not tops:
+            names = ", ".join(sorted(preloaded))
+            kept.append(f"{part}: the preloaded {names} stay in their category, which the attribution does not itemize")
         found = [(_bucket(e, entries), int(e.tokens)) for e in tops]
         need = {b: sum(t for x, t in found if x == b) for b, _ in found}
         held = sum(t for _, t in found)

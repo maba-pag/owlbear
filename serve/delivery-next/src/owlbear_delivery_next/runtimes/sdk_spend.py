@@ -46,7 +46,7 @@ async def meter(client: CopilotClient, st: _Step, sid: str, agent: str) -> None:
                          cli_error=error)  # fmt: skip
     if st.created:  # a resumed session is not measured: its first model call was an earlier run's
         st.start = context_start.Start(st.metered, agent=agent, model=st.cfg.model or "", context=st.cfg.context,
-                                       place=spend_ledger.where(), tasks=st.requests)  # fmt: skip
+                                       place=spend_ledger.where(), tasks=st.requests, skills=st.preloaded)  # fmt: skip
         st.start.opened(st.session, sid)
 
 

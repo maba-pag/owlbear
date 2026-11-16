@@ -21,6 +21,11 @@ def test_a_real_answer_maps_to_seven_parts_that_add_up_to_its_total_and_is_writt
     assert found.parts == {"system_prompt": 4210, "custom_instructions": 6137, "skills": 0, "subagents": 0,
                            "built_in_tools": 581, "mcp_tools": 0, "messages": 101}  # fmt: skip
     assert sum(found.parts.values()) == ANSWER["contextAttribution"]["totalTokens"]
+    preloaded = context_start.mapped(SessionContextAttribution.from_dict(ANSWER["contextAttribution"]),
+                                     {"owlbear-module-design", "owlbear-acceptance-criteria"})  # fmt: skip
+    assert preloaded.parts == found.parts
+    assert preloaded.kept == ("skills: the preloaded owlbear-acceptance-criteria, owlbear-module-design stay in their "
+                              "category, which the attribution does not itemize")  # fmt: skip
     assert context_start.mapped(None).fields() == {"measured": False, "error": "no context attribution"}
 
     spend_ledger.context("r1", "s1", agent="builder", model="gpt-6-luna", tier="standard", measurement=found.fields())
