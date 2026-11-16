@@ -30,7 +30,7 @@ AMENDMENT = (
 def person_checks(checks: Sequence[PersonCheck]) -> list[str]:
     """The owner checks' proof, operation and criterion coverage for shaping and planning."""
     return [
-        f"- {p.id}: covers {', '.join(p.criteria) or 'not specified'}; expect {' '.join(p.expect.split())}"
+        f"- {p.id}: covers {', '.join(p.criteria) or 'all criteria'}; expect {' '.join(p.expect.split())}"
         + "".join(f"\n  - {' '.join(s.split())}" for s in p.steps)
         for p in checks
     ]
