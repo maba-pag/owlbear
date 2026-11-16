@@ -41,8 +41,9 @@ from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
 from owlbear_delivery_next.change_contracts.visual_records import VisualResult
 from owlbear_delivery_next.change_flow import amend_apply, amending, loop
 from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import chat_routes
-from owlbear_delivery_next.runtimes import amendments, step_input
+from owlbear_delivery_next.runtimes import amendments, session_result, step_input
 from owlbear_delivery_next.state_store import briefs, change_record
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import check, queue
@@ -637,6 +638,20 @@ def test_reshaping_or_stopping_ends_a_waiting_amendment_and_a_late_yes_approves_
     assert [why for _, why in dropped] == [f"question {q.id}: the amendment it asks about has ended"]
     assert (c.amendments[0].state, c.brief.approved_version) == ("declined", 3)
     assert (amending.current(c).source if c.amending else None) == ("request" if intent == "change" else None)
+
+
+def test_a_brief_request_cannot_clear_the_shared_git_policy_gate():
+    c = change()
+    run = session_result.Run(
+        "fixture", "shared-git-changed", detail="Shared hooks changed", termination=Termination(confirmed=True)
+    )
+    c = loop.apply(c, session_result.to_result(run, K.BUILD, NOW), NOW)
+    stop, outcome = c.stop.model_copy(), c.outcome.model_copy()
+
+    c, step = loop.schedule(c, [IntentItem(at=NOW, intent="change", text="greet in French")], NOW)
+
+    assert (c.stop, c.outcome, step) == (stop, outcome, None)
+    assert amending.current(c).source == "request"
 
 
 def test_removing_every_visual_state_while_the_visual_check_stopped_goes_on_to_the_next_check():
