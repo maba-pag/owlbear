@@ -49,8 +49,9 @@ function detailHead(d) {
           + "Existing pauses are kept." };
         show();
       };
+      const why = [d.amendments.request, starts(d).title].filter(Boolean).join(". ");
       amend = button("Request a brief change", request, { variant: "secondary", aria: DIALOG,
-        disabled: Boolean(d.amendments?.request), title: d.amendments?.request || undefined });
+        disabled: Boolean(why), title: why || undefined });
     }
   }
   const under = [d.brief.title && d.slug, several() && `in ${d.projectName}`].filter(Boolean).join(" \u00b7 ");
