@@ -9,10 +9,11 @@ from owlbear_delivery_next.github.account import REPOSITORY_OWNER, Writer
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from owlbear_delivery_next.github.account import Origin
     from owlbear_delivery_next.state_store.store import Store
 
 
-def of(store: Store, repo: Path, *, detecting: bool = False) -> Writer:
+def of(store: Store, repo: Path | Origin, *, detecting: bool = False) -> Writer:
     """The writer of *repo*'s project: its setting, ``SettingsUnset`` at the first launch while no layer sets it.
 
     *detecting* (setup's, the CLI's and the profile's detection, which may run before the settings are filled in) uses
