@@ -149,7 +149,8 @@ never edit code and ask no questions. They run while Delivery is paused and use 
 
 An auditor reports findings, then a separate verifier checks each against the code and supplied decisions and
 plans. Accepted findings become Backlog entries by default. Each run also opens one summary issue, linked both
-ways with its finding issues. **Results of the last run** shows the commit, changed defaults, accepted findings,
+ways with its finding issues. Larger reports continue in comments on that same issue, retaining all reasons.
+**Results of the last run** shows the commit, changed defaults, accepted findings,
 rejected and unsure findings with reasons, lens coverage and context limits. Older reports remain explicitly
 unverified. **Finish publishing** retries unfinished findings or the summary without running another agent.
 Starting again with unpublished results requires explicit consent to drop that report's remaining publication.

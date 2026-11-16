@@ -465,10 +465,21 @@ class FakeGitHub:
 
     def comment(self, number, method, params, body):
         if method == "GET":
-            comments = [{"body": text} for issue, text in self.comments if issue == number]
+            comments = [
+                {
+                    "id": index,
+                    "body": text,
+                    "html_url": f"https://github.com/acme/owlbear-data/issues/{issue}#issuecomment-{index}",
+                }
+                for index, (issue, text) in enumerate(self.comments, 1)
+                if issue == number
+            ]
             return 0, self._page(comments, params)
         self.comments.append((number, body["body"]))
-        return 0, {"id": len(self.comments)}
+        return 0, {
+            "id": len(self.comments),
+            "html_url": f"https://github.com/acme/owlbear-data/issues/{number}#issuecomment-{len(self.comments)}",
+        }
 
     def edit(self, issue, body):
         for name in body.get("labels", []):  # GitHub makes a missing label itself, in its own colour

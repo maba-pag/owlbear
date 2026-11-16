@@ -58,6 +58,12 @@ class _RepositorySink(report_publish.Sink):
     def edit(self, number: int, body: str) -> None:
         self.issues.edit(number, body)
 
+    @override
+    def comment(self, number: int, body: str, *, marker: str, pending_since: datetime | None) -> str:
+        return self.issues.marked_comment(
+            self.issues.repository, number, body, marker=marker, pending_since=pending_since
+        )
+
 
 class _BacklogSink(report_publish.Sink):
     def __init__(self, book: backlog.Backlog, summary: dict[str, Any]) -> None:
@@ -95,6 +101,13 @@ class _BacklogSink(report_publish.Sink):
     @override
     def edit(self, number: int, body: str) -> None:
         self.book.issues.edit(number, {"body": body})
+
+    @override
+    def comment(self, number: int, body: str, *, marker: str, pending_since: datetime | None) -> str:
+        self.book.issues.private()
+        return self.book.issues.marked_comment(
+            self.book.repository, number, body, marker=marker, pending_since=pending_since
+        )
 
     def _issue(self, entry: backlog.Entry) -> Issue:
         url = f"https://{self.book.issues.host}/{self.book.repository}/issues/{entry.id}"

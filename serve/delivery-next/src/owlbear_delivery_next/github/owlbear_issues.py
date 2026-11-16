@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Literal, NoReturn
 
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.account import AccountMissing, Origin, Writer
+from owlbear_delivery_next.github.gh_client import RECENT_SECONDS as AUDIT_RECENT_SECONDS
 from owlbear_delivery_next.github.gh_client import GhClient, invalid, repo
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 
@@ -25,7 +26,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.github.gh_client import Json, Runner
 
 PAGE = 100
-AUDIT_RECENT_SECONDS = 120.0
 
 
 def _unavailable(operation: str, path: Path, exc: OSError) -> NoReturn:

@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 FILE = "audits.json"
 NAMES = ("doc", "agent", "code")
-OPTIONAL = {"verified", "verdicts", "verifier_session", "summary_issue"}
+OPTIONAL = {"verified", "verdicts", "verifier_session", "summary_issue", "summary_parts"}
 INTERRUPTED = "OwlBear stopped while the audit ran; start it again"
 _guard = threading.RLock()
 _live: set[tuple[str, str]] = set()
@@ -46,6 +46,16 @@ class SummaryIssue(BaseModel):
     url: str = ""
     pending: str | None = None
     complete: bool = False
+
+
+class SummaryPart(BaseModel):
+    """A continuation comment's host-owned creation intent and receipt."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    body: str
+    url: str = ""
+    pending: str | None = None
 
 
 class Report(BaseModel):
@@ -74,6 +84,7 @@ class Report(BaseModel):
     verdicts: list[AuditVerdict] = Field(default_factory=list)
     verifier_session: str = ""
     summary_issue: SummaryIssue = Field(default_factory=SummaryIssue)
+    summary_parts: list[SummaryPart] = Field(default_factory=list)
 
 
 REPORTS = TypeAdapter(dict[Literal["doc", "agent", "code"], Report])

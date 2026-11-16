@@ -209,3 +209,93 @@ def test_backlog_summary_recovery_finishes_repeat_links_and_refuses_public_zero_
     with pytest.raises(ProviderError, match="not private"):
         attempt()
     assert len(github.issues) == 3
+
+
+def test_oversized_summary_preserves_full_reasons_and_recovers_comment_receipts(
+    tmp_path, monkeypatch, shared_repo, github
+):
+    store = Store(tmp_path / "store", DataRepo(shared_repo[0]), "fixture")
+    state = _report()
+    candidate = state["findings"][0]
+    state.update(
+        verified=True,
+        verifier_session="verifier-fixture",
+        session="auditor-fixture",
+        findings=[dict(candidate, title=f"Finding {index}") for index in range(41)],
+        verdicts=[
+            {
+                "finding": index + 1,
+                "verdict": "accepted" if index == 0 else "rejected",
+                "reason": f"Reason {index}: " + "\u96ea" * 1790,
+                "decisions": [],
+                "duplicate_of": "",
+            }
+            for index in range(41)
+        ],
+        summary_issue={"number": None, "url": "", "pending": None, "complete": False},
+    )
+    state["verdicts"][1]["reason"] = "<!-- audit:run-one:summary:part:2 -->\n" + state["verdicts"][1]["reason"]
+    book = backlog.Backlog.of(store)
+    monkeypatch.setattr(publish.backlog.Backlog, "of", lambda _store: book)
+    comment, edit = github.comment, book.issues.edit
+    hidden, lose_comment, lose_edit = True, True, True
+
+    def interrupted_comment(number, method, params, body):
+        nonlocal lose_comment
+        if method == "GET" and hidden:
+            return 0, []
+        answer = comment(number, method, params, body)
+        if method == "POST" and lose_comment:
+            lose_comment = False
+            assert record.load(store)["code"]["summary_parts"][0]["pending"]
+            return 502, "comment response lost"
+        return answer
+
+    def interrupted_edit(number, fields):
+        nonlocal lose_edit
+        answer = edit(number, fields)
+        if number == 1 and lose_edit:
+            lose_edit = False
+            msg = "final summary edit response lost"
+            raise OSError(msg)
+        return answer
+
+    monkeypatch.setattr(github, "comment", interrupted_comment)
+    monkeypatch.setattr(book.issues, "edit", interrupted_edit)
+
+    def attempt():
+        publish.findings(store, state, lambda: record.save(store, "code", state), audit="code")
+
+    with pytest.raises(ProviderError, match="comment response lost"):
+        attempt()
+    state = record.load(store)["code"]
+    assert state["findings"][0]["number"] == 2
+    assert record.unpublished(state) == 1
+    planned = [part["body"] for part in state["summary_parts"]]
+    with pytest.raises(ProviderError, match="two minutes"):
+        attempt()
+    assert len(github.comments) == 1
+    hidden = False
+    monkeypatch.setattr(report_publish, "PART_BYTES", 15_000)
+    with pytest.raises(OSError, match="final summary edit response lost"):
+        attempt()
+    state = record.load(store)["code"]
+    assert not state["summary_issue"]["complete"]
+    attempt()
+    _complete_large_report(record.load(store)["code"], planned, github)
+
+
+def _complete_large_report(final, planned, github):
+    assert final["summary_issue"]["complete"]
+    assert record.unpublished(final) == 0
+    assert len(github.issues) == 2
+    assert len(github.comments) == len(planned)
+    assert [part["body"] for part in final["summary_parts"]] == planned
+    assert all(part["url"] and part["pending"] is None for part in final["summary_parts"])
+    bodies = [issue["body"] for issue in github.issues.values()] + [body for _, body in github.comments]
+    assert all(len(body.encode("utf-8")) <= 65_536 for body in bodies)
+    details = "".join(body for _, body in github.comments)
+    assert all(verdict["reason"] in details for verdict in final["verdicts"][1:])
+    assert github.issues[2]["html_url"] in details
+    assert github.issues[1]["html_url"] in github.issues[2]["body"]
+    assert final["summary_parts"][0]["url"] in github.issues[1]["body"]

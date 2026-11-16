@@ -7,6 +7,7 @@ import json
 import re
 import subprocess
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, NoReturn
 from urllib.parse import quote
 
@@ -21,6 +22,8 @@ if TYPE_CHECKING:
 
 TIMEOUT = 30.0
 API_VERSION = "2026-03-10"
+RECENT_SECONDS = 120.0
+PAGE = 100
 # gh prints `gh: <message> (HTTP 409)`, or `gh: HTTP 409` when the body has no top-level message.
 _HTTP_STATUS = re.compile(r"^gh: (?:HTTP (\d{3})|.*\(HTTP (\d{3})\))$", re.MULTILINE)
 
@@ -114,6 +117,12 @@ def invalid(operation: str, detail: str, cause: Exception | None = None) -> NoRe
     raise ProviderError(FailureCode.INVALID_RESPONSE, operation, detail, retry_safe=True) from cause
 
 
+def _comment_url(value: Json) -> str:
+    if not isinstance(value, dict) or not isinstance(value.get("html_url"), str) or not value["html_url"]:
+        invalid("comment_issue", "a comment without its link")
+    return value["html_url"]
+
+
 class GhClient:
     """Run Delivery's fixed ``gh`` commands; GitHub Enterprise via ``host``."""
 
@@ -179,3 +188,25 @@ class GhClient:
     def _graphql(self, operation: str, query: str, variables: dict[str, Any], *, write: bool = False) -> Json:
         body = {"query": query, "variables": variables}
         return self._gh(operation, ("api", "--hostname", self.host, "graphql", "--input", "-"), body=body, write=write)
+
+    def marked_comment(
+        self, repository: str, number: int, body: str, *, marker: str, pending_since: datetime | None
+    ) -> str:
+        """Find or create a marked comment; a recent unknown write waits for GitHub's listing."""
+        endpoint = f"{repo(repository)}/issues/{number}/comments"
+        page = 1
+        while True:
+            found = self._api("list_comments", "GET", f"{endpoint}?per_page={PAGE}&page={page}")
+            if not isinstance(found, list):
+                invalid("list_comments", "the issue comments are not a list")
+            for comment in found:
+                if str(comment.get("body") or "").rstrip().endswith(f"<!-- {marker} -->"):
+                    return _comment_url(comment)
+            if len(found) < PAGE:
+                break
+            page += 1
+        if pending_since and (datetime.now(UTC) - pending_since).total_seconds() < RECENT_SECONDS:
+            detail = "GitHub may still be listing the report comment; press again in two minutes"
+            raise ProviderError(FailureCode.RESPONSE_UNKNOWN, "comment_issue", detail, retry_safe=False)
+        made = self._api("comment_issue", "POST", endpoint, body={"body": body}, write=True)
+        return _comment_url(made)
