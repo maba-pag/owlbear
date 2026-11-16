@@ -88,7 +88,13 @@ def evidence(uid: str, unit: Mapping[str, Any], rev: Mapping[str, Any], projects
     if unit.get("kind") == "chat":
         low, high = int(rev.get("from_events") or 0), int(rev.get("cutoff_events") or 0)
         return retro_segments.prepare(sessions, last_said(sessions[0]), low=low, high=high, per_turn=True)
+    gaps = []
+    if uid.startswith("chg:"):
+        fresh = units.describe_change(uid, *projects[uid.split(":", 2)[1]])
+        sessions, gaps = fresh["sessions"], fresh["gaps"]
     prepared = retro_segments.prepare(sessions, outcome(uid, projects))
+    if uid.startswith("chg:"):
+        prepared.gaps = list(dict.fromkeys([*gaps, *prepared.capture_gaps.values()]))
     prepared.activity = activity(uid, projects)
     return prepared
 

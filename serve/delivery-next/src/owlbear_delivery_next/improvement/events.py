@@ -1,7 +1,7 @@
 """Improvement's event intake (design §4): a watched session's own events, kept bounded for the Spotter's cards.
 
-Every SDK event passes through ``Kept.add`` as the same dict a session's ``events.jsonl`` line holds (``to_dict()``),
-so a live session and a logged one read alike. Only the session's own agent counts (no subagent's events). A user
+Every SDK callback passes through ``Kept.add`` as a dict (``to_dict()``), including callbacks absent from persisted
+logs. Its count is therefore not a persisted event ordinal. Only the session's own agent supplies content. A user
 message is the requester's unless a source other than the user sent it, it continues autopilot or it is the Spotter's
 note (``requester``); any other is kept as an action, so it never replaces the request or the plan. Kept: the first
 requester message (the step's task) and the last few, the turn (the latest requester message's event id), the agent's
@@ -112,7 +112,7 @@ def result_text(data: dict[str, Any]) -> Any:  # noqa: ANN401 - a text, or a str
 
 
 class Kept:
-    """One session's bounded intake."""
+    """One session's bounded intake; ``n`` counts all callbacks, not just persisted main-agent events."""
 
     def __init__(self) -> None:
         self.task, self.task_n = "", 0  # the first requester message: a step's task, criteria and scope
@@ -127,7 +127,7 @@ class Kept:
         self.n = 0  # events seen
 
     def add(self, ev: Any) -> bool:  # noqa: ANN401 - an SDK event object or a logged event
-        """Take in one event of the main agent (a subagent's is left out); whether it completed a main-agent call."""
+        """Count a callback and keep main-agent content; whether it completed a main-agent call."""
         d = as_dict(ev)
         self.n += 1
         kind, data, at = d.get("type"), d.get("data") or {}, str(d.get("timestamp") or "")

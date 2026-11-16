@@ -20,6 +20,7 @@ from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.retro_calls import Work, key, paid, strings
+from owlbear_delivery_next.improvement.retro_grade_history import CONTRACT, corrected_id
 from owlbear_delivery_next.improvement.retro_segments import cut, dumps
 from owlbear_delivery_next.local_system import mask
 
@@ -66,6 +67,7 @@ def _entry(r: Mapping[str, Any]) -> dict[str, Any]:
         "look": r.get("look"),
         "category": r.get("category"),
         "at": f"e{r.get('cutoff')}",
+        "call": r.get("call", ""),
         "session": r.get("session"),
         "note": cut(mask.redact(str(r.get("note") or "")), NOTE),
         "sampled_silence": silence(r),
@@ -86,10 +88,27 @@ def _home(record: Mapping[str, Any], parts: list[Part]) -> int:
     return begun[-1] if begun else mine[0]
 
 
-def _open(w: Work) -> list[dict[str, Any]]:
-    """The records a judge grades: assessable, with something of their own session to read."""
+def opened(w: Work) -> list[dict[str, Any]]:
+    """Normalized copies of assessable looks: persisted cutoffs with the original live count retained."""
     read = {p.session for p in w.prepared.parts}
-    return [r for r in w.records if assessable(r) and r.get("session") in read]
+    w.prepared.anchor_gaps.clear()
+    out = []
+    for r in w.records:
+        if assessable(r):
+            cutoff, gap = retro_segments.locate(r, w.prepared)
+            if not gap and r.get("session") in read:
+                out.append(r | {"cutoff": cutoff, "live_cutoff": r.get("cutoff")})
+            else:
+                w.prepared.anchor_gaps[r["id"]] = gap or _missing(w, r)
+    return out
+
+
+_open = opened
+
+
+def _missing(w: Work, record: Mapping[str, Any]) -> str:
+    _, gap = retro_segments.locate(record, w.prepared)
+    return gap or (PRUNED if w.prepared.parts else UNSEEN)
 
 
 def _shown(p: Part) -> dict[str, str]:
@@ -98,13 +117,16 @@ def _shown(p: Part) -> dict[str, str]:
 
 
 def _message(w: Work, parts: Iterable[Part], records: Iterable[Mapping[str, Any]]) -> str:
+    gaps = w.prepared.gaps if w.prepared.sessions else list(w.unit.get("gaps") or ())
     evidence = {
         "unit": w.unit.get("kind", ""),
-        "gaps": cut("; ".join(w.unit.get("gaps") or ()), GAPS),
+        "gaps": cut("; ".join(dict.fromkeys([*gaps, *w.prepared.anchor_gaps.values()])), GAPS),
         "earlier": w.prepared.earlier,
         "parts": [_shown(p) for p in parts],
         "records": [_entry(r) for r in records],
     } | ({"activity": w.prepared.activity} if w.prepared.activity else {})
+    if w.correction:
+        evidence["correction_contract"] = CONTRACT
     return f"{JUDGE.read_text()}\n\n## The evidence\n\n```json\n{dumps(evidence)}\n```\n"
 
 
@@ -200,7 +222,14 @@ def _grade(w: Work, r: Mapping[str, Any], said: Mapping[str, Any] | None, *, see
     elif value == "missed" and not silence(r):
         value, reason = "not-assessable", "missed is said only of a sampled silent look"
     should = str((said or {}).get("call") or "")[:60] if value in {"wrong", "missed"} else ""
-    more: dict[str, Any] = {"should": should} if should else {}
+    more: dict[str, Any] = {"evidence_contract": CONTRACT}
+    if "live_cutoff" in r:
+        more["live_cutoff"] = r["live_cutoff"]
+    if w.correction:
+        original = f"rg-{r['id']}"
+        more |= {"id": corrected_id(original), "supersedes": original}
+    if should:
+        more["should"] = should
     if seen:  # what the judge saw of its moment, kept so a review reads that and never a capture changed since
         more |= retro_segments.moment(w.prepared.parts[_home(r, w.prepared.parts)], int(r.get("cutoff") or 0))
     if w.provenance != "real":
@@ -217,15 +246,15 @@ def judging(w: Work) -> list[tuple[list[Part], list[dict[str, Any]], str]]:
     """The judging batches of *w*'s assessable records, each with its message; none when no evidence was read."""
     if not w.prepared.parts:
         return []
-    return [(p, c, _message(w, p, c)) for p, c in batches(w, _open(w))]
+    return [(p, c, _message(w, p, c)) for p, c in batches(w, opened(w))]
 
 
 def judge(w: Work) -> list[str]:
     """Phase 1: grade every record of the revision once and keep the findings; the ids of the findings."""
-    judged = {r["id"] for r in _open(w)}
-    gone = {"grade": "not-assessable", "reason": PRUNED if w.prepared.parts else UNSEEN}
+    judged = {r["id"] for r in opened(w)}
     without = [(r, {"grade": "not-assessable", "reason": _unassessable(r)}) for r in w.records if not assessable(r)]
-    without += [(r, gone) for r in w.records if assessable(r) and r["id"] not in judged]
+    without += [(r, {"grade": "not-assessable", "reason": _missing(w, r)})
+                for r in w.records if assessable(r) and r["id"] not in judged]  # fmt: skip
     w.found["grades"] += len(store.add_grades(_grade(w, r, said) for r, said in without))
     ids: list[str] = []
     seen: set[str] = set()  # the parts judged by an earlier batch: a part carried again yields no finding twice
