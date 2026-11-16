@@ -127,21 +127,14 @@ def _case(repo: Path, root: Path, case: Path) -> dict[str, Any]:
         )
         runs.append(replay_transport.evidence(done))
     state["findings"] = [{**row, "number": None, "url": "", "pending": None} for row in state["findings"]]
-    sink, saves = report_publish.Recorder(), 0
-
-    def save() -> None:
-        nonlocal saves
-        _write_run(root, state)
-        saves += 1
-
-    report_publish.publish(state, sink, save, project="fixture", audit="code")
+    sink = report_publish.Recorder()
+    report_publish.publish(state, sink, lambda: _write_run(root, state), project="fixture", audit="code")
     return state | {
         "titles": [row["title"] for row in state["findings"]],
         "helpers": sum(row.get("part") == "helper" for row in state["subagents"]),
         "refusals": script.refusals,
         "runs": runs,
         "issues": sink.issues,
-        "saves": saves,
     }
 
 
