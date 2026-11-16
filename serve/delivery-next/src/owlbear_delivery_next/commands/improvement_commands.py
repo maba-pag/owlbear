@@ -30,25 +30,32 @@ def run_retro(
     *,
     change: Annotated[str | None, Parameter(group=UNIT)] = None,
     chat: Annotated[str | None, Parameter(group=UNIT)] = None,
+    repair_grades: bool = False,
 ) -> Namespace:
     """Queue a run of one unit for the host's Retro job (paid).
 
     Args:
         change: PROJECT/SLUG: a finished Change; PROJECT is its folder's name or id.
         chat: SESSION: an enrolled chat, quiet for a day.
+        repair_grades: Rejudge affected historical grades of the Change, preserving originals as history.
     """
-    return Namespace(command="improvement", action="retro", retro="run", change=change, chat=chat)
+    return Namespace(
+        command="improvement", action="retro", retro="run", change=change, chat=chat, repair_grades=repair_grades
+    )
 
 
 @retro.command(name="status")
-def retro_status(*, last: int = 10, plan: str | None = None) -> Namespace:
+def retro_status(*, last: int = 10, plan: str | None = None, repair_grades: bool = False) -> Namespace:
     """The latest runs, or with --plan what a run of a unit would ask (not paid).
 
     Args:
         last: How many of the latest runs.
         plan: UNIT: a unit id (chg:…, chat:…) or PROJECT/SLUG.
+        repair_grades: With --plan, inventory affected historical grades without writing or paying.
     """
-    return Namespace(command="improvement", action="retro", retro="status", last=last, plan=plan)
+    return Namespace(
+        command="improvement", action="retro", retro="status", last=last, plan=plan, repair_grades=repair_grades
+    )
 
 
 @spotter_test.command

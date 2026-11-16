@@ -24,6 +24,7 @@ from owlbear_delivery_next.improvement import (
     pilot_seed,
     retro_evidence,
     retro_proposals,
+    retro_regrade,
     spotter_test_run,
 )
 from owlbear_delivery_next.improvement import retro_store as retro
@@ -160,6 +161,14 @@ def _test(a: argparse.Namespace) -> None:
 
 def _retro(a: argparse.Namespace) -> None:
     if a.retro == "run":
+        if a.repair_grades:
+            if not a.change:
+                msg = "--repair-grades requires --change PROJECT/SLUG"
+                raise CaseError(msg)
+            uid, projects = _unit(a.change)
+            rid = retro_regrade.queue(BY, uid, projects)
+            _say(f"queued {rid}: affected grades await correction; originals remain in history")
+            return
         change = None
         if a.change:
             pid, _ = _project(_slash(a.change)[0])
@@ -169,8 +178,12 @@ def _retro(a: argparse.Namespace) -> None:
         _say(f"queued {rid}: {said}")
     elif a.plan:
         uid, projects = _unit(a.plan)
-        _say(json.dumps(retro_evidence.plan(uid, projects)))
+        planned = retro_regrade.plan(uid, projects) if a.repair_grades else retro_evidence.plan(uid, projects)
+        _say(json.dumps(planned))
     else:
+        if a.repair_grades:
+            msg = "--repair-grades requires --plan UNIT"
+            raise CaseError(msg)
         _say(f"queued: {len(retro.queued())}")
         keep = ("id", "unit", "trigger", "by", "state", "why", "result", "spent", "known", "calls")
         for r in retro.runs(a.last, synthetic=True)[::-1]:

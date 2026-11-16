@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from owlbear_delivery_next.improvement import assumptions
+from owlbear_delivery_next.improvement import assumptions, retro_grade_history
 from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 
@@ -168,3 +168,37 @@ def test_replay_journey():
     assert seen() == before
     assert before[0]["run-1"]["calls"] == 1
     assert before[1][pid]["state"] == "rejected"
+
+
+def test_grade_correction_preserves_history_and_never_trusts_or_counts_pending_originals():
+    originals = [
+        {"id": f"rg-{rid}", "record": rid, "unit": "chg:p1:fix", "grade": "wrong", "look": "plan", "category": "c"}
+        for rid in ("r1", "r2")
+    ]
+    store.add_grades(originals)
+    history = (store.place() / "grades.jsonl").read_bytes()
+    cohort = {g["record"]: g["id"] for g in originals}
+    request = store.request_correction("owner", "p1:fix", "r1", cohort)
+    assert store.grades() == []
+    assert store.class_grades() == {}
+    assert store.graded() == {"r1", "r2"}  # pending work is never mistaken for automatic late work
+    assert {g["grade"] for g in store.grades(include_pending=True)} == {retro_grade_history.PENDING}
+    assert store.take(request)  # a host killed before opening the run leaves the cohort pending
+    store.request_correction("owner", "p1:fix", "r1", cohort)
+    corrected = originals[0] | {
+        "id": retro_grade_history.corrected_id("rg-r1"),
+        "supersedes": "rg-r1",
+        "grade": "worth-it",
+        "evidence_contract": retro_grade_history.CONTRACT,
+    }
+    assert store.add_grades([corrected]) == [corrected["id"]]
+    assert store.add_grades([corrected]) == []
+    assert [(g["id"], g["grade"]) for g in store.grades()] == [("rg-r1", "worth-it")]
+    assert store.grades(record="r1")[0]["history_id"] == corrected["id"]
+    assert [(g["id"], g["grade"]) for g in store.grades(include_pending=True)] == [
+        ("rg-r1", "worth-it"),
+        ("rg-r2", retro_grade_history.PENDING),
+    ]
+    assert store.class_grades()[("plan", "c")]["worth-it"] == 1
+    assert (store.place() / "grades.jsonl").read_bytes().startswith(history)
+    assert store.lines("grades.jsonl") == [*originals, corrected]

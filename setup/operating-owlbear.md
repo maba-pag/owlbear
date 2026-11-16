@@ -158,6 +158,14 @@ with `--change PROJECT/SLUG` or `--chat SESSION` queues a run for the machine
 host, even while paused or switched off; `owlbear improvement retro status` lists the latest runs,
 and `--plan UNIT` shows how many judging calls a run would make, without spending credits.
 
+For historical grades affected by live event counts or omitted repair sessions, use
+`owlbear improvement retro status --plan PROJECT/SLUG --repair-grades` to inspect the affected record IDs without
+writing or paying. `owlbear improvement retro run --change PROJECT/SLUG --repair-grades` explicitly queues their
+rejudging. Originals remain in the append-only grade history. Until corrected, they show **Awaiting evidence
+correction** and count toward no current grade or proposal. Corrections preserve logical references and do not
+double count. This run only rejudges; it does not propose lessons or start the Spotter experiment. Each run keeps
+the configured credit limit. If it stops early, remaining grades stay pending until another explicit request.
+
 The **Improvement** page (menu, under Work) shows Retro's proposals waiting for you first, each with
 the findings it rests on, its risks and where it would land. **Accept** makes it there: a pending
 memory, a candidate Spotter case, an entry in the project's backlog, or an issue on GitHub for a change

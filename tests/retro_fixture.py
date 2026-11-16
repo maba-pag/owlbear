@@ -60,7 +60,8 @@ def session(spec: Mapping[str, Any]) -> str:
 def _turn(turn: list[Any], n: int) -> list[dict[str, Any]]:
     kind, *rest = turn
     if kind in {"user", "agent"}:
-        return [{"type": "user.message" if kind == "user" else "assistant.message", "data": {"content": rest[0]}}]
+        return [{"id": f"event-{n + 1}", "type": "user.message" if kind == "user" else "assistant.message",
+                 "data": {"content": rest[0]}}]  # fmt: skip
     tool, args, result, ok = rest
     call = f"call-{n + 1}"
     arguments = {"command": args} if tool == "bash" else {"input": args}
@@ -79,13 +80,17 @@ def _log(n: int, chars: int) -> str:
 
 
 def events(spec: Mapping[str, Any]) -> tuple[list[dict[str, Any]], dict[int, int]]:
-    """*spec*'s log events, and by turn (from 1) the number of the event that ends it."""
+    """*spec*'s log events, and each turn's record moment (the start for a hand-off, completion otherwise)."""
     out: list[dict[str, Any]] = []
     ends: dict[int, int] = {}
     fill = spec.get("filler") or {}
     for i, turn in enumerate(spec["turns"], 1):
         out += _turn(turn, len(out))
         ends[i] = len(out)
+        look = next((r["look"] for r in spec["records"] if r["turn"] == i), "")
+        if turn[0] == "agent" and look and look != "plan":
+            out += _turn(["call", "fixture-look", "end of turn", "done", True], len(out))
+            ends[i] = len(out) - int(look in {"hand-off", "handoff"})
         for k in range(fill.get("calls", 0) if i == fill.get("after") else 0):
             out += _turn(["call", "bash", f"make -j8 module_{k:04}", _log(k, fill["chars"]), True], len(out))
     return out, ends
@@ -93,7 +98,7 @@ def events(spec: Mapping[str, Any]) -> tuple[list[dict[str, Any]], dict[int, int
 
 def records(spec: Mapping[str, Any]) -> list[dict[str, Any]]:
     """The Spotter's records of *spec*, each with its card."""
-    _, ends = events(spec)
+    log, ends = events(spec)
     turns = spec["turns"]
     found = []
     for r in spec["records"]:
@@ -108,6 +113,11 @@ def records(spec: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "category": r["category"],
                 "note": r["note"],
                 "cutoff": ends[r["turn"]],
+                "call": (
+                    log[ends[r["turn"]] - 1]["id"]
+                    if r["look"] == "plan"
+                    else log[ends[r["turn"]] - 1]["data"]["toolCallId"]
+                ),
                 "session": session(spec),
                 "step": "synthetic",
                 "provenance": "synthetic",

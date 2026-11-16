@@ -38,6 +38,21 @@ def enrolled() -> list[str]:
         return []
 
 
+def due(uid: str, request: dict[str, Any], projects: units.Projects) -> dict[str, Any] | None:
+    """The Change or chat revision a button request takes."""
+    found = (
+        units.due_changes(projects, change=request["change"])
+        if request.get("change")
+        else units.due_chats(enrolled(), datetime.now(UTC), chat=request["chat"])
+    )
+    return next((item for item in found if item["unit"] == uid), None)
+
+
+def revision(uid: str, rev: str) -> dict[str, Any]:
+    """A run's saved revision."""
+    return next(r for r in store.known()[uid]["revisions"] if r["rev"] == rev)
+
+
 def session(agent: str) -> tuple[RoleModel, float]:
     """The model and the time in seconds a session of role *agent* runs with.
 
@@ -203,7 +218,7 @@ class Running:
     by: str = ""
     rev: str = ""  # "" until its revision is taken
     provenance: str = "real"
-    mode: str = "judge"  # or "grade-only", or retro_more's "redraft" or "followup"
+    mode: str = "judge"  # "grade-only", "correct-grades", or retro_more's "redraft" or "followup"
     records: list[str] = field(default_factory=list)  # a grade-only run's records
     spec: str = ""  # a synthetic unit's name
     id: str = field(default_factory=lambda: f"rr-{uuid.uuid4().hex[:12]}")
@@ -230,7 +245,7 @@ class Running:
     @property
     def reads_real(self) -> bool:
         """Whether this run reads a real unit, its eligibility checked: not synthetic, a redraft or a follow-up."""
-        return self.provenance == "real" and self.mode in {"judge", "grade-only"}
+        return self.provenance == "real" and self.mode in {"judge", "grade-only", "correct-grades"}
 
     @property
     def needs(self) -> tuple[str, ...]:

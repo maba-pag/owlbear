@@ -13,6 +13,10 @@ export function place(r, named) {
 }
 
 function grade(g) {
+  if (g.grade === "awaiting-correction") {
+    const reason = g.reason ? html`<br><span class="meta">${g.reason}</span>` : nothing;
+    return html`<li>Awaiting evidence correction${reason}</li>`;
+  }
   const said = `${g.preliminary ? "Preliminary grade" : "Graded"}: ${g.grade}${g.should ? `, should have been ${
     g.should}` : ""}`;
   return html`<li>${said}${g.reason ? html`<br><span class="meta">${g.reason}</span>` : nothing}</li>`;
