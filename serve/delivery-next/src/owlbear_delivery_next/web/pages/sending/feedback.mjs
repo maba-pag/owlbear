@@ -130,11 +130,11 @@ export function begin(form = "", { on = null, hold = true } = {}) {
 }
 
 // The phase shown on *el* (showing action *id*), if its send still holds: one whose element now shows another action,
-// or whose form element now holds another form, is over.
-function shown(el, id) {
+// or whose form element now holds another form, is over, as is a refused or unsure one whose element is now disabled.
+function shown(el, id, disabled) {
   el.dataset.sends = id;
   const s = of(el);
-  if (s && (s.id !== id || (s.scope && s.scope.dataset.form !== s.form))) forget(s);
+  if (s && (s.id !== id || (s.scope && s.scope.dataset.form !== s.form) || (disabled && !locks(s)))) forget(s);
   const now = sends.has(s) ? s : null;
   if (!now || !locks(now)) el.style.minInlineSize = "";
   return now?.phase;
@@ -148,7 +148,7 @@ class Look extends Directive {
   }
 
   update(part, [id, label, { icon, busy = false, disabled = false } = {}]) {
-    const el = part.element, phase = shown(el, id);
+    const el = part.element, phase = shown(el, id, disabled);
     // a p-button whose icon was set and then removed shows an arrow: "none" says no icon
     el.setAttribute("icon", phase === "sent" ? "none" : MARK[phase] ?? icon ?? "none");
     el.toggleAttribute("disabled", disabled);
