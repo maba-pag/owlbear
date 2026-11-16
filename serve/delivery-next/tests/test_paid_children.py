@@ -322,6 +322,28 @@ def test_a_pause_queued_after_a_failed_settlement_waits_and_the_resume_settles_f
     assert len(child_steps(done, plan_round.LABEL)) == 1
 
 
+def test_a_new_brief_after_failed_settlement_keeps_the_childs_shared_git_gate(tmp_path, change_repo, monkeypatch):
+    paid = settlement_fails(tmp_path, change_repo, monkeypatch)
+    store = Store(tmp_path / "store")
+    with store.lock("c1") as lock:
+        c = store.read("c1")
+        c.pending_child.run.ending = "shared-git-changed"
+        c.pending_child.run.detail = "The child changed shared Git hooks"
+        store.write(lock, c)
+    store.put_inbox("c1", IntentItem(at=datetime.now(UTC), intent="change", text="a different greeting"))
+    engine = []
+    monkeypatch.setattr(runner.amendment, "run", lambda *a: engine.append(a))
+
+    for _ in range(2):
+        c = restart(tmp_path, change_repo).read("c1")
+
+    assert engine == []
+    assert c.stop.reason == "The child changed shared Git hooks"
+    assert c.outcome.exit == Exit.STOP
+    assert (c.pending_child, c.spend.credits, len(paid.children)) == (None, pytest.approx(6), 1)
+    assert [e["exit"] for e in child_steps(store, plan_round.LABEL)] == ["retired"]
+
+
 @pytest.mark.parametrize("intent", ["abandon", "change"])
 def test_an_abandon_or_new_brief_after_a_failed_settlement_counts_the_child_once_and_routes_nothing(
     tmp_path, change_repo, monkeypatch, intent
