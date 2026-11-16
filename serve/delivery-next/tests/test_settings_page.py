@@ -413,7 +413,6 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
     assert saved["spotter"]["steer_share"] == 10
 
 
-@pytest.mark.browser
 def hold_linked_verifier_control(page):
     page.add_init_script("""window.focusReady = (into) => {
         if (!window.heldFocus && into.closest("#set-agents-audit-verifier")) {
@@ -450,6 +449,7 @@ def linked_verifier_survives_model_arrival(page):
     expect(page.locator("#set-agents-audit-verifier :focus")).not_to_have_count(0)
 
 
+@pytest.mark.browser
 def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(local_store, pds, monkeypatch) -> None:
     """Each group has an address, back and forward follow them; an old address of a section or row, or of the former
     Runs group, opens its group there, and the overview's unset list links each setting's row (GW8RT6); a group with
