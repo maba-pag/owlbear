@@ -2,8 +2,11 @@
 judge batch; refs they create or move void them."""
 
 import argparse
+import asyncio
+import shlex
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -25,7 +28,7 @@ from owlbear_delivery_next.change_flow import loop, worktree
 from owlbear_delivery_next.commands import cli, runner
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import command_marks, ref_writes, sdk_adapter
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import briefs
 from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
@@ -36,8 +39,11 @@ VOIDED = "policy:review:read-only-write"
 REFUSED = "state:review:read-only-worktree"
 
 
-def git(cwd: Path, *args: str) -> str:
-    done = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
+def git(cwd: Path, *args: str, external: bool = False) -> str:
+    argv = ["git", *args]
+    if not external and (script := ref_writes.script()):
+        argv = ["/bin/bash", "-c", '. "$1"; shift; exec git "$@"', "read-only-test", str(script), *args]
+    done = subprocess.run(argv, cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603
     return done.stdout.strip()
 
 
@@ -143,6 +149,60 @@ def test_refs_a_review_creates_or_moves_void_its_result_and_are_all_reported(sto
     assert seen[0].worktree.is_dir()
 
 
+def test_fetched_tags_keep_the_result_but_the_steps_own_remote_matching_tag_and_source_branch_writes_void_it(
+    tmp_path, store, change_repo, monkeypatch
+):
+    remote = tmp_path / "remote.git"
+    git(tmp_path, "clone", "-q", "--bare", str(change_repo), str(remote))
+    git(change_repo, "tag", "remote-release")
+    git(change_repo, "tag", "step-release")
+    git(change_repo, "push", "-q", str(remote), "--tags")
+    git(change_repo, "tag", "-d", "remote-release", "step-release")
+    writing = False
+
+    async def fake(cfg):
+        scripts = []
+
+        async def update(params):
+            scripts.extend(s.path for s in params.shell.init_scripts)
+            return SimpleNamespace(success=True)
+
+        session = SimpleNamespace(
+            rpc=SimpleNamespace(
+                instructions=SimpleNamespace(get_sources=lambda: asyncio.sleep(0, SimpleNamespace(sources=[]))),
+                options=SimpleNamespace(update=update),
+            )
+        )
+        await command_marks.opened(session, cfg.worktree, cfg.user, lambda **_e: None)
+        head = git(cfg.worktree, "rev-parse", "HEAD")
+        if writing:
+            commands = [
+                *(f". {shlex.quote(s)}" for s in scripts),
+                f"git -C {shlex.quote(str(change_repo))} tag step-release",
+                f"git -C {shlex.quote(str(change_repo))} branch -f main HEAD",
+            ]
+            await asyncio.to_thread(
+                subprocess.run,
+                ["/bin/bash", "-c", "set -e\n" + "\n".join(commands)],
+                cwd=cfg.worktree,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        else:
+            git(change_repo, "fetch", "-q", "--no-tags", str(remote), "tag", "remote-release", external=True)
+        payload = tools.ReviewResult(verdict="pass", covered_paths=["a.txt"])
+        return Run(cfg.session_id, "result", payload, head=head, termination=Termination(confirmed=True))
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", fake)
+    assert reviewed(store, change_repo).outcome.exit == Exit.DONE
+    assert git(change_repo, "rev-parse", "remote-release") == git(change_repo, "rev-parse", "HEAD")
+    writing = True
+    c = reviewed(store, change_repo)
+    assert (c.outcome.exit, c.outcome.cause) == (Exit.RETRY, VOIDED)
+    assert c.outcome.reason == ("a read-only step changed the repository: moved branch main, created tag step-release")
+
+
 def test_a_read_only_worktree_switched_to_a_branch_is_detached_again_by_the_next_session(
     store, change_repo, monkeypatch
 ):
@@ -165,8 +225,8 @@ def test_concurrent_change_branches_and_branches_other_worktrees_hold_are_not_vi
     git(change_repo, "worktree", "add", "-q", "-b", "feature", str(other), "main")
 
     def act(cfg):
-        git(cfg.worktree, "branch", "owlbear/x")
-        git(other, "commit", "-q", "--allow-empty", "-m", "elsewhere")
+        git(cfg.worktree, "branch", "owlbear/x", external=True)
+        git(other, "commit", "-q", "--allow-empty", "-m", "elsewhere", external=True)
 
     reviewer(monkeypatch, act)
     assert reviewed(store, change_repo).outcome.exit == Exit.DONE
