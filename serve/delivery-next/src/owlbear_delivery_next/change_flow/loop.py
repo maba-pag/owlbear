@@ -59,7 +59,7 @@ from owlbear_delivery_next.change_flow import (
     shaping_capture,
     stuck,
 )
-from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go, open_task, resolved, resume
+from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go, open_task, resolved
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

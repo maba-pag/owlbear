@@ -43,7 +43,8 @@ function detailHead(d) {
             + "After an amendment applies, you can object on the Brief panel. Existing pauses stay in force.",
           instead: "The approved brief and the Change stay as they are.",
         });
-        if (!words || !(await send("/intent", { intent: "change", text: words }, d)) || state.selected !== d.key) return;
+        if (!words || !(await send("/intent", { intent: "change", text: words }, d))
+          || state.selected !== d.key) return;
         state.started = { text: "Brief change requested: Delivery prepares an amendment after the current step. "
           + "Existing pauses are kept." };
         show();

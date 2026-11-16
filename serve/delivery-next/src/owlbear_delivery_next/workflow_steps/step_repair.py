@@ -20,12 +20,12 @@ from pathlib import Path, PurePosixPath
 from traceback import format_exception_only
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts import check_hint, evidence, repair_tools
+from owlbear_delivery_next.change_contracts import check_hint, evidence, repair_tools, tools
 from owlbear_delivery_next.change_contracts.failures import ENVIRONMENT, WRONG_MODEL, kind_of
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Outcome, StepKind, Stop
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.repair_records import KEPT, Tried, Witness
-from owlbear_delivery_next.change_flow import budgets, curation_flow, loop, rebuilds, stuck, worktree
+from owlbear_delivery_next.change_flow import amending, budgets, curation_flow, loop, rebuilds, stuck, worktree
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.settings import profile, roles
@@ -118,7 +118,7 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
             return
         r.found, r.fix = p.cause, p.fix
         r.preparation = p.preparation
-        r.tried.extend(Tried(fix=t.fix, outcome=t.outcome) for t in p.tried)
+        r.tried = [Tried(fix=t.fix, outcome=t.outcome) for t in p.tried]
         r.package, r.command = p.package.strip(), p.command.strip()
         if p.defect is not None:
             r.defect = defect_issue.file(store, path, p.defect)
@@ -461,18 +461,32 @@ def _gated(store: Store, lock: Lock, change: Change, done: Run) -> bool:
     wrong = (seen.cause or "").endswith(f":{WRONG_MODEL}")
     if seen.exit == Exit.STOP or (wrong and r.rerun):
         _stopped(store, lock, change, f"its session's result was voided: {seen.reason}")
+        if seen.stop is not None:
+            change.stop = seen.stop
+            store.write(lock, change)
         return True
     temporary = kind_of(seen.cause) in ENVIRONMENT and not isinstance(done.payload, repair_tools.RepairResult)
-    if not (wrong or temporary):
-        return False
-    r.rerun = r.rerun or wrong
-    wake = seen.wake_at if seen.wake_at and seen.wake_at > now else now + budgets.PAUSE
-    change.outcome = Outcome(
-        exit=Exit.RETRY, cause=r.cause, reason=f"repairing again: {seen.reason}", wake_at=wake, at=now
-    )
-    _log(store, lock, change, f"runs again at {wake:%H:%M}: {seen.reason}")
-    store.write(lock, change)
-    return True
+    if wrong or temporary:
+        r.rerun = r.rerun or wrong
+        wake = seen.wake_at if seen.wake_at and seen.wake_at > now else now + budgets.PAUSE
+        change.outcome = Outcome(
+            exit=Exit.RETRY, cause=r.cause, reason=f"repairing again: {seen.reason}", wake_at=wake, at=now
+        )
+        _log(store, lock, change, f"runs again at {wake:%H:%M}: {seen.reason}")
+        store.write(lock, change)
+        return True
+    if done.ending == "deadline" and done.detail == "step deadline":
+        _stopped(store, lock, change, "its own step deadline ended the repair before it proved a fix")
+        return True
+    p = done.payload
+    if done.ending == "premise" and isinstance(p, tools.WrongPremise) and p.stage == "brief" and not change.tests:
+        r.found = p.reason
+        stuck.retire(change, "the criterion needs a brief amendment")
+        change.stop = None
+        amending.premised(change, p, done.session_id, now)
+        store.write(lock, change)
+        return True
+    return False
 
 
 def _log(store: Store, lock: Lock, change: Change, said: str) -> None:

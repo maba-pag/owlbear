@@ -259,7 +259,7 @@ def test_a_suppression_fix_keeps_its_patch_through_decline_or_approved_applicati
     store.write(Lock(c.slug), declined)
     stopped = store.read(c.slug)
     assert stopped.repairs.done[-1].diff == kept.diff
-    assert kept.diff in stop_routes.shown(stopped, store)["reason"]
+    assert (stop_routes.shown(stopped, store), stop_routes.retained(stopped)["diff"]) == (None, kept.diff)
     assert worktree.git(repo, "rev-parse", "HEAD") == head
     approved = loop.fold(asked, [AnswerItem(question=q.id, option="yes", at=NOW)], NOW)
     step_repair.run(store, Lock(c.slug), approved, repo)
@@ -503,7 +503,8 @@ def _decline_missing_preparation(store, asked):
     kept = store.read(asked.slug)
     assert (kept.repairs.current, kept.outcome.exit, kept.repairs.done[-1].phase) == (None, Exit.STOP, "stopped")
     assert (kept.repairs.done[-1].preparation, kept.repairs.done[-1].witness) == (r.preparation, r.witness)
-    explanation = stop_routes.shown(kept, store)["reason"]
+    assert stop_routes.shown(kept, store) is None
+    explanation = kept.stop.reason
     assert all(text in explanation for text in ("you declined the fix", r.diff, r.witness.output, r.evidence))
     assert explanation == kept.stop.reason
     assert (store.config_path.read_bytes(), worktree.git(store.shared.root, "rev-parse", "HEAD")) == (before, head)

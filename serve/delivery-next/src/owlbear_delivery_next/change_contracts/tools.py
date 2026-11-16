@@ -410,7 +410,10 @@ def asks(role: str, *, judging: bool = False) -> bool:
 def results(role: str, *, ui: bool = False, judging: bool = False) -> list[str]:
     """Delivery's tools a role's agent is offered: every step's own, the first look, the UI scan, the lookup."""
     if role in {PICKER, CURATOR, AUDITOR, "repairer", "project-auditor", "audit-verifier"}:
-        return [SUBMIT.name, *{"repairer": [LOOKUP], "project-auditor": ["set_target"]}.get(role, [])]
+        return [
+            SUBMIT.name,
+            *{"repairer": [LOOKUP, PREMISE.name, "report_progress"], "project-auditor": ["set_target"]}.get(role, []),
+        ]
     extra = [FIRST_LOOK] if role == "design-judge" else [SCAN_DESIGN] if role == "builder" and ui else []
     extra += [LOOKUP] if role in LOOKERS and not judging else []
     return [*(s.name for s in SPECS if s is not ASK or asks(role, judging=judging)), *extra]

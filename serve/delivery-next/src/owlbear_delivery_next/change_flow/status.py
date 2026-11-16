@@ -358,7 +358,7 @@ def _stopped(c: Change, s: str) -> Status | None:
         )
         else c.stop.reason
     )
-    return Status(f"{s} · stopped: {reason}", c.stop.action, c.stop.actor, error=True, stopped=True)
+    return Status(f"{s} · stopped: {reason}", stuck.action(c), c.stop.actor, error=True, stopped=True)
 
 
 def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules

@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import permissions, repair_tools, tools
 from owlbear_delivery_next.change_contracts.models import StepKind
+from owlbear_delivery_next.change_contracts.repair_records import Tried
 from owlbear_delivery_next.change_flow import stuck
-from owlbear_delivery_next.runtimes import sdk_adapter, step_input
+from owlbear_delivery_next.runtimes import amendments, sdk_adapter, step_input
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.workflow_steps import (
     check_repair,
@@ -71,6 +72,19 @@ def session(
         if preparing
         else (repair_tools.ATTEMPT if stuck.diagnostic(change) else repair_tools.SUBMIT)
     )
+
+    def progress(args: tools.Args) -> str:
+        if not isinstance(args, repair_tools.Progress):
+            msg = "report_progress: expected the repair progress contract"
+            raise TypeError(msg)
+        r = change.repairs.current
+        if r is None:
+            msg = "report_progress: the repair has ended"
+            raise ValueError(msg)
+        r.found, r.tried = args.cause, [Tried(fix=t.fix, outcome=t.outcome) for t in args.tried]
+        store.write(lock, change)
+        return "Progress saved. Continue the repair; this is not a proved fix."
+
     return sdk_adapter.Session(
         kind=StepKind(change.repairs.current.step if change.repairs.current else change.step.kind),
         worktree=at,
@@ -82,6 +96,7 @@ def session(
         checks=(),
         submit=submit,
         scope=tuple(change.brief.scope),
+        amendable=amendments.amendable(change),
         model=role.model,
         effort=role.effort,
         context=role.context,
@@ -92,7 +107,7 @@ def session(
         subagents=roles.subagents(settings, LABEL),
         user=roles.user_config(settings),
         memory=sessions.memory(store),
-        helpers=(asked.helper(),),
+        helpers=(asked.helper(), (repair_tools.PROGRESS, progress)),
         watch=watched.watching(store, lock, LABEL, settings, at, sessions.out, watched.needed(settings), asked),
     )
 
@@ -165,9 +180,19 @@ def message(change: Change, witness: tuple[str, ...], at: Path) -> str:
             "",
             "## The brief's scope (a fix outside it, or in your owner's configuration, is his yes or no)",
             scope,
-            *(["", *step_input.brief(change)] if gate or (wrong and removable) else []),
+            "",
+            *step_input.brief(change),
             "",
             "## Finish",
+            (
+                "Call `report_progress` with cumulative cause and tried remedies before lengthy checks and after each "
+                "remedy. Delivery saves it even if your own deadline ends the repair."
+            ),
+            (
+                "If a brief criterion cannot be met by Delivery (installed runtime, no owner token, no live HOME), "
+                "report_wrong_premise stage brief with that criterion's amendment and evidence. Do not work around it "
+                "by borrowing credentials or live data. A setup failure alone never justifies weakening the brief."
+            ),
             "Call `submit_result` once with the cause, every fix you tried and what you proved.",
         ]
     )

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from owlbear_delivery_next.change_contracts.inbox import Recovery
 from owlbear_delivery_next.change_contracts.models import Exit, Record
-from owlbear_delivery_next.change_flow import delivery_target
+from owlbear_delivery_next.change_flow import delivery_target, stuck
 from owlbear_delivery_next.project_host import runner_end
 from owlbear_delivery_next.state_store import work_block
 from owlbear_delivery_next.state_store.store import LockHeldError, StoreError
@@ -38,6 +38,8 @@ def clearable(c: Change) -> str | None:
         return "This stop ends only when you abandon or pause the Change; answer its question"
     if runner_end.unverified(c):
         return "This stop clears itself once the host sees none of the step's processes"
+    if stuck.exhausted(c):
+        return "The repair ended without resolving this cause; an unchanged rerun cannot resolve it"
     return None
 
 
