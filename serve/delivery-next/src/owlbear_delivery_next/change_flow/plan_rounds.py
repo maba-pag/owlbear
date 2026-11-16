@@ -171,9 +171,9 @@ def revised(c: Change, rejected: Mapping[str, str]) -> Next:
     unreviewed.
     """
     lp = current(c)
-    if lp is None or not (found := addressing(c)):
+    if lp is None:
         return "challenge"  # a first plan, or a new attempt's
-    for f in found:
+    for f in addressing(c):
         if f.id in rejected and f.state == "open":
             f.state, f.reason = "rejected", _flat(rejected[f.id], 1000)
         else:
