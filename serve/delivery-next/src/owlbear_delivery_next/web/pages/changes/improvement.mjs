@@ -14,6 +14,7 @@ import { detailsOn } from "./details.mjs";
 const FRESH = 30000;  // ms a Change's read is kept: the page redraws every few seconds
 const read = new Map();  // key -> { at, data, error, reading, stale }
 const outcome = new Map();  // key -> the last follow-up's notice
+const sent = new Map();  // item id -> the item as sent, its row drawn from it until its checkmark is over
 
 
 function fetched(d) {
@@ -34,6 +35,7 @@ async function followUp(d, item, what) {
   const sending = begin(followupForm(item), { hold: false });
   if (!sending) return;
   outcome.delete(d.key);
+  sent.set(item.id, item);  // a read meanwhile (its 30 s refresh, another row's follow-up) may already say queued
   show();
   try {
     const answer = await send(item);
@@ -42,6 +44,8 @@ async function followUp(d, item, what) {
   } catch (error) {
     sending.failed(error);
     outcome.set(d.key, ["error", "That was not done", error.reread ?? error.message]);
+  } finally {
+    sent.delete(item.id);
   }
   const kept = read.get(d.key);
   if (kept) kept.stale = true;  // read again, its rows kept meanwhile so a refused one still says so
@@ -49,7 +53,8 @@ async function followUp(d, item, what) {
 }
 
 function line(d, item, what) {
-  return followupLine(item, () => followUp(d, item, what), { button });
+  const shown = sent.get(item.id) ?? item;
+  return followupLine(shown, () => followUp(d, shown, what), { button });
 }
 
 function shownFinding(d, f) {
