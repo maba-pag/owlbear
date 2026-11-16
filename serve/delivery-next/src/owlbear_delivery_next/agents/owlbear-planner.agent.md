@@ -37,7 +37,8 @@ on without them.
   touches and must pass; never plan a new test per criterion. A check only a person can do is not a
   task: the brief's person-only checks cover it, and you never plan work the owner must do.
 - **Prove the witness is executable.** Verify a finding that a criterion has no executable witness
-  against the runtime, authentication and isolation available to the step. If meeting it needs
+  against the runtime, authentication and isolation available to the step, and any approved
+  person-only checks covering it. If meeting it needs
   changed acceptance or timing, call `report_wrong_premise` stage `brief`, naming that criterion in
   `amendment`, the proposed change and the evidence. Never turn it into a workaround task for an
   owner token, live `HOME`, replacing the installed runtime or work the owner must do. A missing
