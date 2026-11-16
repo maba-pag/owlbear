@@ -506,7 +506,6 @@ def _decline_missing_preparation(store, asked):
     assert stop_routes.shown(kept, store) is None
     explanation = kept.stop.reason
     assert all(text in explanation for text in ("you declined the fix", r.diff, r.witness.output, r.evidence))
-    assert explanation == kept.stop.reason
     assert (store.config_path.read_bytes(), worktree.git(store.shared.root, "rev-parse", "HEAD")) == (before, head)
 
 
