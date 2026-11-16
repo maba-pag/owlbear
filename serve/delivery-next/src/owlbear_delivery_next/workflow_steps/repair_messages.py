@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from owlbear_delivery_next.change_contracts import permissions, repair_tools, tools
 from owlbear_delivery_next.change_contracts.models import StepKind
@@ -74,9 +74,7 @@ def session(
     )
 
     def progress(args: tools.Args) -> str:
-        if not isinstance(args, repair_tools.Progress):
-            msg = "report_progress: expected the repair progress contract"
-            raise TypeError(msg)
+        args = cast(repair_tools.Progress, args)
         r = change.repairs.current
         if r is None:
             msg = "report_progress: the repair has ended"
