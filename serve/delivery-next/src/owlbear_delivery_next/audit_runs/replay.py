@@ -98,6 +98,11 @@ def _case(repo: Path, root: Path, case: Path) -> dict[str, Any]:
     store.root.mkdir()
     state, runs = _state(data, root, case.name, commit), []
     with replay_transport.opened(repo, root, commit) as copy:
+        authority = copy.path / ".owlbear"
+        shutil.copy2(authority / "decisions.md", root / "context" / "decisions.md")
+        research = root / "context" / "research"
+        research.mkdir(exist_ok=True)
+        shutil.copy2(authority / "research" / "owlbear-plan.md", research / "owlbear-plan.md")
         workspace.inspect(copy, commit)
         if data["mode"] == "end-to-end":
             _write_run(root, state)
