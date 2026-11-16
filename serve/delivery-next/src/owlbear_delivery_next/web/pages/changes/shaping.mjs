@@ -82,10 +82,10 @@ function shape(of, on = null) {
 }
 
 // A saved brief opens a new shaping chat in its Change's project; the Change stays as it is until the chat saves.
-export function reviseBrief(d) {
+export function reviseBrief(d, form = "") {
   const v = d.brief.version;
   return openChat({
-    path: `/changes/${encodeURIComponent(d.slug)}/revise-brief`, of: d.project,
+    form, path: `/changes/${encodeURIComponent(d.slug)}/revise-brief`, of: d.project,
     about: `to revise ${d.handle}${several() ? ` in ${d.projectName}` : ""}`,  // handles repeat across projects
     dialog: {
       title: `Revise brief v${v} in a new chat?`, yes: "Open the chat", no: "Not now",
@@ -101,10 +101,11 @@ export function reviseBrief(d) {
 
 // Asks first, then opens the shaping chat through *path* and says how it went (TD-83); *about* names what it opens
 // for, so a launch that ends after the person chose another Change still says which one it was. The clicked button,
-// or *on*, shows the send (sending/feedback.mjs) until the launch ends: a launch that did not open failed.
-async function openChat({ path, of, dialog, about, on = null }) {
+// or *on*, shows the send (sending/feedback.mjs) until the launch ends, and its panel *form*, if any, locks meanwhile:
+// a launch that did not open failed.
+async function openChat({ path, of, dialog, about, form = "", on = null }) {
   if (!(await ask(dialog))) return;
-  const sending = begin("", { on, hold: false });  // a launch can take minutes: the page goes on reading meanwhile
+  const sending = begin(form, { on, hold: false });  // a launch can take minutes: the page goes on reading meanwhile
   if (!sending) return;
   state.choosing = false;  // New Change's project chooser, left open, would hide this launch's result
   state.started = { text: "Opening the shaping chat…" };
