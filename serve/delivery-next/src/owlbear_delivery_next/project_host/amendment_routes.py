@@ -28,6 +28,7 @@ class ObjectionBody(BaseModel):
 def shown(c: Change) -> dict[str, Any]:
     """The versions and every amendment, each applied one with why he may not object to it now, or ""."""
     return {
+        "request": None if c.tests else amending.requestable(c),
         "version": c.brief.version,
         "reference": amend_apply.reference(c),
         "versions": [b.version for b in c.brief.approved],
@@ -36,6 +37,14 @@ def shown(c: Change) -> dict[str, Any]:
             for a in c.amendments
         ],
     }
+
+
+def admit_request(c: Change, text: str) -> None:
+    """Reject an unavailable amendment or an empty request before it enters the inbox."""
+    if why := amending.requestable(c):
+        raise HTTPException(409, why)
+    if not text.strip():
+        raise HTTPException(422, "Say what you want to change in the brief")
 
 
 def router(read: Callable[[str], Change], put: Callable[[str, InboxItem], dict[str, str]]) -> APIRouter:

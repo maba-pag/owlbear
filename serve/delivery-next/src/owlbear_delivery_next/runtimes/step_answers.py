@@ -36,7 +36,8 @@ def answered(change: Change, *, challenged: bool = False, own: str = "") -> list
     """The "answers so far" lines: no unchecked clarification and none a challenged review leaves out."""
     kept = [
         q for q in change.questions
-        if q.answer and not disputes.hidden(q, challenged=challenged, own=own) and not answer_kinds.unchecked(change, q)
+        if q.answer and not q.answer.superseded_at and not disputes.hidden(q, challenged=challenged, own=own)
+        and not answer_kinds.unchecked(change, q)
         and not answer_kinds.owned(q)  # its text says why the rejected clarification changed the brief
     ]  # fmt: skip
     return ["", "The owner's answers so far:", *(line for q in kept for line in _listed(q))] if kept else []

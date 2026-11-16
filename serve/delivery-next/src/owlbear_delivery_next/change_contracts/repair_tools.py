@@ -26,15 +26,20 @@ class Defect(Args):
     )  # fmt: skip
 
 
-class RepairResult(Args):
-    """``submit_result`` for the repairer of a stuck step."""
+class Progress(Args):
+    """Cumulative findings saved while the repair is still running, not proof of a fix."""
 
     cause: str = bounded(3000, "Why the step stopped, with the evidence", "The diff's .pre-commit-config.yaml ...")
     tried: list[Try] = Field(
         max_length=20,
-        description="Every attempted remedy in order; empty only for retry and check-later, never invent a fix",
+        description="Every attempted remedy in order; never invent a fix",
         examples=[[{"fix": "Route web/vendor/ like pages", "outcome": "passed in 212 s"}]],
     )  # fmt: skip
+
+
+class RepairResult(Progress):
+    """``submit_result`` for the repairer of a stuck step."""
+
     fix: Literal["none", "patch", "profile-check", "check-later", "retry", "preparation"] = Field(
         description="patch: your edits in this copy make the checks pass; profile-check: the step needs a project "
         "check the profile lacks, or another than its confirmed one that cannot pass, proven here; check-later: it "
@@ -93,6 +98,9 @@ class AttemptResult(RepairResult):
 
 
 SUBMIT = Spec("submit_result", "Submit once, after trying fixes in this copy.", RepairResult, "result")
+PROGRESS = Spec(
+    "report_progress", "Save cumulative findings and tried remedies; your step continues.", Progress, "result"
+)
 ATTEMPT = Spec(
     "submit_result", "Submit after trying remedies; another no-change retry is not recovery.", AttemptResult, "result"
 )

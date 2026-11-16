@@ -278,6 +278,35 @@ def test_a_clarification_the_check_finds_changing_the_brief_starts_its_amendment
     assert WORDS not in picking.told[-1].message
 
 
+def test_a_new_request_supersedes_an_unchecked_clarification_without_losing_its_history(picking, monkeypatch):
+    run = Asking(picking, monkeypatch)
+    assert run.answer(kind="clarification", text=WORDS, statement=SAID, confirmed=True).status_code == 200
+    c, _ = run.fold()
+    request = IntentItem(at=datetime.now(UTC), intent="change", text="greet in French instead")
+    c, _ = loop.schedule(c, [request], request.at)
+    ident = c.amending.id
+
+    assert clarification.checked(picking.store, Lock(c.slug), c) is c
+    assert c.amending.id == ident
+    assert [(a.source, a.state, a.reason) for a in c.amendments] == [("request", "proposed", request.text)]
+    assert (answer_kinds.delivered_next(c), c.decisions) == (None, [])
+    assert (run.asked(c).answer.statement, run.asked(c).answer.superseded_at) == (SAID, request.at)
+    assert step_answers.answered(Change.model_validate_json(c.model_dump_json())) == []
+
+
+def test_retry_with_a_confirmed_clarification_still_records_its_intent(picking, monkeypatch):
+    options = (Option(id="again", label="Retry", next="retry", action="retry"),)
+    run = Asking(picking, monkeypatch, options=options)
+    response = run.answer(option="again", kind="clarification", text=WORDS, statement=SAID, confirmed=True)
+    assert response.status_code == 200
+    picking.picks.append(verdict())
+
+    c = run.step()
+
+    assert [d.text for d in c.decisions] == [SAID]
+    assert SAID in "\n".join(step_answers.answered(c))
+
+
 def test_a_check_that_fails_waits_and_runs_again_never_taken_for_a_pass(picking, monkeypatch):
     run = Asking(picking, monkeypatch)
     assert run.answer(kind="clarification", text=WORDS, statement=SAID, confirmed=True).status_code == 200
@@ -660,7 +689,7 @@ def moved_on(run: Asking, how: str) -> str:
     if how == "change":
         run.p.store.put_inbox(run.p.slug, IntentItem(at=AT, intent="change", text="a different greeting"))
         c, _ = run.fold()
-        assert (c.step.kind, c.outcome) == (StepKind.SHAPE, None)
+        assert (c.step.kind, c.outcome, c.amending.phase) == (StepKind.BUILD, None, "prepare")
         return f"question {run.qid} {MOVED} its intent changed"
     c, _ = run.p.store.fold(Lock(run.p.slug), run.p.slug, datetime.now(UTC), pr_state="misdelivered")
     assert (c.step.kind, c.outcome.question == run.qid) == (StepKind.BUILD, False)
@@ -721,13 +750,14 @@ def test_the_chat_tool_reports_an_answer_the_change_no_longer_waits_on_as_not_an
     assert (out["answered"], out.get("error"), inbox(picking)) == (False, why, 0)
 
 
-@pytest.mark.parametrize("held", ["paused", "change-at-merge"])
+@pytest.mark.parametrize("held", ["paused", "unapproved-change-at-merge"])
 def test_a_question_the_change_still_waits_on_takes_its_answer(picking, monkeypatch, held):
-    """A pause, or a change of intent at the merge step (which waits for the merge), leaves the question waiting."""
+    """A pause, or a legacy unapproved change at merge, leaves the question waiting."""
     run = Asking(picking, monkeypatch)
-    if held == "change-at-merge":
+    if held == "unapproved-change-at-merge":
         c = picking.change()
         c.step = Step(kind=StepKind.MERGE)
+        c.brief.version += 1
         picking.store.write(Lock(picking.slug), c)
     intent = "pause" if held == "paused" else "change"
     picking.store.put_inbox(picking.slug, IntentItem(at=AT, intent=intent, text="later"))

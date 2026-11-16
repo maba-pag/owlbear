@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.tools import WrongPremise
 
 SUBJECT = "amend"  # a question's cause: scope:<step>:amend <id> <what>
-OWNER = frozenset({"answer", "allow", "revert"})
+OWNER = frozenset({"answer", "allow", "revert", "request"})
 YES = Option(id="yes", label="Yes: apply it")
 UNREVIEWED = Option(id="accept-unreviewed", label="Apply this wording, which no challenge round reviewed")
 WITHIN = Option(id="within", label="No: work on within the approved brief (your reason goes to the work)")
@@ -56,6 +56,19 @@ def current(c: Change) -> Amendment | None:
 def key(a: Amendment) -> str:
     """Its challenge loop's subject."""
     return f"amendment:{a.id}"
+
+
+def requestable(c: Change) -> str:
+    """Why the owner cannot request an amendment now, or an empty string."""
+    if c.finished_at or c.intent.abandoned_at or c.step.kind == StepKind.CLEANUP:
+        return "This Change has ended"
+    if c.tests:
+        return "A test review keeps its fixed brief"
+    if c.step.kind == StepKind.SHAPE:
+        return "The brief is being shaped; settle it with the shaper first"
+    if c.brief.approved_version != c.brief.version:
+        return "Approve the brief before requesting an amendment"
+    return "An amendment is already in progress; settle it first" if c.amending else ""
 
 
 def start(  # noqa: PLR0913 - what each source states
@@ -261,7 +274,13 @@ def question_text(a: Amendment) -> str:
     return "\n\n".join([a.reason[:500], " ".join(ask), details])
 
 
-_SOURCES = {"worker": "a worker", "answer": "your answer", "allow": "your Allow it", "revert": "your revert"}
+_SOURCES = {
+    "worker": "a worker",
+    "answer": "your answer",
+    "allow": "your Allow it",
+    "revert": "your revert",
+    "request": "your request",
+}
 
 
 def _item_line(i: AmendedItem) -> str:

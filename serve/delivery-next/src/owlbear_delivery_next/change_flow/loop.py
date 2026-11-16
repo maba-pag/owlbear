@@ -59,7 +59,7 @@ from owlbear_delivery_next.change_flow import (
     shaping_capture,
     stuck,
 )
-from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go, open_task, resolved, resume
+from owlbear_delivery_next.change_flow.moves import ask, enter, fix_task, go, open_task, resolved
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -271,7 +271,7 @@ def fold(  # noqa: C901, PLR0912 - per item kind
                         dropped.append((answer, why))
                     c.outcome = None
             case IntentItem():
-                _intent(c, item)
+                owner_answers.intent(c, item)
             case PullItem():
                 c.pull_requested = item.at
             case RestartItem() if not round_flow.restartable(c):  # checked again under the lock (TD-215)
@@ -284,18 +284,6 @@ def fold(  # noqa: C901, PLR0912 - per item kind
                 pass
     curation_flow.fixed(c, change.step, now)
     return c
-
-
-def _intent(c: Change, item: IntentItem) -> None:
-    match item.intent:
-        case "pause":
-            c.intent.paused_at, c.intent.pause_reason = item.at, item.text
-        case "resume":
-            resume(c)
-        case "abandon":
-            c.intent.abandoned_at = item.at
-        case "change":
-            c.intent.words, c.intent.hold = item.text, True
 
 
 def _target(q: Question, option: str | None) -> str | None:

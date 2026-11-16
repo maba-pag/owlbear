@@ -61,7 +61,7 @@ def delivered_next(c: Change) -> Question | None:
     s = c.step
     return next(
         (q for q in reversed(c.questions) if q.step == s.kind and q.answer and not q.effect_observed_at
-         and q.answer.kind != "brief_change" and not unchecked(c, q)),
+         and q.answer.kind != "brief_change" and not q.answer.superseded_at and not unchecked(c, q)),
         None,
     )  # fmt: skip
 
@@ -73,6 +73,9 @@ def superseded(c: Change, q: Question) -> str:
     fold: at the merge step a change of intent waits, so its question still does.
     """
     o, i, s = c.outcome, c.intent, c.step.kind
+    current = o is not None and o.exit == Exit.ASK and o.question == q.id
+    if c.amending and not amending.owned(q) and not current:
+        return f"question {q.id} no longer waits on an answer: its intent changed"
     moving = i.abandoned_at or (i.hold and s != StepKind.MERGE)
     if q.cause is not None or (o is not None and o.exit == Exit.ASK and o.question == q.id and not moving):
         return ""
@@ -93,7 +96,9 @@ def decision_id(c: Change, q: Question) -> str:
 
 def unchecked(c: Change, q: Question) -> bool:
     """Whether *q*'s answer is a clarification its check has not yet found within the brief: no role reads it."""
-    return bool(q.answer and q.answer.kind == "clarification") and all(d.id != decision_id(c, q) for d in c.decisions)
+    return bool(q.answer and q.answer.kind == "clarification" and not q.answer.superseded_at) and all(
+        d.id != decision_id(c, q) for d in c.decisions
+    )
 
 
 def first_unchecked(c: Change) -> Question | None:

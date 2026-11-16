@@ -113,9 +113,9 @@ class ConsentBody(Body):
 
 
 class IntentBody(Body):
-    """Pause, resume or abandon the Change."""
+    """Pause, resume, abandon or request a change to the approved brief."""
 
-    intent: Literal["pause", "resume", "abandon"]
+    intent: Literal["pause", "resume", "abandon", "change"]
     text: str = Field(default="", max_length=500)
 
 
@@ -461,7 +461,9 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
 
     @router.post("/changes/{slug}/intent")
     def intent(slug: str, body: IntentBody) -> dict[str, str]:
-        read(slug)
+        c = read(slug)
+        if body.intent == "change":
+            amendment_routes.admit_request(c, body.text)
         return put(slug, IntentItem(at=datetime.now(UTC), intent=body.intent, text=body.text))
 
     @router.post("/changes/{slug}/pull")

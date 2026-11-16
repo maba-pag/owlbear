@@ -1,4 +1,4 @@
-"""Proof feasibility for brief and plan challenges and their planner."""
+"""Proof feasibility for brief/plan challenges, their planner and a stuck step's repairer."""
 
 from __future__ import annotations
 
@@ -24,6 +24,11 @@ AMENDMENT = (
     "another task: report_wrong_premise stage brief with that criterion in amendment, the proposed "
     "change and evidence. A repairable tool or setup defect that leaves acceptance unchanged is "
     "stage setup, never a reason to weaken the brief."
+)
+REPAIR_REMINDER = (
+    "Your turn ended without a result. Call submit_result with the cause and every fix you tried, or "
+    "report_wrong_premise stage brief for an unexecutable criterion. Save partial findings with "
+    "report_progress."
 )
 
 

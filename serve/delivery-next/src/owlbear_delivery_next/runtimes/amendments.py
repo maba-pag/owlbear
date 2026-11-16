@@ -231,7 +231,8 @@ RECONSIDER_FINISH = (
     "error names and call it again."
 )
 FINISH = "Call `submit_result` once. If it is rejected, fix what each error names and call it again."
-_FROM = {"worker": "a worker's premise", "answer": "the owner's answer", "allow": "the owner's Allow it",
+_FROM = {"worker": "a worker's premise", "answer": "the owner's answer", "request": "the owner's request",
+         "allow": "the owner's Allow it",
          "revert": "the owner's revert"}  # fmt: skip
 
 
