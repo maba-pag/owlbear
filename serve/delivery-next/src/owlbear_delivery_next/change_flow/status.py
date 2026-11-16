@@ -403,6 +403,8 @@ def _status(  # noqa: C901, PLR0911, PLR0912 - D3 rules
         return stopped
     if (repairing := _repairing(c, s)) is not None:
         return repairing
+    if c.amending and o is None:
+        return Status(f"{s} · brief amendment {c.amending.id} in progress", None, "delivery")
     if o and o.exit == Exit.PENDING:
         if (yours := _owned(c, s, o, activity)) is not None:
             return yours
