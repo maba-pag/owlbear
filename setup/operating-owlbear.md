@@ -73,6 +73,7 @@ project's Changes while that project's VS Code window is closed.
 | `owlbear update` | Runs updates now |
 | `owlbear versions [--prepare]` | The version it runs and the one it would take next; `--prepare` installs and checks that one without switching |
 | `owlbear impeccable [--install]` | Shows the Impeccable this version pins; `--install` downloads and verifies what is missing. `owlbear design-pack` is its old name, kept so versions from before the rename can install it |
+| `owlbear audit-replay` | Replays the private fixed audit corpus locally against historical commits available in the current clone. Prints a pass/fail report without writing into shared data, contacting a model or starting the host. Scripted judgment does not prove live audit quality |
 | `owlbear autostart on` or `off` | Starts OwlBear at login, or not; `on` saves this shell's PATH and `COPILOT_CLI_PATH` as they are now, so run it again after adding or removing a tool or Node version |
 | `owlbear setup --repo PATH` | Checks a project's readiness, confirms its profile and registers its chat server; the **Add a project** dialog does the same from the Projects page, and repairs use this command |
 | `owlbear data` | Shows the shared settings repository and what only this Mac's checkout of it holds |
