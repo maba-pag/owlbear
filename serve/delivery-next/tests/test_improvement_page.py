@@ -486,6 +486,7 @@ def test_each_records_act_the_spotter_test_and_the_chats_not_followed_show(tmp_p
 
     with machine_page(tmp_path, monkeypatch, pds) as w:
         _acted(w.pid)
+        proposal = _proposal("spotter-case", "look:handoff", ["rg-r-note"], record="r-note", call="hand-off-fitness")
         _partial_correction(w.pid)
         spotter_test.declare("fewer re-runs", "B", "A")
         spotter_test.start({"model": "gpt-5.6-sol", "effort": "high", "context": "", "prompt": "p",
@@ -502,6 +503,9 @@ def test_each_records_act_the_spotter_test_and_the_chats_not_followed_show(tmp_p
         expect(failed).to_contain_text(f"Its error: {FAILED}")
         expect(failed).to_contain_text("Awaiting evidence correction")
         expect(failed).not_to_contain_text("Graded: wrong")
+        stale = card(page, proposal)
+        expect(stale).to_contain_text("this case's grade awaits evidence correction")
+        expect(stale.get_by_role("button", name="Accept", exact=True)).to_be_disabled()
         harm = page.locator("#look-r-harm")
         expect(harm).to_contain_text("Stopped the step: irreversible harm")
         expect(harm).to_contain_text("Its act: stop-and-ask, silent arm, delivered")

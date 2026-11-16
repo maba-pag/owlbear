@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import retro_evidence, retro_grade_history, retro_judge, retro_segments, retro_units
+from owlbear_delivery_next.improvement import (
+    retro_evidence,
+    retro_grade_history,
+    retro_judge,
+    retro_segments,
+    retro_units,
+)
 from owlbear_delivery_next.improvement import retro_store as store
 
 if TYPE_CHECKING:
@@ -39,11 +45,7 @@ def plan(uid: str, projects: Projects) -> dict[str, Any]:
         if not retro_judge.assessable(record):
             continue
         resolved = located.get(record["id"])
-        if (
-            record.get("session") not in unit.get("sessions", ())
-            or resolved is None
-            or resolved != grade.get("cutoff")
-        ):
+        if record.get("session") not in unit.get("sessions", ()) or resolved is None or resolved != grade.get("cutoff"):
             corrections[record["id"]] = grade["id"]
     return {"unit": uid, "revision": rev["rev"], "records": len(corrections), "corrections": corrections}
 
