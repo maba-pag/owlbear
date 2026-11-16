@@ -111,7 +111,7 @@ function conflictRow(k, q, r, d, key) {
   const action = owner && !inForce
     ? text(`You withdrew ${k.departs}: decide this round with Pass or Fail.`, { size: "xs" })
     : owner ? html`${text("Withdrawing it leaves this round to your Pass or Fail; later rounds no longer check it.",
-      { size: "xs" })}${button(`Withdraw ${k.departs}`, withdrawing(k.departs, said, d),
+      { size: "xs" })}${button(`Withdraw ${k.departs}`, withdrawing(k.departs, said, d, key),
       { variant: "secondary", aria: DIALOG })}`
     : button("Change the brief to take this", take, { variant: "secondary", aria: DIALOG, ...starts(d) });
   return html`<div class="finding">${text(`${where(k.state, k.width ? [k.width] : [])} · ${k.rule}: ${k.text}`)}

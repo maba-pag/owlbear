@@ -6,8 +6,8 @@ import { Slow } from "/assets/ui.mjs";
 // element whose `data-form` is the form key the send names) locks and dims; on success the control shows a checkmark
 // for at least HOLD before the page rereads and returns to normal after BACK; on a refusal or timeout the form unlocks
 // with its input kept and the control says so until that form is clicked or edited again.
-// A page renders its buttons with `control` and notification actions with `action`, wraps their handlers in `press`,
-// and brackets each request with `begin` and the returned send's `done` or `failed`.
+// A page renders its buttons with `control`, wraps their handlers in `press`, and brackets each request with
+// `begin` and the returned send's `done` or `failed`.
 const HOLD = 1000, BACK = 2000;
 const SAID = { pending: "Sending", sent: "Sent", failed: "Failed", unsure: "Not confirmed" };
 const MARK = { failed: "error", unsure: "warning", sent: "check" };
@@ -135,11 +135,6 @@ function shown(el, id) {
   return now?.phase;
 }
 
-function attribute(el, name, value) {
-  if (value == null) el.removeAttribute(name);
-  else el.setAttribute(name, value);
-}
-
 // A p-button's label, icon, loading and disabled state, as its send shows them; *id* names its action (its label
 // unless that changes), so a send ends once the element shows another action.
 class Look extends Directive {
@@ -149,7 +144,8 @@ class Look extends Directive {
 
   update(part, [id, label, { icon, busy = false, disabled = false } = {}]) {
     const el = part.element, phase = shown(el, id);
-    attribute(el, "icon", phase === "sent" ? null : MARK[phase] ?? icon);
+    // a p-button whose icon was set and then removed shows an arrow: "none" says no icon
+    el.setAttribute("icon", phase === "sent" ? "none" : MARK[phase] ?? icon ?? "none");
     el.toggleAttribute("disabled", disabled);
     el.loading = busy || phase === "pending";
     render(phase === "sent" ? html`<p-icon class="sent-mark" name="check" color="inherit" aria-hidden="true"></p-icon
@@ -159,18 +155,3 @@ class Look extends Directive {
 }
 export const control = directive(Look);
 
-// A p-inline-notification's action (*label* null: none), as its send shows it; it has no room for a bare mark.
-class ActionLook extends Directive {
-  render() {
-    return noChange;
-  }
-
-  update(part, [id, label, icon]) {
-    const el = part.element, phase = label == null ? undefined : shown(el, id);
-    attribute(el, "action-label", phase && phase !== "pending" ? SAID[phase] : label);
-    attribute(el, "action-icon", MARK[phase] ?? icon);
-    el.actionLoading = phase === "pending";
-    return noChange;
-  }
-}
-export const action = directive(ActionLook);
