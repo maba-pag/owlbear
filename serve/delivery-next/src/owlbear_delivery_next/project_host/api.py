@@ -26,7 +26,7 @@ from owlbear_delivery_next.change_contracts.inbox import (
     WithdrawItem,
 )
 from owlbear_delivery_next.change_contracts.models import Change, ErrorKind, Exit, PersonCheck, Waiting
-from owlbear_delivery_next.change_flow import amending, loop, moves, rebuilds, round_flow, round_marks, versions
+from owlbear_delivery_next.change_flow import loop, moves, rebuilds, round_flow, round_marks, versions
 from owlbear_delivery_next.change_flow.progress import progress
 from owlbear_delivery_next.change_flow.status import card, for_chat, status, unloadable
 from owlbear_delivery_next.git.command_failure import failure
@@ -463,10 +463,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     def intent(slug: str, body: IntentBody) -> dict[str, str]:
         c = read(slug)
         if body.intent == "change":
-            if why := amending.requestable(c):
-                raise HTTPException(409, why)
-            if not body.text.strip():
-                raise HTTPException(422, "Say what you want to change in the brief")
+            amendment_routes.admit_request(c, body.text)
         return put(slug, IntentItem(at=datetime.now(UTC), intent=body.intent, text=body.text))
 
     @router.post("/changes/{slug}/pull")

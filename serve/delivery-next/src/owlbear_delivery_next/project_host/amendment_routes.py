@@ -39,6 +39,14 @@ def shown(c: Change) -> dict[str, Any]:
     }
 
 
+def admit_request(c: Change, text: str) -> None:
+    """Reject an unavailable amendment or an empty request before it enters the inbox."""
+    if why := amending.requestable(c):
+        raise HTTPException(409, why)
+    if not text.strip():
+        raise HTTPException(422, "Say what you want to change in the brief")
+
+
 def router(read: Callable[[str], Change], put: Callable[[str, InboxItem], dict[str, str]]) -> APIRouter:
     """POST /changes/{slug}/amendments/{ident}/objection: queued while he may object, else 409 with why."""
     routes = APIRouter()
