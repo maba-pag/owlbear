@@ -64,6 +64,8 @@ def requestable(c: Change) -> str:
         return "This Change has ended"
     if c.tests:
         return "A test review keeps its fixed brief"
+    if c.step.kind == StepKind.SHAPE:
+        return "The brief is being shaped; settle it with the shaper first"
     if c.brief.approved_version != c.brief.version:
         return "Approve the brief before requesting an amendment"
     return "An amendment is already in progress; settle it first" if c.amending else ""
