@@ -115,13 +115,35 @@ def test_accepted_findings_remain_publishable_after_workspace_cleanup_fails(audi
 
     monkeypatch.setattr(job.workspace, "opened", opened)
     monkeypatch.setattr(job.workspace, "inspect", lambda *_args: None)
-    monkeypatch.setattr(job.sessions, "auditor", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(job.sessions, "auditor", lambda *_args, **_kwargs: SimpleNamespace(role="project-auditor"))
+    monkeypatch.setattr(job.sessions, "verifier", lambda *_args: SimpleNamespace(role="audit-verifier"))
     monkeypatch.setattr(job.sessions, "accepted", lambda *_args: result)
-    audits.run = lambda _cfg: SimpleNamespace(session_id="auditor-one", subagents=[])
+    checked = project_audit_tools.AuditVerdicts(
+        verdicts=[
+            project_audit_tools.AuditVerdict(
+                finding=1,
+                verdict="accepted",
+                reason="The removed command is named literally.",
+                decisions=[],
+                duplicate_of="",
+            )
+        ]
+    )
+    monkeypatch.setattr(job.sessions, "verified", lambda *_args: checked)
+    ran = []
+
+    def run(cfg):
+        ran.append(cfg.role)
+        return SimpleNamespace(session_id=cfg.role, subagents=[])
+
+    audits.run = run
     audits._work("doc", state, resume=False)  # noqa: SLF001 - exercise the worker's cleanup/publication boundary
     saved = audits.read("doc")
     assert saved["state"] == "publishing"
     assert saved["findings"] == _report()["findings"]
+    assert saved["verified"]
+    assert saved["verdicts"] == checked.model_dump(mode="json")["verdicts"]
+    assert ran == ["project-auditor", "audit-verifier"]
     assert "fixture workspace cleanup failed" in saved["reason"]
     launched = []
     monkeypatch.setattr(audits, "_launch", lambda audit, state, *, resume: launched.append((audit, state, resume)))
@@ -133,6 +155,9 @@ def test_discard_consent_only_replaces_the_report_the_owner_reviewed(tmp_path, m
     store = Store(tmp_path / "store", name="fixture")
     store.write_profile(Profile(entries={profile.DEFAULT: ProfileEntry(state="known", value="main")}))
     audits = job.Audits(store)
+    audits.repo = tmp_path / "clone"
+    monkeypatch.setattr(job.github_writer, "of", lambda *_args: SimpleNamespace(access=lambda: None))
+    monkeypatch.setattr(job.workspace, "pin", lambda *_args: "initial-pin")
     monkeypatch.setattr(job.Audits, "refusal", lambda *_args: "")
     launched = []
 
@@ -276,6 +301,58 @@ def test_redirected_finding_recovers_its_actual_issue_after_a_lost_receipt(tmp_p
     assert audits.read("doc")["findings"][0]["number"] == 1
     assert audits.read("doc")["state"] == "done"
     assert len(github.issues) == 1
+    _redirected_summary(store, monkeypatch, github)
+
+
+def _redirected_summary(store, monkeypatch, github):
+    state = _report()
+    state.update(
+        id="verified-redirect",
+        destination="acme/owlbear-data",
+        note="File findings in acme/owlbear-data.",
+        verified=True,
+        session="auditor",
+        verifier_session="verifier",
+        verdicts=[{"finding": 1, "verdict": "accepted", "reason": "Confirmed.", "decisions": [], "duplicate_of": ""}],
+        summary_issue={"number": None, "url": "", "pending": None, "complete": False},
+    )
+    lost_edit = True
+
+    def transport(argv, data, timeout, cwd, env):
+        nonlocal lost_edit
+        answer = github(argv, data, timeout, cwd, env)
+        method, endpoint = github.calls[-1][:2]
+        if method == "POST" and endpoint.endswith("/issues") and len(github.issues) == 2:
+            assert record.load(store)["doc"]["summary_issue"]["pending"]
+            github.hidden.add(2)
+            return subprocess.CompletedProcess(argv, 1, b"", b"gh: connection reset")
+        if method == "PATCH" and endpoint.endswith("/issues/2") and lost_edit:
+            lost_edit = False
+            return subprocess.CompletedProcess(argv, 1, b"", b"gh: connection reset")
+        return answer
+
+    monkeypatch.setattr(publish, "OwlbearIssues", lambda repo, root: OwlbearIssues(repo, root, runner=transport))
+
+    def attempt():
+        publish.findings(store, state, lambda: record.save(store, "doc", state))
+
+    with pytest.raises(ProviderError):
+        attempt()
+    state = record.load(store)["doc"]
+    with pytest.raises(RuntimeError, match="two minutes"):
+        attempt()
+    github.hidden.clear()
+    with pytest.raises(ProviderError):
+        attempt()
+    state = record.load(store)["doc"]
+    assert state["findings"][0]["number"] == 3
+    assert not state["summary_issue"]["complete"]
+    attempt()
+    assert record.load(store)["doc"]["summary_issue"]["complete"]
+    assert len(github.issues) == 3
+    assert github.issues[2]["html_url"] in github.issues[3]["body"]
+    assert github.issues[3]["html_url"] in github.issues[2]["body"]
+    assert github.issues[2]["body"].endswith("<!-- audit:verified-redirect:summary -->\n")
 
 
 def test_redirected_destination_must_be_named_in_full(tmp_path):

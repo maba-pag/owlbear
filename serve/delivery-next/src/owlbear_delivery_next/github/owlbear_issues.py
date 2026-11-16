@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Literal, NoReturn
 
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.account import AccountMissing, Origin, Writer
+from owlbear_delivery_next.github.gh_client import RECENT_SECONDS as AUDIT_RECENT_SECONDS
 from owlbear_delivery_next.github.gh_client import GhClient, invalid, repo
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 
@@ -25,7 +26,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.github.gh_client import Json, Runner
 
 PAGE = 100
-AUDIT_RECENT_SECONDS = 120.0
 
 
 def _unavailable(operation: str, path: Path, exc: OSError) -> NoReturn:
@@ -174,6 +174,11 @@ class OwlbearIssues(GhClient):
         except OSError as exc:
             _unavailable("retry_audit", pending, exc)
         return self.create(title, body, marker=marker, labels=labels)
+
+    def edit(self, number: int, body: str) -> Issue:
+        """Replace only the body, including the caller's final audit marker, as the selected writer."""
+        endpoint = f"{repo(self.repository)}/issues/{number}"
+        return _issue(self._api("edit_issue", "PATCH", endpoint, body={"body": body}, write=True), "edit_issue")
 
     def close(self, number: int) -> Issue:
         """Close one issue as not planned."""

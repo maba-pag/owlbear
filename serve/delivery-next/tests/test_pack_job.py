@@ -2818,6 +2818,7 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
         "Engine update",
         "Review Tests",
         "Doc audit",
+        "Code audit",
         "Backlog triage",
     ]
     assert (got["Memory curation"]["href"], got["Memory curation"]["last"]) == ("/memory", None)

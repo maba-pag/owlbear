@@ -41,7 +41,7 @@ def prepare(store: Store, root: Path, state: dict[str, Any], repository: str) ->
         json.dumps([d.model_dump(mode="json") for d in decisions], indent=2) + "\n", encoding="utf-8"
     )
     (at / "run.json").write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
-    limits: list[str] = []
+    limits: list[str] = ["Issue discussions were not examined; issue-body coverage is not complete planning coverage."]
 
     def supply(name: str, read: Callable[[], object]) -> None:
         try:

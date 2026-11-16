@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol, override
@@ -14,6 +15,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
 WAIT = "GitHub may still be listing the last entry; press again in two minutes"
+BODY_LIMIT = 65_536
+PART_BYTES = 60_000
+CONTINUATION_MASK, CONTINUATION_BYTE = 0xC0, 0x80
 
 
 class Sink(Protocol):
@@ -42,6 +46,10 @@ class Sink(Protocol):
 
     def edit(self, number: int, body: str) -> None:
         """Replace an issue body idempotently; keep any sink-owned metadata and selected writer."""
+        ...
+
+    def comment(self, number: int, body: str, *, marker: str, pending_since: datetime | None) -> str:
+        """Idempotently append marked report detail, returning its link after a saved intent."""
         ...
 
 
@@ -78,13 +86,14 @@ def publish(
         for index, finding in enumerate(state["findings"], 1)
         if verdicts[index]["verdict"] == "accepted"
     ]
+    initial = _summary(state, project, audit, complete=False)
     _open(
         state["summary_issue"],
         sink,
         save,
         _Draft(
             title=f"{project}: {audit} audit summary",
-            body=_summary(state, project, audit, complete=False),
+            body=initial if _fits(initial) else _compact(state, project, audit, complete=False),
             labels=("audit:summary",),
             marker=f"audit:{state['id']}:summary",
         ),
@@ -101,9 +110,77 @@ def publish(
                 marker=f"audit:{state['id']}:{index}",
             ),
         )
-    sink.edit(state["summary_issue"]["number"], _summary(state, project, audit, complete=True))
+    final = _summary(state, project, audit, complete=True)
+    if state.get("summary_parts") or not _fits(final):
+        links = _continue(state, sink, save, final)
+        final = _compact(state, project, audit, complete=True, links=links)
+    sink.edit(state["summary_issue"]["number"], final)
     state["summary_issue"]["complete"] = True
     save()
+
+
+def _fits(body: str) -> bool:
+    return len(body.encode("utf-8")) <= BODY_LIMIT
+
+
+def _chunks(text: str) -> list[str]:
+    data, start, parts = text.encode("utf-8"), 0, []
+    while start < len(data):
+        end = min(start + PART_BYTES, len(data))
+        if end < len(data):
+            while data[end] & CONTINUATION_MASK == CONTINUATION_BYTE:
+                end -= 1
+            newline = data.rfind(b"\n", start, end)
+            if newline >= start + PART_BYTES // 2:
+                end = newline + 1
+        parts.append(data[start:end].decode("utf-8"))
+        start = end
+    return parts
+
+
+def _continue(state: dict[str, Any], sink: Sink, save: Callable[[], None], body: str) -> list[str]:
+    marker = f"audit:{state['id']}:summary"
+    receipts = state.setdefault("summary_parts", [])
+    if not receipts:
+        detail = body.removesuffix(f"\n\n<!-- {marker} -->\n").partition("\n\n")[2]
+        parts = _chunks(detail)
+        receipts.extend(
+            record.SummaryPart(
+                body=f"Audit report, part {index}/{len(parts)}\n\n{part}\n\n<!-- {marker}:part:{index} -->\n"
+            ).model_dump(mode="json")
+            for index, part in enumerate(parts, 1)
+        )
+    for index, receipt in enumerate(receipts, 1):
+        if receipt["url"]:
+            continue
+        pending = datetime.fromisoformat(receipt["pending"]) if receipt["pending"] else None
+        receipt["pending"] = record.now()
+        save()
+        identity = f"{marker}:part:{index}"
+        receipt["url"] = sink.comment(
+            state["summary_issue"]["number"], receipt["body"], marker=identity, pending_since=pending
+        )
+        receipt["pending"] = None
+        save()
+    return [receipt["url"] for receipt in receipts]
+
+
+def _compact(state: dict[str, Any], project: str, audit: str, *, complete: bool, links: list[str] | None = None) -> str:
+    counts = Counter(row["verdict"] for row in state["verdicts"])
+    detail = "The complete report will follow in this issue's comments."
+    if links:
+        detail = f"The complete report continues in {len(links)} comments: [first part]({links[0]})"
+        if len(links) > 1:
+            detail += f", [last part]({links[-1]})"
+        detail += "."
+    return _marked(
+        f"Publication: {'complete' if complete else 'publishing'}\n\n## Scope\n\nProject: {project}\n\n"
+        f"Audit: {audit}\n\nBranch: {state['branch']}\n\nCommit: {state['commit']}\n\n{state['summary']}\n\n"
+        f"Accepted: {counts['accepted']}; rejected: {counts['rejected']}; unsure: {counts['unsure']}.\n\n"
+        "## Full report\n\nThe full scope, note, changed defaults, parts, coverage gaps, effects, "
+        "finding links and every verifier reason are preserved below.\n\n" + detail,
+        f"audit:{state['id']}:summary",
+    )
 
 
 def _open(
@@ -150,10 +227,7 @@ def _finding(state: dict[str, Any], finding: dict[str, Any]) -> str:
 
 def _summary(state: dict[str, Any], project: str, audit: str, *, complete: bool) -> str:
     verdicts = {row["finding"]: row for row in state["verdicts"]}
-    counts = {
-        outcome: sum(row["verdict"] == outcome for row in state["verdicts"])
-        for outcome in ("accepted", "rejected", "unsure")
-    }
+    counts = Counter(row["verdict"] for row in state["verdicts"])
     published = sum(
         finding["number"] is not None
         for index, finding in enumerate(state["findings"], 1)
@@ -236,6 +310,7 @@ class Recorder(Sink):
     def __init__(self) -> None:
         self.issues: dict[int, dict[str, Any]] = {}
         self._markers: dict[str, int] = {}
+        self.comments: dict[str, dict[str, Any]] = {}
 
     @override
     def find(self, marker: str) -> Issue | None:
@@ -270,6 +345,14 @@ class Recorder(Sink):
     def edit(self, number: int, body: str) -> None:
         """Replace the recorded body, just as a successful issue edit would."""
         self.issues[number]["body"] = body
+
+    @override
+    def comment(self, number: int, body: str, *, marker: str, pending_since: datetime | None) -> str:
+        """Record one marked continuation comment without duplicating an existing receipt."""
+        if marker not in self.comments:
+            url = f"{self.issues[number]['url']}#issuecomment-{len(self.comments) + 1}"
+            self.comments[marker] = {"body": body, "url": url}
+        return self.comments[marker]["url"]
 
     def _issue(self, number: int) -> Issue:
         return Issue(number, self.issues[number]["url"], "open")

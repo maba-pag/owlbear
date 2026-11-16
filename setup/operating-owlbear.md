@@ -141,6 +141,26 @@ registration intact when the admitted clone changes.
 after a merge and when idle each has its own setting in **Settings → This machine**: off, on, or on
 even while paused; **Curate now** on the Maintenance page always runs.
 
+On a project's **Maintenance** page, **Doc audit** checks its documentation and **Code audit** checks defects and
+lean code. OwlBear's own project also offers **Agent audit**, for its instructions, agents and skills. Type an
+optional note, press **Start audit** and confirm once. The note can change scope, lenses, commit or strictness;
+to send issues outside the Backlog, name the destination literally as `owner/name`. Audits read a pinned commit,
+never edit code and ask no questions. They run while Delivery is paused and use AI credits.
+
+An auditor reports findings, then a separate verifier checks each against the code and supplied decisions and
+plans. Accepted findings become Backlog entries by default. Each run also opens one summary issue, linked both
+ways with its finding issues. Larger reports continue in comments on that same issue, retaining all reasons.
+**Results of the last run** shows the commit, changed defaults, accepted findings,
+rejected and unsure findings with reasons, lens coverage and context limits. Older reports remain explicitly
+unverified. **Finish publishing** retries unfinished findings or the summary without running another agent.
+Starting again with unpublished results requires explicit consent to drop that report's remaining publication.
+
+Set both **project auditor** and **audit verifier** on **Settings** before starting. The code audit also requires
+the project auditor's subagents switch on: a context helper precedes one worker per lens part. The chat tool
+`start_code_audit` takes the same optional note and returns the initial pinned commit and Maintenance address.
+In an OwlBear developer checkout it targets the registered OwlBear project, not that developer checkout; it
+never drops unpublished results from chat. Live audit quality is separate from the scripted `audit-replay` proof.
+
 The Spotter looks at agents' work beside them, in Delivery's steps and in the VS Code chats of the folders listed in
 `enrolled_chats`, and acts on each finding as its settings in **Settings → Spotter** say: it records it, steers the
 agent, refuses its hand-off, stops it and resumes it with a note, stops it to ask you, or shows it to you on the

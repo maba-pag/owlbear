@@ -37,7 +37,7 @@ mcp = MCPServer(
     instructions="Shape a Change with the owner, save its brief and visual check, show Delivery status, answer a "
     "worker's question, find decisions, record one the owner confirmed or propose one, complete a finite "
     "OwlBear instruction, retire a rule, queue a "
-    "read-back and record one.",
+    "read-back and record one, or start a read-only code audit.",
 )
 
 
@@ -144,6 +144,26 @@ def show_status(
 ) -> dict[str, Any]:
     """Show each Change's status line, next action and open question with its id, and the Changes page."""
     return _STATE["chat"].show_status(change)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
+def start_code_audit(
+    note: Annotated[
+        str,
+        Field(
+            description="Optional instructions for auditor and verifier, at most 2000 characters; audits never edit. "
+            "May change scope, target or issue destination; name a destination literally as owner/name.",
+            max_length=2000,
+            examples=["Check only serve/delivery-next."],
+        ),
+    ] = "",
+) -> dict[str, Any]:
+    """Start this project's code audit; OwlBear developer chats use its fixed registered project.
+
+    Returns the initial pinned commit and Maintenance address. Uses AI credits. Never drops unpublished results:
+    finish or discard them on Maintenance first. A note may move the final audited commit.
+    """
+    return _STATE["chat"].start_code_audit(note)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
