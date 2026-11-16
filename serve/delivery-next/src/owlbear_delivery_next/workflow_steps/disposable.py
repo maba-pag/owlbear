@@ -1,8 +1,9 @@
 """The Change's read-only worktree ``<slug>.ro`` beside its own under the data root (folder trust).
 
 One per Change, so a VS Code window opened on it is reused: before each read-only session (each judge in the window,
-each SDK judge batch) it is reset to the judged commit, which discards whatever an earlier session wrote. Refs a
-session creates or moves in the shared repository void its result. It goes when the Change's own worktree goes.
+each SDK judge batch) it is reset to the judged commit, which discards whatever an earlier session wrote. A native
+process-inherited Git hook attributes ref writes; unrelated fetched tags do not void the result. The worktree goes
+when the Change's own worktree goes.
 Accepted limit: a window turn that survives an unconfirmed cancel could still write here after the host cleared its
 mark; the next preparation resets that.
 """
@@ -21,6 +22,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.local_system.storage_io import atomic_write
+from owlbear_delivery_next.runtimes import ref_writes
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import ro_installs
 
@@ -42,6 +44,7 @@ class Copy:
     path: Path
     refs: dict[str, str]
     shared: tuple[str, ...] = ()
+    watch: ref_writes.Watch | None = None
 
 
 def path(source: Path, slug: str) -> Path:
@@ -68,8 +71,10 @@ def prepare(source: Path, store: Store, slug: str) -> Copy | str:
             at.parent.mkdir(parents=True, exist_ok=True)
             worktree.git(source, "worktree", "prune")
             worktree.git(source, "worktree", "add", "--quiet", "--detach", str(at), commit)
-        return Copy(source, at, _refs(source), _shared(source))
-    except (OSError, subprocess.SubprocessError) as exc:
+        refs, shared = _refs(source), _shared(source)
+        watch = ref_writes.prepare(at, store.root / "changes" / slug)
+        return Copy(source, at, refs, shared, watch)
+    except (OSError, subprocess.SubprocessError, ref_writes.RefWatchError) as exc:
         return f"the read-only worktree could not be prepared: {worktree.failure(exc)}"
 
 
@@ -132,7 +137,8 @@ def _listed(cwd: Path) -> list[dict[str, str]]:
 
 
 def changed(copy: Copy) -> list[str]:
-    """Refs created or moved since the copy was made, except Change branches and branches other worktrees hold."""
+    """Net ref writes; only attributed additions of tags count in a watched copy, not another process's fetch."""
+    written = ref_writes.refs(copy.watch)
     try:
         now = _refs(copy.source)
         held = {e["branch"] for e in _listed(copy.source) if "branch" in e and not _same(e["worktree"], copy.path)}
@@ -140,8 +146,13 @@ def changed(copy: Copy) -> list[str]:
         return [f"its refs could not be read: {worktree.failure(exc)}"]
     found = []
     for ref in sorted(copy.refs.keys() | now.keys()):
-        if copy.refs.get(ref) == now.get(ref) or ref.startswith(OWN) or ref in held:
+        if copy.refs.get(ref) == now.get(ref):
             continue
+        if ref not in written:
+            if ref.startswith(OWN) or ref in held:
+                continue
+            if copy.watch is not None and ref.startswith("refs/tags/") and ref not in copy.refs:
+                continue
         kind = "tag" if ref.startswith("refs/tags/") else "branch"
         name = ref.removeprefix("refs/tags/").removeprefix("refs/heads/")
         action = "deleted" if ref not in now else "moved" if ref in copy.refs else "created"
