@@ -1,10 +1,11 @@
-"""Project doc and agent audits: owner-started maintenance, their last report and publication recovery."""
+"""Project audits: shared page/chat admission, their last report and publication recovery."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.audit_runs import job as audit_job
@@ -15,21 +16,42 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_delivery_next.impeccable_runs.pack_job import Job
-    from owlbear_delivery_next.project_host.host import Host
+    from owlbear_delivery_next.project_host.host import Host, HostRecord
     from owlbear_delivery_next.state_store.store import Store
 
 
-class StartBody(BaseModel):
-    """The note as typed and explicit consent to replace an unfinished report."""
+class NoteBody(BaseModel):
+    """Chat supplies a note, never consent to discard an unpublished report."""
 
     model_config = ConfigDict(extra="forbid")
 
     note: str = Field(default="", max_length=2000)
+
+
+class StartBody(NoteBody):
+    """The page's note and explicit consent to replace one exact unfinished report."""
+
     discard_report: str = Field(default="", max_length=32)
 
 
+def maintenance_page(rec: HostRecord) -> str | None:
+    """The Maintenance address for this host's project, or its machine overview."""
+    if not rec.token:
+        return None
+    return f"{rec.url}maintenance{f'?project={rec.project}' if rec.project else ''}#token={rec.token}"
+
+
+def start_audit(audits: audit_job.Audits, host: Host, audit: str, body: StartBody) -> dict[str, Any]:
+    """Both triggers use the same host's admission and its already-bound Audits object."""
+    try:
+        with admitted(host):
+            return audits.start(audit, body.note, discard_report=body.discard_report)
+    except audit_job.AuditBusyError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
 def router(audits: audit_job.Audits, host: Host) -> APIRouter:
-    """Offer the project's audits; only the owner on the page starts or continues publication."""
+    """Offer the project's audits; only the page discards a report or continues publication."""
     routes = APIRouter()
 
     @routes.get("/maintenance/audits")
@@ -38,11 +60,26 @@ def router(audits: audit_job.Audits, host: Host) -> APIRouter:
 
     @routes.post("/maintenance/audits/{audit}", dependencies=[Depends(decision_routes.owner)])
     def start(audit: str, body: StartBody) -> dict[str, Any]:
+        return start_audit(audits, host, audit, body)
+
+    @routes.post("/chat/audits/code")
+    def chat_start(body: NoteBody) -> JSONResponse:
+        page = maintenance_page(host.record)
         try:
-            with admitted(host):
-                return audits.start(audit, body.note, discard_report=body.discard_report)
-        except audit_job.AuditBusyError as exc:
-            raise HTTPException(409, str(exc)) from exc
+            state = start_audit(audits, host, "code", StartBody(note=body.note))
+        except HTTPException as exc:
+            return JSONResponse(
+                {"started": False, "error": exc.detail, "maintenance_page": page}, status_code=exc.status_code
+            )
+        return JSONResponse(
+            {
+                "started": True,
+                "id": state["id"],
+                "state": state["state"],
+                "initial_commit": state["commit"],
+                "maintenance_page": page,
+            }
+        )
 
     @routes.post("/maintenance/audits/{audit}/publish", dependencies=[Depends(decision_routes.owner)])
     def publish(audit: str) -> dict[str, Any]:

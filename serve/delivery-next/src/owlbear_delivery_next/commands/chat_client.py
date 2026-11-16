@@ -1,9 +1,9 @@
 """The chat tools' client of the running host, one per workspace (D4 §3.1), under chat contract 1.
 
 The workspace is told before any state is made: a registered project's clone gets every tool; OwlBear's own
-repository, by its identity, gets OwlBear's decisions through the machine host (TD-435, TD-450); any other folder
-is no OwlBear project, and every tool says so. The client reads and writes no state itself: everything goes through
-the host over HTTP, naming the chat contract, so a chat keeps its tools while OwlBear updates beneath it
+repository, by its identity, gets OwlBear's decisions and fixed-project audits through the machine host; any other
+folder is no OwlBear project, and every tool says so. The client reads and writes no state itself: everything goes
+through the host over HTTP, naming the chat contract, so a chat keeps its tools while OwlBear updates beneath it
 (D-01M5Q5GKHX7BJTXPEW2MHGS9E0). With the host down, the tools say so; nothing is read from the state then (D4 §3.3's
 read-only status fallback is gone, since an older chat server could misread what a newer host wrote).
 """
@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_contracts import chat_contract, pick_tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_flow.status import APPROVE, CONTINUE
-from owlbear_delivery_next.commands import capture_wait
+from owlbear_delivery_next.commands import capture_wait, chat_decisions
 from owlbear_delivery_next.local_system import codebase, data_repo, local_home
 from owlbear_delivery_next.project_host import answers, api, host
 from owlbear_delivery_next.state_store import project_home
@@ -49,7 +49,7 @@ RESTART = (
     "neither the agent host nor the window needs restarting"
 )
 NOT_OWLBEAR = "{repo} is not an OwlBear project: add its clone on the Changes page, then " + RESTART
-NO_CHANGES = "OwlBear's own workspace has no Changes: only the decision tools work here"
+NO_CHANGES = "OwlBear's own workspace has no Changes: use its decision tools or start_code_audit"
 _LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))  # loopback never goes through a proxy
 OK = 200
 OLDER_HOST = (
@@ -193,6 +193,20 @@ class Chat:
         """Create or revise a brief draft; the host returns the handle or one error per field."""
         code, out = self.call("POST", path, fields)
         return {"saved": done(code), **out}
+
+    def start_code_audit(self, note: str = "") -> dict[str, Any]:
+        """Start the project's code audit without discarding a report; its initial pin and Maintenance address."""
+        code, out = self.call("POST", "/chat/audits/code", {"note": note}, timeout=WRITE)
+        if code != OK:
+            page = out.get("maintenance_page")
+            rec = self.record()
+            if not page and rec:
+                page = f"{rec.url}maintenance{f'?project={rec.project}' if rec.project else ''}#token={rec.token}"
+            why = _why(code, out)
+            if code == LOST:
+                why = why.replace(UNKNOWN, "the host's answer was lost; check Maintenance before trying again", 1)
+            return {"started": done(code), "error": why, "maintenance_page": page}
+        return out
 
     def show_status(self, change: str = "") -> dict[str, Any]:
         """Every Change (or one) with its line, next action and open question, as the host reports them."""
@@ -385,18 +399,18 @@ class Chat:
                     return {"saved": None, "error": UNCLEAR.format(why=f"{why}; ask the owner")}
                 if t > admit_by + SETTLE:
                     return {"saved": None, "error": UNCLEAR.format(why=STILL_SAVING)}
-            elif same := [d for d in out["decisions"] if _same(d, body)]:
-                if found := [d for d in same if _new(d, body, started)]:
+            elif same := [d for d in out["decisions"] if chat_decisions.same(d, body)]:
+                if found := [d for d in same if chat_decisions.new(d, body, started)]:
                     return self._found(body, found)
                 if t > admit_by:  # an older one, or this one if the clock went back: never "record it again"
-                    return {"saved": None, "error": UNCLEAR.format(why=OLDER.format(ids=_ids(same)))}
+                    return {"saved": None, "error": UNCLEAR.format(why=OLDER.format(ids=chat_decisions.ids(same)))}
             elif t > admit_by:
                 return _absent(out["decisions"], body, started, fenced=fenced)
             _pause(POLL)
 
     def _found(self, body: dict[str, Any], found: list[dict[str, Any]]) -> dict[str, Any]:
         """The one decision this propose saved, else why it is unclear: never one that differs from it."""
-        ids = _ids(found)
+        ids = chat_decisions.ids(found)
         if len(found) > 1:
             return {"saved": None, "error": UNCLEAR.format(why=f"{ids} match it; ask the owner")}
         made = found[0]
@@ -405,7 +419,7 @@ class Chat:
         wanted = (body["replaces"],) if body.get("replaces") else ()
         state, origin = ("in_force", body["origin"]) if body["confirmed"] else ("draft", "autonomous")
         as_sent = (detail.get("state"), detail.get("origin")) == (state, origin)
-        if code != OK or tuple(links) != wanted or not as_sent or not _same(detail, body):
+        if code != OK or tuple(links) != wanted or not as_sent or not chat_decisions.same(detail, body):
             return {"saved": None, "error": UNCLEAR.format(why=f"{ids} matches it in part; ask the owner")}
         said = [EFFECTS[e]] if (e := body.get("effect")) else []
         marks = [p.removeprefix(EFFECT) for p in str(detail.get("rationale", "")).split("\n\n") if p.startswith(EFFECT)]
@@ -422,37 +436,17 @@ def _why(code: int, out: dict[str, Any]) -> str:
     return str(out.get("detail") or out.get("error") or f"the host answered {code}")
 
 
-def _same(row: dict[str, Any], body: dict[str, Any]) -> bool:
-    """The row has the sent wording and the layer it is saved in."""
-    wording = (row["title"].strip(), row["statement"].strip())
-    return wording == (body["title"].strip(), body["statement"].strip()) and row["scope"] in _layers(body)
-
-
 def _absent(rows: list[dict[str, Any]], body: dict[str, Any], started: datetime, *, fenced: bool) -> dict[str, Any]:
     """Past the deadline with no row like it: not saved only on a fenced host where nothing new is in its layer."""
-    if new := [d for d in rows if _new(d, body, started)]:
-        return {"saved": None, "error": UNCLEAR.format(why=CHANGED.format(ids=_ids(new)))}
+    if new := [d for d in rows if chat_decisions.new(d, body, started)]:
+        return {"saved": None, "error": UNCLEAR.format(why=CHANGED.format(ids=chat_decisions.ids(new)))}
     if fenced:
         return {"saved": False, "error": NOT_SAVED}
     return {"saved": None, "error": UNCLEAR.format(why=UNFENCED)}
 
 
-def _new(row: dict[str, Any], body: dict[str, Any], started: datetime) -> bool:
-    """The row was made since the call started, in the layer the save is made in: it may be this save, edited since."""
-    return row["scope"] in _layers(body) and datetime.fromisoformat(row["created_at"]) >= started
-
-
-def _layers(body: dict[str, Any]) -> set[str]:
-    """Global, else a project for a new decision, or the project or Change of the decision it replaces."""
-    return {"global"} if body["scope"] == "global" else {"project", "change"} if body.get("replaces") else {"project"}
-
-
-def _ids(rows: list[dict[str, Any]]) -> str:
-    return ", ".join(d["id"] for d in rows)
-
-
 class OwlBear(Chat):
-    """OwlBear's own workspace, never registered (TD-435): its decisions on the machine host, and no Changes."""
+    """OwlBear's unregistered workspace: machine-side decisions and fixed-project audits, but no Changes."""
 
     prefix = "/owlbear"
     not_running = OWLBEAR_DOWN
