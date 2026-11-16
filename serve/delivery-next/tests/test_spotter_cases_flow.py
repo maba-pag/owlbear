@@ -1117,7 +1117,8 @@ def test_a_command_whose_store_cannot_be_read_is_refused_with_the_whole_reason(t
         retro_store.place().mkdir(parents=True, exist_ok=True)
         (retro_store.place() / "requests.jsonl").write_text("{x\n")
         why = f"RetroError: Retro's requests.jsonl cannot be read: JSONDecodeError: {BAD}"
-        asked = SimpleNamespace(command="improvement", action="retro", retro="status", last=5, plan=None)
+        asked = SimpleNamespace(command="improvement", action="retro", retro="status", last=5, plan=None,
+                                repair_grades=False)  # fmt: skip
     capsys.readouterr()
 
     code = cases_cli.main(asked)

@@ -19,6 +19,7 @@ from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.retro_calls import Refusal
+from owlbear_delivery_next.improvement.retro_grade_history import PENDING
 from owlbear_delivery_next.machine_host import cases_job
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import machine_settings, registry, spend_ledger
@@ -36,6 +37,21 @@ def enrolled() -> list[str]:
         return list(machine_settings.current().enrolled_chats or ())
     except registry.RegistryError:
         return []
+
+
+def due(uid: str, request: dict[str, Any], projects: units.Projects) -> dict[str, Any] | None:
+    """The Change or chat revision a button request takes."""
+    found = (
+        units.due_changes(projects, change=request["change"])
+        if request.get("change")
+        else units.due_chats(enrolled(), datetime.now(UTC), chat=request["chat"])
+    )
+    return next((item for item in found if item["unit"] == uid), None)
+
+
+def revision(uid: str, rev: str) -> dict[str, Any]:
+    """A run's saved revision."""
+    return next(r for r in store.known()[uid]["revisions"] if r["rev"] == rev)
 
 
 def session(agent: str) -> tuple[RoleModel, float]:
@@ -162,15 +178,19 @@ def settle_open(live: set[tuple[str, str]]) -> None:
 
 
 def pinned() -> set[str]:
-    """The sessions a finding, a Spotter or pilot case or an open proposal rests on: never pruned."""
+    """Sessions held by findings, cases, open proposals or unfinished grade corrections: never pruned."""
     found = store.all_findings()
     pins = {s for f in found for s in f.get("sessions") or ()}
     for path in cases.place().glob("c-*.json"):
         with contextlib.suppress(OSError, ValueError, AttributeError):
             prov = json.loads(path.read_text()).get("provenance") or {}  # a synthetic case has no session
             pins |= {str(p["session"]) for p in (prov.get("record"), prov.get("pilot")) if p and p.get("session")}
-    owner = {f["id"]: f.get("unit") for f in found} | {g["id"]: g.get("unit") for g in store.grades(synthetic=True)}
+    grades = store.grades(synthetic=True, include_pending=True)
+    owner = {f["id"]: f.get("unit") for f in found} | {g["id"]: g.get("unit") for g in grades}
     known = store.known()
+    for grade in grades:
+        if grade["grade"] == PENDING:
+            pins |= {grade.get("session", ""), *known.get(grade.get("unit", ""), {}).get("sessions", ())}
     for snap in props.folded().values():
         if snap.get("state") not in props.CLOSED:
             for fid in snap.get("findings") or ():
@@ -181,7 +201,8 @@ def pinned() -> set[str]:
 def prune(say: Callable[[str], None]) -> str:
     """Remove the captures of judged chats nothing pins, saying how many or why it could not."""
     try:
-        gone = chatlogs.prune(datetime.now(UTC), judged_sessions(), pinned())
+        with store.locked():
+            gone = chatlogs.prune(datetime.now(UTC), judged_sessions(), pinned())
     except (store.RetroError, OSError, ValueError) as exc:
         why = f"Retro could not prune judged captures: {failure(exc)}"
         say(why)
@@ -203,7 +224,7 @@ class Running:
     by: str = ""
     rev: str = ""  # "" until its revision is taken
     provenance: str = "real"
-    mode: str = "judge"  # or "grade-only", or retro_more's "redraft" or "followup"
+    mode: str = "judge"  # "grade-only", "correct-grades", or retro_more's "redraft" or "followup"
     records: list[str] = field(default_factory=list)  # a grade-only run's records
     spec: str = ""  # a synthetic unit's name
     id: str = field(default_factory=lambda: f"rr-{uuid.uuid4().hex[:12]}")
@@ -230,7 +251,7 @@ class Running:
     @property
     def reads_real(self) -> bool:
         """Whether this run reads a real unit, its eligibility checked: not synthetic, a redraft or a follow-up."""
-        return self.provenance == "real" and self.mode in {"judge", "grade-only"}
+        return self.provenance == "real" and self.mode in {"judge", "grade-only", "correct-grades"}
 
     @property
     def needs(self) -> tuple[str, ...]:

@@ -22,6 +22,8 @@ from owlbear_delivery_next.improvement import (
     followups,
     improvement_view,
     proposal_apply,
+    retro_bars,
+    retro_judge,
     spotter,
 )
 from owlbear_delivery_next.improvement import proposal_targets as targets
@@ -278,6 +280,60 @@ def test_a_case_shows_the_grade_it_rests_on_and_a_lost_redraft_is_asked_for_agai
     assert [(p["id"], p["redraft"], p["redraft_state"]) for p in shown if p["id"] == pid] == [(pid, child, "drafted")]
     review = world.http.post(f"{API}/proposals/{pid}/redraft")
     assert (review.status_code, [q.get("redraft") for q in store.queued()]) == (200, [pid])
+
+    _correct_cases(world, grade, child)
+
+
+def _correct_cases(world, grade, child):
+    changed = grade | {"id": "rg-r2", "record": "r2", "should": "hand-off-fitness"}
+    store.add_grades([changed])
+    key = props.open_key("real", "spotter-case", "r2")
+    second = props.file(key, ["rg-r2"], kind="spotter-case", record="r2", call="hand-off-fitness",
+                        target="look:handoff", provenance="real")  # fmt: skip
+    old = next(p for p in world.http.get(API).json()["proposals"] if p["id"] == second)
+    store.request_correction("owner", "p1:fix", "r1", {"r2": "rg-r2"})
+    pending = next(p for p in world.http.get(API).json()["proposals"] if p["id"] == second)
+    assert "awaits evidence correction" in pending["destination"]["error"]
+    assert pending["token"] != old["token"]
+    url = f"{API}/proposals/{second}/decide"
+    assert world.http.post(url, json={"state": "accepted", "token": old["token"]}).status_code == 409
+    store.add_grades([changed | {"id": "rg-r2-persisted-event-1", "supersedes": "rg-r2", "should": "none"}])
+    current = next(p for p in world.http.get(API).json()["proposals"] if p["id"] == second)
+    assert world.http.post(url, json={"state": "accepted", "token": current["token"]}).status_code == 409
+    assert second in retro_bars.cases(SimpleNamespace(uid="chg:p1:fix", rev={"rev": "later"}, provenance="real"))
+    fresh = props.folded()[second]
+    assert (fresh["state"], fresh["call"]) == ("drafted", "none")
+    assert fresh["review_digest"] != fresh["evidence"]
+    props.reviewed(second, fresh["evidence"], {"verdict": "survive", "publishable": TEXT})
+    current = next(p for p in world.http.get(API).json()["proposals"] if p["id"] == second)
+    assert "error" not in current["destination"]
+    accepted = proposal_apply.decide(second, "accepted", current["token"], "owner",
+                                    places={}, shared_root=world.shared)  # fmt: skip
+    assert accepted["accepted"]["call"] == "none"
+
+    unsupported = grade | {"id": "rg-r3", "record": "r3"}
+    store.add_grades([unsupported])
+    third = props.file(props.open_key("real", "spotter-case", "r3"), ["rg-r3"], kind="spotter-case",
+                       record="r3", call="hand-off-fitness", provenance="real")  # fmt: skip
+    props.reviewed(third, props.folded()[third]["evidence"], {"verdict": "survive", "publishable": TEXT})
+    store.request_correction("owner", "p1:fix", "r1", {"r3": "rg-r3"})
+    store.add_grades([unsupported | {"id": "rg-r3-persisted-event-1", "supersedes": "rg-r3", "grade": "worth-it"}])
+    current = next(p for p in world.http.get(API).json()["proposals"] if p["id"] == third)
+    closed = world.http.post(f"{API}/proposals/{third}/decide",
+                            json={"state": "rejected", "token": current["token"]})  # fmt: skip
+    assert closed.status_code == 200
+    assert props.folded()[third]["state"] == "rejected"
+
+    props.reviewed(child, props.folded()[child]["evidence"], {"verdict": "survive", "publishable": TEXT})
+    store.request_correction("owner", "p1:fix", "r1", {"r1": "rg-r1"})
+    store.add_grades([grade | {"id": "rg-r1-persisted-event-1", "supersedes": "rg-r1", "should": "none"}])
+    assert child in retro_bars.cases(SimpleNamespace(uid="chg:p1:fix", rev={"rev": "later"}, provenance="real"))
+    refreshed = props.folded()[child]
+    assert (refreshed["state"], refreshed["call"], refreshed["direction"]) == ("drafted", "none", "x")
+    sent = retro_judge.render(refreshed, retro_judge.seen_findings())
+    assert '"direction": "x"' in sent
+    props.reviewed(child, refreshed["evidence"], {"verdict": "survive", "publishable": TEXT})
+    assert props.folded()[child]["state"] == "waiting"
 
 
 def test_only_an_irreversible_stop_marks_a_stopped_step_and_looks_filter_by_project_id(world) -> None:

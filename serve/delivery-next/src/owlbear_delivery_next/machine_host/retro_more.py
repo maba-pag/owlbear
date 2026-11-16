@@ -1,7 +1,7 @@
-"""Retro's runs that judge no unit (#716): a redirected proposal's redraft and a finding's follow-up.
+"""Extra requested Retro runs: grade corrections, proposal redrafts and finding follow-ups.
 
-Each is one run of the job, from the button: admitted, limited, leased and recorded as any Retro run, with one paid
-call; it holds no unit revision, so its end settles none.
+Each is admitted, limited, leased and recorded as any Retro run. Redrafts and follow-ups need no unit evidence;
+corrections use the normal judge with the request's exact cohort. None settles the original unit revision.
 """
 
 from __future__ import annotations
@@ -26,9 +26,12 @@ UNIT = {"redraft": "proposal", "followup": "finding"}  # a run's unit id: ``<kin
 
 
 def running(request: Mapping[str, Any]) -> Running | None:
-    """The run a legacy synthetic request, a redraft or a follow-up asks for; None for a Change or chat."""
+    """An extra requested run; None for an ordinary Change or chat request."""
     if named := request.get("synthetic"):
         return Running(f"syn:{named}", "button", request.get("by", ""), provenance="synthetic")
+    if request.get("corrections"):
+        return Running(f"chg:{request['change']}", "button", request.get("by", ""), rev=request["revision"],
+                       mode="correct-grades", records=list(request["corrections"]))  # fmt: skip
     mode = next((m for m in MODES if request.get(m)), "")
     if not mode:
         return None

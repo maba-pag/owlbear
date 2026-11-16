@@ -26,7 +26,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.improvement import assumptions
+from owlbear_delivery_next.improvement import assumptions, retro_grade_history
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
@@ -237,9 +237,21 @@ def request(
     if sum(map(bool, named.values())) != 1:
         msg = "a Retro request names exactly one Change, one chat, one redraft or one follow-up"
         raise RetroError(msg)
+    return _request(by, named)
+
+
+def request_correction(by: str, change: str, revision: str, corrections: Mapping[str, str]) -> str:
+    """Register the exact pending cohort and queue its correction together, before any paid call."""
+    if not change or not revision or not corrections:
+        msg = "a grade correction names a Change, its existing revision and affected grades"
+        raise RetroError(msg)
+    return _request(by, {"change": change, "revision": revision, "corrections": dict(corrections)})
+
+
+def _request(by: str, fields: Mapping[str, Any]) -> str:
     rid = f"rq-{uuid.uuid4().hex[:12]}"
     with locked():
-        append("requests.jsonl", {"id": rid, "by": by, **named, "at": now()})
+        append("requests.jsonl", {"id": rid, "by": by, **fields, "at": now()})
     return rid
 
 
@@ -378,7 +390,7 @@ def add_findings(items: Iterable[Mapping[str, Any]]) -> list[str]:
 
 
 def add_grades(items: Iterable[Mapping[str, Any]]) -> list[str]:
-    """Keep each grade not kept before (a record is graded once, ever); the ids added."""
+    """Keep each storage identity once; a historical correction has its own identity."""
     return _add("grades.jsonl", items)
 
 
@@ -407,12 +419,16 @@ def findings(
     ]
 
 
-def grades(record: str | None = None, unit: str | None = None, *, synthetic: bool = False) -> list[dict[str, Any]]:
-    """The grades, of one Spotter record or one unit when named."""
+def grades(
+    record: str | None = None, unit: str | None = None, *, synthetic: bool = False, include_pending: bool = False
+) -> list[dict[str, Any]]:
+    """Effective grades, optionally with pending display rows; original judgements remain in the ledger."""
     gone = retired_ids()
     return [
         g
-        for g in _first("grades.jsonl").values()
+        for g in retro_grade_history.effective(
+            lines("grades.jsonl"), lines("requests.jsonl"), include_pending=include_pending
+        )
         if visible(g, gone, synthetic=synthetic)
         and (record is None or g["record"] == record)
         and (unit is None or g.get("unit") == unit)

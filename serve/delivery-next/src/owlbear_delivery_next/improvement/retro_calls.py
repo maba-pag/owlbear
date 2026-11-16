@@ -78,6 +78,7 @@ class Work:
     ask: Ask
     provenance: str = "real"
     grade_only: bool = False
+    correction: bool = False
     found: dict[str, int] = field(default_factory=lambda: {"findings": 0, "grades": 0})
 
 
