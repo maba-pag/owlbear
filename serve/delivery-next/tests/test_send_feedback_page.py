@@ -7,15 +7,20 @@ requests show on the button, its form and a live region, while a second form of 
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
 
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.state_store import registry
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 from .test_approval_view import served
+from .test_improvement_page import SLUG as SPOTTED
+from .test_improvement_page import machine_page
+from .test_machine_pages import browsing, chats, clone, shaping, until
 from .test_spotter_question_page import NOW, SLUG, Host, opened, stopped
 
 if TYPE_CHECKING:
@@ -192,3 +197,70 @@ def test_an_accepted_answer_shows_its_checkmark_for_a_second_before_the_form_cha
         seen = page.evaluate("window.seen")
         assert seen["gone"] - seen["sent"] >= 1_000, seen
         assert len(wire.posts) == 2
+
+
+@pytest.mark.browser
+def test_new_change_through_the_chooser_loads_until_the_chat_opens_then_shows_its_checkmark(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
+    """AC-10: the chooser's Continue goes at once; New Change shows the launch, which a chat that opened ends sent."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    launched = chats(monkeypatch)
+    for name in ("alpha", "beta"):
+        shaping(Path(registry.register(clone(tmp_path / name, "same")).path), "A brief")
+    with browsing(monkeypatch, pds) as (page, base):
+        page.goto(f"{base}/#token=t")
+        new = page.locator("#header-actions p-button")
+        said = page.locator(".said-aloud[role=status]")
+        page.get_by_role("button", name="New Change").click()
+        page.get_by_role("button", name="Continue").click()
+        pds.answer(page, "Open the chat")
+        expect(page.locator("#choose")).to_have_count(0)
+        expect(new).to_have_js_property("loading", value=True)  # through the launch, not only its request
+        expect(said).to_have_text("Sending")
+        until(page, lambda: launched.calls)
+        expect(new).to_have_js_property("loading", value=True)
+        launched.release.set()
+        expect(new.locator(".sent-mark")).to_be_visible()
+        expect(said).to_have_text("Sent")
+        expect(page.locator("#started")).to_have_text("A chat opened in VS Code to shape the new Change.")
+        expect(page.get_by_role("button", name="New Change", exact=True)).to_be_visible(timeout=5_000)
+        assert len(launched.calls) == 1
+
+
+@pytest.mark.browser
+@pytest.mark.timeout(120)  # the follow-up's own 30 s timeout runs out in a real browser
+def test_a_follow_up_with_no_answer_in_30_s_is_not_confirmed_and_locks_its_row_alone(
+    tmp_path: Path, monkeypatch, pds
+) -> None:
+    """AC-5, AC-7, AC-10: a Change's follow-up keeps its 30 s timeout; another follow-up row stays usable."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    with machine_page(tmp_path, monkeypatch, pds) as w:
+        page, held = w.page, []
+
+        def never(route: Any) -> None:  # Playwright cannot take a builtin method as a handler
+            held.append(route)
+
+        page.route("**/improvement/followups", never)
+        page.goto(f"{w.base}/?project={w.pid}&change={w.pid}%2F{SPOTTED}#token=t")
+        page.locator("#details-switch").click()
+        detail = page.locator("#improvement-detail")
+        row = detail.locator("#finding-f-1 .followup")
+        other = detail.locator("#look-r-note .followup")
+        row.get_by_role("button", name="Follow up").click()
+        pds.answer(page, "Follow up")
+        button = row.locator("p-button")
+        expect(button).to_have_js_property("loading", value=True)
+        expect(row).to_have_class(re.compile(r"\bsending\b"))
+        assert not other.evaluate("r => r.inert || r.classList.contains('sending')")
+        expect(other.get_by_role("button", name="Follow up")).to_be_enabled()
+        page.wait_for_timeout(5_500)  # past the 5 s most actions wait: this one still waits
+        expect(button).to_have_js_property("loading", value=True)
+        expect(row.get_by_role("button", name="Not confirmed", exact=True)).to_be_visible(timeout=30_000)
+        expect(button).to_have_attribute("icon", "warning")
+        expect(page.locator(".said-aloud[role=status]")).to_have_text("Not confirmed")
+        expect(detail).to_contain_text("That was not done")
+        assert not row.evaluate("r => r.inert")
+        assert len(held) == 1

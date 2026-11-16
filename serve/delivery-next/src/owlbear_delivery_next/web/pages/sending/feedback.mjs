@@ -11,7 +11,7 @@ import { Slow } from "/assets/ui.mjs";
 const HOLD = 1000, BACK = 2000;
 const SAID = { pending: "Sending", sent: "Sent", failed: "Failed", unsure: "Not confirmed" };
 const MARK = { failed: "error", unsure: "warning", sent: "check" };
-const sends = new Set();  // each: { control, scope, form, id, phase, released }
+const sends = new Set();  // each: { control, scope, form, id, phase, released, holds }
 let clicked = null;  // the control of the latest click: the next send is its own
 let redraw = () => {};
 let region = null;
@@ -30,7 +30,7 @@ const locks = (s) => s.phase === "pending" || s.phase === "sent";
 // True while a send waits for its answer or holds its checkmark: the page rereads nothing until then, so its form
 // stays in place however fast Delivery answers.
 export function holding() {
-  return [...sends].some((s) => s.phase === "pending" || (s.phase === "sent" && !s.released));
+  return [...sends].some((s) => s.holds && (s.phase === "pending" || (s.phase === "sent" && !s.released)));
 }
 
 function lock(s, on) {
@@ -61,8 +61,9 @@ function announce(phase) {
 
 function move(s, phase) {
   s.phase = phase;
-  lock(s, locks(s));
   announce(phase);
+  if (!sends.has(s)) return;  // its control shows another action now: it is not this send's to lock
+  lock(s, locks(s));
   redraw();
 }
 
@@ -87,15 +88,19 @@ export function press(handler) {
 }
 
 // One send of the control clicked last, for form *form*; null when that control is already sending. It locks and
-// redraws at once, so the click that sends is the one that disables.
-export function begin(form = "") {
-  const control = clicked;
+// redraws at once, so the click that sends is the one that disables. *on* is the control that shows it when the one
+// clicked goes at once (a chooser's Continue); a send with *hold* false keeps no reread of the page waiting, for one
+// whose control the reread leaves in place and whose answer may take long (a chat launch, a follow-up).
+export function begin(form = "", { on = null, hold = true } = {}) {
+  const control = on ?? clicked;
   clicked = null;
   const was = control && of(control);
   if (was && locks(was)) return null;
   if (was) forget(was);
   const scope = form && control?.closest?.(`[data-form="${CSS.escape(form)}"]`);
-  const s = { control, scope: scope || null, form, id: control?.dataset.sends, phase: "pending", released: false };
+  const s = {
+    control, scope: scope || null, form, id: control?.dataset.sends, phase: "pending", released: false, holds: hold,
+  };
   if (control) control.style.minInlineSize = `${control.getBoundingClientRect().width}px`;
   sends.add(s);
   move(s, "pending");

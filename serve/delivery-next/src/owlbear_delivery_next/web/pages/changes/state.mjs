@@ -14,8 +14,7 @@ export const REVERT = "Reversing the merge needs a revert you make yourself.";
 // per form (drafts: form key -> its fields), which toggles are open (by their summary), and the notes above.
 export const state = {
   changes: null, detail: null, notes: [], selected: null, started: null, error: null, seen: "",
-  stale: false, refused: null, drafts: new Map(), opened: new Set(), doneOpen: false, creating: false,
-  choosing: false,
+  stale: false, refused: null, drafts: new Map(), opened: new Set(), doneOpen: false, choosing: false,
 };
 // The page's other mutable values, in an object since a module cannot reassign another's binding.
 export const page = { busy: false, again: false, lastSeen: null, arrived: false, skipped: false };
@@ -26,7 +25,7 @@ export function show() {
   const focused = document.activeElement;
   render(view(), document.getElementById("page"));
   const why = unshapeable();
-  render(button("New Change", newChange, { icon: "add", aria: DIALOG, busy: state.creating, disabled: Boolean(why),
+  render(button("New Change", newChange, { icon: "add", aria: DIALOG, disabled: Boolean(why),
     title: why || undefined }),
     document.getElementById("header-actions"));
   const modal = [...document.querySelectorAll("p-modal")].some((m) => m.open);

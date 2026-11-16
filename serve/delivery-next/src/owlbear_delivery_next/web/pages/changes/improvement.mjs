@@ -1,24 +1,24 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { repeat } from "/assets/lit-html/3.3.3/directives/repeat.js";
+import { begin } from "/assets/page/sending/feedback.mjs";
 import { call } from "/assets/ui.mjs";
-import { askFollowup, followupLine, said, send } from "/assets/page/improvement/followup.mjs";
+import { askFollowup, followupForm, followupLine, said, send } from "/assets/page/improvement/followup.mjs";
 import { finding, look } from "/assets/page/improvement/record.mjs";
 import { show } from "./state.mjs";
-import { info, notice, text } from "./widgets.mjs";
+import { button, info, notice, text } from "./widgets.mjs";
 import { detailsOn } from "./details.mjs";
 
 // The Spotter's and Retro's detail of one Change (#716), shown only with the page's details: its looks and Retro's
 // findings, each with its follow-up. A Change stopped for irreversible harm says so above, switch or not.
 
 const FRESH = 30000;  // ms a Change's read is kept: the page redraws every few seconds
-const read = new Map();  // key -> { at, data, error, reading }
+const read = new Map();  // key -> { at, data, error, reading, stale }
 const outcome = new Map();  // key -> the last follow-up's notice
-let busy = "";
 
 
 function fetched(d) {
   const kept = read.get(d.key);
-  if (kept && (kept.reading || Date.now() - kept.at < FRESH)) return kept;
+  if (kept && !kept.stale && (kept.reading || Date.now() - kept.at < FRESH)) return kept;
   const next = { at: Date.now(), data: kept?.data ?? null, error: "", reading: true };
   read.set(d.key, next);
   const q = new URLSearchParams({ project: d.project, slug: d.slug });
@@ -28,23 +28,32 @@ function fetched(d) {
   return next;
 }
 
+// Each follow-up row shows its own send (sending/feedback.mjs) and locks alone; its answer may take 30 s.
 async function followUp(d, item, what) {
-  if (busy || !(await askFollowup(item, what))) return;
-  busy = item.id;
+  if (!(await askFollowup(item, what))) return;
+  const sending = begin(followupForm(item), { hold: false });
+  if (!sending) return;
   outcome.delete(d.key);
   show();
   try {
-    outcome.set(d.key, ["success", "Done", said(await send(item))]);
+    const answer = await send(item);
+    outcome.set(d.key, ["success", "Done", said(answer)]);
+    await sending.done();
   } catch (error) {
+    sending.failed(error);
     outcome.set(d.key, ["error", "That was not done", error.reread ?? error.message]);
   }
-  busy = "";
-  read.delete(d.key);
+  const kept = read.get(d.key);
+  if (kept) kept.stale = true;  // read again, its rows kept meanwhile so a refused one still says so
   show();
 }
 
+function line(d, item, what) {
+  return followupLine(item, () => followUp(d, item, what), { button });
+}
+
 function shownFinding(d, f) {
-  return finding(f, "", followupLine(f, () => followUp(d, f, "finding"), { busy: busy === f.id, disabled: !!busy }));
+  return finding(f, "", line(d, f, "finding"));
 }
 
 function body(d, r) {
@@ -56,8 +65,7 @@ function body(d, r) {
     ${r.error ? notice("error", "The newest detail could not be read", r.error) : nothing}
     ${text("The Spotter's looks", { weight: "semibold" })}
     ${missing.length ? notice("error", "Some Spotter records could not be read", missing.join("\n")) : nothing}
-    ${looks.length ? html`<ul class="cards">${repeat(looks, (l) => l.id, (l) => look(l, {}, followupLine(l,
-      () => followUp(d, l, "look"), { busy: busy === l.id, disabled: !!busy })))}</ul>`
+    ${looks.length ? html`<ul class="cards">${repeat(looks, (l) => l.id, (l) => look(l, {}, line(d, l, "look")))}</ul>`
       : text(missing.length ? "No readable look at this Change; some records could not be read."
         : "No look at this Change.", { size: "sm", color: "contrast-medium" })}
     ${text("Retro's findings", { weight: "semibold" })}

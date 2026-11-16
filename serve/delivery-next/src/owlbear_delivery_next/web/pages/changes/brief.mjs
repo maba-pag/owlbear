@@ -159,7 +159,7 @@ function readBacks(d) {
 export function reviseButton(d) {
   if (d.brief.unrevisable !== "") return nothing;
   return button("Revise the brief in a new chat", () => reviseBrief(d),
-    { variant: "secondary", icon: "edit", aria: DIALOG, busy: state.creating, ...starts(d) });
+    { variant: "secondary", icon: "edit", aria: DIALOG, id: `revise:${d.key}`, ...starts(d) });
 }
 
 // Approving the current version, from its line in the version list; off, with the reason above, until it may be.
