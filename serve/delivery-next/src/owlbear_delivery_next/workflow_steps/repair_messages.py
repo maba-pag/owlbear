@@ -74,7 +74,7 @@ def session(
     )
 
     def progress(args: tools.Args) -> str:
-        args = cast(repair_tools.Progress, args)
+        args = cast("repair_tools.Progress", args)
         r = change.repairs.current
         if r is None:
             msg = "report_progress: the repair has ended"
