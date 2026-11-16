@@ -29,8 +29,8 @@ function detailHead(d) {
         show();
       }
     };
-    intent = button(d.paused ? "Resume" : "Pause", go, d.paused ? { icon: "play", ...starts(d) }
-      : { variant: "secondary", icon: "pause" });
+    intent = button(d.paused ? "Resume" : "Pause", go, d.paused ? { icon: "play", id: "intent", ...starts(d) }
+      : { variant: "secondary", icon: "pause", id: "intent" });
   }
   const under = [d.brief.title && d.slug, several() && `in ${d.projectName}`].filter(Boolean).join(" \u00b7 ");
   return html`<div class="detail-head">${back}<div>${hd(2, d.brief.title || d.slug, "xl", { tabindex: "-1" })}${under

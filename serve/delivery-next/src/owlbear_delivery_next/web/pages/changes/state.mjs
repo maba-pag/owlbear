@@ -1,4 +1,5 @@
 import { html, render } from "/assets/lit-html/3.3.3/lit-html.js";
+import { begin, changed } from "/assets/page/sending/feedback.mjs";
 import { blockedOf, call as host, HostDown, project, Restarted, Slow, shown, token } from "/assets/ui.mjs";
 import { button } from "./widgets.mjs";
 import { youCount, view, refresh } from "./list.mjs";
@@ -17,7 +18,9 @@ export const state = {
   choosing: false,
 };
 // The page's other mutable values, in an object since a module cannot reassign another's binding.
-export const page = { busy: false, again: false, lastSeen: null, arrived: false };
+export const page = { busy: false, again: false, lastSeen: null, arrived: false, skipped: false };
+
+changed(() => show());
 
 export function show() {
   const focused = document.activeElement;
@@ -94,24 +97,29 @@ export function formsOf(d) {
 
 // One action of the owner on the shown Change. A refusal goes beside the form that was used (*form*), so it is seen
 // where he is looking; the poll keeps it until the forms change, then a definite one moves to the top of its Change
-// and stays there until he acts, or opens another (#914). True once the host took it.
+// and stays there until he acts, or opens another (#914). True once the host took it. The clicked control and the
+// form show the send (sending/feedback.mjs): an accepted one holds its form for its checkmark before the reread.
 export function send(path, body, d, form = "") {
   return sendTo(`/changes/${d.slug}${path}`, body, d, form);
 }
 
 // The same, through a route that names the Change in its body (*url* from the host's root).
 export async function sendTo(url, body, d, form = "") {
+  const sending = begin(form);
+  if (!sending) return false;  // its control is still sending: one request per click
   try {
     await call(url, body, d.project);
   } catch (e) {
+    sending.failed(e);
     if (e instanceof HostDown || e instanceof Restarted || state.selected !== d.key) return failed(e) && false;
     const unsure = e instanceof Slow;
     state.refused = { key: d.key, forms: formsOf(d), form, text: unsure ? e.reread : e.message, unsure };
     show();
     document.querySelector("#detail .refused")?.scrollIntoView({ block: "nearest" });
-    if (unsure) await refresh();  // it may have been done: what Delivery says now shows which
+    if (unsure || page.skipped) await refresh();  // it may have been done: what Delivery says now shows which
     return false;
   }
+  await sending.done();
   state.refused = null;
   if (form) state.drafts.delete(form);
   document.activeElement?.blur?.();

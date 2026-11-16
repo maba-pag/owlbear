@@ -359,6 +359,6 @@ function objecting(a, d) {
     }))) return;
     send(`/amendments/${encodeURIComponent(a.id)}/objection`, { text: draft(key, () => ({})).text ?? "" }, d, key);
   };
-  return html`${field(key, "text", "Why you object (optional)", "1")}
-    ${row(button("Object", go, { variant: "secondary", aria: DIALOG, ...starts(d) }))}`;
+  return html`<div data-form=${key}>${field(key, "text", "Why you object (optional)", "1")}
+    ${row(button("Object", go, { variant: "secondary", aria: DIALOG, ...starts(d) }))}</div>`;
 }

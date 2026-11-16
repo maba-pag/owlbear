@@ -1,5 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { settingsWait } from "/assets/ui.mjs";
+import { action as actionLook, press } from "/assets/page/sending/feedback.mjs";
 import { questionText } from "/assets/page/config/unset.mjs";
 import { DIALOG, REVERT, state, show, draft, notify, send, starts } from "./state.mjs";
 import {
@@ -242,7 +243,8 @@ export function withdrawing(id, said, d) {
 export function criteriaPanel(d) {
   return info("Your visual criteria", text("Every later visual round checks these until you withdraw them."),
     d.owner_criteria.map((k) => row(text(`${k.id}: ${k.text}`),
-      button("Withdraw", withdrawing(k.id, k.text, d), { variant: "secondary", aria: DIALOG }))));
+      button("Withdraw", withdrawing(k.id, k.text, d),
+        { variant: "secondary", aria: DIALOG, id: `withdraw:${k.id}` }))));
 }
 
 export function checkForm(check, d) {
@@ -336,8 +338,8 @@ export function pullbackNote(p, d) {
     if (sure) send("/pull", {}, d);
   };
   return html`<p-inline-notification state=${behind ? "warning" : "success"} heading=${title} heading-tag="h3"
-    dismiss-button="false" action-label=${behind ? "Pull" : nothing} action-icon=${behind ? "refresh" : nothing}
-    @action=${behind ? pull : nothing}>${p.reason || ""}</p-inline-notification>`;
+    dismiss-button="false" ${actionLook("pull", behind ? "Pull" : null, behind ? "refresh" : null)}
+    @action=${behind ? press(pull) : nothing}>${p.reason || ""}</p-inline-notification>`;
 }
 
 // A stop the owner may clear once he did what it asks (#754), so Delivery reruns its step; *d.recovery* has the stop,
@@ -371,8 +373,8 @@ export function stopNotice(d) {
     show();
   };
   return html`<p-inline-notification class="recorded" state="error" heading="Stopped" heading-tag="h3"
-    dismiss-button="false" action-label=${held ? nothing : "Done: run the step again"}
-    action-icon=${held ? nothing : "refresh"} @action=${held ? nothing : clear}>${
+    dismiss-button="false" ${actionLook("recovery", held ? null : "Done: run the step again", held ? null : "refresh")}
+    @action=${held ? nothing : press(clear)}>${
       kept ? text(said, { cls: "repair-reason" }) : said}</p-inline-notification>
     ${kept ? text("The fix kept (not applied):") : nothing}${repairPatch(kept?.diff, "The retained repair patch")}`;
 }
