@@ -4,17 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.improvement import retro_evidence, retro_grade_history, retro_judge, retro_units
+from owlbear_delivery_next.improvement import retro_evidence, retro_grade_history, retro_judge, retro_segments, retro_units
 from owlbear_delivery_next.improvement import retro_store as store
-from owlbear_delivery_next.improvement.retro_calls import Paid, Work
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.improvement.retro_units import Projects
-
-
-def _never(*_args: object) -> Paid:
-    msg = "planning a grade correction makes no paid call"
-    raise store.RetroError(msg)
 
 
 def plan(uid: str, projects: Projects) -> dict[str, Any]:
@@ -31,8 +25,8 @@ def plan(uid: str, projects: Projects) -> dict[str, Any]:
     rev = unit["revisions"][-1]
     found = {r["id"]: r for r in retro_units.records() if retro_units.unit_of(r) == uid}
     prepared = retro_evidence.evidence(uid, unit, rev, projects)
-    work = Work("correction-plan", uid, rev, unit, list(found.values()), prepared, _never, grade_only=True)
-    located = {r["id"]: r for r in retro_judge.opened(work)}
+    read = {p.session for p in prepared.parts}
+    located = {r["id"]: retro_segments.locate(r, prepared)[0] for r in found.values() if r.get("session") in read}
     history = retro_grade_history.effective(store.lines("grades.jsonl"), ())
     corrections = {}
     for grade in history:
@@ -48,7 +42,7 @@ def plan(uid: str, projects: Projects) -> dict[str, Any]:
         if (
             record.get("session") not in unit.get("sessions", ())
             or resolved is None
-            or resolved["cutoff"] != grade.get("cutoff")
+            or resolved != grade.get("cutoff")
         ):
             corrections[record["id"]] = grade["id"]
     return {"unit": uid, "revision": rev["rev"], "records": len(corrections), "corrections": corrections}
