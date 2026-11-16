@@ -25,7 +25,7 @@ from owlbear_delivery_next.workflow_steps import sessions
 
 AGENTS = (
     "builder", "planner", "reviewer", "challenger", "design-judge", "preparer", "updater", "test-reviewer",
-    "test-curator", "picker", "curator", "auditor", "project-auditor", "repairer",
+    "test-curator", "picker", "curator", "auditor", "project-auditor", "audit-verifier", "repairer",
 )  # fmt: skip
 PENDING: set[str] = {"spotter", "retro", "retro-review"}  # every worker role has its own agent file (TD-106);
 # Improvement's come with their slices (item 9)
@@ -163,6 +163,7 @@ def test_judges_are_never_offered_or_told_of_a_question() -> None:
             "curator",
             "auditor",
             "project-auditor",
+            "audit-verifier",
             "repairer",
         }
         assert asks == (role not in never), role

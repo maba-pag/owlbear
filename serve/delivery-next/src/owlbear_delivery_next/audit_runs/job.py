@@ -57,7 +57,7 @@ class Audits:
 
     def offered(self) -> tuple[str, ...]:
         """Only OwlBear's shared project folder offers an agent audit."""
-        return record.NAMES if self.store.name == "owlbear" else ("doc",)
+        return ("doc", "agent") if self.store.name == "owlbear" else ("doc",)
 
     def busy(self) -> bool:
         """Whether the project's stop must wait for an audit or its publication."""

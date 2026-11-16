@@ -68,6 +68,7 @@ APPLIED = [
     "agents.picker.minutes",
     "agents.auditor.minutes",
     "agents.project-auditor.minutes",
+    "agents.audit-verifier.minutes",
     "pr_labels",
     "pr_marker",
     "load_user_instructions",  # D-01M5YE4P5317N1HWD0QN6N05E0
@@ -85,6 +86,7 @@ APPLIED = [
     "agents.updater.subagents",  # TD-376; the shaper's chat runs in VS Code, not as a step
     "agents.auditor.subagents",
     "agents.project-auditor.subagents",
+    "agents.audit-verifier.subagents",
     "sessions",  # TD-336
 ]  # the settings Delivery uses today
 STARTING = 5.0  # seconds a folder rename waits for a runner launch or the host's folder check to end

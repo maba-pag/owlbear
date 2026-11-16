@@ -37,6 +37,7 @@ REQUIRED: dict[str, tuple[str, ...]] = {
     "retro-review": ("owlbear-review-judgment",),  # challenges Retro's proposals
     "auditor": (),  # its one job's skill comes from the PDS candidate (JOBS)
     "project-auditor": (),  # the audit job selects its procedure
+    "audit-verifier": (),  # audit-verify selects the shared audit and verification procedure
     "repairer": ("owlbear-module-design", "owlbear-acceptance-criteria"),  # it fixes code and checks, as the builder
 }
 UI: dict[str, tuple[str, ...]] = {"builder": ("owlbear-interface-design",)}  # added when the brief has a UI (TD-76)
@@ -47,6 +48,7 @@ JOBS: dict[str, tuple[str, ...]] = (
     )
     | {"pds-audit": ("pds-audit-deprecations-js",), "pds-update": ("pds-knowledge-js",)}  # a PDS candidate's (#777)
     | {"doc-audit": ("owlbear-doc-audit",), "agent-audit": ("owlbear-agent-audit",)}
+    | dict.fromkeys(("code-audit", "audit-verify"), ("owlbear-code-audit",))
     | dict.fromkeys(("amendment-prepare", "amendment-revise"), ("owlbear-acceptance-criteria",))  # TD-185
 )
 HOSTED = frozenset({"view", "glob", "grep"})  # a chat role's tools when Delivery hosts it: the shaper's candidate

@@ -72,7 +72,7 @@ def _shape(name: str, obj: dict[str, Any], defs: dict[str, Any], depth: int = 0)
 def test_every_agent_tool_is_described_small_and_flat() -> None:
     """TD-63: no count of tools; each agent-facing tool has described fields, about six, one nesting level."""
     specs = [v for v in vars(tools).values() if isinstance(v, tools.Spec)]
-    specs += [project_audit_tools.SUBMIT, project_audit_tools.SET_TARGET]
+    specs += [project_audit_tools.SUBMIT, project_audit_tools.VERDICT, project_audit_tools.SET_TARGET]
     schemas = [(f"{s.name}:{s.model.__name__}", s.model.model_json_schema()) for s in specs]
     schemas += [(t.name, t.input_schema) for t in asyncio.run(mcp_server.mcp.list_tools())]
     assert {s.name for s in specs} >= {"submit_result", "ask_question", "report_wrong_premise", "report_missing_tool"}

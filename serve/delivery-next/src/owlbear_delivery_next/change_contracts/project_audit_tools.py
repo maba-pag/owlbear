@@ -41,14 +41,24 @@ class ChangedDefault(tools.Args):
     reason: str = tools.bounded(500, "Why the note changes it, 1-500 characters", "The note limits the audit to setup.")
 
 
+class AuditPart(tools.Args):
+    """Coverage of one requested lens part."""
+
+    part: str = tools.bounded(200, "Lens part's name, 1-200 characters", "lean: dependencies")
+    ran: bool = Field(description="Whether this part was inspected; true or false", examples=[True])
+    note: str = tools.bounded(
+        2000, "Inspection evidence or why the part did not run, 1-2000 characters", "Read manifests and imports."
+    )
+
+
 class AuditFindings(tools.Args):
-    """``submit_result`` for a documentation or agent audit."""
+    """``submit_result`` for a read-only project audit."""
 
     findings: list[AuditFinding] = tools.bounded(60, "Up to 60 findings; empty is valid", [], least=0)
-    parts: list[str] = Field(
+    parts: list[AuditPart] = Field(
         default_factory=list,
-        max_length=0,
-        description="Empty list for documentation and agent audits; no lens parts run",
+        max_length=60,
+        description="Up to 60 lens parts with coverage; empty when no lens parts were requested",
         examples=[[]],
     )
     not_covered: list[Annotated[str, Field(min_length=1, max_length=2000)]] = tools.bounded(
@@ -68,6 +78,40 @@ class AuditFindings(tools.Args):
     )
 
 
+class AuditVerdict(tools.Args):
+    """The verifier's judgment of one host-numbered finding."""
+
+    finding: int = Field(
+        ge=1,
+        le=60,
+        strict=True,
+        description="Finding's one-based number in context/run.json, 1-60",
+        examples=[1],
+    )
+    verdict: Literal["accepted", "rejected", "unsure"] = Field(
+        description="One judgment: accepted, rejected or unsure", examples=["accepted"]
+    )
+    reason: str = tools.bounded(
+        2000, "Evidence and reason for this judgment, 1-2000 characters", "The caller drops the stored receipt."
+    )
+    decisions: list[Annotated[str, Field(min_length=1, max_length=200)]] = tools.bounded(
+        200, "Up to 200 applicable decision IDs, each 1-200 characters; empty if none apply", [], least=0
+    )
+    duplicate_of: str = Field(
+        max_length=500,
+        description="Existing issue reference when this is a duplicate, otherwise empty; at most 500 characters",
+        examples=["https://github.com/example/project/issues/42"],
+    )
+
+
+class AuditVerdicts(tools.Args):
+    """``submit_result`` with exactly one judgment per numbered finding."""
+
+    verdicts: list[AuditVerdict] = tools.bounded(
+        60, "Exactly one verdict per finding in context/run.json, up to 60; empty for no findings", [], least=0
+    )
+
+
 class Target(tools.Args):
     """Ask the host to pin the ref the note requested, without changing it yourself."""
 
@@ -78,6 +122,9 @@ class Target(tools.Args):
 SUBMIT = tools.Spec(
     "submit_result", "Submit the read-only audit's findings and coverage once.", AuditFindings, "result"
 )
+VERDICT = tools.Spec(
+    "submit_result", "Submit exactly one checked verdict per host-numbered audit finding.", AuditVerdicts, "result"
+)
 SET_TARGET = tools.Spec(
     "set_target",
     "Ask the host to resolve and pin only a target requested by the note; continue after its reply.",
@@ -86,9 +133,21 @@ SET_TARGET = tools.Spec(
 )
 
 
-def check(args: AuditFindings, root: Path) -> list[str]:
-    """Refuse an invented publication destination while the report's author can still correct it."""
-    note = json.loads((root / "context" / "run.json").read_text(encoding="utf-8"))["note"]
+def check(args: AuditFindings | AuditVerdicts, root: Path) -> list[str]:
+    """Check destination consent or exact finding coverage while the author can still correct it."""
+    run = json.loads((root / "context" / "run.json").read_text(encoding="utf-8"))
+    if isinstance(args, AuditVerdicts):
+        numbers = [v.finding for v in args.verdicts]
+        expected = set(range(1, len(run["findings"]) + 1))
+        if len(numbers) != len(set(numbers)) or set(numbers) != expected:
+            return [
+                (
+                    f"verdicts.finding: submit exactly one verdict for every finding 1..{len(expected)}, "
+                    f"with no duplicates or other numbers; received {numbers}"
+                )
+            ]
+        return []
+    note = run["note"]
     named = re.search(
         rf"(?<![A-Za-z0-9_./:@-])(?i:https?://github\.com/)?{re.escape(args.destination)}"
         r"(?![A-Za-z0-9_-]|\.[A-Za-z0-9_.-])",

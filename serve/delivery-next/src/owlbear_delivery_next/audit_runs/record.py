@@ -7,9 +7,14 @@ import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError
 
-from owlbear_delivery_next.change_contracts.project_audit_tools import AuditFinding, ChangedDefault
+from owlbear_delivery_next.change_contracts.project_audit_tools import (
+    AuditFinding,
+    AuditPart,
+    AuditVerdict,
+    ChangedDefault,
+)
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 
@@ -17,7 +22,8 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Store
 
 FILE = "audits.json"
-NAMES = ("doc", "agent")
+NAMES = ("doc", "agent", "code")
+OPTIONAL = {"verified", "verdicts", "verifier_session", "summary_issue"}
 INTERRUPTED = "OwlBear stopped while the audit ran; start it again"
 _guard = threading.RLock()
 _live: set[tuple[str, str]] = set()
@@ -29,6 +35,17 @@ class Finding(AuditFinding):
     number: int | None
     url: str
     pending: str | None
+
+
+class SummaryIssue(BaseModel):
+    """Host-owned creation intent, issue receipt and final summary-edit receipt."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    number: int | None = None
+    url: str = ""
+    pending: str | None = None
+    complete: bool = False
 
 
 class Report(BaseModel):
@@ -48,14 +65,18 @@ class Report(BaseModel):
     destination: str
     summary: str
     findings: list[Finding]
-    parts: list[str]
+    parts: list[AuditPart]
     not_covered: list[str]
     subagents: list[dict[str, Any]]
     reason: str
     session: str = ""
+    verified: bool = False
+    verdicts: list[AuditVerdict] = Field(default_factory=list)
+    verifier_session: str = ""
+    summary_issue: SummaryIssue = Field(default_factory=SummaryIssue)
 
 
-REPORTS = TypeAdapter(dict[Literal["doc", "agent"], Report])
+REPORTS = TypeAdapter(dict[Literal["doc", "agent", "code"], Report])
 
 
 def now() -> str:
@@ -85,7 +106,9 @@ def load(store: Store) -> dict[str, Any]:
     except ValidationError as exc:
         exc.add_note(f"saved audit record: {path}")
         raise
-    return {name: report.model_dump(mode="json") for name, report in validated.items()}
+    return {
+        name: report.model_dump(mode="json", exclude=OPTIONAL - data[name].keys()) for name, report in validated.items()
+    }
 
 
 def read(store: Store) -> dict[str, Any]:
@@ -112,5 +135,11 @@ def save(store: Store, audit: str, state: dict[str, Any]) -> None:
 
 
 def unpublished(state: dict[str, Any]) -> int:
-    """How many findings have no confirmed issue receipt."""
-    return sum(f.get("number") is None for f in state.get("findings", []))
+    """Unconfirmed finding receipts, and a verified run's unfinished summary publication."""
+    findings = state.get("findings", [])
+    if not state.get("verified", False):
+        return sum(f.get("number") is None for f in findings)
+    accepted = {v["finding"] for v in state["verdicts"] if v["verdict"] == "accepted"}
+    return sum(f.get("number") is None for n, f in enumerate(findings, 1) if n in accepted) + int(
+        not state.get("summary_issue", {}).get("complete", False)
+    )
