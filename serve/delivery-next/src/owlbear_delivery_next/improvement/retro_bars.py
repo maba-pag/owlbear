@@ -86,18 +86,23 @@ def cases(w: Work) -> list[str | None]:
 
     One of an earlier revision whose case was never filed, its run ended before, is filed now.
     """
-    synthetic, held = w.provenance != "real", {f for p in props.folded().values() for f in p["findings"]}
+    snaps = list(props.folded().values())
+    synthetic, held = w.provenance != "real", {f for p in snaps for f in p["findings"]}
     return [
         props.file(
-            props.open_key(w.provenance, "spotter-case", g["record"]),
+            live.get("key") or props.open_key(w.provenance, "spotter-case", g["record"]),
             [g["id"]],
             kind="spotter-case",
             record=g["record"],
             call=g.get("should", ""),
             cause="",
-            target=f"look:{g.get('look', '')}",
-            mechanism=f"the Spotter's {g.get('look')} look was {g['grade']}: it should have said "
-            f"{g.get('should') or 'otherwise'}",
+            target=live.get("target", "") if live.get("redraft_of") else f"look:{g.get('look', '')}",
+            mechanism=live.get("mechanism", "")
+            if live.get("redraft_of")
+            else (
+                f"the Spotter's {g.get('look')} look was {g['grade']}: it should have said "
+                f"{g.get('should') or 'otherwise'}"
+            ),
             bar="a record graded wrong or missed",
             provenance=w.provenance,
             assumptions=[assumptions.RETRO_GRADES, *_synthetic(w)],
@@ -105,6 +110,17 @@ def cases(w: Work) -> list[str | None]:
         for g in store.grades(unit=w.uid, synthetic=synthetic)
         if g["grade"] in {"wrong", "missed"}
         and (g.get("rev") == w.rev.get("rev") or g["id"] not in held or g.get("supersedes"))
+        for live in (
+            [
+                p
+                for p in snaps
+                if p.get("kind") == "spotter-case"
+                and p.get("record") == g["record"]
+                and p.get("provenance") == w.provenance
+                and p["state"] not in props.CLOSED
+            ]
+            or [{}]
+        )
     ]
 
 

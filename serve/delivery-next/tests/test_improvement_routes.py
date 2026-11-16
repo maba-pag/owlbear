@@ -23,6 +23,7 @@ from owlbear_delivery_next.improvement import (
     improvement_view,
     proposal_apply,
     retro_bars,
+    retro_judge,
     spotter,
 )
 from owlbear_delivery_next.improvement import proposal_targets as targets
@@ -280,6 +281,10 @@ def test_a_case_shows_the_grade_it_rests_on_and_a_lost_redraft_is_asked_for_agai
     review = world.http.post(f"{API}/proposals/{pid}/redraft")
     assert (review.status_code, [q.get("redraft") for q in store.queued()]) == (200, [pid])
 
+    _correct_cases(world, grade, child)
+
+
+def _correct_cases(world, grade, child):
     changed = grade | {"id": "rg-r2", "record": "r2", "should": "hand-off-fitness"}
     store.add_grades([changed])
     key = props.open_key("real", "spotter-case", "r2")
@@ -318,6 +323,17 @@ def test_a_case_shows_the_grade_it_rests_on_and_a_lost_redraft_is_asked_for_agai
                             json={"state": "rejected", "token": current["token"]})  # fmt: skip
     assert closed.status_code == 200
     assert props.folded()[third]["state"] == "rejected"
+
+    props.reviewed(child, props.folded()[child]["evidence"], {"verdict": "survive", "publishable": TEXT})
+    store.request_correction("owner", "p1:fix", "r1", {"r1": "rg-r1"})
+    store.add_grades([grade | {"id": "rg-r1-persisted-event-1", "supersedes": "rg-r1", "should": "none"}])
+    assert child in retro_bars.cases(SimpleNamespace(uid="chg:p1:fix", rev={"rev": "later"}, provenance="real"))
+    refreshed = props.folded()[child]
+    assert (refreshed["state"], refreshed["call"], refreshed["direction"]) == ("drafted", "none", "x")
+    sent = retro_judge.render(refreshed, retro_judge.seen_findings())
+    assert '"direction": "x"' in sent
+    props.reviewed(child, refreshed["evidence"], {"verdict": "survive", "publishable": TEXT})
+    assert props.folded()[child]["state"] == "waiting"
 
 
 def test_only_an_irreversible_stop_marks_a_stopped_step_and_looks_filter_by_project_id(world) -> None:

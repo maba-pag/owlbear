@@ -302,6 +302,8 @@ def render(
         "omitted": f"[{max(0, len(snap['findings']) - len(shown))} more findings omitted]",
         "evidence": snap["evidence"],
     } | dict(more or {})
+    if snap.get("redraft_of"):
+        proposal |= {"direction": snap.get("direction", ""), "call": snap.get("call", "")}
     proposal = retro_segments.masked(proposal)
     head = f"{prompt.read_text()}\n\n## The proposal\n\n```json\n"
     text = dumps(proposal)
