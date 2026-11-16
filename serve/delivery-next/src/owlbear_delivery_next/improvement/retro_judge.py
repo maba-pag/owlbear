@@ -99,16 +99,11 @@ def opened(w: Work) -> list[dict[str, Any]]:
             if not gap and r.get("session") in read:
                 out.append(r | {"cutoff": cutoff, "live_cutoff": r.get("cutoff")})
             else:
-                w.prepared.anchor_gaps[r["id"]] = gap or _missing(w, r)
+                w.prepared.anchor_gaps[r["id"]] = gap or (PRUNED if w.prepared.parts else UNSEEN)
     return out
 
 
 _open = opened
-
-
-def _missing(w: Work, record: Mapping[str, Any]) -> str:
-    _, gap = retro_segments.locate(record, w.prepared)
-    return gap or (PRUNED if w.prepared.parts else UNSEEN)
 
 
 def _shown(p: Part) -> dict[str, str]:
@@ -253,7 +248,7 @@ def judge(w: Work) -> list[str]:
     """Phase 1: grade every record of the revision once and keep the findings; the ids of the findings."""
     judged = {r["id"] for r in opened(w)}
     without = [(r, {"grade": "not-assessable", "reason": _unassessable(r)}) for r in w.records if not assessable(r)]
-    without += [(r, {"grade": "not-assessable", "reason": _missing(w, r)})
+    without += [(r, {"grade": "not-assessable", "reason": w.prepared.anchor_gaps[r["id"]]})
                 for r in w.records if assessable(r) and r["id"] not in judged]  # fmt: skip
     w.found["grades"] += len(store.add_grades(_grade(w, r, said) for r, said in without))
     ids: list[str] = []
