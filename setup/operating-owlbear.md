@@ -165,6 +165,7 @@ rejudging. Originals remain in the append-only grade history. Until corrected, t
 correction** and count toward no current grade or proposal. Corrections preserve logical references and do not
 double count. This run only rejudges; it does not propose lessons or start the Spotter experiment. Each run keeps
 the configured credit limit. If it stops early, remaining grades stay pending until another explicit request.
+Captures needed by pending corrections remain pinned until those corrections finish.
 Existing case proposals backed by those grades cannot be accepted or applied on their old review. An ordinary
 Retro proposal pass can refresh a still-open case proposal for review against the corrected grade.
 

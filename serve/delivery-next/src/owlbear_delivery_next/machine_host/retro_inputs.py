@@ -19,6 +19,7 @@ from owlbear_delivery_next.improvement import retro_proposals as props
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.retro_calls import Refusal
+from owlbear_delivery_next.improvement.retro_grade_history import PENDING
 from owlbear_delivery_next.machine_host import cases_job
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import machine_settings, registry, spend_ledger
@@ -177,15 +178,19 @@ def settle_open(live: set[tuple[str, str]]) -> None:
 
 
 def pinned() -> set[str]:
-    """The sessions a finding, a Spotter or pilot case or an open proposal rests on: never pruned."""
+    """Sessions held by findings, cases, open proposals or unfinished grade corrections: never pruned."""
     found = store.all_findings()
     pins = {s for f in found for s in f.get("sessions") or ()}
     for path in cases.place().glob("c-*.json"):
         with contextlib.suppress(OSError, ValueError, AttributeError):
             prov = json.loads(path.read_text()).get("provenance") or {}  # a synthetic case has no session
             pins |= {str(p["session"]) for p in (prov.get("record"), prov.get("pilot")) if p and p.get("session")}
-    owner = {f["id"]: f.get("unit") for f in found} | {g["id"]: g.get("unit") for g in store.grades(synthetic=True)}
+    grades = store.grades(synthetic=True, include_pending=True)
+    owner = {f["id"]: f.get("unit") for f in found} | {g["id"]: g.get("unit") for g in grades}
     known = store.known()
+    for grade in grades:
+        if grade["grade"] == PENDING:
+            pins |= {grade.get("session", ""), *known.get(grade.get("unit", ""), {}).get("sessions", ())}
     for snap in props.folded().values():
         if snap.get("state") not in props.CLOSED:
             for fid in snap.get("findings") or ():
