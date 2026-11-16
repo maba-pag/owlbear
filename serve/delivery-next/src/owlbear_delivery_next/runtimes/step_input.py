@@ -31,6 +31,14 @@ if TYPE_CHECKING:
 LIMIT = 1500
 DETAIL = 4000  # a task's details: review findings, CI log tail or review thread
 READ_ONLY = "Read files and run any read-only command; nothing you run may write files or change Git state."
+PROOF_CONTEXT = (
+    "Delivery sessions execute the installed runtime, not this Change's branch code. Workers get no owner token; "
+    "checks must not use the live HOME or stores. For each criterion, verify an executable witness at its claimed "
+    "boundary with the runtime, authentication and isolated data actually available. A nominal command, a fixture "
+    "or a later ordinary Delivery session does not prove a real Delivery session on changed branch runtime code. "
+    "If that proof is unavailable, the criterion and its timing need the owner's choice of a person check or a "
+    "look after release, not a workaround that widens these boundaries."
+)
 FINISH = """\
 Call `submit_result` once with the summary and checks; Delivery reads your commit from the worktree HEAD,
 records the files it changes and lints them with the project's linters. If it is rejected, fix what each
@@ -365,6 +373,7 @@ def plan(change: Change, profile: Profile, worktree: Path, others: Mapping[str, 
         "",
         *_brief(change),
         f"Scope: {', '.join(change.brief.scope) or 'not limited'}",
+        PROOF_CONTEXT,
         "",
         "## Packages (project profile)",
         *wt.package_lines(profile, worktree, check_hint.UNCHECKED),
@@ -403,11 +412,18 @@ def plan_challenge(
             *_others(others),
             "",
             "## Judge",
+            PROOF_CONTEXT,
             (
                 "Every criterion is named by a task's goal that says the real run showing it met, and its checks "
                 "run the existing tests the change touches; no new test per criterion. Tasks are in a buildable "
                 "order and each fits one session; scopes match the code and touch other open Changes' "
                 "scopes only where the brief needs it. Findings only for what must change."
+            ),
+            (
+                "A criterion with no executable witness under these constraints needs a brief amendment, not "
+                "another task: report_wrong_premise stage brief with that criterion in amendment, the proposed "
+                "change and evidence. A repairable tool or setup defect that leaves acceptance unchanged is "
+                "stage setup, never a reason to weaken the brief."
             ),
             *plan_rounds.challenge_lines(change),
             "",
@@ -436,9 +452,12 @@ def brief_challenge(change: Change, worktree: Path) -> str:
             *([f"- {v.name}: {v.path} · expect {_flat(v.expect)}" for v in change.brief.visual] or ["- none"]),
             "",
             "## Judge",
+            PROOF_CONTEXT,
             (
-                "Findings only for: criteria that contradict each other or the code; a criterion no test or command "
-                "can check and no person-only check covers; a behaviour only a person can confirm without a "
+                "Findings only for: criteria that contradict each other or the code; a criterion whose promised "
+                "proof Delivery cannot execute and no feasible person-only check covers, even if a test or command "
+                "exists (name the unavailable prerequisite and propose feasible acceptance with its timing); "
+                "a behaviour only a person can confirm without a "
                 "person-only check; repository facts the brief cites that the code does not support; what the "
                 "owner's intent implies but the brief lacks, or what goes beyond it; a brief larger than one "
                 "reviewable pull request (propose the split as the fix). Place: the criterion id or field."
