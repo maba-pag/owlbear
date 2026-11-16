@@ -22,6 +22,7 @@ from owlbear_delivery_next.improvement import (
     followups,
     improvement_view,
     proposal_apply,
+    retro_bars,
     spotter,
 )
 from owlbear_delivery_next.improvement import proposal_targets as targets
@@ -284,7 +285,6 @@ def test_a_case_shows_the_grade_it_rests_on_and_a_lost_redraft_is_asked_for_agai
     key = props.open_key("real", "spotter-case", "r2")
     second = props.file(key, ["rg-r2"], kind="spotter-case", record="r2", call="hand-off-fitness",
                         target="look:handoff", provenance="real")  # fmt: skip
-    props.reviewed(second, props.folded()[second]["evidence"], {"verdict": "survive", "publishable": TEXT})
     old = next(p for p in world.http.get(API).json()["proposals"] if p["id"] == second)
     store.request_correction("owner", "p1:fix", "r1", {"r2": "rg-r2"})
     pending = next(p for p in world.http.get(API).json()["proposals"] if p["id"] == second)
@@ -295,10 +295,16 @@ def test_a_case_shows_the_grade_it_rests_on_and_a_lost_redraft_is_asked_for_agai
     store.add_grades([changed | {"id": "rg-r2-persisted-event-1", "supersedes": "rg-r2", "should": "none"}])
     current = next(p for p in world.http.get(API).json()["proposals"] if p["id"] == second)
     assert world.http.post(url, json={"state": "accepted", "token": current["token"]}).status_code == 409
-    assert props.file(key, ["rg-r2"], call="none", mechanism="the corrected judgement") == second
+    assert second in retro_bars.cases(SimpleNamespace(uid="chg:p1:fix", rev={"rev": "later"}, provenance="real"))
     fresh = props.folded()[second]
     assert (fresh["state"], fresh["call"]) == ("drafted", "none")
     assert fresh["review_digest"] != fresh["evidence"]
+    props.reviewed(second, fresh["evidence"], {"verdict": "survive", "publishable": TEXT})
+    current = next(p for p in world.http.get(API).json()["proposals"] if p["id"] == second)
+    assert "error" not in current["destination"]
+    accepted = proposal_apply.decide(second, "accepted", current["token"], "owner",
+                                    places={}, shared_root=world.shared)  # fmt: skip
+    assert accepted["accepted"]["call"] == "none"
 
 
 def test_only_an_irreversible_stop_marks_a_stopped_step_and_looks_filter_by_project_id(world) -> None:

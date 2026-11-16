@@ -199,14 +199,15 @@ def file(
         if live is not None:
             new = [f for f in findings if f not in live["findings"]]
             moved = counterexamples is not None and dict(counterexamples) != live["counterexamples"]
-            corrected = (
-                live.get("grade_versions") and live["review_digest"] and live["review_digest"] != live["evidence"]
+            grade_fields = {k: fields[k] for k in ("call", "mechanism", "target") if k in fields}
+            corrected = live.get("grade_versions") and (
+                live["review_digest"] != live["evidence"] or any(live.get(k) != v for k, v in grade_fields.items())
             )
             if not new and not moved and not corrected:
                 return live["id"]
             grown = {"findings": new} | ({"counterexamples": dict(counterexamples)} if moved else {})
             if corrected:
-                grown["grade_fields"] = {k: fields[k] for k in ("call", "mechanism", "target") if k in fields}
+                grown["grade_fields"] = grade_fields
             n = sum(line.get("proposal") == live["id"] for line in store.lines(FILE))  # growth back to an earlier
             eid = f"gr-{live['id']}-{n}-{store.digest(grown)}"  # state is a new event, never a replay of the old
             _event({"eid": eid, "proposal": live["id"], "type": "grown", **grown})

@@ -103,7 +103,8 @@ def cases(w: Work) -> list[str | None]:
             assumptions=[assumptions.RETRO_GRADES, *_synthetic(w)],
         )
         for g in store.grades(unit=w.uid, synthetic=synthetic)
-        if g["grade"] in {"wrong", "missed"} and (g.get("rev") == w.rev.get("rev") or g["id"] not in held)
+        if g["grade"] in {"wrong", "missed"}
+        and (g.get("rev") == w.rev.get("rev") or g["id"] not in held or g.get("supersedes"))
     ]
 
 
