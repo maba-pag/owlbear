@@ -159,12 +159,14 @@ def overview(store: Store) -> list[dict[str, Any]]:
 
 def _audits(store: Store) -> list[dict[str, Any]]:
     reports = audit_record.read(store)
-    offered = ["doc", "agent"] if store.name == "owlbear" else ["doc"]
+    offered = ["doc", "agent", "code"] if store.name == "owlbear" else ["doc", "code"]
     notes = {
         "doc": "Checks the documentation against the code and itself: accuracy, staleness, broken links, "
         "duplication, structure, audience. Reads a pinned commit and never edits.",
         "agent": "Checks the instructions, agents and skills that steer agents in OwlBear's repository. "
         "Reads a pinned commit and never edits.",
+        "code": "Checks defects and lean code against the plans and decisions at a pinned commit. "
+        "A verifier checks each finding; accepted findings and one summary become issues. Never edits.",
     }
     return [
         {
@@ -201,7 +203,16 @@ def subagent_use(store: Store) -> list[dict[str, Any]]:
             steps[key] = kind if kind in roles.SESSIONS else before[0], _ran(e) or before[1]
     for name, last in audit_record.read(store).items():
         if last.get("session"):
-            steps[(f"audit:{name}", last["session"])] = (f"{name}-audit", _ran(last))
+            ran = _ran(last)
+            steps[(f"audit:{name}", last["session"])] = (
+                f"{name}-audit",
+                [row for row in ran if row.get("audit_role") != "audit-verifier"],
+            )
+            if last.get("verifier_session"):
+                steps[(f"audit:{name}", last["verifier_session"])] = (
+                    "audit-verify",
+                    [row for row in ran if row.get("audit_role") == "audit-verifier"],
+                )
     use: dict[str, dict[str, Any]] = {}
     for kind, ran in steps.values():
         if kind not in roles.SESSIONS:

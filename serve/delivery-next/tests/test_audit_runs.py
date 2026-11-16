@@ -115,13 +115,35 @@ def test_accepted_findings_remain_publishable_after_workspace_cleanup_fails(audi
 
     monkeypatch.setattr(job.workspace, "opened", opened)
     monkeypatch.setattr(job.workspace, "inspect", lambda *_args: None)
-    monkeypatch.setattr(job.sessions, "auditor", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(job.sessions, "auditor", lambda *_args, **_kwargs: SimpleNamespace(role="project-auditor"))
+    monkeypatch.setattr(job.sessions, "verifier", lambda *_args: SimpleNamespace(role="audit-verifier"))
     monkeypatch.setattr(job.sessions, "accepted", lambda *_args: result)
-    audits.run = lambda _cfg: SimpleNamespace(session_id="auditor-one", subagents=[])
+    checked = project_audit_tools.AuditVerdicts(
+        verdicts=[
+            project_audit_tools.AuditVerdict(
+                finding=1,
+                verdict="accepted",
+                reason="The removed command is named literally.",
+                decisions=[],
+                duplicate_of="",
+            )
+        ]
+    )
+    monkeypatch.setattr(job.sessions, "verified", lambda *_args: checked)
+    ran = []
+
+    def run(cfg):
+        ran.append(cfg.role)
+        return SimpleNamespace(session_id=cfg.role, subagents=[])
+
+    audits.run = run
     audits._work("doc", state, resume=False)  # noqa: SLF001 - exercise the worker's cleanup/publication boundary
     saved = audits.read("doc")
     assert saved["state"] == "publishing"
     assert saved["findings"] == _report()["findings"]
+    assert saved["verified"]
+    assert saved["verdicts"] == checked.model_dump(mode="json")["verdicts"]
+    assert ran == ["project-auditor", "audit-verifier"]
     assert "fixture workspace cleanup failed" in saved["reason"]
     launched = []
     monkeypatch.setattr(audits, "_launch", lambda audit, state, *, resume: launched.append((audit, state, resume)))
@@ -133,6 +155,9 @@ def test_discard_consent_only_replaces_the_report_the_owner_reviewed(tmp_path, m
     store = Store(tmp_path / "store", name="fixture")
     store.write_profile(Profile(entries={profile.DEFAULT: ProfileEntry(state="known", value="main")}))
     audits = job.Audits(store)
+    audits.repo = tmp_path / "clone"
+    monkeypatch.setattr(job.github_writer, "of", lambda *_args: SimpleNamespace(access=lambda: None))
+    monkeypatch.setattr(job.workspace, "pin", lambda *_args: "initial-pin")
     monkeypatch.setattr(job.Audits, "refusal", lambda *_args: "")
     launched = []
 

@@ -57,7 +57,7 @@ class Audits:
 
     def offered(self) -> tuple[str, ...]:
         """Only OwlBear's shared project folder offers an agent audit."""
-        return ("doc", "agent") if self.store.name == "owlbear" else ("doc",)
+        return ("doc", "agent", "code") if self.store.name == "owlbear" else ("doc", "code")
 
     def busy(self) -> bool:
         """Whether the project's stop must wait for an audit or its publication."""
@@ -70,10 +70,12 @@ class Audits:
 
     def offer(self) -> dict[str, Any]:
         """The page's offered actions, models, target and reports."""
-        branch, role, problem = "", {}, ""
+        branch, role, verifier, problem = "", {}, {}, ""
         try:
             branch = profile.value(self.store.read_profile() or Profile(), profile.DEFAULT, "")
-            role = self.store.settings().roles.get("project-auditor") or {}
+            settings = self.store.settings()
+            role = settings.roles.get("project-auditor") or {}
+            verifier = settings.roles.get("audit-verifier") or {}
         except (StoreError, SettingsUnset, OSError, ValueError) as exc:
             problem = failure(exc)
         rows = []
@@ -85,6 +87,7 @@ class Audits:
                     "name": f"{audit.title()} audit",
                     "branch": branch,
                     "role": {key: role.get(key) for key in ("model", "effort")},
+                    "verifier": {key: verifier.get(key) for key in ("model", "effort")},
                     "last": last,
                     "blocked": problem or self.refusal(audit),
                 }
@@ -110,7 +113,12 @@ class Audits:
             settings = self.store.settings()
             roles.chosen(settings, f"{audit}-audit")
             roles.limit(settings, f"{audit}-audit")
-            roles.subagents(settings, f"{audit}-audit")
+            allowed = roles.subagents(settings, f"{audit}-audit")
+            if audit == "code" and not allowed:
+                return "the code audit requires project-auditor subagents on; change it on the Settings page"
+            roles.chosen(settings, "audit-verify")
+            roles.limit(settings, "audit-verify")
+            roles.subagents(settings, "audit-verify")
             roles.user_config(settings)
             backlog.Backlog.of(self.store)
             record.load(self.store)
@@ -119,7 +127,7 @@ class Audits:
         return ""
 
     def start(self, audit: str, note: str = "", *, discard_report: str = "") -> dict[str, Any]:
-        """Pin the selected branch and launch one auditor, refusing an undisposed partial publication."""
+        """Pin the selected branch and launch its audit, refusing an undisposed partial publication."""
         with self.lock:
             if why := self.refusal(audit):
                 raise AuditBusyError(why)
@@ -131,7 +139,7 @@ class Audits:
                 msg = "the last audit report changed; review it and start again"
                 raise AuditBusyError(msg)
             if old and record.unpublished(old) and not discard_report:
-                msg = "the last audit has unpublished findings; finish publishing or explicitly drop them"
+                msg = "the last audit has unpublished findings or summary; finish publishing or explicitly drop them"
                 raise AuditBusyError(msg)
             prof = self.store.read_profile() or Profile()
             branch = profile.value(prof, profile.DEFAULT, "")
@@ -141,7 +149,7 @@ class Audits:
             state = {
                 "id": uuid.uuid4().hex,
                 "state": "running",
-                "phase": "auditing",
+                "phase": "pinning commit",
                 "started_at": record.now(),
                 "ended_at": "",
                 "branch": branch,
@@ -156,9 +164,24 @@ class Audits:
                 "subagents": [],
                 "reason": "",
                 "session": "",
+                "verified": False,
+                "verdicts": [],
+                "verifier_session": "",
+                "summary_issue": record.SummaryIssue().model_dump(mode="json"),
             }
+            if self.repo is None:
+                raise AuditBusyError(UNBOUND)
+            try:
+                state["commit"] = workspace.pin(self.repo, branch, github_writer.of(self.store, self.repo).access())
+            except Exception as exc:
+                state.update(state="failed", phase="", reason=failure(exc), ended_at=record.now())
+                record.save(self.store, audit, state)
+                logger.exception("%s audit could not pin its initial commit", audit)
+                raise AuditBusyError(state["reason"]) from exc
+            state["phase"] = "auditing"
+            started = state.copy()
             self._launch(audit, state, resume=False)
-            return state.copy()
+            return started
 
     def publish(self, audit: str) -> dict[str, Any]:
         """Finish a partial publication without running another agent."""
@@ -197,7 +220,7 @@ class Audits:
             if not resume:
                 with spend_ledger.at(spend_ledger.Where.of(self.store, job=f"{audit.title()} audit")):
                     self._audit(audit, state, save)
-            publish.findings(self.store, state, save)
+            publish.findings(self.store, state, save, audit=audit)
             state.update(state="done", phase="", reason="", ended_at=record.now())
         except Exception as exc:
             state.update(reason=failure(exc), ended_at=record.now())
@@ -213,8 +236,6 @@ class Audits:
     def _audit(self, audit: str, state: dict[str, Any], save: Callable[[], None]) -> None:
         if self.repo is None or self.maintenance is None:
             raise AuditBusyError(UNBOUND)
-        state["commit"] = workspace.pin(self.repo, state["branch"], github_writer.of(self.store, self.repo).access())
-        save()
         prof = self.store.read_profile() or Profile()
         repository = profile.value(prof, profile.REPO, "")
         with workspace.opened(self.maintenance, self.repo, state["commit"]) as copy:
@@ -245,22 +266,55 @@ class Audits:
                 state["note"],
                 helper=target,
             )
-            try:
+
+            def execute(cfg: Session, field: str) -> Run:
                 try:
-                    done = self.run(cfg)
-                except session_result.ReturnedRunError as exc:
-                    state["session"] = exc.run.session_id
-                    state["subagents"] = exc.run.subagents
-                    raise
-                state["session"] = done.session_id
-                state["subagents"] = done.subagents
-            finally:
-                workspace.inspect(copy, state["commit"])
-            result = sessions.accepted(done, root)
-            data = result.model_dump(mode="json")
-            data["not_covered"] = [*state["not_covered"], *data["not_covered"]]
-            data["changed_defaults"] = [*state["changed_defaults"], *data["changed_defaults"]]
-            data["findings"] = [{**f, "number": None, "url": "", "pending": None} for f in data["findings"]]
-            state.update(data)
+                    try:
+                        done = self.run(cfg)
+                    except session_result.ReturnedRunError as exc:
+                        remember(exc.run, field, cfg.role)
+                        raise
+                    remember(done, field, cfg.role)
+                    return done
+                finally:
+                    workspace.inspect(copy, state["commit"])
+
+            def remember(done: Run, field: str, role: str) -> None:
+                state[field] = done.session_id
+                state["subagents"].extend(row | {"audit_role": role} for row in done.subagents)
+                save()
+
+            done = execute(cfg, "session")
+            _findings(state, sessions.accepted(done, root), audit)
+            save()
+            (root / "context" / "run.json").write_text(json.dumps(state), encoding="utf-8")
+            verification = execute(sessions.verifier(self.store, root, state["note"]), "verifier_session")
+            checked = sessions.verified(verification, root)
+            state.update(verified=True, verdicts=checked.model_dump(mode="json")["verdicts"])
             state.update(state="publishing", phase="opening issues")
             save()
+
+
+def _findings(state: dict[str, Any], result: project_audit_tools.AuditFindings, audit: str) -> None:
+    data = result.model_dump(mode="json")
+    data["not_covered"] = [*state["not_covered"], *data["not_covered"]]
+    data["changed_defaults"] = [*state["changed_defaults"], *data["changed_defaults"]]
+    data["findings"] = [{**f, "number": None, "url": "", "pending": None} for f in data["findings"]]
+    state.update(data, phase="checking findings", verified=False, verdicts=[])
+    if audit == "code":
+        state["not_covered"].extend(_coverage(state))
+    state["not_covered"].extend(f"{part['part']}: {part['note']}" for part in state["parts"] if not part["ran"])
+
+
+def _coverage(state: dict[str, Any]) -> list[str]:
+    limits = []
+    if not state["parts"]:
+        limits.append("The code audit reported no lens-part coverage.")
+    completed = sum(row.get("outcome") == "completed" for row in state["subagents"])
+    required = 1 + sum(part["ran"] for part in state["parts"])
+    if completed < required:
+        limits.append(
+            f"Helper and per-part delegation unconfirmed: {completed} completed subagents "
+            f"for the helper and {required - 1} reported lens parts."
+        )
+    return limits
