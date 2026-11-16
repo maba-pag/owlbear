@@ -295,7 +295,8 @@ export function briefInfo(d) {
 
 // TD-185: the reference and current versions, and every amendment: old -> new, reason, level, challenger and verdict,
 // how it ended; an applied one takes his objection while he may object, else says why not.
-const SOURCES = { worker: "a worker", answer: "your answer", allow: "your Allow it", revert: "your revert" };
+const SOURCES = { worker: "a worker", answer: "your answer", request: "your request", allow: "your Allow it",
+  revert: "your revert" };
 const LEVELS = { autonomous: "applied by Delivery alone", approved: "approved by you", decided: "decided by you" };
 const STATES = {
   recorded: "recorded before amendments existed; never applied", proposed: "in progress", applied: "applied",

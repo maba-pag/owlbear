@@ -60,10 +60,20 @@ def test_each_role_has_its_skills_in_the_one_skills_folder_and_none_loads_the_ch
         assert preload.missing(role) == []
     shipped = {p.name for p in preload.directory().iterdir() if p.is_dir()}
     roles = {s for r in ROLES for s in preload.required(r, ui=True)}
-    assert shipped == roles | set(pack_files.manifest()["skills"]) | {preload.CHAT}
+    jobs = {name for skills in preload.JOBS.values() for name in skills if name.startswith("owlbear-")}
+    assert shipped == roles | jobs | set(pack_files.manifest()["skills"]) | {preload.CHAT}
     assert not any(preload.CHAT in preload.required(r, ui=True) for r in preload.REQUIRED)
     for kind in sdk_adapter.ROLES:
         assert sdk_adapter.agent(kind)["skills"] == list(preload.REQUIRED[sdk_adapter.ROLES[kind]])
+
+
+def test_code_audit_skill_loads_only_for_the_audit_and_verification_jobs() -> None:
+    jobs = {job for job, skills in preload.JOBS.items() if "owlbear-code-audit" in skills}
+    assert jobs == {"code-audit", "audit-verify"}
+    for role, job in (("project-auditor", "code-audit"), ("audit-verifier", "audit-verify")):
+        assert preload.required(role, job=job) == ("owlbear-code-audit",)
+        assert preload.missing(role, job=job) == []
+    assert not any("owlbear-code-audit" in skills for skills in preload.REQUIRED.values())
 
 
 def test_missing_misnamed_and_malformed_skills_are_reported(gap) -> None:

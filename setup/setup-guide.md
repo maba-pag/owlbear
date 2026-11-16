@@ -17,7 +17,7 @@ Before running setup, ensure the following are installed on your Mac:
 | --- | --- | --- |
 | Python 3.14.8 | OwlBear runtime; OwlBear supports the 3.14 series only | [python.org](https://www.python.org/downloads/) |
 | [uv](https://docs.astral.sh/uv/) | Installs OwlBear's dependencies and launches its tool servers | [Installation guide](https://docs.astral.sh/uv/getting-started/installation/) |
-| Git, with `user.name` and `user.email` set | Clone, and the commits of each Change | [git-scm.com](https://git-scm.com/) |
+| Git with configured hooks (`git hook list`), and `user.name` and `user.email` set | Clone, Change commits and read-only ref-write attribution | [git-scm.com](https://git-scm.com/) |
 | [GitHub CLI](https://cli.github.com/), signed in (`gh auth login`) to every account that writes to a project | Pushes, pull requests and merges, made as the account the Settings page's GitHub account names (by default the repository owner's when `gh` has it, else `maba-pag`); that account needs push access, over an HTTPS `origin` with no token in its URL | [Installation guide](https://cli.github.com/manual/installation) |
 | GitHub Copilot CLI | Runs OwlBear's agent sessions | `brew install --cask copilot-cli`, or set `COPILOT_CLI_PATH` to its absolute path |
 | VS Code | New Change's shaping chat opens there | [code.visualstudio.com](https://code.visualstudio.com/) |
@@ -30,6 +30,9 @@ session cannot answer; OwlBear skips it and reports the CLI as missing.
 
 If your Git configuration signs commits, OwlBear checks that the signing key is usable before it
 works on a project.
+
+Read-only steps add a process-local `reference-transaction` hook without replacing existing Git hooks.
+Unsupported or disabled hook registration refuses preparation before an agent session starts.
 
 ---
 

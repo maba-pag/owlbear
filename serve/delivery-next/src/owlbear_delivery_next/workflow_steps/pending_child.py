@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 
-from owlbear_delivery_next.change_contracts import amend_tools
+from owlbear_delivery_next.change_contracts import amend_tools, failures
 from owlbear_delivery_next.change_contracts.held_records import PendingChild
 from owlbear_delivery_next.change_contracts.models import Exit, StepKind
 from owlbear_delivery_next.change_contracts.round_records import RECHECK
@@ -253,6 +253,8 @@ def fits(change: Change) -> bool:
         return False  # its own brief generation is gone, or it was never bound to one
     if pending.label in AMENDING:
         return pending.parent == amending(change)
+    if change.amending is not None:
+        return False
     if pending.label == "question-admission":
         q = change.pending_question
         return bool(
@@ -286,6 +288,11 @@ def retired(store: Store, lock: Lock, change: Change) -> Change:
     if pending.run is not None:
         run = held.accounted(pending.run)  # counted whether or not its result still loads
         step = booked(change, run, {"exit": "retired"})
+        gate = session_result.to_result(run, StepKind.REVIEW, datetime.now(UTC), change.step.kind)
+        if gate.exit == Exit.STOP or (
+            gate.question and (gate.question.cause or "").endswith(failures.READ_ONLY_UNREAD)
+        ):
+            change = loop.apply(change, gate, datetime.now(UTC))
     change.pending_child = None
     store.write(lock, change)
     if step is not None:

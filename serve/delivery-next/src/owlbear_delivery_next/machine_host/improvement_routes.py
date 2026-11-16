@@ -202,7 +202,8 @@ def _reads(routes: APIRouter, m: _Machine) -> None:
         if project:
             m.registered(project)
         missing: list[str] = []
-        shown = improvement_view.looks(m.projects(), units.records(unread=missing), store.grades(), project=project,
+        shown = improvement_view.looks(m.projects(), units.records(unread=missing),
+                                       store.grades(include_pending=True), project=project,
                                        change=change, limit=limit)  # fmt: skip
         return shown | ({"record_unread": missing} if missing else {})
 
@@ -217,7 +218,9 @@ def _reads(routes: APIRouter, m: _Machine) -> None:
         if loaded is not None and slug not in loaded[0].slugs():
             raise HTTPException(404, f"project {project} has no Change {slug!r}")
         missing: list[str] = []
-        shown = improvement_view.change_detail(project, slug, units.records(unread=missing), store.grades())
+        shown = improvement_view.change_detail(
+            project, slug, units.records(unread=missing), store.grades(include_pending=True)
+        )
         return shown | ({"record_unread": missing} if missing else {})
 
 

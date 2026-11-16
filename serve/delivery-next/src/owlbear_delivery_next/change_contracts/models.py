@@ -41,7 +41,8 @@ type Actor = Literal["you", "admin", "delivery", "github"]
 type Channel = Literal["status-view", "chat"]
 type Role = Literal[
     "planner", "builder", "reviewer", "challenger", "design-judge", "preparer", "shaper", "updater", "test-reviewer",
-    "test-curator", "picker", "curator", "spotter", "retro", "retro-review", "auditor", "repairer",
+    "test-curator", "picker", "curator", "spotter", "retro", "retro-review", "auditor", "project-auditor",
+    "audit-verifier", "repairer",
 ]  # fmt: skip
 type Effort = Literal["low", "medium", "high", "xhigh", "max"]
 type Context = Literal["default", "long"]  # the model's default context tier, or its long-context tier
@@ -221,6 +222,7 @@ class Answer(Record):
     tasks: list[str] = Field(default_factory=list)  # the plan tasks a final retry rebuilds (TD-217)
     kind: AnswerKind | None = None  # TD-461: set on a worker question's answer only
     statement: str = ""  # a clarification's confirmed intent: a Change decision once checked within the brief
+    superseded_at: datetime | None = None  # a later owner request retired this unchecked intent, not its history
 
 
 class Question(Record):

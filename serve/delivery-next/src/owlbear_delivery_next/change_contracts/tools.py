@@ -389,7 +389,9 @@ FIRST_LOOK = "submit_first_look"  # the design judge's own verdict, before the d
 SCAN_DESIGN = "scan_design"  # the builder's design detector on a UI Change (slice 7)
 LOOKUP = "lookup_decisions"  # which decisions govern a question, answered by the picker (TD-456, TD-459)
 LOOKERS = frozenset({"planner", "builder", "reviewer", "preparer", "test-curator", "repairer"})  # a step's worker
-JUDGES = frozenset({"challenger", "design-judge", "test-reviewer", "picker", "curator", "auditor"})  # never asks
+JUDGES = frozenset(
+    ("challenger", "design-judge", "test-reviewer", "picker", "curator", "auditor", "project-auditor", "audit-verifier")
+)
 PICKER = "picker"  # an SDK-only session whose one tool is its result (TD-459)
 CURATOR = "curator"  # automatic memory curation: its memory tools, then its report as its result (item 5 slice 4)
 AUDITOR = "auditor"  # the PDS deprecation audit: read tools, then its report as its result (#777)
@@ -401,17 +403,15 @@ VERDICTS = frozenset({
 
 
 def asks(role: str, *, judging: bool = False) -> bool:
-    """Whether a session may ask the owner with ``ask_question``: never a judge's, a judgement's or the updater's.
-
-    The pack updater runs inside a host job, not a Change; its owner questions are the job's stops (TD-177).
-    """
+    """Whether a session may ask; judges, the updater and repairer leave questions to Delivery."""
     return role not in JUDGES and role not in {"updater", "repairer"} and not judging  # #1066: Delivery asks
 
 
 def results(role: str, *, ui: bool = False, judging: bool = False) -> list[str]:
     """Delivery's tools a role's agent is offered: every step's own, the first look, the UI scan, the lookup."""
-    if role in {PICKER, CURATOR, AUDITOR, "repairer"}:  # a repairer's one owner question is Delivery's (#1066)
-        return [SUBMIT.name, *([LOOKUP] if role == "repairer" else [])]
+    extra = {"repairer": [LOOKUP, PREMISE.name, "report_progress"], "project-auditor": ["set_target"]}.get(role, [])
+    if role in {PICKER, CURATOR, AUDITOR, "repairer", "project-auditor", "audit-verifier"}:
+        return [SUBMIT.name, *extra]
     extra = [FIRST_LOOK] if role == "design-judge" else [SCAN_DESIGN] if role == "builder" and ui else []
     extra += [LOOKUP] if role in LOOKERS and not judging else []
     return [*(s.name for s in SPECS if s is not ASK or asks(role, judging=judging)), *extra]

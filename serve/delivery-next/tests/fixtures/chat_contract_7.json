@@ -721,6 +721,27 @@
         }
       ]
     },
+    "POST /chat/audits/code": {
+      "body": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "additionalProperties": false,
+              "properties": {
+                "note": {
+                  "default": "",
+                  "maxLength": 2000,
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      },
+      "parameters": []
+    },
     "POST /decisions/lookup": {
       "body": {
         "content": {
@@ -1822,6 +1843,22 @@
         "properties": {
           "change": {
             "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "start_code_audit": {
+      "input": {
+        "properties": {
+          "note": {
+            "default": "",
+            "maxLength": 2000,
             "type": "string"
           }
         },

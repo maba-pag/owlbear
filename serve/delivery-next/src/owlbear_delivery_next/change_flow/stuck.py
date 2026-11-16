@@ -55,6 +55,35 @@ def bound(c: Change) -> bool:
     return r is not None and (r.step, r.task) == (c.step.kind, c.step.task)
 
 
+def retire(c: Change, why: str) -> None:
+    """Keep a superseded repair's findings and patch without running or applying it again."""
+    if (r := c.repairs.current) is not None:
+        r.phase, r.stopped = "stopped", why
+        c.repairs.done.append(r)
+        c.repairs.current = None
+
+
+def exhausted(c: Change) -> bool:
+    """Include older persisted repair stops, but not a live repair's recoverable publication failure."""
+    if not (c.stop and c.outcome and c.outcome.exit == Exit.STOP) or c.repairs.current:
+        return False
+    r = next((r for r in reversed(c.repairs.done) if r.cause == c.outcome.cause), None)
+    return bool(r and r.phase in {"stopped", "applied"} and c.stop.kind == kind_of(r.cause))
+
+
+def action(c: Change) -> str:
+    """The executable way out of an exhausted repair, including stops written before this route existed."""
+    if not exhausted(c):
+        return c.stop.action if c.stop else ""
+    if (
+        not c.tests
+        and c.brief.approved_version == c.brief.version
+        and c.stop.kind in {ErrorKind.SCOPE, ErrorKind.PROJECT_ENV}
+    ):
+        return "Request a brief change, pause or abandon the Change"
+    return "Review the repair evidence; pause or abandon the Change"
+
+
 def obstruction(evidence: str) -> str:
     """The first sentence of what stopped the step, as the owner reads it in the status line."""
     first = evidence.strip().splitlines()[0] if evidence.strip() else "the step stopped"
@@ -146,7 +175,10 @@ def stopped(c: Change, why: str, now: datetime) -> None:
     """Nothing worked, a fix was refused or declined: stop listing every fix tried and the repair's spend."""
     r = c.repairs.current
     assert r is not None  # noqa: S101 - only a repair stops
-    tried = "; ".join(f"{i}. {t.fix}: {t.outcome.rstrip('.')}" for i, t in enumerate(r.tried, 1)) or "nothing"
+    tried = (
+        "; ".join(f"{i}. {t.fix}: {t.outcome.rstrip('.')}" for i, t in enumerate(r.tried, 1))
+        or "no remedies were reported"
+    )
     spent = f"{r.credits:.2f} credits" if r.credits is not None else "an unknown number of credits"
     found = f" It found: {r.found.rstrip('.')}." if r.found else ""
     r.phase, r.stopped = "stopped", why
@@ -166,3 +198,5 @@ def stopped(c: Change, why: str, now: datetime) -> None:
 def _stop(c: Change, cause: str, reason: str, now: datetime) -> None:
     c.stop = Stop(kind=ErrorKind(kind_of(cause)), reason=reason, action=RERUN, resume="the step runs again", at=now)
     c.outcome = Outcome(exit=Exit.STOP, cause=cause, reason=reason, who="you", at=now)
+    c.stop.action = action(c)
+    c.stop.resume = "The brief changes, or the Change is paused or abandoned"

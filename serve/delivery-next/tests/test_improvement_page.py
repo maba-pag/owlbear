@@ -21,6 +21,7 @@ from owlbear_delivery_next.improvement import (
     cases,
     followups,
     improvement_view,
+    retro_grade_history,
     spotter,
 )
 from owlbear_delivery_next.improvement import proposal_targets as targets
@@ -64,6 +65,16 @@ BARE = (
     "e => { const c = e.cloneNode(true); c.querySelectorAll('time, ul').forEach((t) => t.remove()); "
     "return c.textContent; }"
 )
+
+
+def _partial_correction(pid: str) -> None:
+    unit = f"chg:{pid}:{SLUG}"
+    old = [{"id": f"rg-{rid}", "record": rid, "unit": unit, "grade": "wrong"} for rid in ("r-note", "r-quiet")]
+    store.add_grades(old)
+    request = store.request_correction("owner", f"{pid}:{SLUG}", "r1", {g["record"]: g["id"] for g in old})
+    store.take(request)
+    store.add_grades([old[1] | {"id": retro_grade_history.corrected_id(old[1]["id"]),
+                               "supersedes": old[1]["id"], "grade": "worth-it"}])  # fmt: skip
 
 
 class Backlog:
@@ -475,6 +486,8 @@ def test_each_records_act_the_spotter_test_and_the_chats_not_followed_show(tmp_p
 
     with machine_page(tmp_path, monkeypatch, pds) as w:
         _acted(w.pid)
+        proposal = _proposal("spotter-case", "look:handoff", ["rg-r-note"], record="r-note", call="hand-off-fitness")
+        _partial_correction(w.pid)
         spotter_test.declare("fewer re-runs", "B", "A")
         spotter_test.start({"model": "gpt-5.6-sol", "effort": "high", "context": "", "prompt": "p",
                             "prompt_hash": "ab12cd34", "cases": 7})  # fmt: skip
@@ -488,6 +501,14 @@ def test_each_records_act_the_spotter_test_and_the_chats_not_followed_show(tmp_p
         failed = page.locator("#look-r-note")
         expect(failed).to_contain_text("Its act: refuse-hand-off, steered arm, failed")
         expect(failed).to_contain_text(f"Its error: {FAILED}")
+        expect(failed).to_contain_text("Awaiting evidence correction")
+        expect(failed).not_to_contain_text("Graded: wrong")
+        stale = card(page, proposal)
+        expect(stale).to_contain_text("this case's grade awaits evidence correction")
+        expect(stale.get_by_role("button", name="Accept", exact=True)).to_be_disabled()
+        stale.get_by_role("button", name="Reject", exact=True).click()
+        pds.answer(page, "Reject")
+        expect(stale).to_contain_text("Rejected")
         harm = page.locator("#look-r-harm")
         expect(harm).to_contain_text("Stopped the step: irreversible harm")
         expect(harm).to_contain_text("Its act: stop-and-ask, silent arm, delivered")
@@ -499,6 +520,7 @@ def test_each_records_act_the_spotter_test_and_the_chats_not_followed_show(tmp_p
         quiet = page.locator("#look-r-quiet")  # no act: nothing about one
         expect(quiet).to_contain_text("Nothing found")
         expect(quiet).not_to_contain_text("Its act")
+        expect(quiet).to_contain_text("Graded: worth-it")
 
         spotted = page.locator("#spotter")
         expect(spotted).to_contain_text("fewer re-runs")
@@ -646,6 +668,7 @@ def test_a_changes_detail_shows_behind_the_details_switch(tmp_path, monkeypatch,
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with machine_page(tmp_path, monkeypatch, pds) as w:
+        _partial_correction(w.pid)
         page = w.page
         page.goto(f"{w.base}/?project={w.pid}&change={w.pid}%2F{SLUG}#token=t")
         expect(page.get_by_text(STOPPED).first).to_be_visible()  # the stop says why, switch or not
@@ -665,6 +688,8 @@ def test_a_changes_detail_shows_behind_the_details_switch(tmp_path, monkeypatch,
         switch.click()
         detail = page.locator("#improvement-detail")
         expect(detail.locator("#look-r-note")).to_contain_text("It said done with the week column unchecked.")
+        expect(detail.locator("#look-r-note")).to_contain_text("Awaiting evidence correction")
+        expect(detail.locator("#look-r-quiet")).to_contain_text("Graded: worth-it")
         finding = detail.locator("#finding-f-1")
         expect(finding).to_contain_text("done before the week held")
         expect(finding).to_contain_text("Cost: a re-run")

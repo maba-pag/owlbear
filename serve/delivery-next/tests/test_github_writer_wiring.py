@@ -12,6 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from owlbear_delivery_next.audit_runs import workspace as audit_workspace
 from owlbear_delivery_next.change_contracts.models import Change, Exit, Names, Step, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.commands import cli, runner, setup
@@ -130,6 +131,8 @@ def _backlog(tmp_path, monkeypatch):
 def _owlbear_issues(tmp_path, _monkeypatch):
     with contextlib.suppress(ProviderError):
         OwlbearIssues("acme/owlbear", tmp_path).find("<!-- marker -->")
+    with contextlib.suppress(ProviderError):
+        OwlbearIssues("acme/owlbear", tmp_path).edit(7, "Summary\n\n<!-- audit:run:summary -->\n")
 
 
 CASES = {  # entry, the project's setting, the active account, whose token the launch carries
@@ -217,11 +220,16 @@ def _owners_pull(store, repo, _head, lock):
     assert c.pullback is not None, said
 
 
+def _audit_fetch(store, repo, head, _lock):
+    assert audit_workspace.pin(repo, "main", github_writer.of(store, repo).access()) == head
+
+
 GIT_CASES = {
     "the publish push and both reads of its ref": (_publish_push, ["ls-remote", "push", "ls-remote"]),
     "a cleanup fetch": (_cleanup_fetch, ["fetch"]),
     "a Builder task that needs the target": (_needs_target, ["fetch"]),
     "the owner's Pull": (_owners_pull, ["fetch"]),
+    "an audit's pinned branch": (_audit_fetch, ["fetch"]),
 }
 
 

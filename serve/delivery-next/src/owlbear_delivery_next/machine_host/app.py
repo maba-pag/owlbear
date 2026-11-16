@@ -25,7 +25,6 @@ from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, leases, local_home
 from owlbear_delivery_next.machine_host import (
     control,
-    impeccable,
     improvement_routes,
     onboarding_routes,
     update_routes,
@@ -34,6 +33,7 @@ from owlbear_delivery_next.machine_host import (
 from owlbear_delivery_next.machine_host.machine import Machine, MachineError
 from owlbear_delivery_next.project_host import (
     api,
+    audit_routes,
     chat_routes,
     decision_routes,
     impact_routes,
@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from starlette.types import ASGIApp, Receive, Scope, Send
 
 PROJECT = re.compile(r"^/p/([0-9a-f]{16})(?=/|$)")
+OWLBEAR_AUDIT = "/api/next/owlbear/chat/audits/code"
 
 
 class RegisterBody(api.Body):
@@ -98,7 +99,8 @@ class Dispatcher:
             if asked and secrets.compare_digest(headers.get(b"authorization", b""), self.expected):
                 self.machine.auto.use()
         found = PROJECT.match(scope.get("path", "")) if scope["type"] == "http" else None
-        if found is None:
+        audit = scope["type"] == "http" and scope.get("path") == OWLBEAR_AUDIT and scope.get("method") == "POST"
+        if found is None and not audit:
             await self.app(scope, receive, send)
             return
         headers = dict(scope.get("headers", []))
@@ -114,7 +116,30 @@ class Dispatcher:
             )  # reads only (§5.3)
             await JSONResponse({"detail": said}, 503)(scope, receive, send)
             return
-        p = self.machine.projects.get(found[1])
+        if audit:
+            await self._audit(scope, receive, send)
+        elif found is not None:
+            await self._serve(scope, receive, send, found[0])
+
+    async def _audit(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Delegate an authenticated machine chat through the fixed project's normal request gate."""
+        sent = dict(scope.get("headers", [])).get(chat_contract.HEADER.lower().encode())
+        value = sent.decode("latin-1") if sent is not None else None
+        target = (
+            _audit_project(self.machine)
+            if chat_contract.served(value)
+            else JSONResponse(chat_contract.refusal(value or ""), 409)
+        )
+        if isinstance(target, JSONResponse):
+            await target(scope, receive, send)
+            return
+        prefix = f"/p/{target}"
+        path = f"{prefix}/api/next/chat/audits/code"
+        await self._serve({**scope, "path": path, "raw_path": path.encode()}, receive, send, prefix)
+
+    async def _serve(self, scope: Scope, receive: Receive, send: Send, prefix: str) -> None:
+        """Count a project's admitted request so removal waits for it and the work it starts."""
+        p = self.machine.projects.get(prefix.removeprefix("/p/"))
         if p is None or p.app is None or p.state != "loaded":
             said = f"{p.name} is {p.state}" + (f": {p.reason}" if p.reason else "") if p else "no such project"
             await JSONResponse({"detail": said}, 404)(scope, receive, send)
@@ -123,9 +148,27 @@ class Dispatcher:
             await JSONResponse({"detail": f"{p.name} is stopping"}, 503)(scope, receive, send)
             return
         try:
-            await p.app({**scope, "root_path": scope.get("root_path", "") + found[0]}, receive, send)
+            await p.app({**scope, "root_path": scope.get("root_path", "") + prefix}, receive, send)
         finally:
             p.gate.leave()
+
+
+def _audit_project(machine: Machine) -> str | JSONResponse:
+    """Resolve only the fixed shared-data kind; never open or adopt the caller's checkout."""
+    known = [p for p in list(machine.projects.values()) if p.store is not None and p.store.name == "owlbear"]
+    loaded = [p for p in known if p.state == "loaded" and p.app is not None and p.host is not None]
+    if len(loaded) == 1:
+        return loaded[0].entry.id
+    page = audit_routes.maintenance_page(machine.record)
+    if len(known) == 1:
+        p = known[0]
+        page = audit_routes.maintenance_page(machine.record.model_copy(update={"project": p.entry.id}))
+        why = f"the fixed OwlBear project is {p.state}" + (f": {p.reason}" if p.reason else "")
+        if p.state == "loaded":
+            why = "the fixed OwlBear project's host or API is unavailable"
+    else:
+        why = "the fixed OwlBear project is not loaded" if not loaded else "multiple fixed OwlBear projects are loaded"
+    return JSONResponse({"detail": why, "maintenance_page": page}, 409)
 
 
 def create(machine: Machine, ended: Callable[[], None] = lambda: None) -> ASGIApp:
@@ -433,7 +476,8 @@ def _pack_routes(routes: APIRouter, machine: Machine) -> None:
     @routes.post(f"{pack_routes.OLD}/look", include_in_schema=False)
     def look_pack() -> dict[str, Any]:
         """Look now whether a released version pins a newer pack; it fetches, and never installs anything."""
-        impeccable.look()
+        with contextlib.suppress(versions.VersionError, registry.RegistryError):
+            machine.checks.look()
         return machine.impeccable.read()
 
     pack_routes.moved(routes, "")

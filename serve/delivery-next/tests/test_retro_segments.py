@@ -45,6 +45,13 @@ def test_saved_output_course_journey(tmp_path):
     got = seg.prepare(["s1"], "the chat ended", per_turn=True)
 
     first, second = got.parts
+    assert seg.locate({"session": "s1", "look": "hand-off", "call": "c1", "cutoff": 90}, got) == (2, "")
+    assert seg.locate({"session": "s1", "look": "state-change", "call": "c1", "cutoff": 99}, got) == (3, "")
+    assert seg.locate({"session": "s1", "look": "sample", "call": "c2", "cutoff": 150}, got) == (7, "")
+    handoff = seg.moment(first, 2)
+    assert handoff["moment"].endswith('s1.e2 call bash: {"command": "uv run test"}')
+    assert "s1.e3 result bash ok" not in handoff["moment"]
+    assert "s1.e3 result bash ok" in handoff["later"]
     assert (first.ref, second.ref) == ("s1.p1", "s2.p1")
     assert "3 failed, 9 passed" in first.text
     assert "I recovered" in first.later
@@ -79,12 +86,19 @@ def test_a_changes_first_session_sees_what_its_shorter_second_session_did_later_
 
 def test_a_builder_resumed_after_review_is_told_its_course_in_the_order_it_happened():
     def said(minute, text):
-        return {"type": "assistant.message", "timestamp": f"2025-01-01T10:{minute:02}:00Z", "data": {"content": text}}
+        return {
+            "id": f"message-{minute}",
+            "type": "assistant.message",
+            "timestamp": f"2025-01-01T10:{minute:02}:00Z",
+            "data": {"content": text},
+        }
 
     _captured("s-a", [said(1, "built it"), said(2, "all done"), said(5, "repaired: tests pass now")])
     _captured("s-b", [said(3, "review: changes requested"), said(4, "the build is broken")])
 
-    built, repaired, review = seg.prepare(["s-a", "s-b"], "the Change ended done").parts
+    prepared = seg.prepare(["s-a", "s-b"], "the Change ended done")
+    built, repaired, review = prepared.parts
+    assert seg.locate({"session": "s-a", "look": "plan", "call": "message-5", "cutoff": 100}, prepared) == (3, "")
 
     assert (built.ref, repaired.ref, review.ref) == ("s1.p1", "s1.p2", "s2.p1")
     assert "repaired" not in built.text
@@ -138,6 +152,13 @@ def test_a_looks_moment_holds_its_events_up_to_it_even_when_one_quotes_a_later_e
     assert "lint is clean" not in shown["later"]
     assert "the build broke" in shown["later"]
     assert shown["later"].endswith("outcome: sent back")
+    said[2] += "x" * 1400
+    _captured("s1", [_event("assistant.message", content=c) for c in said])
+    (part,) = seg.prepare(["s1"], "sent back").parts
+    long = seg.moment(part, 3)
+    assert long["moment"].startswith("s1.e3 agent: shipping it")
+    assert "chars omitted]" in long["moment"]
+    assert len(long["moment"]) <= seg.MOMENT
 
 
 def test_parts_are_bounded_and_masked_and_only_quotes_found_in_the_cited_text_survive():
@@ -160,3 +181,7 @@ def test_parts_are_bounded_and_masked_and_only_quotes_found_in_the_cited_text_su
     checked = seg.verify(finding, got.parts)
     assert (checked["quotes"], checked["status"]) == (["result bash failed"], "known")
     assert seg.verify({"refs": ["s1.e4"], "quotes": ["never said"]}, got.parts)["status"] == "unknown"
+    events += [events[-1]]
+    _captured("s1", events)
+    duplicated = seg.prepare(["s1"], "merged")
+    assert "ambiguous persisted moment" in seg.locate({"session": "s1", "look": "sample", "call": "c39"}, duplicated)[1]

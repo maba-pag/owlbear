@@ -2,8 +2,8 @@
 
 Judging is tool-less, so its evidence is prepared here. A segment is one requester turn of a chat, or one session of
 a Change; its main-agent events become lines reduced as a Spotter card reduces them (failures and test results kept
-fuller), each line prefixed with its reference ``s<segment>.e<event>`` (the event counted as the Spotter's intake
-counts it). A segment is cut into parts at ``PART`` characters. After an event that names a saved output, a bounded
+fuller), each line prefixed with its reference ``s<segment>.e<event>`` (a readable persisted event ordinal, not a live
+callback count). A segment is cut into parts at ``PART`` characters. After an event that names a saved output, a bounded
 excerpt of the output follows when the capture kept it, else a marker saying why it is missing. Each part comes with
 the unit's later course: what happened after it, reduced to outcome lines, ending with the unit's outcome. Every cut
 leaves a marker of what it omitted; all text is masked. A finding's quote must appear in the prepared text it cites,
@@ -76,7 +76,7 @@ class Part:
 
     ref: str  # ``s<segment>.p<part>``
     session: str
-    first: int  # the first and last event it holds, counted as records' ``cutoff``
+    first: int  # the first and last readable persisted event ordinals it holds
     last: int
     text: str = ""
     later: str = ""
@@ -90,6 +90,32 @@ class Prepared:
     parts: list[Part] = field(default_factory=list)
     earlier: str = ""
     activity: str = ""  # a Change's last activity events, supplementary
+    sessions: list[str] = field(default_factory=list)
+    gaps: list[str] = field(default_factory=list)
+    capture_gaps: dict[str, str] = field(default_factory=dict)
+    anchor_gaps: dict[str, str] = field(default_factory=dict)  # unresolved record ids, filled by judge preparation
+    positions: dict[tuple[str, str, str], list[int]] = field(default_factory=dict)
+
+
+def locate(record: Mapping[str, Any], prepared: Prepared) -> tuple[int | None, str]:
+    """Resolve a look to its persisted ordinal, or a specific gap; never substitute a nearby Delivery event."""
+    session = str(record.get("session") or "")
+    selected = prepared.sessions or list(dict.fromkeys(p.session for p in prepared.parts))
+    if session not in selected:
+        return None, f"session {session} was not selected for this unit"
+    if session in prepared.capture_gaps:
+        return None, prepared.capture_gaps[session]
+    if record.get("step") in {"chat", "synthetic"}:
+        return int(record.get("cutoff") or 0), ""
+    kinds = {"plan": "assistant.message", "hand-off": "tool.execution_start", "handoff": "tool.execution_start",
+             "sample": "tool.execution_complete", "state-change": "tool.execution_complete"}  # fmt: skip
+    kind, call = kinds.get(str(record.get("look")), ""), str(record.get("call") or "")
+    positions = prepared.positions.get((session, kind, call), []) if kind and call else []
+    if len(positions) != 1:
+        state = "ambiguous" if positions else "missing"
+        anchor = f"{kind or record.get('look')} {call or '(no call)'}"
+        return None, f"session {session}: {state} persisted moment for {anchor}"
+    return positions[0], ""
 
 
 @dataclass
@@ -169,11 +195,12 @@ def _say(d: Mapping[str, Any], calls: dict[str, str], said: Mapping[str, Any], s
     return line, brief
 
 
-def _lines(sessions: Iterable[str], high: int, *, per_turn: bool) -> list[_Line]:
+def _lines(prepared: Prepared, high: int, *, per_turn: bool) -> list[_Line]:
     found: list[_Line] = []
     segment = 0
-    for session in sessions:
+    for session in prepared.sessions:
         said, calls, n = retro_units.sidecar(session), {}, 0
+        prepared.gaps += retro_units.session_gaps(session, None)
         segment, fresh = segment + 1, True
         try:
             for d in retro_units.events(session):
@@ -182,6 +209,10 @@ def _lines(sessions: Iterable[str], high: int, *, per_turn: bool) -> list[_Line]
                     break
                 if not ev.main_agent(d):
                     continue
+                kind, data = str(d.get("type") or ""), d.get("data") or {}
+                identity = d.get("id") if kind == "assistant.message" else data.get("toolCallId")
+                if identity and kind in {"assistant.message", "tool.execution_start", "tool.execution_complete"}:
+                    prepared.positions.setdefault((session, kind, str(identity)), []).append(n)
                 if per_turn and not fresh and d.get("type") == "user.message" and ev.requester(d):
                     segment, fresh = segment + 1, True  # a requester turn starts the next segment
                 text, brief = _say(d, calls, said, session)
@@ -189,6 +220,9 @@ def _lines(sessions: Iterable[str], high: int, *, per_turn: bool) -> list[_Line]
                     found.append(_Line(n, session, segment, text, brief, _at(d)))
                     fresh = False
         except FileNotFoundError:
+            gap = f"session {session}'s capture is missing"
+            prepared.capture_gaps[session] = gap
+            prepared.gaps.append(gap)
             continue
         except OSError as exc:
             exc.add_note(f"preparing session {session}'s capture")
@@ -203,8 +237,8 @@ def prepare(sessions: list[str], outcome: str, *, low: int = 0, high: int = 0, p
     were judged before: they are the earlier course, context only. When every event says when it happened, what came
     later is told in that order, and a part ends where another session's events came in between (a resumed session).
     """
-    out, outcome = Prepared(), cut(mask.redact(outcome), OUTCOME)
-    lines = _lines(sessions, high, per_turn=per_turn)
+    out, outcome = Prepared(sessions=list(dict.fromkeys(sessions))), cut(mask.redact(outcome), OUTCOME)
+    lines = _lines(out, high, per_turn=per_turn)
     before = [x for x in lines if x.n <= low]
     lines = [x for x in lines if x.n > low]
     out.earlier = cut(mask.redact("\n".join(x.brief for x in before if x.brief)), LATER)
@@ -239,10 +273,13 @@ def moment(part: Part, cutoff: int) -> dict[str, str]:
     sessions, ending with the unit's outcome. Its events are told apart by their numbers, never by their text, and
     masked before they are cut.
     """
-    upto = mask.redact("\n".join(text for n, text in part.lines if n <= cutoff))
+    before = [text for n, text in part.lines if n <= cutoff]
+    upto = mask.redact("\n".join(before))
     after = mask.redact("\n".join(text for n, text in part.lines if n > cutoff))
     rest = f"{after}\n{part.later}".strip("\n")
     shown = upto if len(upto) <= MOMENT else "[…] " + upto[4 - MOMENT :]  # the moment is at its end
+    if before and len(anchor := mask.redact(before[-1])) > MOMENT:
+        shown = cut(anchor, MOMENT)  # a long anchor's prefix carries the persisted reference; never cut it away
     return {"moment": shown, "later": cut(rest, MOMENT)}
 
 

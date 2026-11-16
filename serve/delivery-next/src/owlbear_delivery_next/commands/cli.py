@@ -8,6 +8,7 @@ from pathlib import Path
 from subprocess import CalledProcessError, TimeoutExpired
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.audit_runs import replay as audit_replay
 from owlbear_delivery_next.change_contracts import check_hint
 from owlbear_delivery_next.change_contracts.models import (
     Brief,
@@ -324,6 +325,10 @@ def run(a: argparse.Namespace) -> int:  # noqa: PLR0911 - one branch per command
         return setup.run(repo, a.confirm, yes=a.yes, local_files=a.local_files) if found else 1
     if a.command in {"prepare", "finish"}:
         return (prepare_move if a.command == "prepare" else finish_move)(a.repo.resolve())
+    if a.command == "audit-replay":
+        ok, text = audit_replay.run(a.repo.resolve())
+        sys.stdout.write(text + "\n")
+        return 0 if ok else 1
     store = Store.open(a.repo.resolve())
     if a.command in {"backlog", "status", "profile"}:
         return report(store, a)

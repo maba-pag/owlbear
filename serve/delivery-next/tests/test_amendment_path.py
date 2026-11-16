@@ -41,8 +41,9 @@ from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
 from owlbear_delivery_next.change_contracts.visual_records import VisualResult
 from owlbear_delivery_next.change_flow import amend_apply, amending, loop
 from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import chat_routes
-from owlbear_delivery_next.runtimes import amendments, step_input
+from owlbear_delivery_next.runtimes import amendments, session_result, step_input
 from owlbear_delivery_next.state_store import briefs, change_record
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import check, queue
@@ -635,7 +636,29 @@ def test_reshaping_or_stopping_ends_a_waiting_amendment_and_a_late_yes_approves_
     c, _ = loop.schedule(c, [AnswerItem(question=q.id, option="yes", at=NOW)], NOW, dropped=dropped)
 
     assert [why for _, why in dropped] == [f"question {q.id}: the amendment it asks about has ended"]
-    assert (c.amendments[0].state, c.amending, c.brief.approved_version) == ("declined", None, 3)
+    assert (c.amendments[0].state, c.brief.approved_version) == ("declined", 3)
+    assert (amending.current(c).source if c.amending else None) == ("request" if intent == "change" else None)
+
+
+@pytest.mark.parametrize("ending", ["shared-git-changed", "read-only-unread"])
+def test_a_brief_request_cannot_clear_the_shared_git_policy_gate(ending):
+    c = change()
+    run = session_result.Run(
+        "fixture", ending, detail="Shared Git needs inspection", termination=Termination(confirmed=True)
+    )
+    c = loop.apply(c, session_result.to_result(run, K.BUILD, NOW), NOW)
+    stop, outcome = c.stop.model_copy() if c.stop else None, c.outcome.model_copy()
+
+    c, step = loop.schedule(c, [IntentItem(at=NOW, intent="change", text="greet in French")], NOW)
+
+    assert (c.stop, c.outcome, step) == (stop, outcome, None)
+    assert amending.current(c).source == "request"
+    if ending == "read-only-unread":
+        q, dropped = loop.open_question(c), []
+        c, step = loop.schedule(c, [AnswerItem(at=NOW, question=q.id, option="retry")], NOW, dropped=dropped)
+        assert dropped == []
+        assert step is not None
+        assert c.amending is not None
 
 
 def test_removing_every_visual_state_while_the_visual_check_stopped_goes_on_to_the_next_check():
@@ -699,7 +722,8 @@ def test_a_yes_folded_after_reshaping_or_stopping_in_the_same_batch_approves_not
     c, _ = loop.schedule(c, items, NOW, dropped=dropped)
 
     assert [why for _, why in dropped] == [f"question {q.id}: the amendment it asks about has ended"]
-    assert (c.amendments[0].state, c.amending, c.brief.version) == ("declined", None, 3)
+    assert (c.amendments[0].state, c.brief.version) == ("declined", 3)
+    assert (amending.current(c).source if c.amending else None) == ("request" if intent == "change" else None)
 
 
 def test_repeated_objections_remove_a_queued_merge_each_time():

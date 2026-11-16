@@ -14,6 +14,7 @@ from owlbear_delivery_next.change_contracts import evidence
 from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
     Brief,
+    BriefRecipe,
     Change,
     Environment,
     Exit,
@@ -152,6 +153,59 @@ def test_the_states_are_rendered_at_the_merge_base_with_the_same_recipe_and_ever
     pids = [int(p) for e in events if e["event"] == "pids" for p in e["pids"]]
     assert pids
     assert not any(psutil.pid_exists(p) and psutil.Process(p).status() != psutil.STATUS_ZOMBIE for p in pids)
+    assert (check.answers(served(ui)), worktrees(ui)) == (False, 1)
+
+
+@pytest.mark.browser
+def test_a_branch_only_preview_helper_renders_baseline_code_with_the_checked_recipe(ui, tmp_path, monkeypatch):
+    """#1282: c1 added tests/metrics_preview.py; its merge-base capture must not lose every before picture."""
+    work = Path(ui.names.worktree)
+    commit(work, "site/content.py", "TEXT = 'baseline module'\n")
+    base = commit(work, "site/index.html", "<html><body>baseline page</body></html>")
+    git(work, "push", "-q", "origin", "HEAD:refs/heads/main")
+    commit(work, "site/content.py", "TEXT = 'changed module'\n")
+    commit(work, "site/index.html", "<html><body>changed page</body></html>")
+    commit(
+        work,
+        "site/tests/metrics_preview.py",
+        (
+            "import http.server, sys\n"
+            "from pathlib import Path\n"
+            "sys.path.insert(0, str(Path.cwd()))\n"
+            "from content import TEXT\n"
+            "class Page(http.server.SimpleHTTPRequestHandler):\n"
+            "    def do_GET(self):\n"
+            "        body = (TEXT + Path('index.html').read_text()).encode()\n"
+            "        self.send_response(200)\n"
+            "        self.end_headers()\n"
+            "        self.wfile.write(body)\n"
+            "http.server.HTTPServer(('127.0.0.1', int(sys.argv[1])), Page).serve_forever()\n"
+        ),
+    )
+    ui.env = ui.env.model_copy(update={"command": f"{sys.executable} tests/metrics_preview.py {{port}}"})
+    ui.brief.recipe = BriefRecipe(command="missing-old-preview {port}", directory="site",
+                                 ready_url="http://127.0.0.1:{port}/")  # fmt: skip
+    # Neither dirty helper edits nor the changed module/page may leak into the baseline.
+    (work / "site/tests/metrics_preview.py").write_text("raise RuntimeError('uncommitted helper')\n")
+    seen = []
+
+    def capturing(url, states, out, widths, **kwargs):
+        with _LOCAL.open(url, timeout=5) as response:
+            seen.append(response.read().decode())
+        return visual.capture(url, states, out, widths, **kwargs)
+
+    monkeypatch.setattr(visual, "CAPTURE", capturing)
+    events = []
+    shots = run(ui, tmp_path, events, widths=(1280,))
+    assert (shots.head, shots.tree, shots.files, shots.findings) == (
+        base,
+        visual.tree(work, base),
+        ["home-1280.png"],
+        [],
+    )
+    assert seen == ["baseline module<html><body>baseline page</body></html>"]
+    assert (tmp_path / "out" / base[:7] / "home-1280.png").read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    assert all(gone(int(p)) for e in events for p in e["pids"])
     assert (check.answers(served(ui)), worktrees(ui)) == (False, 1)
 
 

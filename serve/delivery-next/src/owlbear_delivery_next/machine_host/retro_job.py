@@ -41,9 +41,11 @@ from owlbear_delivery_next.machine_host import retro_block, retro_more, retro_re
 from owlbear_delivery_next.machine_host.auto_update import IDLE_FOR
 from owlbear_delivery_next.machine_host.retro_inputs import (
     Running,
+    due,
     enrolled,
     failed_grading,
     prune,
+    revision,
     session,
     start_settings,
     unfinished,
@@ -192,8 +194,8 @@ class RetroJob:
 
     def _button(self, request: dict[str, Any]) -> None:
         by = request.get("by", "")
-        if (more := retro_more.running(request)) is not None:  # a synthetic unit, a redraft or a follow-up
-            if not self._took(more.uid, by):
+        if (more := retro_more.running(request)) is not None:
+            if not self._took(more.uid, by, mode=more.mode):
                 why = self.seams.blocked(more.uid)
                 self._start(more, f"refused: {why.text}" if why else "", settings_unset=why.keys)
             return
@@ -211,7 +213,7 @@ class RetroJob:
             if self.waiting:
                 return
         try:
-            item = self._due(uid, request)
+            item = due(uid, request, self.seams.projects())
         except (store.RetroError, OSError) as exc:
             self._start(Running(uid, "button", by), f"refused: {failure(exc)}")
             return
@@ -221,21 +223,17 @@ class RetroJob:
             return
         self._start(Running(uid, "button", by, rev=item["rev"]))
 
-    def _took(self, uid: str, by: str) -> bool:
+    def _took(self, uid: str, by: str, *, mode: str = "") -> bool:
         """The button takes over *uid*'s waiting run, its cursor and spend kept; was there one?"""
         if (same := next((c for c in self.waiting if c.uid == uid), None)) is None:
             return False
+        if mode and mode != same.mode:
+            self._start(Running(uid, "button", by, mode=mode), "refused: another Retro run of this Change is waiting")
+            return True
         same.trigger, same.by, same.why = "button", by, ""
         store.run_event(same.id, "resumed", by=by, trigger="button")
         self._go(same)
         return True
-
-    def _due(self, uid: str, request: dict[str, Any]) -> dict[str, Any] | None:
-        if request.get("change"):
-            found = units.due_changes(self.seams.projects(), change=request["change"])
-        else:
-            found = units.due_chats(enrolled(), datetime.now(UTC), chat=request["chat"])
-        return next((i for i in found if i["unit"] == uid), None)
 
     def _start(self, ctx: Running, refused: str = "", *, settings_unset: tuple[str, ...] = ()) -> None:
         """Open *ctx*, recorded, and run it; refused when its limit, a role or an assumption it needs is missing."""
@@ -263,7 +261,11 @@ class RetroJob:
             if ctx.meter is None:
                 ctx.meter = Meter(ctx.limit - ctx.spent, "retro-run")
             work = self._admitted(ctx, "open", lambda _key: self._work(ctx))
-            out = (retro_more.run if ctx.mode in retro_more.MODES else retro_judge.run)(work)
+            if ctx.mode == "correct-grades":
+                retro_judge.judge(work)
+                out = dict(work.found)
+            else:
+                out = (retro_more.run if ctx.mode in retro_more.MODES else retro_judge.run)(work)
             result = "stopped: runtime end unconfirmed" if ctx.unended else "judged"  # its last call's end too
         except WaitingError as exc:
             if exc.why != ctx.why:
@@ -292,7 +294,7 @@ class RetroJob:
         spent = ctx.spent + (report["credits"] if report else 0.0)
         known = ctx.known and (report["credits_known"] if report else True)
         store.run_event(ctx.id, "ended", result=result, credits=report, spent=spent, known=known, **(out or {}))
-        if ctx.rev and ctx.mode != "grade-only" and not (out or {}).get("held"):  # a held run never took it
+        if ctx.rev and ctx.mode not in {"grade-only", "correct-grades"} and not (out or {}).get("held"):
             units.settle(ctx.uid, ctx.rev, result.split(":", 1)[0], run=ctx.id, result=result)
         if ctx in self.waiting:
             self.waiting.remove(ctx)
@@ -306,23 +308,26 @@ class RetroJob:
         projects = self.seams.projects()
         if ctx.mode in retro_more.MODES:
             return retro_more.work(ctx, ask, projects)
-        if ctx.rev and ctx.mode != "grade-only" and self._revision(ctx).get("run") != ctx.id:
+        grading = ctx.mode in {"grade-only", "correct-grades"}
+        if ctx.rev and not grading and revision(ctx.uid, ctx.rev).get("run") != ctx.id:
             units.settle(ctx.uid, ctx.rev, "open", run=ctx.id)  # a retry owns the revision it takes again until it ends
         if not ctx.rev:
             self._frozen(ctx, units.freeze({"unit": ctx.uid, "rev": ""}, projects, units.records())["rev"])
-        unit, rev = store.known()[ctx.uid], self._revision(ctx)
+        unit, rev = store.known()[ctx.uid], revision(ctx.uid, ctx.rev)
         found = {r["id"]: r for r in units.records()}
-        held = [found[i] for i in (ctx.records if ctx.mode == "grade-only" else rev.get("records") or ()) if i in found]
+        ids = ctx.records if grading else rev.get("records") or ()
+        if ctx.mode == "correct-grades" and (missing := set(ids) - found.keys()):
+            msg = f"grade correction cannot read its Spotter records: {', '.join(sorted(missing))}"
+            raise store.RetroError(msg)
+        held = [found[i] for i in ids if i in found]
         prepared = evidence(ctx.uid, unit, rev, projects)
-        return Work(ctx.id, ctx.uid, rev, unit, held, prepared, ask, grade_only=ctx.mode == "grade-only")
+        return Work(ctx.id, ctx.uid, rev, unit, held, prepared, ask, grade_only=grading,
+                    correction=ctx.mode == "correct-grades")  # fmt: skip
 
     def _frozen(self, ctx: Running, rev: str) -> None:
         ctx.rev = rev
         store.run_event(ctx.id, "frozen", rev=rev)
         units.settle(ctx.uid, rev, "open", run=ctx.id)
-
-    def _revision(self, ctx: Running) -> dict[str, Any]:
-        return next(r for r in store.known()[ctx.uid]["revisions"] if r["rev"] == ctx.rev)
 
     # Admission and one paid call
 

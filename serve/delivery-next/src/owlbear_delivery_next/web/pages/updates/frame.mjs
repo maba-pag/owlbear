@@ -66,7 +66,7 @@ function standing(u) {
 function newest(u) {
   // the host keeps a newer version it found through failed checks, until it is applied or found withdrawn
   if (u.latest && u.latest !== u.current) {
-    const last = standing(u) === "newer" ? "" : ", found by the last successful check";
+    const last = standing(u) === "newer" ? "" : ", last known available";
     const unread = u.name === "pds" && checks.all?.runs_unread
       ? `whether a project already takes it could not be read: ${checks.all.runs_unread}` : "";
     const said = [u.detail, unread].filter(Boolean).join("; ");

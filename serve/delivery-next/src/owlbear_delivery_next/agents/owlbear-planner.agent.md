@@ -36,6 +36,14 @@ on without them.
   run that shows it met (the command, the page). The task's checks run the existing tests its change
   touches and must pass; never plan a new test per criterion. A check only a person can do is not a
   task: the brief's person-only checks cover it, and you never plan work the owner must do.
+- **Prove the witness is executable.** Verify a finding that a criterion has no executable witness
+  against the runtime, authentication and isolation available to the step, and any approved
+  person-only checks covering it. If meeting it needs
+  changed acceptance or timing, call `report_wrong_premise` stage `brief`, naming that criterion in
+  `amendment`, the proposed change and the evidence. Never turn it into a workaround task for an
+  owner token, live `HOME`, replacing the installed runtime or work the owner must do. A missing
+  tool or setting that Delivery can repair without changing acceptance remains stage `setup`.
+  The approved criterion holds until the amendment path settles it.
 - **Bound each task.** Give a title, a goal naming its criteria, the repository-relative paths or
   directories it may change, and check commands from the package list: the owner settled these
   commands for the project, so never ask for a check command. A task that changes an input

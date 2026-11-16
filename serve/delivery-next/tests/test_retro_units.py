@@ -4,12 +4,12 @@ import gzip
 import json
 import os
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from owlbear_delivery_next.improvement import chatlogs, retro_judge, retro_store, retro_units, spotter
+from owlbear_delivery_next.change_contracts.models import Change
+from owlbear_delivery_next.improvement import chatlogs, retro_evidence, retro_judge, retro_store, retro_units, spotter
 
 LATER = datetime.now(UTC) + timedelta(days=2)
 
@@ -56,6 +56,15 @@ def test_a_changes_sessions_reviewers_and_replacements_are_its_own_and_each_gap_
     _note(event="started", session="s-rev", worktree=place + ".ro", role="reviewer")
     _note(event="started", session="s-new", worktree=place, replaces="s-build", role="builder")
     _note(event="started", session="s-other", worktree=other, role="builder")
+    root = tmp_path / "projects" / "p1"
+    repair = str(root / "runs" / "fix-it-repair-1")
+    _note(event="started", session="s-repair-old", worktree=repair, role="repairer")
+    _note(event="started", session="s-repair", worktree=repair, role="repairer")
+    _note(event="started", session="s-repair-new", worktree=repair, replaces="s-repair", role="repairer")
+    _note(event="started", session="s-current", worktree="/earlier-repair-copy", role="repairer")
+    _note(event="started", session="s-foreign-repair",
+          worktree=str(tmp_path / "projects" / "p2" / "runs" / "fix-it-repair-1"), role="repairer")  # fmt: skip
+    _note(event="started", session="s-foreign-replacement", worktree=other, replaces="s-repair", role="repairer")
     _note(event="ended", session="s-build", provisional=False)
     _captured(
         "s-build",
@@ -63,18 +72,34 @@ def test_a_changes_sessions_reviewers_and_replacements_are_its_own_and_each_gap_
         outputs=[{"path": str(tmp_path / "copilot-tool-output-1.txt"), "state": "missing"}],
     )
     _captured("s-new", [_event("subagent.started", agentName="explore")], provisional=True)
+    for session in ("s-repair-old", "s-repair", "s-repair-new", "s-current"):
+        _captured(session, [_event("assistant.message", content="repair complete")])
     _record("rec-1", 4, project="p1", change="fix-it", step="build", session="s-build")
     (spotter.place() / "cards" / "rec-1.json.gz").unlink()
-    change = SimpleNamespace(finished_at=datetime.now(UTC), names=SimpleNamespace(worktree=place))
-    st = SimpleNamespace(
-        root=Path("/x/p1"), slugs=lambda: ["fix-it"], read=lambda _s: change, events=lambda _s: [{}] * 200
+    repair = {"cause": "x", "evidence": "failure", "step": "build", "at": datetime.now(UTC)}
+    change = Change(
+        slug="fix-it",
+        finished_at=datetime.now(UTC),
+        names={"worktree": place},
+        repairs={
+            "done": [repair | {"session": "s-repair"}],
+            "current": repair | {"session": "s-current"},
+        },
     )
+    st = SimpleNamespace(root=root, slugs=lambda: ["fix-it"], read=lambda _s: change, events=lambda _s: [{}] * 200)
 
     rev = retro_units.freeze({"unit": "chg:p1:fix-it", "rev": ""}, {"p1": (st, None)}, retro_units.records())
 
     unit = retro_store.units()["chg:p1:fix-it"]
-    assert unit["sessions"] == ["s-build", "s-rev", "s-new"]
-    assert unit["exposure"] == ["agent:builder", "agent:explore", "agent:reviewer", "skill:w-build", "tool:edit"]
+    assert unit["sessions"] == ["s-build", "s-rev", "s-new", "s-repair-old", "s-repair", "s-repair-new", "s-current"]
+    assert unit["exposure"] == [
+        "agent:builder",
+        "agent:explore",
+        "agent:repairer",
+        "agent:reviewer",
+        "skill:w-build",
+        "tool:edit",
+    ]
     assert unit["gaps"] == [
         retro_units.SHAPING,
         "output copilot-tool-output-1.txt of session s-build: missing",
@@ -84,6 +109,14 @@ def test_a_changes_sessions_reviewers_and_replacements_are_its_own_and_each_gap_
         "record rec-1's card is missing",
     ]
     assert (rev["rev"], rev["records"], unit["family"]) == ("r1", ["rec-1"], "chg:p1:fix-it")
+    # A revision frozen before repairs were attributed still prepares their current captures without rewriting it.
+    frozen = unit | {"sessions": ["s-build"]}
+    (retro_units.folder("s-repair") / "log.jsonl.gz").unlink()
+    prepared = retro_evidence.evidence("chg:p1:fix-it", frozen, rev, {"p1": (st, None)})
+    assert prepared.sessions == unit["sessions"]
+    assert "s-repair-new" in {p.session for p in prepared.parts}
+    assert "s-repair" in prepared.capture_gaps
+    assert frozen["sessions"] == ["s-build"]
 
 
 class _Chat:

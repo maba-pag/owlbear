@@ -31,7 +31,7 @@ class Clock:
 def idle(monkeypatch) -> SimpleNamespace:
     """A running machine with nothing to do, v0.2 newer than it runs, and an update that only records its start."""
     looks: list[int] = []
-    monkeypatch.setattr(versions, "target", lambda: looks.append(1) or Choice("v0.2", "c2"))
+    monkeypatch.setattr(versions, "target", lambda _channel=None: looks.append(1) or Choice("v0.2", "c2"))
     clock = Clock()
     record = HostRecord(url="http://127.0.0.1:4321/", token=TOKEN, pid=1, started_at=datetime.now(UTC), code="c")
     machine = Machine(record, paused=False)
@@ -134,7 +134,7 @@ def test_nothing_is_announced_while_owlbear_stops_when_idle_or_without_a_newer_v
     assert idle.auto.read() is None
 
     idle.machine.ending = False
-    monkeypatch.setattr(versions, "target", lambda: None)
+    monkeypatch.setattr(versions, "target", lambda _channel=None: None)
     idle.auto.next_look = 0
     idle.auto.tick()
     assert idle.auto.read() is None
