@@ -168,6 +168,7 @@ the configured credit limit. If it stops early, remaining grades stay pending un
 Captures needed by pending corrections remain pinned until those corrections finish.
 Existing case proposals backed by those grades cannot be accepted or applied on their old review. An ordinary
 Retro proposal pass can refresh a still-open case proposal for review against the corrected grade.
+You can still reject or set aside a previously reviewed proposal whose grade awaits correction or no longer supports it.
 
 The **Improvement** page (menu, under Work) shows Retro's proposals waiting for you first, each with
 the findings it rests on, its risks and where it would land. **Accept** makes it there: a pending

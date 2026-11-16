@@ -306,6 +306,19 @@ def test_a_case_shows_the_grade_it_rests_on_and_a_lost_redraft_is_asked_for_agai
                                     places={}, shared_root=world.shared)  # fmt: skip
     assert accepted["accepted"]["call"] == "none"
 
+    unsupported = grade | {"id": "rg-r3", "record": "r3"}
+    store.add_grades([unsupported])
+    third = props.file(props.open_key("real", "spotter-case", "r3"), ["rg-r3"], kind="spotter-case",
+                       record="r3", call="hand-off-fitness", provenance="real")  # fmt: skip
+    props.reviewed(third, props.folded()[third]["evidence"], {"verdict": "survive", "publishable": TEXT})
+    store.request_correction("owner", "p1:fix", "r1", {"r3": "rg-r3"})
+    store.add_grades([unsupported | {"id": "rg-r3-persisted-event-1", "supersedes": "rg-r3", "grade": "worth-it"}])
+    current = next(p for p in world.http.get(API).json()["proposals"] if p["id"] == third)
+    closed = world.http.post(f"{API}/proposals/{third}/decide",
+                            json={"state": "rejected", "token": current["token"]})  # fmt: skip
+    assert closed.status_code == 200
+    assert props.folded()[third]["state"] == "rejected"
+
 
 def test_only_an_irreversible_stop_marks_a_stopped_step_and_looks_filter_by_project_id(world) -> None:
     _records(

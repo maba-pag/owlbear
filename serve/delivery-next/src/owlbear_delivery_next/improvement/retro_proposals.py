@@ -313,7 +313,8 @@ def transition(
         if not store.visible(snap, store.retired_ids(), synthetic=True):
             msg = f"proposal {proposal} is hidden: it rests on a retired assumption"
             raise store.RetroError(msg)
-        if snap["state"] == "drafted" or snap.get("review_digest") != snap["evidence"]:
+        dismiss = state in {"rejected", "later"} and snap.get("grade_versions") and snap["state"] != "drafted"
+        if not dismiss and (snap["state"] == "drafted" or snap.get("review_digest") != snap["evidence"]):
             msg = f"proposal {proposal}'s evidence waits for its review"
             raise store.RetroError(msg)
         taken = (check(snap) if check is not None else None) or {}
