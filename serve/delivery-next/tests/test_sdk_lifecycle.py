@@ -951,7 +951,11 @@ def test_three_sdk_failures_whose_data_and_notes_differ_stop_one_defects_existin
     assert (len(signatures), budget.count, c.outcome.exit) == (1, 3, Exit.STOP)
     said = f"JsonRpcError: JSON-RPC Error -32603: {whole_error}\nwhile the worker replaced"
     said += " {'where': 'worker replaced'}"
-    assert (c.questions, c.repairs.current, c.stop.action) == ([], None, "Run the step again")
+    assert (c.questions, c.repairs.current, c.stop.action) == (
+        [],
+        None,
+        "Review the repair evidence; pause or abandon the Change",
+    )
     assert c.repairs.done[-1].evidence == evidence == said
     assert evidence in c.stop.reason
 

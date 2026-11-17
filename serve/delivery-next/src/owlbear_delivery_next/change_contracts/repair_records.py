@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from owlbear_delivery_next.change_contracts.preparation import Preparation
 
 type Phase = Literal["running", "asked", "approved", "applied", "unchanged", "stopped"]
-type Fix = Literal["none", "patch", "profile-check", "retry", "preparation"]
+type Fix = Literal["none", "patch", "profile-check", "check-later", "retry", "preparation"]
 KEPT = "refs/owlbear/repair/"  # + the Change's slug: a fix waiting for the owner's yes stays reachable
 
 
@@ -85,6 +85,7 @@ class Repair(BaseModel):
     applied: str = ""  # its commit on the Change's branch
     applied_at: datetime | None = None
     witness: Witness | None = None
+    replaces: str = ""  # the confirmed check command the owner is asked to replace or remove, as it was then
     held: list[str] = Field(default_factory=list)  # why the owner is asked before it is applied
     diff: str = ""  # what he is shown
     question: str = ""  # his yes/no question's id

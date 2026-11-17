@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.improvement import acts, chatlogs, retro_records, retro_store, spotter
+from owlbear_delivery_next.improvement import acts, chatlogs, retro_records, retro_sessions, retro_store, spotter
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.state_store.database import DIAGNOSTIC_EVENTS, StoreError
 from owlbear_delivery_next.state_store.store import ACTIVITY_LIMIT
@@ -43,6 +43,7 @@ SHAPING = "the chat that shaped the brief is not attributable to the Change"
 SYNTHETIC = "syn-"  # historical synthetic sessions remain in Retro's own folder
 UNREADABLE = (StoreError, sqlite3.Error, OSError, ValueError)  # a Change or its activity cannot be read
 records = retro_records.records
+change_sessions = retro_sessions.change_sessions
 
 
 def change_id(project: str, slug: str) -> str:
@@ -169,18 +170,6 @@ def session_gaps(session: str, ended: Mapping[str, Any] | None) -> list[str]:
 # A Change's sessions
 
 
-def change_sessions(lines: list[dict[str, Any]], place: str) -> list[str]:
-    """The sessions that ran in the Change's worktree *place* or its reviewers' read-only copy, with replacements."""
-    places = {place, f"{place}.ro"}
-    found = [d["session"] for d in lines if d.get("event") == "started" and d.get("worktree") in places]
-    grew = True
-    while grew:
-        more = [d["session"] for d in lines if d.get("replaces") in found and d["session"] not in found]
-        found += more
-        grew = bool(more)
-    return list(dict.fromkeys(found))
-
-
 def change_place(st: Store, repo: Path | None, slug: str) -> str:
     """The Change's worktree as its sessions named it; "" when it cannot be known."""
     try:
@@ -208,9 +197,17 @@ def describe_change(uid: str, st: Store, repo: Path | None) -> dict[str, Any]:
     slug = uid.split(":", 2)[2]
     lines = manifest()
     place, gaps, seen = change_place(st, repo, slug), [SHAPING], set()
-    sessions = change_sessions(lines, place) if place else []
+    change = st.read(slug)
+    repairs = [*change.repairs.done, *([change.repairs.current] if change.repairs.current else [])]
+    sessions = change_sessions(
+        lines,
+        place,
+        repair_sessions=[r.session for r in repairs if r.session],
+        repair_places=[str(st.root / "runs" / f"{slug}-repair-{n}") for n in range(1, len(repairs) + 1)],
+        project=uid.split(":", 2)[1],
+    )
     if not place:
-        gaps.append("the Change's worktree cannot be known, so none of its sessions is")
+        gaps.append("the Change's main worktree cannot be known; only recorded repair sessions are attributable")
     ended = {d["session"]: d for d in lines if d.get("event") == "ended"}
     roles = {d["session"]: d.get("role", "") for d in lines if d.get("event") == "started"}
     seen |= {f"agent:{roles[s]}" for s in sessions if roles.get(s)}

@@ -20,22 +20,24 @@ from pathlib import Path, PurePosixPath
 from traceback import format_exception_only
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts import check_hint, evidence, repair_tools
+from owlbear_delivery_next.change_contracts import check_hint, evidence, repair_tools, tools
 from owlbear_delivery_next.change_contracts.failures import ENVIRONMENT, WRONG_MODEL, kind_of
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Outcome, StepKind, Stop
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.repair_records import KEPT, Tried, Witness
-from owlbear_delivery_next.change_flow import budgets, curation_flow, loop, rebuilds, stuck, worktree
+from owlbear_delivery_next.change_flow import amending, budgets, curation_flow, loop, rebuilds, stuck, worktree
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.workflow_steps import (
     check,
+    check_repair,
     check_weakening,
     defect_issue,
     engine,
     lookup,
     preparation_repair,
+    project_checks,
     repair_copy,
     repair_messages,
     sessions,
@@ -116,11 +118,12 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
             return
         r.found, r.fix = p.cause, p.fix
         r.preparation = p.preparation
-        r.tried.extend(Tried(fix=t.fix, outcome=t.outcome) for t in p.tried)
+        r.tried = [Tried(fix=t.fix, outcome=t.outcome) for t in p.tried]
+        r.package, r.command = p.package.strip(), p.command.strip()
         if p.defect is not None:
             r.defect = defect_issue.file(store, path, p.defect)
-        if p.fix == "none":
-            _stopped(store, lock, change, "nothing it tried worked")
+        if p.fix in {"none", project_checks.LATER}:
+            _unfixed(store, lock, change, at, prof)
             return
         if preparing or p.fix == "preparation":
             _preparation(
@@ -134,13 +137,30 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
         if p.fix == "retry":
             _unchanged(store, lock, change, (path, at), (witness, roles.limit(settings, LABEL), prof))
             return
-        r.package, r.command = p.package.strip(), p.command.strip()
         _proven(store, lock, change, (path, at), witness, roles.limit(settings, LABEL), prof)
     finally:
         if done is not None and done.termination is not None and done.termination.confirmed:
             repair_copy.drop(path, at)
         else:  # its processes may still use it: the next repair's copy replaces it
             _log(store, lock, change, f"kept its copy {at}: its session's processes are not confirmed gone")
+
+
+def _unfixed(store: Store, lock: Lock, change: Change, at: Path, prof: Profile) -> None:
+    """Without a fix: nothing worked, or the check waits until the Change's first task built the project (#1275)."""
+    r = change.repairs.current
+    if r is None or r.fix == "none":
+        _stopped(store, lock, change, "nothing it tried worked")
+        return
+    if not project_checks.gates(r.cause):  # a confirmed check that cannot pass yet: the owner's yes removes it
+        _offered(store, lock, change, at, repair_copy.changed(at, r.base), prof)
+        return
+    edits = "it deferred the project check but left edits; none were applied"
+    if why := project_checks.defers(change) or (edits if repair_copy.changed(at, r.base) else ""):
+        _stopped(store, lock, change, why)
+        return
+    _log(store, lock, change, f"the project check waits until the first task is built: {r.found}; the step runs again")
+    stuck.applied(change, "check deferred", datetime.now(UTC))
+    store.write(lock, change)
 
 
 def _preparation(
@@ -269,13 +289,12 @@ def _witnessed(
 def _offered(  # noqa: PLR0913, PLR0917 - the Change, its copy, what changed there and the profile
     store: Store, lock: Lock, change: Change, at: Path, changed: list[tuple[str, str]], prof: Profile
 ) -> None:
-    """A proposed project check is the owner's to confirm, unless it can't be offered."""
+    """A proposed change of a project check is the owner's to confirm, unless it can't be offered."""
     r = change.repairs.current
     assert r is not None  # noqa: S101 - _proven() checked it
-    if why := _unfit(at, r.package, changed, prof):
+    if why := check_repair.offer(change, at, changed, prof):
         _stopped(store, lock, change, why)
         return
-    r.held = [f"adds the check `{r.command}` for {r.package} to the project profile, which you confirm"]
     stuck.asked(change, repair_messages.question(r), datetime.now(UTC))
     store.write(lock, change)
 
@@ -285,19 +304,18 @@ def _apply(store: Store, lock: Lock, change: Change, path: Path, prof: Profile) 
     assert r is not None  # noqa: S101 - run() checked it
     if r.fix == "preparation":
         made = preparation_repair.apply(store, change)
-    elif r.fix == "profile-check":
-        key = f"check:{r.package}"
-        if (entry := prof.entries.get(key)) is not None and profile.is_confirmed(entry):  # confirmed while it waited
-            _stopped(store, lock, change, f"{r.package}'s check `{entry.value}` was confirmed meanwhile; nothing added")
+    elif r.fix in {"profile-check", project_checks.LATER}:
+        made, why = check_repair.apply(store, lock, change, prof, path)
+        if why:
+            _stopped(store, lock, change, why)
             return
-        store.write_profile(profile.confirm(prof, key, r.command, datetime.now(UTC)))
-        made = f"profile {key}"
     else:
         message = f"fix: {stuck.obstruction(r.found)}\n\nRepaired by an agent; applied by Delivery (#1066)."
         made = repair_copy.apply(path, change.names.branch, r.base, r.commit, message)
         repair_copy.git(path, ["update-ref", "-d", f"{KEPT}{change.slug}"])
     _log(store, lock, change, f"applied {made}; the step runs again.{repair_messages.defect(r)}")
     stuck.applied(change, made, datetime.now(UTC))
+    check_repair.adopt(store, change, r, path)
     store.write(lock, change)
 
 
@@ -431,44 +449,47 @@ def _spent(r: Repair, run: Run) -> None:
 
 
 def _gated(store: Store, lock: Lock, change: Change, done: Run) -> bool:
-    """The gates every session's result passes first; True when they settled the repair for now.
-
-    Processes not confirmed gone or a credit limit stop it; a wrong model reruns it once after the wait
-    (D-01M5DW3X003TZZRSDCY027SP3C); a network or quota failure is temporary: the repair runs again later
-    (D-01M6RT5QHWHB0ZHBBY0BE34FBE).
-    """
+    """Apply process/credit holds or model/transient retries before a repair result; True when gated."""
     r, now = change.repairs.current, datetime.now(UTC)
     assert r is not None  # noqa: S101 - _repair() checked it
     seen = session_result.to_result(done, StepKind(r.step), now)
     wrong = (seen.cause or "").endswith(f":{WRONG_MODEL}")
     if seen.exit == Exit.STOP or (wrong and r.rerun):
-        _stopped(store, lock, change, f"its session's result was voided: {seen.reason}")
+        why = (
+            "its own step deadline ended the repair before it proved a fix"
+            if done.ending == "deadline"
+            else (f"its session's result was voided: {seen.reason}")
+        )
+        _stopped(store, lock, change, why)
+        if seen.stop is not None:
+            if seen.stop.kind == ErrorKind.LIVENESS:
+                change.blocked = seen.stop
+            else:
+                change.stop = seen.stop
+            store.write(lock, change)
         return True
     temporary = kind_of(seen.cause) in ENVIRONMENT and not isinstance(done.payload, repair_tools.RepairResult)
-    if not (wrong or temporary):
-        return False
-    r.rerun = r.rerun or wrong
-    wake = seen.wake_at if seen.wake_at and seen.wake_at > now else now + budgets.PAUSE
-    change.outcome = Outcome(
-        exit=Exit.RETRY, cause=r.cause, reason=f"repairing again: {seen.reason}", wake_at=wake, at=now
-    )
-    _log(store, lock, change, f"runs again at {wake:%H:%M}: {seen.reason}")
-    store.write(lock, change)
-    return True
-
-
-def _unfit(at: Path, package: str, changed: list[tuple[str, str]], prof: Profile) -> str:
-    """Why a proposed project check can't be offered: its package lies outside the repository, or it needs edits."""
-    where = PurePosixPath(package)
-    inside = not where.is_absolute() and ".." not in where.parts and (at / where).resolve().is_relative_to(at.resolve())
-    if not inside or not (at / where).is_dir():
-        return f"its proposed check names the package {package}, which is not a folder of this repository"
-    if (entry := prof.entries.get(f"check:{package}")) is not None and profile.is_confirmed(entry):
-        return f"its proposed check would replace {package}'s confirmed check `{entry.value}`, which only you change"
-    if changed:
-        edits = ", ".join(p for p, _ in changed)
-        return f"its proposed check also needs files it changed ({edits}), which a project check cannot carry"
-    return ""
+    if wrong or temporary:
+        r.rerun = r.rerun or wrong
+        wake = seen.wake_at if seen.wake_at and seen.wake_at > now else now + budgets.PAUSE
+        change.outcome = Outcome(
+            exit=Exit.RETRY, cause=r.cause, reason=f"repairing again: {seen.reason}", wake_at=wake, at=now
+        )
+        _log(store, lock, change, f"runs again at {wake:%H:%M}: {seen.reason}")
+        store.write(lock, change)
+        return True
+    if done.ending == "deadline" and done.detail == "step deadline":
+        _stopped(store, lock, change, "its own step deadline ended the repair before it proved a fix")
+        return True
+    p = done.payload
+    if done.ending == "premise" and isinstance(p, tools.WrongPremise) and p.stage == "brief" and not change.tests:
+        r.found = p.reason
+        stuck.retire(change, "the criterion needs a brief amendment")
+        change.stop = None
+        amending.premised(change, p, done.session_id, now)
+        store.write(lock, change)
+        return True
+    return False
 
 
 def _log(store: Store, lock: Lock, change: Change, said: str) -> None:

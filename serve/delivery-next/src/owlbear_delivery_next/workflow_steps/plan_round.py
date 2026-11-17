@@ -16,10 +16,10 @@ from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepK
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import PLAN, RECHECK
-from owlbear_delivery_next.change_flow import asking, loop, plan_rounds, worktree
+from owlbear_delivery_next.change_flow import amending, asking, loop, plan_rounds, worktree
 from owlbear_delivery_next.change_flow.moves import carry_integrations
 from owlbear_delivery_next.local_system.git_files import git_common_dir
-from owlbear_delivery_next.runtimes import sdk_adapter, step_input
+from owlbear_delivery_next.runtimes import amendments, sdk_adapter, step_input
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.settings.profile import vouched
 from owlbear_delivery_next.workflow_steps import engine, held_writes, overlap, pending_child, sessions
@@ -115,6 +115,7 @@ def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
             checks=(),
             rechecks=keys,
             cap=lp.policy.max_findings if cap is None else cap,
+            amendable=amendments.amendable(change),
             journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
             memory=sessions.memory(store),
         )
@@ -125,6 +126,14 @@ def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
     verdict, run = pending_child.child(store, lock, change, (LABEL, str(plan.version) if plan else ""), start)
     if (step := pending_child.booked(change, run, {"exit": verdict.exit})) is not None:
         events.append(step)  # counted here; the caller's one write commits it with the verdict and its round
+    if (
+        isinstance(p := run.payload, tools.WrongPremise)
+        and p.stage == "brief"
+        and verdict.exit == Exit.BACK
+        and not verdict.operational
+    ):
+        amending.premised(change, p, run.session_id, datetime.now(UTC))
+        return verdict
     return judged(change, verdict, run.payload)
 
 
@@ -173,7 +182,7 @@ def continued(store: Store, lock: Lock, change: Change, repo: Path) -> bool:
         overlap.record(change, result, others, path)
     end = datetime.now(UTC)
     event = {"event": "step", "at": end.isoformat(timespec="seconds"), "kind": StepKind.PLAN, "exit": result.exit}
-    store.write(lock, loop.apply(change, result, end))
+    store.write(lock, change if change.amending is not None else loop.apply(change, result, end))
     for step in [*events, event | {"reason": result.reason, "mode": s.mode}]:  # logged once their settlement is durable
         sessions.announce(store, lock, change.slug, step)
     return True

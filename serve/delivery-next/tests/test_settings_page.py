@@ -413,6 +413,42 @@ def test_a_save_refused_by_a_newer_save_keeps_the_edits_and_the_next_save_lands(
     assert saved["spotter"]["steer_share"] == 10
 
 
+def hold_linked_verifier_control(page):
+    page.add_init_script("""window.focusReady = (into) => {
+        if (!window.heldFocus && into.closest("#set-agents-audit-verifier")) {
+            window.heldFocus = into;
+            return new Promise(() => {});
+        }
+        return into.componentOnReady?.();
+    };""")
+
+    def held(route):
+        response = route.fetch()
+        body = response.text()
+        assert body.count("into.componentOnReady?.()") == 1
+        route.fulfill(response=response, body=body.replace("into.componentOnReady?.()", "window.focusReady(into)"))
+
+    page.route("**/assets/page/config/state.mjs", held)
+
+
+def linked_verifier_survives_model_arrival(page):
+    page.evaluate("""async () => {
+        const m = await import("/assets/page/config/state.mjs");
+        window.offeredBeforeFocus = m.state.offered;
+        m.state.offered = null;
+        m.show();
+    }""")
+    page.goto(page.url.split("#")[0] + "#set-agents-audit-verifier")
+    page.wait_for_function("window.heldFocus")
+    page.evaluate("""async () => {
+        const m = await import("/assets/page/config/state.mjs");
+        m.page.arrived = {offered: window.offeredBeforeFocus, note: m.state.modelsNote};
+        m.showIdle();
+    }""")
+    assert page.evaluate("window.heldFocus.isConnected") is False
+    expect(page.locator("#set-agents-audit-verifier :focus")).not_to_have_count(0)
+
+
 @pytest.mark.browser
 def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(local_store, pds, monkeypatch) -> None:
     """Each group has an address, back and forward follow them; an old address of a section or row, or of the former
@@ -421,7 +457,8 @@ def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(local_st
     from owlbear_delivery_next.settings import config  # noqa: PLC0415
 
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"sessions": None}))
-    with settings_page(local_store, pds) as page:
+    with settings_page(local_store, pds, before_goto=hold_linked_verifier_control) as page:
+        linked_verifier_survives_model_arrival(page)
         url = page.url.split("#")[0]
         pds.group(page, "overview")
         expect(page.locator("#unset-agents")).to_have_text(f"Agents and runs, 1 unset: {SESSIONS}")

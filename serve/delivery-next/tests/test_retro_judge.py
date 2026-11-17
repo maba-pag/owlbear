@@ -314,24 +314,49 @@ def test_a_part_carried_into_a_second_batch_for_its_records_yields_its_findings_
 
 
 def test_each_part_names_its_session_so_a_records_moment_is_found_when_event_numbers_restart():
-    parts = [Part("s1.p1", "s-a", 1, 9, "s1.e3 agent: built", ""), Part("s2.p1", "s-b", 1, 9, "s2.e3 agent: ok", "")]
+    _capture("s-a", ["build plan", "built"])
+    _capture("s-b", ["review plan", "reviewed"])
+    prepared = retro_segments.prepare(["s-a", "s-b"], "done")
+    record = _record("r1", 300, session="s-b", step="review", look="plan", call="message-1")
     ask = Asked(lambda ev, _a: _graded(ev))
-    retro_judge.judge(_work(ask, [_record("r1", 3, session="s-b")], parts, uid="chg:p1:fix-it"))
+    work = _work(ask, [record], prepared.parts, uid="chg:p1:fix-it")
+    work.prepared = prepared
+    retro_judge.judge(work)
     sent = _evidence(ask.messages[0])
     assert [(p["ref"], p["session"]) for p in sent["parts"]] == [("s1.p1", "s-a"), ("s2.p1", "s-b")]
     assert sent["records"][0]["session"] == "s-b"
+    assert (sent["records"][0]["call"], sent["records"][0]["at"]) == ("message-1", "e1")
+    [grade] = retro_store.grades()
+    assert (grade["cutoff"], grade["live_cutoff"], grade["evidence_contract"]) == (1, 300, "persisted-event-1")
+    assert grade["moment"].endswith("s2.e1 agent: review plan")
+    assert record["cutoff"] == 300
 
 
 def test_a_record_whose_own_session_left_nothing_to_read_is_never_judged_on_another_sessions_evidence():
-    parts = [Part("s1.p1", "s-kept", 1, 9, "s1.e3 agent: built", "")]
-    records = [_record("gone", 3, session="s-pruned"), _record("kept", 3, session="s-kept")]
+    _capture("s-kept", ["built"])
+    prepared = retro_segments.prepare(["s-kept", "s-pruned"], "done")
+    records = [
+        _record("gone", 30, session="s-pruned", step="build", look="plan", call="message-1"),
+        _record("kept", 30, session="s-kept", step="build", look="plan", call="message-1"),
+        _record("unselected", 30, session="s-other", step="build", look="plan", call="message-1"),
+        _record("missing-anchor", 30, session="s-kept", step="build", look="plan", call="not-captured"),
+    ]
     ask = Asked(lambda ev, _a: _graded(ev))
-
-    retro_judge.judge(_work(ask, records, parts, uid="chg:p1:fix-it", grade_only=True))
+    work = _work(ask, records, prepared.parts, uid="chg:p1:fix-it", grade_only=True)
+    work.prepared = prepared
+    retro_judge.judge(work)
 
     assert [r["id"] for m in ask.messages for r in _evidence(m)["records"]] == ["kept"]
     gone = next(g for g in retro_store.grades() if g["record"] == "gone")
-    assert (gone["grade"], gone["reason"], gone.get("moment")) == ("not-assessable", retro_judge.PRUNED, None)
+    assert (gone["grade"], gone["reason"], gone.get("moment")) == (
+        "not-assessable",
+        "session s-pruned's capture is missing",
+        None,
+    )
+    grades = {g["record"]: g for g in retro_store.grades()}
+    assert "was not selected" in grades["unselected"]["reason"]
+    assert "missing persisted moment" in grades["missing-anchor"]["reason"]
+    assert "session s-pruned's capture is missing" in _evidence(ask.messages[0])["gaps"]
 
 
 def test_a_grade_only_run_proposes_a_case_for_a_late_record_graded_wrong():
@@ -395,7 +420,10 @@ def test_a_wrong_grade_of_an_earlier_revision_whose_case_was_never_filed_gets_it
 def _capture(session, turns):
     folder = retro_units.folder(session)
     folder.mkdir(parents=True, exist_ok=True)
-    log = "".join(json.dumps({"type": "assistant.message", "data": {"content": c}}) + "\n" for c in turns)
+    log = "".join(
+        json.dumps({"id": f"message-{i}", "type": "assistant.message", "data": {"content": c}}) + "\n"
+        for i, c in enumerate(turns, 1)
+    )
     (folder / "log.jsonl.gz").write_bytes(gzip.compress(log.encode()))
 
 

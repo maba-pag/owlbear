@@ -348,7 +348,7 @@ def void(c: Change, a: Amendment, removed: set[str]) -> None:
 
 
 def resume(c: Change, a: Amendment, level: Level, now: datetime) -> None:
-    """The stopped step on the new version: approved by the owner, a plan task is replanned; else it reruns.
+    """The new version: owner-approved planning or a plan task is replanned; equivalent amendments rerun the step.
 
     A scope-widening amendment has the Change's governing decisions reassessed before work resumes: the pin forgets
     the revisions of those it did not pick, so the decisions gate puts them to the picker again.
@@ -370,5 +370,5 @@ def resume(c: Change, a: Amendment, level: Level, now: datetime) -> None:
     if s.kind == StepKind.CHECK and (not c.brief.visual if s.task == VISUAL else all(p.id != s.task for p in c.checks)):
         go(c, StepKind.FOLLOW)  # its check is gone: the next one is chosen as after any follow
     else:
-        go(c, s.kind, s.task, s.mode)
+        go(c, s.kind, s.task, None if level != "autonomous" and s.kind == StepKind.PLAN else s.mode)
     c.outcome = None

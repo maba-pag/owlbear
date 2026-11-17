@@ -96,6 +96,14 @@ def owns_changed_runner(path: Path, name: str = "test") -> bool:
     return scripts.get(name) == "owlbear_tools.testing:test_main"
 
 
+def package_lines(profile: Profile, path: Path, unchecked: str) -> list[str]:
+    """The profile's packages with their install and check commands; *unchecked* instead when it offers no check."""
+    inst = {k.removeprefix("install:"): e.value for k, e in profile.entries.items() if k.startswith("install:")}
+    chk = {p: check_hint.qualified(p, c) for p, c in plan_checks(profile, path)}
+    rows = [f"- `{p}`: install `{inst.get(p, 'none')}`, check `{chk.get(p, 'none')}`" for p in sorted({*inst, *chk})]
+    return rows if chk else [*rows, unchecked]
+
+
 def plan_checks(profile: Profile, path: Path) -> list[tuple[str, str]]:
     """Confirmed test runners offered to the Planner; root lint already belongs to submission."""
     pairs = checks(profile)

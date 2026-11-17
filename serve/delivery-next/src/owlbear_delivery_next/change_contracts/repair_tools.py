@@ -26,21 +26,31 @@ class Defect(Args):
     )  # fmt: skip
 
 
-class RepairResult(Args):
-    """``submit_result`` for the repairer of a stuck step."""
+class Progress(Args):
+    """Cumulative findings saved while the repair is still running, not proof of a fix."""
 
     cause: str = bounded(3000, "Why the step stopped, with the evidence", "The diff's .pre-commit-config.yaml ...")
     tried: list[Try] = Field(
-        max_length=20, description="Every attempted remedy in order; empty only for retry, never invent a fix",
+        max_length=20,
+        description="Every attempted remedy in order; never invent a fix",
         examples=[[{"fix": "Route web/vendor/ like pages", "outcome": "passed in 212 s"}]],
     )  # fmt: skip
-    fix: Literal["none", "patch", "profile-check", "retry", "preparation"] = Field(
+
+
+class RepairResult(Progress):
+    """``submit_result`` for the repairer of a stuck step."""
+
+    fix: Literal["none", "patch", "profile-check", "check-later", "retry", "preparation"] = Field(
         description="patch: your edits in this copy make the checks pass; profile-check: the step needs a project "
-        "check the profile lacks, proven here; retry: the cause no longer reproduces, no change needed; "
-        "none: you tried remedies but none worked",
+        "check the profile lacks, or another than its confirmed one that cannot pass, proven here; check-later: it "
+        "needs one, and none can pass until this Change has built the project; retry: the cause no longer "
+        "reproduces, no change needed; none: you tried remedies but none worked",
         examples=["patch"],
     )
-    package: str = Field(default="", max_length=300, description="profile-check only: its package", examples=["."])
+    package: str = Field(
+        default="", max_length=300, examples=["."],
+        description="profile-check: its package; check-later: the package whose confirmed check cannot pass yet",
+    )  # fmt: skip
     command: str = Field(
         default="", max_length=500, description="profile-check only: its command", examples=["uv run pytest -q"]
     )
@@ -51,8 +61,8 @@ class RepairResult(Args):
 
     @model_validator(mode="after")
     def _check(self) -> RepairResult:
-        if self.fix != "retry" and not self.tried:
-            msg = "tried: list the remedies actually attempted; only retry may report no attempted fix"
+        if self.fix not in {"retry", "check-later"} and not self.tried:
+            msg = "tried: list the remedies actually attempted; only retry and check-later may report none"
             raise ValueError(msg)
         if self.fix == "profile-check" and not (self.package.strip() and self.command.strip()):
             msg = "package and command: a profile-check needs both, e.g. package '.' and command 'uv run pytest -q'"
@@ -72,11 +82,12 @@ class PreparationResult(RepairResult):
 class AttemptResult(RepairResult):
     """The diagnostic or real rerun failed: reproduce that operation and try remedies, not another no-change retry."""
 
-    fix: Literal["none", "patch", "profile-check", "retry", "preparation"] = Field(
-        description="patch: a proven edit; profile-check: a proven missing project check; none: remedies failed",
-        json_schema_extra={"enum": ["none", "patch", "profile-check", "preparation"]},
+    fix: Literal["none", "patch", "profile-check", "check-later", "retry", "preparation"] = Field(
+        description="patch: a proven edit; profile-check: a proven project check, missing or replacing a confirmed "
+        "one that cannot pass; check-later: no check can pass until this Change has built the project; "
+        "none: remedies failed",
+        json_schema_extra={"enum": ["none", "patch", "profile-check", "check-later", "preparation"]},
     )
-    tried: list[Try] = Field(min_length=1, max_length=20, description="Actual attempted remedies, never diagnostics")
 
     @model_validator(mode="after")
     def _attempted(self) -> AttemptResult:
@@ -87,6 +98,9 @@ class AttemptResult(RepairResult):
 
 
 SUBMIT = Spec("submit_result", "Submit once, after trying fixes in this copy.", RepairResult, "result")
+PROGRESS = Spec(
+    "report_progress", "Save cumulative findings and tried remedies; your step continues.", Progress, "result"
+)
 ATTEMPT = Spec(
     "submit_result", "Submit after trying remedies; another no-change retry is not recovery.", AttemptResult, "result"
 )

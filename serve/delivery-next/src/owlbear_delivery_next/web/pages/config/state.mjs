@@ -98,26 +98,54 @@ function keepFocus(label) {
   });
 }
 
-// Focus *target*, or a row's first control, and keep it in view. A control's design-system part may still be loading,
-// so this begins once the control has rendered. Then, as the menu's dialog puts the focus back on its button as it
-// closes and the components above it grow as they load, the focus is put back and the control scrolled to again until
-// both have stayed a few frames, for at most a second. The owner's next key, pointer press or wheel, also while the
-// control still loads, ends it: he moves them himself.
-async function reveal(target) {
-  const control = target.matches("p-table-row, p-table-cell, div")
+// A setting the shown layer cannot hold is read-only: its row takes the focus.
+function destination(target) {
+  return (target.matches("p-table-row, p-table-cell, div")
     ? target.querySelector(":is([data-key], [id^='machine-'], [id^='global-machine-'], p-select, p-input-text, "
       + "p-segmented-control):not([disabled])")
-    : null;  // a setting the shown layer cannot hold is read-only: its row takes the focus
-  const into = control ?? target, block = control ? "center" : "start";
+    : null) ?? target;
+}
+
+// Model choices can replace the first control before its readiness promise settles.
+async function readyTarget(target, signal) {
+  while (target.isConnected && !signal.aborted) {
+    const into = destination(target);
+    let wake;
+    const replaced = new Promise((resolve) => { wake = resolve; });
+    const changed = new MutationObserver(() => { if (!into.isConnected) wake(); });
+    changed.observe(document.getElementById("page"), { childList: true, subtree: true });
+    signal.addEventListener("abort", wake, { once: true });
+    try {
+      await Promise.race([into.componentOnReady?.(), replaced]);
+    } finally {
+      changed.disconnect();
+      signal.removeEventListener("abort", wake);
+    }
+    if (into.isConnected) return into;
+  }
+  return null;
+}
+
+// Focus the row's current control once ready; owner input ends the focus and scroll recovery.
+async function reveal(target) {
   const owner = new AbortController();
   for (const type of ["keydown", "pointerdown", "wheel"]) {
     addEventListener(type, () => owner.abort(), { capture: true, signal: owner.signal });
   }
-  await into.componentOnReady?.();
-  if (owner.signal.aborted) return;
+  let into = await readyTarget(target, owner.signal);
+  if (!into || owner.signal.aborted) {
+    owner.abort();
+    return;
+  }
+  const block = into === target ? "start" : "center";
   into.scrollIntoView({ block });
   let top = into.getBoundingClientRect().top;
   for (let frame = 0, kept = 0; frame < 60 && kept < 10 && !owner.signal.aborted; frame++) {
+    if (!into.isConnected) {
+      into = await readyTarget(target, owner.signal);
+      if (!into || owner.signal.aborted) break;
+      kept = 0;
+    }
     if (into.getBoundingClientRect().top !== top) {
       into.scrollIntoView({ block });
       top = into.getBoundingClientRect().top;

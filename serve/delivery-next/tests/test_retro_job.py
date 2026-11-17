@@ -2,6 +2,7 @@
 
 import asyncio
 import dataclasses
+import fcntl
 import gzip
 import json
 import os
@@ -22,6 +23,7 @@ from owlbear_delivery_next.improvement import (
     chatlogs,
     retro_evidence,
     retro_judge,
+    retro_regrade,
     retro_store,
     retro_units,
     spotter,
@@ -177,14 +179,14 @@ def _finished_change(tmp_path, *, events=None, records=None):
         events
         if events is not None
         else [
-            {"type": t, "data": {"content": c}}
+            {"id": "c" if t == "assistant.message" else "u", "type": t, "data": {"content": c}}
             for t, c in [("user.message", "add the week column"), ("assistant.message", "Added; the tests pass.")]
         ]
     )
     log = "".join(json.dumps(e) + "\n" for e in events)
     (folder / "log.jsonl.gz").write_bytes(gzip.compress(log.encode()))
     (folder / "sidecar.json").write_text(json.dumps({"session": sid, "provisional": False, "outputs": []}))
-    record = {"id": "rec-c", "at": "2026-01-01T00:00:00+00:00", "look": "handoff", "call": "c", "cutoff": 2}
+    record = {"id": "rec-c", "at": "2026-01-01T00:00:00+00:00", "look": "plan", "call": "c", "cutoff": 20}
     record |= {"category": "none", "project": "p1", "change": "fix-it", "step": "build", "session": sid}
     records = records if records is not None else [record]
     for r in records:
@@ -351,8 +353,24 @@ def test_a_button_retry_owns_the_revision_it_takes_again_so_a_stop_before_settli
 
 
 def test_a_run_interrupted_between_settled_calls_resumes_on_what_is_left_of_its_limit(said, tmp_path):
+    spec = _large()
+    events, _ = syn.events(spec)
+    records = syn.records(spec) + [
+        {"id": f"tool-{n}", "look": "sample", "category": "none", "cutoff": n, "call": e["data"]["toolCallId"]}
+        for n, e in enumerate(events, 1)
+        if e["type"] == "tool.execution_complete"
+    ]
+    projects = _finished_change(tmp_path, events=events, records=records)
+    retro_store.request("owner", change="p1:fix-it")
+    _job(Asker(), projects=projects).tick(0.0)
+    originals = retro_store.lines("grades.jsonl")
+    for grade in originals:
+        grade.pop("evidence_contract", None)
+        grade["cutoff"] += 1000  # the historical live callback coordinate, not the persisted moment
+    (retro_store.place() / "grades.jsonl").write_text("".join(json.dumps(g) + "\n" for g in originals))
+    historical = (retro_store.place() / "grades.jsonl").read_bytes()
+    before = retro_store.known()
     said.limit = 1.5
-    projects = _large_change(tmp_path)
     first, calls = Asker(), []
     real = retro_store.run_event
 
@@ -362,7 +380,7 @@ def test_a_run_interrupted_between_settled_calls_resumes_on_what_is_left_of_its_
             raise Dead
         real(run, event, **fields)
 
-    retro_store.request("owner", change="p1:fix-it")
+    retro_regrade.queue("owner", "chg:p1:fix-it", projects)
     with pytest.MonkeyPatch.context() as dying:
         dying.setattr(retro_store, "run_event", dies_at_the_second_call)
         with pytest.raises(Dead):
@@ -370,10 +388,19 @@ def test_a_run_interrupted_between_settled_calls_resumes_on_what_is_left_of_its_
 
     _job(later := Asker(), restarted=True, projects=projects).tick(1.0)
 
-    [run] = _runs()
+    _, run = _runs()
     assert (first.seen, later.seen) == (["retro"], ["retro"])  # the first batch replayed, not asked again
     assert run["result"] == "stopped: an answer was cut off at the credit limit"
     assert (run["spent"], run["calls"]) == (2.0, 2)
+    assert retro_store.known() == before  # correcting grades never settles the original unit again
+    remaining = retro_regrade.plan("chg:p1:fix-it", projects)["records"]
+    assert 0 < remaining < len(originals)
+    assert (retro_store.place() / "grades.jsonl").read_bytes().startswith(historical)
+    retro_regrade.queue("owner", "chg:p1:fix-it", projects)  # another allowance needs an explicit request
+    _job(Asker(), projects=projects).tick(2.0)
+    assert retro_regrade.plan("chg:p1:fix-it", projects)["records"] == 0
+    assert len(retro_store.grades()) == len(originals)
+    assert props.folded() == {}
 
 
 # Eligibility at the call, gate J3
@@ -479,7 +506,7 @@ def test_a_late_record_whose_grade_only_run_failed_waits_for_the_button_and_late
     said.retro_after_change, projects = "on", _finished_change(tmp_path)
     job = _job(asker := Asker(), projects=projects)
     job.tick(0.0)
-    late = {"id": "rec-d", "at": "2026-01-01T00:01:00+00:00", "look": "handoff", "call": "d", "cutoff": 2}
+    late = {"id": "rec-d", "at": "2026-01-01T00:01:00+00:00", "look": "plan", "call": "c", "cutoff": 2}
     late |= {"category": "none", "project": "p1", "change": "fix-it", "step": "build", "session": "s-build"}
     with (spotter.root() / "records-2026-01-01.jsonl").open("a") as out:
         out.write(json.dumps(late) + "\n")
@@ -792,9 +819,17 @@ def test_a_paused_automatic_run_waits_while_the_button_runs_and_is_taken_over_wi
 
 
 @pytest.mark.usefixtures("said")
-def test_capture_pruning_journey():
+def test_capture_pruning_journey(monkeypatch):
+    remove = chatlogs.prune
+
+    def prune(*args):
+        with (retro_store.place() / "judged.lock").open("a") as lock, pytest.raises(BlockingIOError):
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return remove(*args)
+
+    monkeypatch.setattr(chatlogs, "prune", prune)
     old = (datetime.now(UTC) - timedelta(days=40)).isoformat()
-    for sid in ("s-find", "s-case", "s-prop", "c-two", "s-ctl", "s-rec", "s-pil"):
+    for sid in ("s-find", "s-case", "s-prop", "c-two", "s-ctl", "s-rec", "s-pil", "s-correct"):
         retro_units.folder(sid).mkdir(parents=True)
         (retro_units.folder(sid) / "log.jsonl.gz").write_bytes(b"x")
     judged = [{"rev": "r1", "state": "judged"}]
@@ -805,6 +840,7 @@ def test_capture_pruning_journey():
     r1 = {"rev": "r1", "state": "judged", "sha256": retro_units.fingerprint("c-two")["sha256"]}
     found = {"chg:p:find": unit("s-find"), "chg:p:case": unit("s-case"), "chg:p:prop": unit("s-prop")}
     found |= {"chat:c-two": unit("c-two", "chat", [r1, {"rev": "r2", "state": "open"}]), "chg:p:ctl": unit("s-ctl")}
+    found["chg:p:correct"] = unit("s-correct")
     retro_store.update(lambda t: t["units"].update(found))
     retro_store.add_findings(
         [{"id": "f1", "unit": "chg:p:find", "sessions": ["s-find"]}, {"id": "f2", "unit": "chg:p:prop"}]
@@ -815,13 +851,26 @@ def test_capture_pruning_journey():
     made = {"c-2": {"record": {"session": "s-rec"}}, "c-3": {"pilot": {"session": "s-pil"}}, "c-4": {"synthetic": "s"}}
     for cid, prov in made.items():
         (cases.place() / f"{cid}.json").write_text(json.dumps({"id": cid, "provenance": prov}))
-    assert pinned() == {"s-find", "s-case", "s-prop", "s-rec", "s-pil"}
+    grade = {
+        "id": "rg-correct",
+        "record": "r-correct",
+        "unit": "chg:p:correct",
+        "session": "s-correct",
+        "grade": "wrong",
+    }
+    retro_store.add_grades([grade])
+    retro_store.request_correction("owner", "p:correct", "r1", {"r-correct": "rg-correct"})
+    assert pinned() == {"s-find", "s-case", "s-prop", "s-rec", "s-pil", "s-correct"}
     assert "c-two" not in retro_inputs.judged_sessions()
 
     _job(Asker()).tick(0.0)
 
     kept = sorted(p.name for p in retro_units.folder("s-ctl").parent.iterdir() if not p.name.startswith("."))
-    assert kept == ["c-two", "s-case", "s-find", "s-pil", "s-prop", "s-rec"]
+    assert kept == ["c-two", "s-case", "s-correct", "s-find", "s-pil", "s-prop", "s-rec"]
+    retro_store.add_grades([grade | {"id": "rg-correct-persisted-event-1", "supersedes": "rg-correct"}])
+    assert "s-correct" not in pinned()
+    assert not retro_inputs.prune(lambda _line: None)
+    assert not retro_units.folder("s-correct").exists()
 
 
 @pytest.mark.usefixtures("said")

@@ -73,6 +73,7 @@ project's Changes while that project's VS Code window is closed.
 | `owlbear update` | Runs updates now |
 | `owlbear versions [--prepare]` | The version it runs and the one it would take next; `--prepare` installs and checks that one without switching |
 | `owlbear impeccable [--install]` | Shows the Impeccable this version pins; `--install` downloads and verifies what is missing. `owlbear design-pack` is its old name, kept so versions from before the rename can install it |
+| `owlbear audit-replay` | Replays the private fixed audit corpus locally against historical commits available in the current clone. Prints a pass/fail report without writing into shared data, contacting a model or starting the host. Scripted judgment does not prove live audit quality |
 | `owlbear autostart on` or `off` | Starts OwlBear at login, or not; `on` saves this shell's PATH and `COPILOT_CLI_PATH` as they are now, so run it again after adding or removing a tool or Node version |
 | `owlbear setup --repo PATH` | Checks a project's readiness, confirms its profile and registers its chat server; the **Add a project** dialog does the same from the Projects page, and repairs use this command |
 | `owlbear data` | Shows the shared settings repository and what only this Mac's checkout of it holds |
@@ -140,6 +141,26 @@ registration intact when the admitted clone changes.
 after a merge and when idle each has its own setting in **Settings → This machine**: off, on, or on
 even while paused; **Curate now** on the Maintenance page always runs.
 
+On a project's **Maintenance** page, **Doc audit** checks its documentation and **Code audit** checks defects and
+lean code. OwlBear's own project also offers **Agent audit**, for its instructions, agents and skills. Type an
+optional note, press **Start audit** and confirm once. The note can change scope, lenses, commit or strictness;
+to send issues outside the Backlog, name the destination literally as `owner/name`. Audits read a pinned commit,
+never edit code and ask no questions. They run while Delivery is paused and use AI credits.
+
+An auditor reports findings, then a separate verifier checks each against the code and supplied decisions and
+plans. Accepted findings become Backlog entries by default. Each run also opens one summary issue, linked both
+ways with its finding issues. Larger reports continue in comments on that same issue, retaining all reasons.
+**Results of the last run** shows the commit, changed defaults, accepted findings,
+rejected and unsure findings with reasons, lens coverage and context limits. Older reports remain explicitly
+unverified. **Finish publishing** retries unfinished findings or the summary without running another agent.
+Starting again with unpublished results requires explicit consent to drop that report's remaining publication.
+
+Set both **project auditor** and **audit verifier** on **Settings** before starting. The code audit also requires
+the project auditor's subagents switch on: a context helper precedes one worker per lens part. The chat tool
+`start_code_audit` takes the same optional note and returns the initial pinned commit and Maintenance address.
+In an OwlBear developer checkout it targets the registered OwlBear project, not that developer checkout; it
+never drops unpublished results from chat. Live audit quality is separate from the scripted `audit-replay` proof.
+
 The Spotter looks at agents' work beside them, in Delivery's steps and in the VS Code chats of the folders listed in
 `enrolled_chats`, and acts on each finding as its settings in **Settings → Spotter** say: it records it, steers the
 agent, refuses its hand-off, stops it and resumes it with a note, stops it to ask you, or shows it to you on the
@@ -157,6 +178,18 @@ while OwlBear is idle. Each run stops at `retro_run_credit_limit`. `owlbear impr
 with `--change PROJECT/SLUG` or `--chat SESSION` queues a run for the machine
 host, even while paused or switched off; `owlbear improvement retro status` lists the latest runs,
 and `--plan UNIT` shows how many judging calls a run would make, without spending credits.
+
+For historical grades affected by live event counts or omitted repair sessions, use
+`owlbear improvement retro status --plan PROJECT/SLUG --repair-grades` to inspect the affected record IDs without
+writing or paying. `owlbear improvement retro run --change PROJECT/SLUG --repair-grades` explicitly queues their
+rejudging. Originals remain in the append-only grade history. Until corrected, they show **Awaiting evidence
+correction** and count toward no current grade or proposal. Corrections preserve logical references and do not
+double count. This run only rejudges; it does not propose lessons or start the Spotter experiment. Each run keeps
+the configured credit limit. If it stops early, remaining grades stay pending until another explicit request.
+Captures needed by pending corrections remain pinned until those corrections finish.
+Existing case proposals backed by those grades cannot be accepted or applied on their old review. An ordinary
+Retro proposal pass can refresh a still-open case proposal for review against the corrected grade.
+You can still reject or set aside a previously reviewed proposal whose grade awaits correction or no longer supports it.
 
 The **Improvement** page (menu, under Work) shows Retro's proposals waiting for you first, each with
 the findings it rests on, its risks and where it would land. **Accept** makes it there: a pending

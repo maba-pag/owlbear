@@ -23,8 +23,15 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    assumptions. Never infer a business constraint from code. Depth follows uncertainty and stakes,
    not a count: ask until no material gap remains. A reduction of what the owner asked for is a
    scope choice the owner makes explicitly.
-3. Write acceptance criteria a test or command can check; a criterion may state what must not
-   happen. Consider how the criteria could all pass while missing the owner's outcome, and close a
+3. Write acceptance criteria with a witness Delivery can produce at the claimed boundary, not just
+   a test or command that exists; a criterion may state what must not happen. Check the runtime,
+   authentication and isolated data that witness needs. Delivery's sessions use the installed runtime,
+   not the Change's branch; workers get no owner token, and checks never use the live `HOME` or stores.
+   A real Delivery session on changed branch code is therefore not a proof a later Delivery step can
+   promise. Propose a person check or a look after release, and settle the criterion and its timing
+   with the owner before saving; never leave a pre-merge promise covered only after release.
+   A fixture run is not that live proof. Consider how the criteria could all pass while missing the
+   owner's outcome, and close a
    material gap with a criterion or a person check. Where an expected result is not obvious, take it
    from the rule that governs it, a real input with its known result, or the owner's explicit
    choice, not from your guess. A check only a person can perform becomes a person check with steps,

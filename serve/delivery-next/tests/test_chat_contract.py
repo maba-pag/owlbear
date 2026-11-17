@@ -7,6 +7,7 @@ import itertools
 import json
 import os
 import subprocess
+import threading
 import urllib.error
 from datetime import UTC, datetime
 from email.message import Message
@@ -15,20 +16,25 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.audit_runs import job as audit_job
+from owlbear_delivery_next.audit_runs import record as audit_record
 from owlbear_delivery_next.change_contracts import chat_contract
 from owlbear_delivery_next.change_contracts import models as m
-from owlbear_delivery_next.change_flow import brief_tools
+from owlbear_delivery_next.change_flow import brief_tools, worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import chat_client, mcp_server
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import Machine
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.host import Host, HostRecord
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import lookup
+
+from .test_audit_runs import _report
 
 FIXTURES = Path(__file__).parent / "fixtures"
 WORDING = {"description", "examples", "title"}  # what a tool says to the model; its shape is the contract
@@ -45,6 +51,7 @@ ROUTES = [  # what chat_client calls, under a project and (the decisions) under 
     *(("post", f"/decisions/{{decision_id}}/{w}") for w in ("retire", "read-back", "correct-origin")),
     ("post", "/decisions/{decision_id}/queue-read-back"),
     ("post", "/decisions/{decision_id}/complete"),
+    ("post", "/chat/audits/code"),
 ]  # fmt: skip
 
 
@@ -315,6 +322,89 @@ def clone(path: Path) -> Path:
     for args in (["init", "-q", str(path)], ["-C", str(path), "commit", "-q", "--allow-empty", "-m", "i"]):
         subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
     return path.resolve()
+
+
+def test_a_developer_chat_keeps_the_fixed_projects_unpublished_audit_and_never_opens_its_checkout(
+    tmp_path, monkeypatch
+):
+    developer = clone(tmp_path / "developer")
+    worktree.git(developer, "remote", "add", "origin", codebase.URL)
+    before = sorted(p.relative_to(developer) for p in developer.rglob("*"))
+    store = Store(tmp_path / "fixed-store", name="owlbear")
+    audit_record.save(store, "code", _report())
+    saved = (store.root / audit_record.FILE).read_bytes()
+    pid = "0123456789abcdef"
+    rec = record(project=pid)
+    host = SimpleNamespace(
+        maintenance=None,
+        repo=tmp_path / "fixed-clone",
+        record=rec,
+        launching=threading.Lock(),
+        closed=lambda: False,
+        updating=lambda: "",
+        draining=lambda: False,
+    )
+    bound, factory = [], session_slots.audits
+
+    def audits(h, s):
+        bound.append(factory(h, s))
+        return bound[-1]
+
+    monkeypatch.setattr(session_slots, "audits", audits)
+    monkeypatch.setattr(audit_job.Audits, "refusal", lambda *_args: "")
+    project_app = api.create_app(store, "t", host)
+    fixed = SimpleNamespace(
+        store=store,
+        state="loaded",
+        host=host,
+        app=project_app,
+        gate=project.Gate(),
+        entry=SimpleNamespace(id=pid),
+        name="owlbear",
+        reason="",
+    )
+    machine = SimpleNamespace(
+        record=record(),
+        projects={pid: fixed},
+        stopping=threading.Event(),
+        updating="",
+        auto=SimpleNamespace(use=lambda: None),
+    )
+    fallback = FastAPI()
+    fallback.add_api_route(chat_contract.CAPABILITY, lambda: SERVES)
+    http = TestClient(app.Dispatcher(fallback, machine, b"Bearer t"), base_url="http://127.0.0.1")
+    monkeypatch.setattr(Store, "open", lambda *_a, **_k: pytest.fail("the developer checkout must not be opened"))
+    chat = chat_client.workspace(developer)
+    assert isinstance(chat, chat_client.OwlBear)
+    monkeypatch.setattr(chat, "record", record)
+
+    def send(_rec, method, url, body, _timeout, *, headers=None):
+        response = http.request(
+            method,
+            url,
+            json=body,
+            headers=(headers or {}) | AUTH | {"X-OwlBear-Use": "chat", chat_contract.HEADER: str(chat_contract.CHAT)},
+        )
+        return response.status_code, response.json()
+
+    monkeypatch.setattr(chat, "send", send)
+    said = chat.start_code_audit("Read the fixed project's code.")
+    assert said == {
+        "started": False,
+        "error": "the last audit has unpublished findings or summary; finish publishing or explicitly drop them",
+        "maintenance_page": f"{rec.url}maintenance?project={pid}#token=t",
+    }
+    assert len(bound) == 1
+    assert bound[0].store is store
+    assert (store.root / audit_record.FILE).read_bytes() == saved
+    assert sorted(p.relative_to(developer) for p in developer.rglob("*")) == before
+    refused = http.post(
+        "/api/next/owlbear/chat/audits/code",
+        json={"note": "", "discard_report": "run-one"},
+        headers=AUTH | {"X-OwlBear-Use": "chat"},
+    )
+    assert refused.status_code == 422
+    assert (store.root / audit_record.FILE).read_bytes() == saved
 
 
 @pytest.fixture

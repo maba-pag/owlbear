@@ -34,6 +34,7 @@ from owlbear_delivery_next.impeccable_runs import pack_job
 from owlbear_delivery_next.project_host import (
     amendment_routes,
     answers,
+    audit_routes,
     backlog_routes,
     brief_actions,
     brief_routes,
@@ -42,9 +43,7 @@ from owlbear_delivery_next.project_host import (
     config_routes,
     decision_routes,
     memory_routes,
-    pack_routes,
     pages,
-    pds_routes,
     project_notes,
     screenshots,
     session_slots,
@@ -114,9 +113,9 @@ class ConsentBody(Body):
 
 
 class IntentBody(Body):
-    """Pause, resume or abandon the Change."""
+    """Pause, resume, abandon or request a change to the approved brief."""
 
-    intent: Literal["pause", "resume", "abandon"]
+    intent: Literal["pause", "resume", "abandon", "change"]
     text: str = Field(default="", max_length=500)
 
 
@@ -462,7 +461,9 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
 
     @router.post("/changes/{slug}/intent")
     def intent(slug: str, body: IntentBody) -> dict[str, str]:
-        read(slug)
+        c = read(slug)
+        if body.intent == "change":
+            amendment_routes.admit_request(c, body.text)
         return put(slug, IntentItem(at=datetime.now(UTC), intent=body.intent, text=body.text))
 
     @router.post("/changes/{slug}/pull")
@@ -492,9 +493,6 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     router.include_router(memory_routes.router(store))
     router.include_router(decision_routes.project(store, lambda: host.repo))
     job = session_slots.packed(host, pack or pack_job.Job(store))  # its sessions count as the project's (TD-336)
-    router.include_router(pack_routes.router(store, job, lambda: admitted(host), host))
-    pds = session_slots.pds(host, store)  # the hand audit and the update
-    router.include_router(pds_routes.router(*pds, admitted=lambda: admitted(host)))
+    app.state.busy = audit_routes.bind(router, store, host, job, lambda: launches.opening)
     app.include_router(router)
-    app.state.busy = lambda: [*(["a shaping chat opening"] if launches.opening else []), *session_slots.busy(job, *pds)]
     return app

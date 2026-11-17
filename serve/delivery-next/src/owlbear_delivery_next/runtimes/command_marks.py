@@ -19,6 +19,7 @@ from copilot.rpc import SessionUpdateOptionsParams, ShellInitScript, ShellInitSc
 
 from owlbear_delivery_next.git import remote_git
 from owlbear_delivery_next.local_system import processes
+from owlbear_delivery_next.runtimes import ref_writes
 from owlbear_delivery_next.runtimes.instruction_scope import applied
 from owlbear_delivery_next.runtimes.sdk_teardown import call as _call
 
@@ -73,12 +74,15 @@ async def opened(session: Any, worktree: Path, user: UserConfig, log: Callable[.
         RuntimeError: The runtime refused either; the step ends before any message.
     """
     await applied(session, worktree, user, log)
-    if not _active:
+    paths = [_active[0] / SCRIPT] if _active else []
+    if extra := ref_writes.script():
+        paths.append(extra)
+    if not paths:
         return
-    script = ShellInitScript(path=str(_active[0] / SCRIPT), shell=ShellInitScriptShell.BASH)
-    update = session.rpc.options.update(SessionUpdateOptionsParams(shell=ShellOptions(init_scripts=[script])))
+    scripts = [ShellInitScript(path=str(path), shell=ShellInitScriptShell.BASH) for path in paths]
+    update = session.rpc.options.update(SessionUpdateOptionsParams(shell=ShellOptions(init_scripts=scripts)))
     if not (await _call(update, "command marks")).success:
-        msg = "the runtime refused the shell init script that marks the step's commands"
+        msg = "the runtime refused the shell init scripts that mark the step's commands and read-only Git writes"
         raise RuntimeError(msg)
 
 

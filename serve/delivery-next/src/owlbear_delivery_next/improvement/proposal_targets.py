@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.improvement import retro_store as store
+from owlbear_delivery_next.improvement.retro_grade_history import PENDING
 from owlbear_delivery_next.local_system import codebase, preload
 
 if TYPE_CHECKING:
@@ -109,6 +110,22 @@ def _one(found: Iterable[str]) -> str:
     return next(iter(every)) if len(every) == 1 else ""
 
 
+def _case(snap: Mapping[str, Any]) -> dict[str, Any]:
+    if versions := snap.get("grade_versions"):
+        grade = next(iter(store.grades(record=snap.get("record", ""))), {})
+        if PENDING in versions.values():
+            msg = "this case's grade awaits evidence correction"
+        elif snap.get("review_digest") != snap.get("evidence"):
+            msg = "this case's corrected grade awaits a new review"
+        elif grade.get("grade") not in {"wrong", "missed"} or grade.get("should", "") != snap.get("call", ""):
+            msg = "the corrected grade no longer supports this Spotter case"
+        else:
+            msg = ""
+        if msg:
+            raise store.RetroError(msg)
+    return {"kind": "case", "record": snap.get("record", ""), "call": snap.get("call", ""), "synthetic": False}
+
+
 def resolve(
     snap: Mapping[str, Any], places: Mapping[str, Place], shared_root: Path, units: Mapping[str, str] | None = None
 ) -> dict[str, Any]:
@@ -120,7 +137,7 @@ def resolve(
     kind, target = snap.get("kind", ""), str(snap.get("target") or "")
     store.require_real(str(snap.get("provenance") or "real"))
     if kind == "spotter-case":
-        return {"kind": "case", "record": snap.get("record", ""), "call": snap.get("call", ""), "synthetic": False}
+        return _case(snap)
     pid = _one(projects(snap, places, units if units is not None else units_of()))
     place = places.get(pid)
     clone = place.clone if place else None

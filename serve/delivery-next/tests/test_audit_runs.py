@@ -1,0 +1,413 @@
+"""Audit publication custody and shared-Git read-only boundaries."""
+
+import contextlib
+import json
+import subprocess
+from types import SimpleNamespace
+
+import pytest
+
+from owlbear_decisions import write
+from owlbear_delivery_next.audit_runs import context, job, publish, record
+from owlbear_delivery_next.change_contracts import project_audit_tools
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
+from owlbear_delivery_next.github.provider import FailureCode, ProviderError
+from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.settings import config, profile
+from owlbear_delivery_next.state_store import backlog
+from owlbear_delivery_next.state_store.store import Store
+
+from .test_decision_lookup import make
+
+
+def _report():
+    return {
+        "id": "run-one",
+        "state": "publishing",
+        "phase": "opening issues",
+        "started_at": record.now(),
+        "ended_at": "",
+        "branch": "main",
+        "commit": "abc",
+        "note": "",
+        "changed_defaults": [],
+        "destination": "",
+        "summary": "Checked docs.",
+        "parts": [],
+        "not_covered": [],
+        "subagents": [],
+        "reason": "",
+        "findings": [
+            {
+                "title": "Removed command in setup",
+                "type": "defect",
+                "severity": "medium",
+                "where": "setup.md:1",
+                "evidence": "The named command no longer exists.",
+                "recommendation": "Name the supported command.",
+                "number": None,
+                "url": "",
+                "pending": None,
+            }
+        ],
+    }
+
+
+@pytest.fixture
+def audit_job(tmp_path, monkeypatch):
+    root = tmp_path / "workspace"
+    (root / "context").mkdir(parents=True)
+    audits = job.Audits(Store(tmp_path / "store", name="fixture"))
+    audits.repo = tmp_path / "clone"
+    audits.maintenance = SimpleNamespace()
+    monkeypatch.setattr(job.github_writer, "of", lambda *_args: SimpleNamespace(access=lambda: None))
+    monkeypatch.setattr(job.workspace, "pin", lambda *_args: "abc")
+    monkeypatch.setattr(job.context, "prepare", lambda *_args: [])
+    state = {**_report(), "state": "running", "phase": "auditing", "findings": []}
+    return audits, state, root
+
+
+def test_target_consent_rejects_a_release_prefix_before_moving_the_worktree(audit_job, monkeypatch):
+    audits, state, root = audit_job
+    state["note"] = "Audit `v1.20`."
+    moved = []
+    monkeypatch.setattr(
+        job.workspace, "opened", lambda *_args: contextlib.nullcontext(SimpleNamespace(path=root / "repo"))
+    )
+
+    def move(_copy, ref):
+        moved.append(ref)
+        return "requested"
+
+    monkeypatch.setattr(job.workspace, "target", move)
+
+    def configure(*_args, helper):
+        with pytest.raises(ValueError, match="complete ref"):
+            helper(project_audit_tools.Target(ref="v1.2", reason="The note names this release."))
+        assert not moved
+        assert helper(project_audit_tools.Target(ref="v1.20", reason="The note names this release.")) == "requested"
+        raise StopIteration
+
+    monkeypatch.setattr(job.sessions, "auditor", configure)
+    with pytest.raises(StopIteration):
+        audits._audit("doc", state, lambda: None)  # noqa: SLF001 - exercise the session-bound target callback
+    assert moved == ["v1.20"]
+
+
+def test_accepted_findings_remain_publishable_after_workspace_cleanup_fails(audit_job, monkeypatch):
+    audits, state, root = audit_job
+    observation = _report()["findings"][0]
+    result = project_audit_tools.AuditFindings(
+        findings=[{key: observation[key] for key in project_audit_tools.AuditFinding.model_fields}],
+        summary="Checked docs.",
+        not_covered=[],
+        changed_defaults=[],
+        destination="",
+    )
+
+    @contextlib.contextmanager
+    def opened(*_args):
+        yield SimpleNamespace(path=root / "repo")
+        msg = "fixture workspace cleanup failed"
+        raise OSError(msg)
+
+    monkeypatch.setattr(job.workspace, "opened", opened)
+    monkeypatch.setattr(job.workspace, "inspect", lambda *_args: None)
+    monkeypatch.setattr(job.sessions, "auditor", lambda *_args, **_kwargs: SimpleNamespace(role="project-auditor"))
+    monkeypatch.setattr(job.sessions, "verifier", lambda *_args: SimpleNamespace(role="audit-verifier"))
+    monkeypatch.setattr(job.sessions, "accepted", lambda *_args: result)
+    checked = project_audit_tools.AuditVerdicts(
+        verdicts=[
+            project_audit_tools.AuditVerdict(
+                finding=1,
+                verdict="accepted",
+                reason="The removed command is named literally.",
+                decisions=[],
+                duplicate_of="",
+            )
+        ]
+    )
+    monkeypatch.setattr(job.sessions, "verified", lambda *_args: checked)
+    ran = []
+
+    def run(cfg):
+        ran.append(cfg.role)
+        return SimpleNamespace(session_id=cfg.role, subagents=[])
+
+    audits.run = run
+    audits._work("doc", state, resume=False)  # noqa: SLF001 - exercise the worker's cleanup/publication boundary
+    saved = audits.read("doc")
+    assert saved["state"] == "publishing"
+    assert saved["findings"] == _report()["findings"]
+    assert saved["verified"]
+    assert saved["verdicts"] == checked.model_dump(mode="json")["verdicts"]
+    assert ran == ["project-auditor", "audit-verifier"]
+    assert "fixture workspace cleanup failed" in saved["reason"]
+    launched = []
+    monkeypatch.setattr(audits, "_launch", lambda audit, state, *, resume: launched.append((audit, state, resume)))
+    assert audits.publish("doc") == saved
+    assert launched == [("doc", saved, True)]
+
+
+def test_discard_consent_only_replaces_the_report_the_owner_reviewed(tmp_path, monkeypatch):
+    store = Store(tmp_path / "store", name="fixture")
+    store.write_profile(Profile(entries={profile.DEFAULT: ProfileEntry(state="known", value="main")}))
+    audits = job.Audits(store)
+    audits.repo = tmp_path / "clone"
+    monkeypatch.setattr(job.github_writer, "of", lambda *_args: SimpleNamespace(access=lambda: None))
+    monkeypatch.setattr(job.workspace, "pin", lambda *_args: "initial-pin")
+    monkeypatch.setattr(job.Audits, "refusal", lambda *_args: "")
+    launched = []
+
+    def launch(audit, state, *, resume):
+        assert not resume
+        launched.append(state)
+        record.save(store, audit, state)
+
+    monkeypatch.setattr(audits, "_launch", launch)
+    record.save(store, "doc", _report())
+    displayed = audits.read("doc")["id"]
+    newer = {**_report(), "id": "run-two", "summary": "Newer unpublished findings."}
+    record.save(store, "doc", newer)
+    before = (store.root / record.FILE).read_bytes()
+    with pytest.raises(job.AuditBusyError, match="the last audit report changed; review it and start again"):
+        audits.start("doc", discard_report=displayed)
+    assert not launched
+    assert (store.root / record.FILE).read_bytes() == before
+    with pytest.raises(job.AuditBusyError, match="the last audit has unpublished findings"):
+        audits.start("doc")
+    assert not launched
+    assert (store.root / record.FILE).read_bytes() == before
+    replacement = audits.start("doc", discard_report=newer["id"])
+    assert launched == [replacement]
+    assert replacement["id"] != newer["id"]
+    assert record.load(store)["doc"] == replacement
+
+
+def test_finish_recovers_a_lost_receipt_without_duplicate_issue(tmp_path, monkeypatch, shared_repo, github):
+    store = Store(tmp_path / "store", DataRepo(shared_repo[0]), "fixture")
+    state, book = _report(), backlog.Backlog.of(store)
+    earlier, _ = book.add(state["findings"][0]["title"], "earlier observation", "audit", ["audit:earlier:1"])
+    book.update(earlier.id, {"kind": "defect", "status": "done"})
+    edit = book.issues.edit
+
+    def lost(number, fields):
+        if number != int(earlier.id):
+            return edit(number, fields)
+        persisted = record.load(store)["doc"]["findings"][0]
+        assert persisted["pending"]
+        monkeypatch.setattr(book.issues, "edit", edit)
+        github.hidden.add(2)
+        backlog._recent.clear()  # noqa: SLF001 - simulate restart before GitHub lists the new issue
+        raise ProviderError(FailureCode.RESPONSE_UNKNOWN, "edit_issue", "response lost", retry_safe=False)
+
+    monkeypatch.setattr(book.issues, "edit", lost)
+    monkeypatch.setattr(job.backlog.Backlog, "of", lambda _store: book)
+    record.save(store, "doc", state)
+    audits = job.Audits(store)
+    audits.publish("doc")
+    audits.thread.join()
+    partial = audits.read("doc")
+    assert partial["state"] == "publishing"
+    assert partial["findings"][0]["pending"]
+    assert "response lost" in partial["reason"]
+    audits.publish("doc")
+    audits.thread.join()
+    assert "two minutes" in audits.read("doc")["reason"]
+    assert len(github.issues) == 2
+    github.hidden.clear()
+    audits.publish("doc")
+    audits.thread.join()
+    finished = audits.read("doc")
+    assert finished["state"] == "done"
+    assert finished["findings"][0]["number"] == 2
+    assert len(github.issues) == 2
+    assert book.current("1").links == ["2"]
+    assert book.current("2").links == ["1"]
+
+
+def test_shared_git_mutation_voids_even_an_errored_session(tmp_path, monkeypatch):
+    repo = tmp_path / "clone"
+    repo.mkdir()
+    worktree.git(repo, "init", "--quiet")
+    worktree.git(repo, "remote", "add", "origin", "https://github.com/acme/tools.git")
+    worktree.git(repo, "config", "user.name", "Fixture")
+    worktree.git(repo, "config", "user.email", "fixture@example.invalid")
+    (repo / "README.md").write_text("Fixture\n")
+    worktree.git(repo, "add", "README.md")
+    worktree.git(repo, "commit", "--quiet", "-m", "Fixture")
+    commit = worktree.git(repo, "rev-parse", "HEAD").strip()
+    worktree.git(repo, "tag", "audit-mutation")
+    root = tmp_path / "workspace"
+    root.mkdir()
+
+    @contextlib.contextmanager
+    def allocated(_prefix):
+        yield root
+
+    audits = job.Audits(Store(tmp_path / "store", name="fixture"))
+    audits.repo = repo
+    audits.maintenance = SimpleNamespace(workspace=allocated, retained=lambda _root: False)
+    monkeypatch.setattr(job.workspace, "pin", lambda *_args: commit)
+    monkeypatch.setattr(job.Audits, "refusal", lambda *_args: "")
+    monkeypatch.setattr(job.profile, "value", lambda _p, key, *_a: "main" if key == job.profile.DEFAULT else "")
+    monkeypatch.setattr(job.context, "prepare", lambda *_args: [])
+    monkeypatch.setattr(job.sessions, "auditor", lambda _store, at, *_args, **_kw: at)
+    published = []
+    monkeypatch.setattr(job.publish, "findings", lambda *_args: published.append(True))
+
+    def session(_root):
+        worktree.git(repo, "tag", "--delete", "audit-mutation")
+        msg = "session connection ended"
+        raise OSError(msg)
+
+    audits.run = session
+    audits.start("doc")
+    audits.thread.join()
+    saved = audits.read("doc")
+    assert saved["state"] == "failed"
+    assert "deleted tag audit-mutation" in saved["reason"]
+    assert not published
+    assert not worktree.git(repo, "tag", "--list", "audit-mutation").strip()
+    assert not (root / "repo").exists()
+
+
+def test_redirected_finding_recovers_its_actual_issue_after_a_lost_receipt(tmp_path, monkeypatch, github):
+    store, state = Store(tmp_path / "store", name="fixture"), _report()
+    state.update(destination="acme/owlbear-data", note="File findings in acme/owlbear-data.")
+
+    def transport(argv, data, timeout, cwd, env):
+        answer = github(argv, data, timeout, cwd, env)
+        if github.calls[-1][:2] == ("POST", "repos/acme/owlbear-data/issues"):
+            github.hidden.add(1)
+            return subprocess.CompletedProcess(argv, 1, b"", b"gh: connection reset")
+        return answer
+
+    monkeypatch.setattr(publish, "OwlbearIssues", lambda repo, root: OwlbearIssues(repo, root, runner=transport))
+    record.save(store, "doc", state)
+    audits = job.Audits(store)
+    audits.publish("doc")
+    audits.thread.join()
+    assert audits.read("doc")["state"] == "publishing"
+    assert "<!-- audit:run-one:1 -->" in github.issues[1]["body"]
+    audits.publish("doc")
+    audits.thread.join()
+    assert "two minutes" in audits.read("doc")["reason"]
+    github.hidden.clear()
+    audits.publish("doc")
+    audits.thread.join()
+    assert audits.read("doc")["findings"][0]["number"] == 1
+    assert audits.read("doc")["state"] == "done"
+    assert len(github.issues) == 1
+    _redirected_summary(store, monkeypatch, github)
+
+
+def _redirected_summary(store, monkeypatch, github):
+    state = _report()
+    state.update(
+        id="verified-redirect",
+        destination="acme/owlbear-data",
+        note="File findings in acme/owlbear-data.",
+        verified=True,
+        session="auditor",
+        verifier_session="verifier",
+        verdicts=[{"finding": 1, "verdict": "accepted", "reason": "Confirmed.", "decisions": [], "duplicate_of": ""}],
+        summary_issue={"number": None, "url": "", "pending": None, "complete": False},
+    )
+    lost_edit = True
+
+    def transport(argv, data, timeout, cwd, env):
+        nonlocal lost_edit
+        answer = github(argv, data, timeout, cwd, env)
+        method, endpoint = github.calls[-1][:2]
+        if method == "POST" and endpoint.endswith("/issues") and len(github.issues) == 2:
+            assert record.load(store)["doc"]["summary_issue"]["pending"]
+            github.hidden.add(2)
+            return subprocess.CompletedProcess(argv, 1, b"", b"gh: connection reset")
+        if method == "PATCH" and endpoint.endswith("/issues/2") and lost_edit:
+            lost_edit = False
+            return subprocess.CompletedProcess(argv, 1, b"", b"gh: connection reset")
+        return answer
+
+    monkeypatch.setattr(publish, "OwlbearIssues", lambda repo, root: OwlbearIssues(repo, root, runner=transport))
+
+    def attempt():
+        publish.findings(store, state, lambda: record.save(store, "doc", state))
+
+    with pytest.raises(ProviderError):
+        attempt()
+    state = record.load(store)["doc"]
+    with pytest.raises(RuntimeError, match="two minutes"):
+        attempt()
+    github.hidden.clear()
+    with pytest.raises(ProviderError):
+        attempt()
+    state = record.load(store)["doc"]
+    assert state["findings"][0]["number"] == 3
+    assert not state["summary_issue"]["complete"]
+    attempt()
+    assert record.load(store)["doc"]["summary_issue"]["complete"]
+    assert len(github.issues) == 3
+    assert github.issues[2]["html_url"] in github.issues[3]["body"]
+    assert github.issues[3]["html_url"] in github.issues[2]["body"]
+    assert github.issues[2]["body"].endswith("<!-- audit:verified-redirect:summary -->\n")
+
+
+def test_redirected_destination_must_be_named_in_full(tmp_path):
+    (tmp_path / "context").mkdir()
+    (tmp_path / "context" / "run.json").write_text(json.dumps({"note": "File in acme/private-audit-reports."}))
+    report = project_audit_tools.AuditFindings(
+        findings=[],
+        not_covered=[],
+        changed_defaults=[],
+        destination="acme/private-audit-reports",
+        summary="No findings.",
+    )
+    assert project_audit_tools.check(report, tmp_path) == []
+    report.destination = "acme/private"
+    assert project_audit_tools.check(report, tmp_path)
+    report.destination = "me/private-audit-reports"
+    assert project_audit_tools.check(report, tmp_path)
+    report.destination = "acme/private-audit-reports"
+    note = tmp_path / "context" / "run.json"
+    note.write_text(json.dumps({"note": "File in https://git.example.test/acme/private-audit-reports."}))
+    assert project_audit_tools.check(report, tmp_path)
+    note.write_text(json.dumps({"note": "File in https://github.com/acme/private-audit-reports."}))
+    assert project_audit_tools.check(report, tmp_path) == []
+
+
+def test_issue_context_uses_the_project_host_and_selected_account(tmp_path, monkeypatch, shared_repo, github, fake_gh):
+    endpoint = "repos/acme/tools/issues?state=open&per_page=100&page=1"
+    issues = [{"number": 7, "title": "Enterprise planning context", "body": "Full issue body", "labels": []}]
+    fake_gh.set(
+        {"github.com": {"acme": "success"}, "git.example.test": {"acme": "success", "octo-writer": "success"}},
+        {"github.com": "acme", "git.example.test": "acme"},
+        [{"has": ["api", endpoint], "out": issues}],
+    )
+    monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"github_account": "octo-writer"}))
+    store = Store(tmp_path / "store", DataRepo(shared_repo[0]), "fixture")
+    store.write_profile(Profile(entries={profile.HOST: ProfileEntry(state="known", value="git.example.test")}))
+    limits = context.prepare(store, tmp_path, _report(), "acme/tools")
+    assert not any(line.startswith("issues:") for line in limits)
+    assert json.loads((tmp_path / "context" / "issues.md").read_text()) == issues
+    assert not github.issues
+    launches = [call for call in fake_gh.calls() if call["argv"][0] == "api"]
+    assert len(launches) == 1
+    login = "octo-writer"
+    assert launches[0]["GH_ENTERPRISE_TOKEN"] == f"tok-{login}"
+    argv = launches[0]["argv"]
+    assert argv[argv.index("--hostname") + 1] == "git.example.test"
+
+
+def test_unresolved_planning_authority_never_becomes_empty_audit_context(tmp_path, shared_repo):
+    shared = DataRepo(shared_repo[0])
+    shared.claim("shop-site", "github.com/acme/shop-site")
+    rule = make(conflict=True)
+    write(rule, shared.root / "shop-site")
+    store = Store(tmp_path / "store", shared, "shop-site")
+    with pytest.raises(ValueError, match="flagged conflict") as failed:
+        context.prepare(store, tmp_path, _report(), "acme/shop-site")
+    assert rule.id in str(failed.value)
+    assert not (tmp_path / "context" / "decisions.md").exists()

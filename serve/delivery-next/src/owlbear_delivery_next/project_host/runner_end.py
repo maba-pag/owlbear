@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import failures
 from owlbear_delivery_next.change_contracts.models import VISUAL, ErrorKind, Exit, StepKind, Stop
-from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow import loop, stuck
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -29,7 +29,13 @@ def block(found: Found | str, now: datetime) -> Stop:
 
 def unverified(c: Change) -> bool:
     """Whether the Change stopped because the end of its last step could not be verified."""
-    return bool(c.stop and c.stop.kind == ErrorKind.LIVENESS and c.outcome and c.outcome.exit == Exit.STOP)
+    return bool(
+        c.stop
+        and c.stop.kind == ErrorKind.LIVENESS
+        and c.outcome
+        and c.outcome.exit == Exit.STOP
+        and not stuck.exhausted(c)
+    )
 
 
 def disappeared(prior: Change, rec: RunnerRecord, now: datetime) -> bool:

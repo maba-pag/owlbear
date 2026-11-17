@@ -237,6 +237,12 @@ def home() -> Namespace:
 
 
 @app.command
+def audit_replay() -> Namespace:
+    """Replay the private fixed audit corpus locally, using fixture transport and no AI credits."""
+    return Namespace(command="audit-replay")
+
+
+@app.command
 def prepare() -> Namespace:
     """Before a reboot: bind the clone's store id and fence the offline move."""
     return Namespace(command="prepare")

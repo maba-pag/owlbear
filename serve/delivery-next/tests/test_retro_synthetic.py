@@ -158,6 +158,10 @@ def test_the_command_refuses_synthetic_runs_and_plans_without_queueing(capsys):
 
     assert cli.main(["improvement", "retro", "status", "--plan", "syn:large"]) == 1
     assert "synthetic Retro is retired" in capsys.readouterr().out
+    assert cli.main(["improvement", "retro", "run", "--chat", "s1", "--repair-grades"]) == 1
+    assert "--repair-grades requires --change" in capsys.readouterr().out
+    assert cli.main(["improvement", "retro", "status", "--repair-grades"]) == 1
+    assert "--repair-grades requires --plan" in capsys.readouterr().out
     assert retro_store.queued() == []
 
 

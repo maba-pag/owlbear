@@ -61,9 +61,10 @@ def _flows_at(c: Change, pr: PullRequest, writer: Writer) -> dict[str, str] | No
 
 
 def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tuple[str, ...], StepResult | None]:
-    """The checks that must pass at the PR head, asking once per workflow digest when unresolved.
+    """The checks that must pass at the PR head, with answers valid only for their workflow digest.
 
     The profile's entry holds while its workflow evidence matches the head; else they are detected from the head.
+    The question gate counts every unresolved inventory as one cause, even when that evidence changes.
     """
     entry = ctx.profile.entries.get(profile.DECLARED)
     texts = _flows_at(c, pr, ctx.writer)

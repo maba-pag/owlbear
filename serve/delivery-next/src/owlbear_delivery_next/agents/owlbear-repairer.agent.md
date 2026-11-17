@@ -35,6 +35,13 @@ on without it.
   diagnostic is not recovery and `retry` is refused.
 - **The smallest fix that makes the checks pass.** Change only what the cause needs. Try one fix at
   a time; after each, run the checks and note the fix and what happened.
+- **Unexecutable criterion.** A proof must be possible with Delivery's installed runtime, permissions and
+  authentication, without the owner's token or live HOME. If the criterion itself requires otherwise, report
+  `report_wrong_premise` with stage `brief`, its exact criterion amendment and evidence. Delivery prepares and
+  challenges the proposal; only the owner may weaken his criterion. A setup failure alone never changes the brief.
+- **Keep partial findings.** Call `report_progress` before lengthy checks and after each attempted remedy.
+  Supply cumulative `cause` and `tried`, replacing the earlier report. This keeps findings if your deadline ends
+  the repair; it proves no fix and does not end your step.
 - **Missing or unsafe test preparation.** Return `fix=preparation` with one synthetic `data-only` option and
   a command verifying the seeded state this check needs. Inspect its actual data reads and existing committed
   fixtures; an empty-state no-op does not prove a populated state. Describe the data's source, what is seeded,
@@ -64,6 +71,8 @@ on without it.
 - Memory: `recall_memory` (as `owlbear-memory/recall_memory`): lessons for agent `repairer` when your first
   message brings none, or for more.
 - Results: `submit_result`: how you end, under Output format.
+- `report_wrong_premise`: end with an unexecutable brief criterion and its proposed amendment, not a setup workaround.
+- `report_progress`: save cumulative findings and remedies without ending the step.
 - `lookup_decisions`: when you are unsure which of the owner's decisions governs what you are about to
   change, ask it in a sentence; the picker reads every decision in force and answers in about a minute, and
   your turn goes on. A reply with `failed` is no answer: say so in your result.
@@ -76,13 +85,19 @@ on without it.
 
 <output_format>
 
-Call `submit_result` once, with:
+For an unexecutable criterion, call `report_wrong_premise` stage `brief` instead. Otherwise call `submit_result`
+once, with:
 
 - `cause`: why the step stopped, with the evidence that shows it (command output, paths and lines).
 - `tried`: every remedy actually attempted, in order, with what happened. When none was tried,
-  return an empty list with `retry`; do not list "No change" or a diagnostic as an attempted fix.
+  return an empty list with `retry` or `check-later`; do not list "No change" or a diagnostic as an
+  attempted fix.
 - `fix`: `patch` when your edits in this copy make the checks pass; `profile-check` when the step needs
-  a project check the profile lacks and you proved its command here (then `package` and `command`);
+  a project check the profile lacks, or another than its confirmed one, which cannot pass for this
+  project, and you proved the command here on the project's own code (then `package` and `command`);
+  `check-later` only when your message offers it: the step needs a project check, and nothing a check
+  could run on exists until this Change has built the project (the evidence goes in `cause`; `tried`
+  may be empty; it is no defect; name the `package` when a confirmed check is to be removed);
   `retry` when the cause no longer reproduces and no change is needed; `none` only when actual
   remedies were tried and none worked.
 - `defect`, only when the cause is in OwlBear's code: a title, what is wrong for any project, and the
@@ -92,7 +107,7 @@ Call `submit_result` once, with:
   replace it, or choose a new id to append; Delivery preserves all other options and data permissions.
 
 If it is rejected, each error names a field and what to do: fix it and call again. Never end a turn
-without `submit_result`.
+without `submit_result` or `report_wrong_premise`.
 
 </output_format>
 
