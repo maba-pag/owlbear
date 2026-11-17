@@ -1,4 +1,4 @@
-"""Explicit repair of grades made with live callback counts or omitted Change repair evidence."""
+"""Registration and idle continuation of historical grade evidence corrections."""
 
 from __future__ import annotations
 
@@ -15,6 +15,28 @@ from owlbear_delivery_next.improvement import retro_store as store
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.improvement.retro_units import Projects
+
+
+def pending() -> list[dict[str, Any]]:
+    """Registered corrections still pending, grouped by their saved unit revision for idle runs."""
+    awaiting = {
+        g["record"]: g["id"]
+        for g in store.grades(include_pending=True)
+        if g["grade"] == retro_grade_history.PENDING
+    }
+    registered = {
+        rid: (q["change"], q["revision"], gid)
+        for q in store.lines("requests.jsonl")
+        for rid, gid in (q.get("corrections") or {}).items()
+    }
+    grouped: dict[tuple[str, str], list[str]] = {}
+    for rid, (change, rev, gid) in registered.items():
+        if awaiting.get(rid) == gid:
+            grouped.setdefault((change, rev), []).append(rid)
+    return [
+        {"unit": f"chg:{change}", "rev": rev, "mode": "correct-grades", "records": records}
+        for (change, rev), records in grouped.items()
+    ]
 
 
 def plan(uid: str, projects: Projects) -> dict[str, Any]:

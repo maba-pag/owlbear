@@ -11,7 +11,8 @@ On start, an open run resumes on the rest of its allowance only when no call of 
 known; otherwise it ends ``stopped: unknown spend after an interruption`` and its unit waits for the button. Per
 pass: the button's requests (they bypass both switches and pause, never the fence, eligibility or a held lease), then
 a waiting run, then Changes due when ``retro_after_change`` allows, then enrolled chats due when OwlBear is idle and
-``retro_when_idle`` allows, and once a day the pruning of judged chat captures no finding, case or open proposal pins.
+``retro_when_idle`` allows (registered pending grade corrections first), and once a day the pruning of judged
+chat captures no finding, case or open proposal pins.
 An unset limit or role, or a retired assumption the run needs, refuses the run, recorded. While a setting of the
 unit's project is unset (``retro_block``), the button's run is refused, recorded, and the automatic ones wait.
 """
@@ -30,7 +31,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.improvement import proposal_apply, retro_judge
+from owlbear_delivery_next.improvement import proposal_apply, retro_judge, retro_regrade
 from owlbear_delivery_next.improvement import retro_store as store
 from owlbear_delivery_next.improvement import retro_units as units
 from owlbear_delivery_next.improvement.credit_meter import Meter
@@ -468,10 +469,11 @@ class RetroJob:
     def _chats(self) -> None:
         if not self._allowed(SWITCH["idle"]) or not self.seams.idle():
             return
-        for item in units.due_chats(enrolled(), datetime.now(UTC)):
+        for item in [*retro_regrade.pending(), *units.due_chats(enrolled(), datetime.now(UTC))]:
             if self.skips.blocked(item["unit"]):
                 continue
-            self._start(Running(item["unit"], "idle", rev=item["rev"]))
+            self._start(Running(item["unit"], "idle", rev=item["rev"], mode=item.get("mode", "judge"),
+                                records=item.get("records", [])))  # fmt: skip
             if self.waiting:
                 return
         self._late("chat:", "idle")

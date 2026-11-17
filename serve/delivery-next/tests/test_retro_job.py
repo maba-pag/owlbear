@@ -393,12 +393,27 @@ def test_a_run_interrupted_between_settled_calls_resumes_on_what_is_left_of_its_
     assert run["result"] == "stopped: an answer was cut off at the credit limit"
     assert (run["spent"], run["calls"]) == (2.0, 2)
     assert retro_store.known() == before  # correcting grades never settles the original unit again
-    remaining = retro_regrade.plan("chg:p1:fix-it", projects)["records"]
-    assert 0 < remaining < len(originals)
+    remaining = retro_regrade.plan("chg:p1:fix-it", projects)["corrections"]
+    assert 0 < len(remaining) < len(originals)
     assert (retro_store.place() / "grades.jsonl").read_bytes().startswith(historical)
-    retro_regrade.queue("owner", "chg:p1:fix-it", projects)  # another allowance needs an explicit request
-    _job(Asker(), projects=projects).tick(2.0)
+    said.retro_when_idle = "on"
+    state = SimpleNamespace(paused=False, fence="", idle=False)
+    idle = _job(asker := Asker(), state, projects=projects)
+    idle.tick(2.0)
+    assert (len(_runs()), asker.seen, retro_store.queued()) == (2, [], [])
+    state.idle = True
+    idle.tick(3.0)
+    _, _, corrected = _runs()
+    assert corrected["id"] != run["id"]
+    assert (corrected["trigger"], corrected["mode"], corrected["limit"], corrected["rev"]) == (
+        "idle", "correct-grades", said.limit, run["rev"])  # fmt: skip
+    assert set(corrected["records"]) == set(remaining)
+    assert {r["id"] for message in asker.messages for r in _evidence(message)["records"]} == set(remaining)
     assert retro_regrade.plan("chg:p1:fix-it", projects)["records"] == 0
+    assert retro_store.known() == before
+    assert (retro_store.place() / "grades.jsonl").read_bytes().startswith(historical)
+    idle.tick(4.0)
+    assert len(_runs()) == 3
     assert len(retro_store.grades()) == len(originals)
     assert props.folded() == {}
 
