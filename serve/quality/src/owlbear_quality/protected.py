@@ -48,8 +48,40 @@ class Protected:
     paths: tuple[str, ...]
 
 
+def _invoked(command: Sequence[str]) -> str:
+    executable = PurePosixPath(command[0]).name
+    wrappers = {"uv", "npm", "pnpm", "yarn", "bun", "poetry", "pdm"}
+    if executable not in wrappers:
+        return executable
+    marker = next((i for i, word in enumerate(command) if word in {"run", "run-script"}), None)
+    if marker is None and executable not in {"npm", "pnpm", "yarn", "bun"}:
+        return ""
+    words = iter(command[(marker + 1) if marker is not None else 1 :])
+    with_value = {
+        "--project",
+        "--directory",
+        "--package",
+        "--python",
+        "-p",
+        "--with",
+        "--with-editable",
+        "--with-requirements",
+        "--group",
+        "--extra",
+        "--env-file",
+        "--workspace",
+        "-w",
+    }
+    for word in words:
+        if word in with_value:
+            next(words, None)
+        elif not word.startswith("-"):
+            return word
+    return ""
+
+
 def _scripts(scripts: dict, commands: Sequence[Sequence[str]], prefixes: tuple[str, ...]) -> dict:
-    invoked = {PurePosixPath(arg).name for command in commands for arg in command if not arg.startswith("-")}
+    invoked = {_invoked(command) for command in commands if command}
     return {k: v for k, v in scripts.items() if k.startswith(prefixes) or k in invoked}
 
 

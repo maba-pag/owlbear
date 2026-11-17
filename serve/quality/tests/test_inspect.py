@@ -21,18 +21,21 @@ def test_protected_compares_parsed_tables_and_invoked_scripts_not_dependencies(t
     base = commit(
         tmp_path,
         {
-            "pyproject.toml": '[project]\ndependencies = []\n[project.scripts]\nscan = "app:old"\n',
+            "pyproject.toml": '[project]\ndependencies = []\n[project.scripts]\nscan = "app:old"\nrun = "other:old"\n',
             "package.json": '{"dependencies": {}}',
         },
     )
     deps = commit(
         tmp_path,
         {
-            "pyproject.toml": '[project]\ndependencies = ["lib"]\n[project.scripts]\nscan = "app:old"\n',
+            "pyproject.toml": (
+                '[project]\ndependencies = ["lib"]\n[project.scripts]\nscan = "app:old"\nrun = "other:old"\n'
+            ),
             "package.json": '{"dependencies": {"lib": "1"}}',
         },
     )
     assert protected(tmp_path, base, deps) is None
+    assert protected(tmp_path, base, deps, (("uv", "run", "scan"),)) is None
     (tmp_path / ".husky").mkdir()
     (tmp_path / ".husky" / "pre-commit").symlink_to("../hook.sh")
     changed = commit(
