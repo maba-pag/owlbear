@@ -33,6 +33,8 @@ def test_protected_compares_parsed_tables_and_invoked_scripts_not_dependencies(t
         },
     )
     assert protected(tmp_path, base, deps) is None
+    (tmp_path / ".husky").mkdir()
+    (tmp_path / ".husky" / "pre-commit").symlink_to("../hook.sh")
     changed = commit(
         tmp_path,
         {
@@ -42,7 +44,8 @@ def test_protected_compares_parsed_tables_and_invoked_scripts_not_dependencies(t
     )
     evidence = protected(tmp_path, deps, changed, (("uv", "run", "scan"),))
     assert evidence is not None
-    assert evidence.paths == (".github/workflows/check.yml", "pyproject.toml")
+    assert evidence.paths == (".github/workflows/check.yml", ".husky/pre-commit", "pyproject.toml")
+    assert "symlink" in evidence.text
     assert all(text in evidence.text for text in ("tool.ruff", "project.scripts", "app:old", "app:new"))
     further = commit(tmp_path, {".github/workflows/check.yml": "name: changed\n"})
     assert protected(tmp_path, deps, further).digest != evidence.digest

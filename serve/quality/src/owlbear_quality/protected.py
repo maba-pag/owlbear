@@ -86,6 +86,19 @@ def _protected(path: str) -> bool:
     )
 
 
+def _content(repo: Path, path: str, entry: tuple[str, str] | None, commands: Sequence[Sequence[str]]) -> object:
+    if entry is None:
+        return None
+    mode, oid = entry
+    source = trees.blob(repo, oid)
+    if mode == "120000":
+        return {"symlink": source}
+    data = _parts(path, source, commands)
+    if not data and PurePosixPath(path).name in {"pyproject.toml", "package.json", "setup.cfg", "tox.ini"}:
+        return None
+    return {"mode": mode, "content": data}
+
+
 def protected(
     repo: Path,
     base: str,
@@ -93,17 +106,13 @@ def protected(
     commands: Sequence[Sequence[str]] = (),
 ) -> Protected | None:
     """Compare protected data in two commits; dependency-only edits produce no change."""
-    before, after = trees.files(repo, base), trees.files(repo, head)
+    before, after = trees.entries(repo, base), trees.entries(repo, head)
     changes = {}
     for path in sorted(before.keys() | after.keys()):
         if not _protected(path) or before.get(path) == after.get(path):
             continue
-        old, new = [
-            _parts(path, trees.blob(repo, tree[path]), commands) if path in tree else None for tree in (before, after)
-        ]
-        # An absent shared file and one with no protected keys both hold no protected configuration.
-        shared = PurePosixPath(path).name in {"pyproject.toml", "package.json", "setup.cfg", "tox.ini"}
-        if old != new and (not shared or old or new):
+        old, new = [_content(repo, path, tree.get(path), commands) for tree in (before, after)]
+        if old != new:
             changes[path] = {"before": old, "after": new}
     if not changes:
         return None
