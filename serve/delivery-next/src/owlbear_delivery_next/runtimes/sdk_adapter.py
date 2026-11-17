@@ -1,7 +1,6 @@
 """One bounded worker session on the installed Copilot CLI; it ends at a result-tool call or deadline (D4 §3.2, P4).
 
-This module keeps the session's lifecycle: opening or resuming it, its events, permissions, deadline and teardown.
-The handlers of its Delivery tools are in ``runtimes.step_tools``, which the step inherits.
+Session lifecycle, events, permissions and teardown live here; Delivery tool handlers live in ``runtimes.step_tools``.
 """
 
 from __future__ import annotations
@@ -108,6 +107,7 @@ class Session:
     policy: Policy
     observe: Callable[[], tools.Worktree]
     checks: tuple[str, ...]
+    lint_commands: tuple[tuple[str, ...], ...] = ()
     packages: tuple[tuple[str, str], ...] = ()  # the profile's (package, check) pairs a plan's error hint names
     submit: tools.Spec = tools.SUBMIT
     scope: tuple[str, ...] = ()  # the approved brief scope a plan must keep to

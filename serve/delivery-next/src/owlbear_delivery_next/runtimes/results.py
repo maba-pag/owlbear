@@ -44,7 +44,7 @@ class Gate:
         self.done = False
         self.stopped = False  # a stop or error tears the step down: no call settles, and no lock is taken to say so
         self.expired: Callable[[], bool] | None = None
-        self.lint = lint.Lint(log)
+        self.lint = lint.Lint(log, cfg.lint_commands)
         self._refused: set[str] = set()  # the tools whose last call was refused, so their next call is a retry
         self._lock = threading.Lock()
         self._linting = threading.Lock()

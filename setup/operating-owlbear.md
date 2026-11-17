@@ -483,6 +483,23 @@ still gate merging. When check names cannot be fully detected, your consent to t
 through CI follow-up and merge for the same workflow and detection-policy evidence. Changed evidence needs
 fresh consent; an old confirmation cannot keep an obsolete detection result in force.
 
+### Lint before submission
+
+The builder lints changed files before accepting a submission. Confirm the project's root lint command once:
+
+```shell
+owlbear profile --confirm 'lint=uv run quality --no-fix --files'
+```
+
+That example is OwlBear's own command. For another project, use its checking-mode lint and format command.
+The `lint` profile value accepts one command per line, parsed into arguments without a shell. Each command runs
+from the repository root with changed files appended. Only owner-confirmed commands count; without one, Delivery
+keeps discovering configured Ruff, Biome and ESLint tools. The existing time budgets and five-refusal limit stay.
+
+Run `owlbear quality lint [--base REF]` by hand without the host. It includes committed, staged, working and
+untracked changes against the merge-base with `REF`, defaulting to the profile's target branch. It prints each
+linter's result and exits 1 for problems or 2 when a tool cannot run.
+
 Delivery repairs a stuck step in a temporary copy and proves its fix with the step's checks.
 A new or broadened lint or type suppression needs your yes/no: the question shows its exact line, reason,
 proof and complete patch. Yes applies the fix and runs the step again. No stops and keeps the

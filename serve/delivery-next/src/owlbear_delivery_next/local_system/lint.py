@@ -26,9 +26,10 @@ def _shown(output: str) -> str:
 class Lint:
     """One session's lint; a linter that breaks the same way twice is skipped, so a broken tool never traps it."""
 
-    def __init__(self, log: Callable[..., None]) -> None:
+    def __init__(self, log: Callable[..., None], commands: Sequence[Sequence[str]] = ()) -> None:
         """Bind the step's activity log."""
         self.log = log
+        self.commands = commands
         self.broken: dict[tuple[str, PurePosixPath], str] = {}  # each linter's last breakage in this session
         self.skipped: dict[tuple[str, PurePosixPath], str] = {}  # linters that broke the same way twice
         self.refused = 0
@@ -44,7 +45,7 @@ class Lint:
 
     def _check(self, root: Path, changed: Sequence[str]) -> list[str]:
         """Lint the changed files that still exist; return one submit error per failing linter."""
-        linters, skipped = runner.plan(root, [f for f in dict.fromkeys(changed) if (root / f).is_file()])
+        linters, skipped = runner.plan(root, [f for f in dict.fromkeys(changed) if (root / f).is_file()], self.commands)
         errors, ran, end = [], [], monotonic() + BUDGET
         for linter in linters:
             if why := self._skip(linter, end):

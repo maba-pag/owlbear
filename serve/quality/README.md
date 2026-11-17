@@ -3,6 +3,21 @@
 Deterministic lint execution and suppression inspection, independent of Delivery's Changes and sessions.
 Delivery owns its refusal count, activity logging and submit budget.
 
+## Lint command
+
+`owlbear quality lint [--base REF]` runs in the current checkout without the host. It checks files changed
+against the merge-base with `REF`, including staged, working and untracked files. The profile's target branch
+is the default. Exit codes: 0 passed, 1 lint problems, 2 a tool could not run.
+
+Confirm the root command once with `owlbear profile --confirm 'lint=COMMAND'`. Each nonblank line is one
+command parsed into arguments, with changed files appended. In an OwlBear development checkout use:
+
+```shell
+owlbear profile --confirm 'lint=uv run quality --no-fix --files'
+```
+
+Only owner-confirmed commands run. Otherwise the existing Ruff, Biome and ESLint discovery applies.
+
 ## Python API
 
 - `run.plan(root, files, commands=())` returns planned linters and skipped-tool reasons. Confirmed commands are

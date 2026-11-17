@@ -45,6 +45,7 @@ from owlbear_delivery_next.runtimes import (
 )
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.settings.config import SettingsUnset
+from owlbear_delivery_next.settings.profile import lint_commands
 from owlbear_delivery_next.state_store import github_writer, project_home, spend_ledger
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 from owlbear_delivery_next.workflow_steps import (
@@ -174,6 +175,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
             policy=permissions.Policy(at, write=parts.write),
             observe=lambda: worktree.observe(at, change.names.target, since),
             checks=parts.checks,
+            lint_commands=lint_commands(profile),
             packages=parts.packages,
             submit=parts.submit,
             scope=tuple(change.brief.scope),

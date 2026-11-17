@@ -124,10 +124,10 @@ CURRENT_FUNCTIONS = (
 )
 CURRENT_IMPORTS = (
     ("commands/chat_client.py", "7495331a853adc5752f71aee688b2128d1260547dc06121d2f988e03cb35e7bf"),
-    ("commands/cli.py", "18cf334a397f0acb5486caf53ec39315479cf274d485e11e6f9884d8963ebd89"),
+    ("commands/cli.py", "df6736030e82eb8a18a49295f631d27febcc5f46bc015785e1ad6d0367117a70"),
     ("commands/dispatch.py", "326c281057f28ebdb70e9ddfb43e62ad0693957ce5cf2305201d67e7d4cba0e4"),
     ("commands/mcp_server.py", "d97982a3bf330ebeb8ae4b0b558b2187fa00611197682d33d2f54f70a9e67b8c"),
-    ("commands/runner.py", "1eab214034ebc0a32fbaf485cca187b6b95b51dad699c447f8da21b6a8bc4e9b"),
+    ("commands/runner.py", "9834172480d4131e683b216e1d214828d1ad5057a6c5883c0888395bacdf66e7"),
     ("commands/setup.py", "0ab35425da1b72b8fc98bb51a003e023a324ede750c5bc6d19bf288ed6cdd231"),
     ("machine_host/app.py", "35c286944230060af35803e560d0fd1aaa3ba3a0560a10b8304b4ec157c0908b"),
     ("machine_host/command.py", "577ce56b1140fdf075a0e005468cb52ae5ccbab25c6519efa162e2bff05cb714"),

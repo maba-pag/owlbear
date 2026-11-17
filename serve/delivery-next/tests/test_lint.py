@@ -9,6 +9,7 @@ import subprocess
 import sys
 import threading
 import time
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
 
@@ -18,11 +19,13 @@ from owlbear_quality import run as runner
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.local_system import lint, processes
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.results import ACCEPTED, ENDED, Gate
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings import profile
 
 RUFF = '[tool.ruff]\nline-length = 100\n\n[tool.ruff.lint]\nselect = ["F"]\n'
 
@@ -39,7 +42,7 @@ def head(work: Path) -> str:
     return worktree.head(work)
 
 
-def gate(work: Path, since: str, log: list[dict]) -> Gate:
+def gate(work: Path, since: str, log: list[dict], commands: tuple[tuple[str, ...], ...] = ()) -> Gate:
     cfg = sdk_adapter.Session(
         StepKind.BUILD,
         work,
@@ -49,6 +52,7 @@ def gate(work: Path, since: str, log: list[dict]) -> Gate:
         policy=Policy(work),
         observe=lambda: worktree.observe(work, "main", since),
         checks=(),
+        lint_commands=commands,
     )
     return Gate(cfg, Run("s1"), lambda **e: log.append(e), lambda: None)
 
@@ -390,3 +394,21 @@ def test_names_git_quotes_reach_the_gates_and_lint_as_real_paths(change_repo: Pa
         ["my file.py", "Über sicht.py"],
         "failed",
     )
+
+
+def test_confirmed_lint_commands_run_at_root_with_changed_files_appended(change_repo: Path) -> None:
+    script = tool(change_repo / "bin", "check", 'printf "%s\\n" "$PWD" "$@"; exit 1')
+    value = f'{script} --check\n{sys.executable} -c "print(123)"'
+    unconfirmed = Profile(entries={profile.LINT: ProfileEntry(state="known", value=value, evidence="detected")})
+    assert profile.lint_commands(unconfirmed) == ()
+    prof = profile.confirm(unconfirmed, profile.LINT, value, datetime.now(UTC))
+    commands = profile.lint_commands(prof)
+    assert commands == ((str(script), "--check"), (sys.executable, "-c", "print(123)"))
+    commit(change_repo, {"notes.md": "before\n"})
+    since = head(change_repo)
+    commit(change_repo, {"notes.md": "after\n", "-odd name.md": "text\n"})
+    log = []
+    text, ok = submit(gate(change_repo, since, log, commands))
+    assert not ok
+    assert f"{change_repo}\n--check\n./-odd name.md\nnotes.md" in text
+    assert [r["state"] for r in next(e for e in log if e["event"] == "lint")["ran"]] == ["failed", "passed"]
