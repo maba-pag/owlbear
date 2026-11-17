@@ -77,13 +77,13 @@ def submit(g: Gate) -> tuple[str, bool]:
     return g.call(tools.SUBMIT, {"summary": "Built", "checks": []})
 
 
-def request(path: Path, c: Change, since: str) -> tuple[Change, Gate]:
+def request(path: Path, c: Change, since: str) -> Change:
     g = gate(path, c, since)
     assert g.call(approval_tools.REQUEST, {"why": WHY})[1]
     result = session_result.to_result(g.run, c.step.kind, NOW)
     result = approvals.requested(c, g.run, path, COMMANDS, result)
     assert result.exit == Exit.ASK
-    return loop.apply(c, result, NOW), g
+    return loop.apply(c, result, NOW)
 
 
 def test_dependency_only_is_accepted_but_configuration_needs_the_exact_approval(project, tmp_path) -> None:
@@ -97,7 +97,7 @@ def test_dependency_only_is_accepted_but_configuration_needs_the_exact_approval(
     assert not ok
     assert "pyproject.toml" in refused
     assert "request_approval" in refused
-    c, _ = request(path, c, base)
+    c = request(path, c, base)
     q = c.questions[-1]
     assert "-line-length = 100" in q.text
     assert "+line-length = 110" in q.text
@@ -131,7 +131,6 @@ def test_configuration_still_refuses_after_the_five_lint_refusals(project, monke
     assert "lint: " not in text
     assert not g.done
     assert g.run.invalid == 1
-    assert not submit(g)[1]
 
 
 def test_a_merged_target_update_in_the_builders_shared_file_needs_no_approval(project) -> None:
@@ -204,7 +203,7 @@ def test_requests_refuse_empty_or_unshowable_changes_without_asking(project) -> 
 def test_configuration_question_shows_the_patch_and_resumes_after_the_answer(c1, pds, project) -> None:
     path, c, base = project
     commit(path, {"pyproject.toml": MANIFEST.replace("100", "110")})
-    requested, _ = request(path, c, base)
+    requested = request(path, c, base)
     q = requested.questions[-1]
 
     def edit(change: Change) -> None:

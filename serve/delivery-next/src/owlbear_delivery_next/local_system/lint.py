@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 BUDGET = 180
 SHOWN = 60
 REFUSALS = 5
-TIMEOUT = runner.TIMEOUT
 
 
 def _shown(output: str) -> str:
@@ -51,7 +50,7 @@ class Lint:
             if why := self._skip(linter, end):
                 skipped.append(why)
                 continue
-            out = runner.run(root, linter, min(TIMEOUT, end - monotonic()))
+            out = runner.run(root, linter, min(runner.TIMEOUT, end - monotonic()))
             ran.append({"tool": linter.name, "files": list(linter.files), "state": out.state})
             errors += self._error(linter, out)
         if ran or skipped:
