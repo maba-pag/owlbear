@@ -39,6 +39,7 @@ from owlbear_delivery_next.workflow_steps import (
     project_checks,
     repair_copy,
     repair_messages,
+    repair_scope,
     sessions,
 )
 from owlbear_delivery_next.workflow_steps.repair_scope import hold as _check_hold
@@ -54,6 +55,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 LABEL = repair_messages.LABEL
+_named = repair_scope.named
 
 
 def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
