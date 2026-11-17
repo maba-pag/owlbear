@@ -404,18 +404,20 @@ def test_a_run_interrupted_between_settled_calls_resumes_on_what_is_left_of_its_
     state.idle = True
     idle.tick(3.0)
     _, _, corrected = _runs()
-    assert corrected["id"] != run["id"]
-    assert (corrected["trigger"], corrected["mode"], corrected["limit"], corrected["rev"]) == (
-        "idle", "correct-grades", said.limit, run["rev"])  # fmt: skip
+    assert (
+        corrected["id"] != run["id"],
+        corrected["trigger"],
+        corrected["mode"],
+        corrected["limit"],
+        corrected["rev"],
+    ) == (True, "idle", "correct-grades", said.limit, run["rev"])
     assert set(corrected["records"]) == set(remaining)
     assert {r["id"] for message in asker.messages for r in _evidence(message)["records"]} == set(remaining)
     assert retro_regrade.plan("chg:p1:fix-it", projects)["records"] == 0
     assert retro_store.known() == before
     assert (retro_store.place() / "grades.jsonl").read_bytes().startswith(historical)
     idle.tick(4.0)
-    assert len(_runs()) == 3
-    assert len(retro_store.grades()) == len(originals)
-    assert props.folded() == {}
+    assert (len(_runs()), len(retro_store.grades()), props.folded()) == (3, len(originals), {})
 
 
 # Eligibility at the call, gate J3

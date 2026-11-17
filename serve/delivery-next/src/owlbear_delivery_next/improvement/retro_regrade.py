@@ -20,9 +20,7 @@ if TYPE_CHECKING:
 def pending() -> list[dict[str, Any]]:
     """Registered corrections still pending, grouped by their saved unit revision for idle runs."""
     awaiting = {
-        g["record"]: g["id"]
-        for g in store.grades(include_pending=True)
-        if g["grade"] == retro_grade_history.PENDING
+        g["record"]: g["id"] for g in store.grades(include_pending=True) if g["grade"] == retro_grade_history.PENDING
     }
     registered = {
         rid: (q["change"], q["revision"], gid)
