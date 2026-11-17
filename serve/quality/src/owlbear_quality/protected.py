@@ -123,6 +123,14 @@ def _parts(path: str, text: str, commands: Sequence[Sequence[str]]) -> object:
     return text
 
 
+def _parsed(path: str, source: str, commands: Sequence[Sequence[str]]) -> object:
+    try:
+        return _parts(path, source, commands)
+    except tomllib.TOMLDecodeError, json.JSONDecodeError, configparser.Error, AttributeError, TypeError:
+        # An unparseable shared manifest is configuration as a whole, not an empty set of exceptions.
+        return source
+
+
 def _protected(path: str) -> bool:
     p = PurePosixPath(path)
     return (
@@ -153,11 +161,7 @@ def _content(
         aim = _target(path, source, tree)  # a hook runs only while its target is executable: the mode counts
         named = {"mode": aim[1], "content": trees.blob(run, repo, aim[2])} if aim else None
         return {"symlink": source, "target": named}
-    try:
-        data = _parts(path, source, commands)
-    except tomllib.TOMLDecodeError, json.JSONDecodeError, configparser.Error, AttributeError, TypeError:
-        # A file that does not parse, or parses to another shape, is compared whole: no part can be told apart.
-        data = source
+    data = _parsed(path, source, commands)
     if not data and PurePosixPath(path).name in {"pyproject.toml", "package.json", "setup.cfg", "tox.ini"}:
         return None
     return {"mode": mode, "content": data}
@@ -218,10 +222,18 @@ def configured(root: Path) -> list[Configuration]:
         for name in sorted(names):
             file = folder / name
             path = file.relative_to(root).as_posix()
-            if not file.is_file() or file.is_symlink() or not lint_file(path):
+            if not (file.is_file() or file.is_symlink()) or not lint_file(path):
                 continue
-            text = file.read_text(encoding="utf-8")
-            parts = _parts(path, text, ())
+            if file.is_symlink():
+                target = file.resolve()
+                content = (
+                    target.read_text(encoding="utf-8")
+                    if target.is_relative_to(root.resolve()) and target.is_file()
+                    else None
+                )
+                parts = json.dumps({"symlink": str(file.readlink()), "target": content}, sort_keys=True, indent=2)
+            else:
+                parts = _parsed(path, file.read_text(encoding="utf-8"), ())
             tables = parts if isinstance(parts, dict) else {"": parts}
             for table, data in tables.items():
                 content = json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False) if table else data
