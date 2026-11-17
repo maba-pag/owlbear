@@ -1,13 +1,18 @@
 """Configuration approval through the worker Gate, owner answers, repairs and the Changes page."""
 
+import json
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from owlbear_quality import ledger
 from owlbear_quality import run as lint_run
+from owlbear_quality.inspect import added
 from playwright.sync_api import expect
 
-from owlbear_delivery_next.change_contracts import approval_tools, tools
+from owlbear_delivery_next.change_contracts import approval_tools, curation_tools, exception_tools, tools
+from owlbear_delivery_next.change_contracts.decision_records import Decision as ChangeDecision
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
@@ -18,8 +23,9 @@ from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import sdk_adapter, session_result, step_answers
 from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.state_store import spend_ledger
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import approvals, repair_copy, session_choice
+from owlbear_delivery_next.workflow_steps import approvals, exception_workers, exceptions, repair_copy, session_choice
 from owlbear_delivery_next.workflow_steps.step_repair import _apply as apply_repair
 from owlbear_delivery_next.workflow_steps.step_repair import _proven as prove_repair
 
@@ -56,7 +62,9 @@ def project(change_repo: Path) -> tuple[Path, Change, str]:
     return change_repo, c, base
 
 
-def gate(path: Path, c: Change, since: str) -> Gate:
+def gate(path: Path, c: Change, since: str, store: Store | None = None, *, curated: bool = False) -> Gate:
+    store = store or Store(path.parent / "store")
+    judge = exception_workers.Asked(store, Lock(c.slug), lambda: c, path)
     cfg = sdk_adapter.Session(
         kind=StepKind.BUILD,
         worktree=path,
@@ -67,7 +75,10 @@ def gate(path: Path, c: Change, since: str) -> Gate:
         observe=lambda: worktree.observe(path, c.names.target, since),
         checks=(),
         lint_commands=COMMANDS,
-        quality=lambda: quality.check(c, path, COMMANDS),
+        quality=lambda: quality.check(c, path, COMMANDS, folder=store.root),
+        helpers=(judge.helper(),),
+        submit=curation_tools.TEST_CURATION if curated else tools.SUBMIT,
+        role="test-curator" if curated else "builder",
     )
     run = Run("builder", model_check="verified", termination=Termination(confirmed=True))
     return Gate(cfg, run, lambda **_e: None, lambda: None)
@@ -77,11 +88,12 @@ def submit(g: Gate) -> tuple[str, bool]:
     return g.call(tools.SUBMIT, {"summary": "Built", "checks": []})
 
 
-def request(path: Path, c: Change, since: str) -> Change:
-    g = gate(path, c, since)
+def request(path: Path, c: Change, since: str, store: Store | None = None) -> Change:
+    store = store or Store(path.parent / "store")
+    g = gate(path, c, since, store)
     assert g.call(approval_tools.REQUEST, {"why": WHY})[1]
     result = session_result.to_result(g.run, c.step.kind, NOW)
-    result = approvals.requested(c, g.run, path, COMMANDS, result)
+    result = approvals.Requests(store, COMMANDS).requested(c, g.run, path, result)
     assert result.exit == Exit.ASK
     return loop.apply(c, result, NOW)
 
@@ -185,14 +197,18 @@ def test_requests_refuse_empty_or_unshowable_changes_without_asking(project) -> 
     path, c, base = project
     g = gate(path, c, base)
     g.call(approval_tools.REQUEST, {"why": WHY})
-    result = approvals.requested(c, g.run, path, COMMANDS, session_result.to_result(g.run, StepKind.BUILD, NOW))
+    result = approvals.Requests(Store(path.parent / "store"), COMMANDS).requested(
+        c, g.run, path, session_result.to_result(g.run, StepKind.BUILD, NOW)
+    )
     assert result.exit == Exit.RETRY
     assert "no unapproved" in result.reason
     for content in ("x" * (repair_copy.SHOWN + 1), b"\x00binary"):
         commit(path, {"lefthook.yml": content})
         g = gate(path, c, base)
         g.call(approval_tools.REQUEST, {"why": WHY})
-        result = approvals.requested(c, g.run, path, COMMANDS, session_result.to_result(g.run, StepKind.BUILD, NOW))
+        result = approvals.Requests(Store(path.parent / "store"), COMMANDS).requested(
+            c, g.run, path, session_result.to_result(g.run, StepKind.BUILD, NOW)
+        )
         assert result.exit == Exit.RETRY
         assert "too long or binary" in result.reason
         assert c.questions == []
@@ -244,3 +260,140 @@ def test_configuration_question_shows_the_patch_and_resumes_after_the_answer(c1,
         assert answered.answer.option == "approve"
         assert answered.delivered_at is None
         assert answered.id == q.id
+
+
+@pytest.fixture
+def scripted_judge(monkeypatch):
+    contexts, replies = [], ["accepted"]
+
+    async def run(cfg):
+        assert cfg.role == "quality-judge"
+        assert cfg.job == exceptions.JOB
+        assert not cfg.policy.write
+        context = json.loads((cfg.worktree / "exceptions-context.json").read_text())
+        contexts.append(context)
+        verdicts = [
+            {"id": i["id"], "verdict": replies[0], "reason": "Evidence: this boundary is generated."}
+            for i in context["items"]
+        ]
+        done = Run(
+            cfg.session_id, model_check="verified", termination=Termination(confirmed=True), usage={"credits": 2.0}
+        )
+        judge = Gate(cfg, done, lambda **_e: None, lambda: None)
+        if replies[0] == "omit":
+            text, ok = judge.call(exception_tools.SUBMIT, {"verdicts": verdicts[:-1]})
+            assert not ok
+            assert "verdicts.id" in text
+            assert not judge.done
+            return Run(
+                cfg.session_id, "error", detail=text, model_check="verified", termination=Termination(confirmed=True)
+            )
+        assert judge.call(exception_tools.SUBMIT, {"verdicts": verdicts})[1]
+        return done
+
+    monkeypatch.setattr(exceptions.sdk_adapter, "run", run)
+    return contexts, replies
+
+
+def judged(g: Gate) -> dict:
+    text, ok = g.call(exception_tools.HELPER, {})
+    assert ok
+    return json.loads(text)
+
+
+def test_a_build_needs_its_judges_acceptance_and_the_judge_receives_own_decisions(project, picking, scripted_judge):
+    path, c, base = project
+    c.decisions.append(ChangeDecision(text="Generated boundary names remain unchanged.", origin="decided", at=NOW))
+    commit(path, {"edge.txt": "# editorconfig-checker-disable-next-line\ngenerated_name\n"})
+    store = picking.store
+    refused, ok = submit(gate(path, c, base, store))
+    assert not ok
+    assert "judge_exceptions" in refused
+    where = spend_ledger.Where.of(store, change=c.slug, step="build")
+    with spend_ledger.at(where):
+        asked = exception_workers.Asked(store, Lock(c.slug), lambda: c, path)
+        g = gate(path, c, base, store)
+        g.cfg = replace(g.cfg, helpers=(asked.helper(),))
+        answer = asked.settled(lambda: judged(g))
+    assert answer["verdicts"][0]["verdict"] == "accepted"
+    assert submit(g)[1]
+    context = scripted_judge[0][0]
+    assert any("Generated boundary names remain unchanged." in d["statement"] for d in context["decisions"])
+    assert c.spend.credits == 2.0
+    assert store.events(c.slug)[-1]["kind"] == exceptions.JOB
+
+
+def test_a_test_curators_suppression_needs_judging_too(project, picking, scripted_judge):
+    path, c, base = project
+    head = commit(path, {"tests/test_edge.py": "# editorconfig-checker-disable-next-line\nvalue = 1\n"})
+    g = gate(path, c, base, picking.store, curated=True)
+    measure = {"command": "true", "tests": 1, "seconds": 0.1}
+    result = {
+        "applied": [{"test": "tests/test_edge.py", "action": "merge", "change": "Merged duplicate"}],
+        "before": measure | {"commit": base},
+        "after": measure | {"commit": head},
+        "summary": "Merged",
+    }
+    assert not g.call(curation_tools.TEST_CURATION, result)[1]
+    assert judged(g)["verdicts"][0]["verdict"] == "accepted"
+    assert g.call(curation_tools.TEST_CURATION, result)[1]
+    assert len(scripted_judge[0]) == 1
+
+
+def test_a_refused_suppression_needs_the_owners_approve(project, picking, scripted_judge):
+    path, c, base = project
+    scripted_judge[1][0] = "refused"
+    head = commit(path, {"edge.txt": "# editorconfig-checker-disable-next-line\ngenerated_name\n"})
+    g = gate(path, c, base, picking.store)
+    assert judged(g)["verdicts"][0]["verdict"] == "refused"
+    assert not submit(g)[1]
+    c = request(path, c, base, picking.store)
+    q = c.questions[-1]
+    assert "generated_name" in q.text
+    assert "Evidence: this boundary is generated." in q.text
+    assert ":suppressions-" in q.cause
+    picking.store.write(Lock(c.slug), c)
+    picking.store.put_inbox(c.slug, AnswerItem(question=q.id, option="approve", at=NOW))
+    c, _ = picking.store.fold(Lock(c.slug), c.slug, NOW)
+    identity = added(quality.git, path, base, head)[0].identity
+    rows = ledger.counting(picking.store.root, identity, scope=c.slug)
+    assert [row["by"] for row in rows] == ["owner"]
+    assert submit(gate(path, c, base, picking.store))[1]
+
+
+def test_removing_an_accepted_blocks_terminator_needs_another_verdict(project, picking, scripted_judge):
+    path, c, base = project
+    block = "# fmt: off\nvalue = 1\n# fmt: on\nother = 2\n"
+    commit(path, {"fixture.py": block})
+    g = gate(path, c, base, picking.store)
+    assert judged(g)["verdicts"][0]["verdict"] == "accepted"
+    assert submit(g)[1]
+    assert len(scripted_judge[0]) == 1
+    commit(path, {"fixture.py": block.replace("# fmt: on\n", "")})
+    assert not submit(gate(path, c, base, picking.store))[1]
+
+
+def test_an_extra_identical_copy_above_an_accepted_one_needs_its_own_change_verdict(project, picking, scripted_judge):
+    path, c, base = project
+    copy = "# editorconfig-checker-disable-next-line\ngenerated_name\n"
+    commit(path, {"edge.txt": copy})
+    g = gate(path, c, base, picking.store)
+    assert judged(g)["verdicts"][0]["verdict"] == "accepted"
+    assert submit(g)[1]
+    commit(path, {"edge.txt": copy + copy})
+    g = gate(path, c, base, picking.store)
+    assert not submit(g)[1]
+    assert judged(g)["verdicts"][-1]["verdict"] == "accepted"
+    assert len(scripted_judge[0][-1]["items"]) == 1
+    assert submit(g)[1]
+
+
+def test_a_judge_cannot_omit_an_item_and_a_failed_run_writes_no_verdict(project, picking, scripted_judge):
+    path, c, base = project
+    scripted_judge[1][0] = "omit"
+    head = commit(path, {"edge.txt": "# editorconfig-checker-disable-next-line\ngenerated_name\n"})
+    g = gate(path, c, base, picking.store)
+    assert "verdicts.id" in judged(g)["failed"]
+    identity = added(quality.git, path, base, head)[0].identity
+    assert ledger.counting(picking.store.root, identity, scope=c.slug) == []
+    assert not submit(g)[1]

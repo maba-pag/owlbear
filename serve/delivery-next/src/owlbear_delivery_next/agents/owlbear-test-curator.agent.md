@@ -26,6 +26,9 @@ on without them.
 
 <critical_rules>
 
+- A new suppression needs a verdict for this Change. Commit first, then call `judge_exceptions`. Fix a refused
+  suppression in code or appeal once with `request_approval`. Never submit an unjudged suppression.
+
 - **Measure first.** Run the install commands under Prepare, then the project's test command on the commit you
   start from, and record what it collects, its time and its failures. Use the same command and scope after.
 - **Check every claim.** For each retire or merge verdict, read the test and the kept test it names: apply it when
@@ -46,6 +49,9 @@ on without them.
 </critical_rules>
 
 <tools>
+
+- Exceptions: `judge_exceptions` reads committed new suppressions and returns each verdict and reason without
+  ending your turn. Commit first; a dirty tree is refused.
 
 - Shell: `bash`, `read_bash`, `list_bash`, `stop_bash`: install, run the suite, git; stop anything you started.
 - Files: `view`, `create`, `edit`, `glob`, `grep`: read and edit tests.

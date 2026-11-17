@@ -51,7 +51,11 @@ def _write(path: Path, rows: dict) -> None:
 def counting(root: Path, identity: str, *, scope: str | None = None) -> list[dict]:
     """Counting verdicts for an identity, optionally only those given for one Change's slug."""
     with _locked(root) as rows:
-        return [v for v in rows.get(identity, []) if not v["aside"] and (scope is None or v["for"] == scope)]
+        return [
+            v | {"index": n}
+            for n, v in enumerate(rows.get(identity, []))
+            if not v["aside"] and (scope is None or v["for"] == scope)
+        ]
 
 
 def add(root: Path, verdicts: Sequence[dict]) -> None:
@@ -60,7 +64,9 @@ def add(root: Path, verdicts: Sequence[dict]) -> None:
         at = datetime.now(UTC).isoformat()
         for entry in verdicts:
             identity = entry["identity"]
-            row = {k: v for k, v in entry.items() if k != "identity"}
+            for index in entry.get("replaces", []):
+                rows[identity][index]["aside"] = True
+            row = {k: v for k, v in entry.items() if k not in {"identity", "replaces"}}
             rows.setdefault(identity, []).append({"at": at, "backlog": "", "aside": False, **row})
         _write(root / FILE, rows)
 

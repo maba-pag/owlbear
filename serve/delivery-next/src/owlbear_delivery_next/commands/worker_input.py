@@ -18,13 +18,20 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts import tools
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.state_store.store import Lock, Store
+    from owlbear_delivery_next.workflow_steps.exception_workers import Asked as Judgment
     from owlbear_delivery_next.workflow_steps.lookup import Asked
 
 
-def helpers(change: Change, at: Path, asked: Asked) -> tuple[tuple[tools.Spec, Callable[[tools.Args], str]], ...]:
+def helpers(
+    change: Change, at: Path, asked: Asked, judged: Judgment
+) -> tuple[tuple[tools.Spec, Callable[[tools.Args], str]], ...]:
     """The tools that answer within the turn: the builder's design detector on a UI Change (slice 7), the lookup."""
     ui = change.step.kind == StepKind.BUILD and change.brief.ui
-    return (*(((design_tools.SCAN, partial(design.builder_scan, at)),) if ui else ()), asked.helper())
+    return (
+        *(((design_tools.SCAN, partial(design.builder_scan, at)),) if ui else ()),
+        asked.helper(),
+        *((judged.helper(),) if change.step.kind == StepKind.BUILD else ()),
+    )
 
 
 def planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list[str]]:

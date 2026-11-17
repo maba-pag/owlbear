@@ -35,6 +35,15 @@ class ExceptionVerdicts(tools.Args):
     )
 
 
+HELPER = tools.Spec(
+    "judge_exceptions",
+    "Judge this Change's new suppressions, with no arguments. Commit first: the host reads commits, not working "
+    "edits. Your turn continues with each verdict and reason or a failed answer. Fix refused suppressions in code "
+    "or appeal once with request_approval. Example: judge_exceptions().",
+    tools.Args,
+    "result",
+)
+
 SUBMIT = tools.Spec(
     "submit_result", "Submit exactly one verdict per host-issued exception id.", ExceptionVerdicts, "result"
 )

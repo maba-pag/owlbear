@@ -16,8 +16,11 @@ from owlbear_delivery_next.change_contracts import (
     option_records,
     question_tools,
     tool_types,
+    worker_roles,
 )
 
+JUDGES = worker_roles.JUDGES
+LOOKERS = worker_roles.LOOKERS
 Args = tool_types.Args
 Spec = tool_types.Spec
 bounded = tool_types.bounded
@@ -378,20 +381,6 @@ SPECS = (SUBMIT, ASK, PREMISE, MISSING)
 FIRST_LOOK = "submit_first_look"  # the design judge's own verdict, before the detector's findings reach it
 SCAN_DESIGN = "scan_design"  # the builder's design detector on a UI Change (slice 7)
 LOOKUP = "lookup_decisions"  # which decisions govern a question, answered by the picker (TD-456, TD-459)
-LOOKERS = frozenset({"planner", "builder", "reviewer", "preparer", "test-curator", "repairer"})  # a step's worker
-JUDGES = frozenset(
-    (
-        "challenger",
-        "design-judge",
-        "test-reviewer",
-        "picker",
-        "curator",
-        "auditor",
-        "project-auditor",
-        "audit-verifier",
-        "quality-judge",
-    )
-)
 PICKER = "picker"  # an SDK-only session whose one tool is its result (TD-459)
 CURATOR = "curator"  # automatic memory curation: its memory tools, then its report as its result (item 5 slice 4)
 AUDITOR = "auditor"  # the PDS deprecation audit: read tools, then its report as its result (#777)
@@ -414,7 +403,7 @@ def results(role: str, *, ui: bool = False, judging: bool = False) -> list[str]:
         return [SUBMIT.name, *extra]
     extra = [FIRST_LOOK] if role == "design-judge" else [SCAN_DESIGN] if role == "builder" and ui else []
     extra += [LOOKUP] if role in LOOKERS and not judging else []
-    extra += [approval_tools.REQUEST.name] if approval_tools.offered(role, judging=judging) else []
+    extra += [approval_tools.REQUEST.name, "judge_exceptions"] if approval_tools.offered(role, judging=judging) else []
     return [*(s.name for s in SPECS if s is not ASK or asks(role, judging=judging)), *extra]
 
 

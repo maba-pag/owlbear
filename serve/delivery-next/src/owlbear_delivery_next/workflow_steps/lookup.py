@@ -323,9 +323,18 @@ class Asked:
     the place it was made in, whichever thread asks, the Spotter's conflict checks included.
     """
 
-    def __init__(self, store: Store, lock: Lock, current: Callable[[], Change]) -> None:
+    def __init__(
+        self,
+        store: Store,
+        lock: Lock,
+        current: Callable[[], Change],
+        *,
+        answer: Callable[[str], tuple[dict[str, Any], Run | None]] | None = None,
+    ) -> None:
         """Bind the step's store and lock, and how to read the Change the runner holds now."""
         self.store, self.lock, self.current = store, lock, current
+        self.answer = answer or (lambda question: worker(store, lock, current(), question))
+        self.label = LABEL
         self.place = spend_ledger.where()
         self.turn, self.state = threading.Lock(), threading.Condition()  # one picker beside the step's own session
         self.open, self.admitted = True, 0
@@ -354,7 +363,7 @@ class Asked:
                 return {"failed": ENDED}
         try:
             with spend_ledger.at(self.place):
-                said, done = worker(self.store, self.lock, self.current(), question)
+                said, done = self.answer(question)
         except Exception as exc:  # noqa: BLE001 - a lookup that cannot run is failed, never "none apply"
             said, done = {"failed": failure(exc)}, None
         if "failed" in said:
@@ -379,4 +388,4 @@ class Asked:
                 self.state.wait_for(lambda: self.admitted == 0)
                 runs, self.runs = self.runs, []
             for done, end in runs:
-                sessions.logged(self.store, self.lock, self.current(), done, {"kind": LABEL, "exit": end})
+                sessions.logged(self.store, self.lock, self.current(), done, {"kind": self.label, "exit": end})
