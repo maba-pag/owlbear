@@ -1,5 +1,7 @@
 """The findings loop's repair chances (TD-123, TD-175): the producing session repairs once; a fresh one is told."""
 
+import asyncio
+
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -184,9 +186,8 @@ def test_the_repair_build_resumes_the_producer_and_records_only_accepted_task_pa
         git(clone, "merge", "-q", "--no-edit", "main")  # a target merge: its paths are not the task's work
         save(clone, "new.txt", "n\n")
         run = Run(cfg.session_id, termination=Termination(confirmed=True))
-        text, ok = Gate(cfg, run, lambda **_e: None, lambda: None).call(
-            tools.SUBMIT, {"summary": "Fixed b.", "checks": []}
-        )
+        gate = Gate(cfg, run, lambda **_e: None, lambda: None)
+        text, ok = await asyncio.to_thread(gate.call, tools.SUBMIT, {"summary": "Fixed b.", "checks": []})
         assert ok, text
         run.usage = {"models": {}}
         return run

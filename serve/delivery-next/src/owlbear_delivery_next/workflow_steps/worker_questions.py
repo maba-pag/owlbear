@@ -107,7 +107,7 @@ def feedback(errors: Sequence[str]) -> str:
     """Delivery's field errors, never framed as an answer from the owner."""
     return (
         "\n\nDelivery refused your submitted question before asking the owner. Correct these fields, then call "
-        "`ask_question` again, or continue without asking when this is your own work:\n"
+        "the question tool again, or continue without asking when this is your own work:\n"
         + "\n".join(f"- {e}" for e in errors)
     )
 

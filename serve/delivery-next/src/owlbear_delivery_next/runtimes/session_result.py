@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_delivery_next.change_contracts import (
     amend_tools,
+    approval_tools,
     curation_tools,
     dispute_tools,
     permissions,
@@ -296,6 +297,12 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
                 for i, t in enumerate(p.tasks, 1)
             ]
             return StepResult(exit=Exit.DONE, reason=f"{len(tasks)} task(s) planned", plan=Plan(tasks=tasks))
+        case "ask" if isinstance(p, approval_tools.RequestApproval):
+            return StepResult(
+                exit=Exit.RETRY,
+                cause=cause_key(ErrorKind.RESULT, kind, approval_tools.LABEL),
+                reason="request_approval: Delivery must compose the configuration approval question",
+            )
         case "ask" if isinstance(p, tools.AskQuestion):
             return StepResult(
                 exit=Exit.RETRY,
