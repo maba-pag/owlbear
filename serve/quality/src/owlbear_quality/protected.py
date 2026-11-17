@@ -132,8 +132,9 @@ def _content(
         return {"symlink": source}
     try:
         data = _parts(path, source, commands)
-    except tomllib.TOMLDecodeError, json.JSONDecodeError, configparser.Error:
-        data = source  # a file that does not parse is compared whole: nobody can tell which part changed
+    except tomllib.TOMLDecodeError, json.JSONDecodeError, configparser.Error, AttributeError, TypeError:
+        # A file that does not parse, or parses to another shape, is compared whole: no part can be told apart.
+        data = source
     if not data and PurePosixPath(path).name in {"pyproject.toml", "package.json", "setup.cfg", "tox.ini"}:
         return None
     return {"mode": mode, "content": data}
