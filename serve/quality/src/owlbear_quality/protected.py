@@ -26,6 +26,8 @@ WHOLE = frozenset(
         "biome.json",
         "biome.jsonc",
         ".editorconfig",
+        ".editorconfig-checker.json",
+        ".ecrc",
         ".eslintignore",
         ".prettierignore",
         ".stylelintignore",
