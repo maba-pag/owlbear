@@ -22,7 +22,7 @@ from owlbear_delivery_next.state_store.layers import read_layer
 
 PRODUCING = ("builder", "planner", "preparer", "updater", "test-curator")
 BUDGET = 2000  # the characters the tests' settings layer gives the pre-flight recall (conftest's complete_layer)
-RECALLING = (*PRODUCING, "reviewer", "challenger", "design-judge", "test-reviewer")
+RECALLING = (*PRODUCING, "reviewer", "challenger", "design-judge", "test-reviewer", "quality-judge")
 NEVER = ("picker", "curator")  # the picker has no memory; the curator curates it and never recalls
 
 

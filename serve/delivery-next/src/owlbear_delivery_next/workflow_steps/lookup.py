@@ -78,9 +78,9 @@ def worker(store: Store, lock: Lock, c: Change, question: str) -> tuple[dict[str
     try:
         view = decision_store.load(store.shared, store.name)
         found = decisions_gate.in_force(view.snapshot, c)
-        if blocked := _unresolved(view.snapshot, found):
+        if blocked := unresolved(view.snapshot, found):
             return blocked, None
-        found += _own(c, store.name, found)
+        found += own(c, store.name, found)
         log, settings = pick.corrections(view.snapshot.root, store.name), store.settings()
     except (StoreError, OSError, ValueError) as exc:
         return {"failed": failure(exc)}, None
@@ -91,7 +91,7 @@ def worker(store: Store, lock: Lock, c: Change, question: str) -> tuple[dict[str
     return answered(done, found), done
 
 
-def _own(c: Change, project: str, found: list[Decision]) -> list[Decision]:
+def own(c: Change, project: str, found: list[Decision]) -> list[Decision]:
     """*c*'s approved brief decisions and those recorded during its work, each whole, once, when not on *found*.
 
     Its Change ones stay in it until archival; a clarification confirmed during the work is one of them (TD-461).
@@ -149,7 +149,7 @@ def _chat(
             e.decision for e in view.snapshot.entries
             if e.decision.state is State.IN_FORCE and e.decision.scope is not Scope.CHANGE
         ]  # fmt: skip
-        if blocked := _unresolved(view.snapshot, found):
+        if blocked := unresolved(view.snapshot, found):
             return blocked, None
         log, resolved = pick.corrections(view.snapshot.root, project), settings() if settings else machine(shared)
     except (StoreError, OSError, ValueError) as exc:
@@ -258,7 +258,7 @@ def machine(shared: DataRepo) -> Settings:
     return resolve(glob, Layer(), read_layer(local_home.root() / MACHINE_SETTINGS, MachineLayer))
 
 
-def _unresolved(seen: Snapshot, found: list[Decision]) -> dict[str, Any] | None:
+def unresolved(seen: Snapshot, found: list[Decision]) -> dict[str, Any] | None:
     """An unresolved scoped rule fails the whole lookup, even beside otherwise valid authority."""
     held = []
     for d in found:
@@ -285,11 +285,12 @@ def answered(done: Run, found: list[Decision]) -> dict[str, Any]:
     if said.status != "ok":
         return {"failed": said.reason}
     by_id = {d.id: d for d in found}
-    rows = [_row(by_id[p.id], p.note) for p in said.decisions]
+    rows = [row(by_id[p.id], p.note) for p in said.decisions]
     return {"decisions": rows} | ({"dropped": said.dropped} if said.dropped else {})
 
 
-def _row(d: Decision, note: str) -> dict[str, str]:
+def row(d: Decision, note: str) -> dict[str, str]:
+    """One whole decision for an agent-facing answer or supplied judging context."""
     row = {"id": d.id, "title": d.title, "statement": whole(d), "scope": str(d.scope), "origin": str(d.origin)}
     return row | ({"note": note} if note else {})
 

@@ -501,6 +501,16 @@ change. The builder calls `request_approval` with its reason. Changes shows the 
 Decline (resume and take it back), or Pause. An edit after approval needs approval again. This gate has no lint
 refusal allowance; target updates already merged into the Change do not ask for approval.
 
+Every suppression a builder or test curator adds needs a verdict for that Change. After committing, the worker
+calls `judge_exceptions`. The quality judge reads the code and all decisions in force, accepts legitimate
+exceptions and refuses workarounds. The worker fixes a refusal in code or appeals once with `request_approval`.
+The question shows the suppression, covered code and judge's reason. Your Approve is recorded as acceptance.
+Changed lint configuration also gets the judge's advice, but always needs your approval.
+
+Set **quality judge** in **Settings** before starting work. Its model, effort, context, minutes and subagent switch
+start unset, like every new role's. Unset settings disable work-starting controls and automatic steps until set.
+The recommendations are `gpt-6.1-sol`, high effort, default context, 15 minutes and subagents on; they are not defaults.
+
 Run `owlbear quality lint [--base REF]` by hand without the host. It includes committed, staged, working and
 untracked changes against the merge-base with `REF`, defaulting to the profile's target branch. It prints each
 linter's result and exits 1 for problems or 2 when a tool cannot run.

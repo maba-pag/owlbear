@@ -69,6 +69,7 @@ APPLIED = [
     "agents.auditor.minutes",
     "agents.project-auditor.minutes",
     "agents.audit-verifier.minutes",
+    "agents.quality-judge.minutes",
     "pr_labels",
     "pr_marker",
     "load_user_instructions",  # D-01M5YE4P5317N1HWD0QN6N05E0
@@ -87,6 +88,7 @@ APPLIED = [
     "agents.auditor.subagents",
     "agents.project-auditor.subagents",
     "agents.audit-verifier.subagents",
+    "agents.quality-judge.subagents",
     "sessions",  # TD-336
 ]  # the settings Delivery uses today
 STARTING = 5.0  # seconds a folder rename waits for a runner launch or the host's folder check to end

@@ -45,6 +45,7 @@ AGENTS: dict[Role, tuple[str, Effort, int]] = {
     "auditor": ("gpt-6.1-sol", "high", 40),
     "project-auditor": ("gpt-6.1-sol", "high", 40),
     "audit-verifier": ("gpt-6.1-sol", "high", 40),
+    "quality-judge": ("gpt-6.1-sol", "high", 15),
 }
 
 
