@@ -909,7 +909,7 @@ def every_name_is_what_its_row_shows(page, pds) -> None:
     expect(page.get_by_role("button", name="Dismiss the change of machine.spotter_budget")).to_have_count(1)
     page.evaluate(RETIRED_NOTICE, [])
     keys = page.evaluate(OVERVIEW_KEYS)
-    assert (len(keys), sum(k["unset"] for k in keys)) == (165, 161)  # audit-verifier adds five unset settings
+    assert (len(keys), sum(k["unset"] for k in keys)) == (170, 166)  # quality-judge adds five unset settings
     for group in dict.fromkeys(k["group"] for k in keys):
         pds.group(page, group)
         for shown in page.evaluate(ROW_WORDS, [k["key"] for k in keys if k["group"] == group]):
@@ -924,7 +924,7 @@ def every_name_is_what_its_row_shows(page, pds) -> None:
                 assert shown["column"], f"{key}: no column"
     pds.group(page, "agents")
     nothing = page.evaluate(NO_ROW)
-    assert (nothing["count"], nothing["wrong"]) == (64, [])  # audit-verifier adds four unsupported round keys
+    assert (nothing["count"], nothing["wrong"]) == (68, [])  # quality-judge adds four unsupported round keys
     assert "agents.planner.bogus" in nothing["unknown"]
 
 
