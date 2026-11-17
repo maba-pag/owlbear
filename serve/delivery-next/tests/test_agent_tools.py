@@ -62,7 +62,8 @@ def test_only_the_builder_writes_files_and_every_role_recalls_memory() -> None:
 
 def test_the_sdk_agent_is_offered_its_own_tools_and_the_result_tools() -> None:
     for kind, role in sdk_adapter.ROLES.items():  # every step's own worker may look decisions up (TD-456)
-        assert sdk_adapter.agent(kind)["tools"] == [*preload.tools(role), *RESULT_TOOLS, tools.LOOKUP]
+        approval = ["request_approval"] if role == "builder" else []
+        assert sdk_adapter.agent(kind)["tools"] == [*preload.tools(role), *RESULT_TOOLS, tools.LOOKUP, *approval]
     reviewer = [*preload.tools("reviewer"), *RESULT_TOOLS, tools.LOOKUP]
     assert options(kind=StepKind.REVIEW)["custom_agents"][0]["tools"] == reviewer
 

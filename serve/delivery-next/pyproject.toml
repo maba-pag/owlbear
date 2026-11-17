@@ -11,6 +11,7 @@ dependencies = [
   "mcp>=2,<2.4",
   "owlbear-decisions",
   "owlbear-memory",
+  "owlbear-quality",
   "playwright>=1.60.0",
   "psutil>=7.2.2",
   "pydantic>=2.13.4",
@@ -30,6 +31,7 @@ owlbear = "owlbear_delivery_next.machine_host.command:main"
 [tool.uv.sources]
 owlbear-decisions = { workspace = true }
 owlbear-memory = { workspace = true }
+owlbear-quality = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

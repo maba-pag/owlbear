@@ -145,6 +145,9 @@ New Change's shaping chat recalls and saves memory with, also in `.mcp.json`, an
 line for the settings file. Reload the project's VS Code window; the **Setup required** note
 disappears.
 
+After setup, [confirm the project's `lint` command](operating-owlbear.md#lint-before-submission) with
+`owlbear profile --confirm lint=...` to use its own checks before builder submissions.
+
 The `.mcp.json` entries name OwlBear's Python through `${HOME}` and no project path: VS Code and the
 Copilot CLI start them in the project folder, so they serve whichever project they sit in.
 

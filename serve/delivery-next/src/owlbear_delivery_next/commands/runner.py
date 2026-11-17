@@ -20,6 +20,7 @@ from owlbear_delivery_next.change_flow import (
     disputes,
     loop,
     plan_rounds,
+    quality,
     repairs,
     shaping_capture,
     stuck,
@@ -45,10 +46,12 @@ from owlbear_delivery_next.runtimes import (
 )
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.settings.config import SettingsUnset
+from owlbear_delivery_next.settings.profile import lint_commands
 from owlbear_delivery_next.state_store import github_writer, project_home, spend_ledger
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 from owlbear_delivery_next.workflow_steps import (
     amendment,
+    approvals,
     before,
     brief_round,
     captures,
@@ -98,14 +101,8 @@ TARGET = ("target", StepKind.BUILD, Exit.BACK)  # a builder's accepted target pr
 type Result = loop.StepResult
 
 
-def _shape(_ctx: engine.Ctx, c: Change) -> tuple[Change, loop.StepResult]:
-    """Shaping happens in chat; the step waits for a revised brief and its approval."""
-    why = c.outcome.reason if c.outcome else f"brief v{c.brief.version} is not approved for planning"
-    return c, engine.pending(Waiting.CHAT, f"brief needs a change: {why} · revise in chat, then approve", None, "you")
-
-
 ENGINE: dict[StepKind, engine.Step] = {
-    StepKind.SHAPE: _shape,
+    StepKind.SHAPE: worker_input.shaping,
     StepKind.PUBLISH: publish.run,
     StepKind.FOLLOW: follow.run,
     StepKind.MERGE: merge.run,
@@ -174,6 +171,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
             policy=permissions.Policy(at, write=parts.write),
             observe=lambda: worktree.observe(at, change.names.target, since),
             checks=parts.checks,
+            lint_commands=lint_commands(profile),
+            quality=lambda: quality.check(change, at, lint_commands(profile)),
             packages=parts.packages,
             submit=parts.submit,
             scope=tuple(change.brief.scope),
@@ -209,7 +208,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     curation_build.recorded(change, run, path)
     post = held_writes.Deferred(store, slug) if accepted else store  # an accepted hold's writes wait for its receipt
-    result = session_result.to_result(run, s.kind, end)
+    result = approvals.requested(change, run, path, lint_commands(profile), session_result.to_result(run, s.kind, end))
     private = run.ending == "ask" and result.cause == cause_key(ErrorKind.RESULT, s.kind, worker_questions.LABEL)
     kept = worker_questions.unbound(post, lock, change, run, run.checks) if private else None
     if kept is None:

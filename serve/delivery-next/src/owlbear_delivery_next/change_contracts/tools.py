@@ -5,12 +5,24 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import PurePosixPath
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
-from owlbear_delivery_next.change_contracts import build_tools, check_hint, question_tools
-from owlbear_delivery_next.change_contracts.option_records import OptionAction
+from owlbear_delivery_next.change_contracts import (
+    approval_tools,
+    build_tools,
+    check_hint,
+    option_records,
+    question_tools,
+    tool_types,
+)
+
+Args = tool_types.Args
+Spec = tool_types.Spec
+bounded = tool_types.bounded
+OptionAction = option_records.OptionAction
+_f = bounded
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -28,18 +40,6 @@ STAGES = ("Which document is wrong; target when the task needs a commit or API o
           "entry or setting, a tool, a check that cannot end); brief only if what the owner gets changes")  # fmt: skip
 
 
-class Args(BaseModel):
-    """Strict tool arguments: unknown fields are an error the agent sees."""
-
-    model_config = ConfigDict(extra="forbid")
-
-
-def _f(limit: int, description: str, example: object, least: int = 1) -> Any:  # noqa: ANN401 - a pydantic FieldInfo
-    """A bounded field with its description and one example (T5)."""
-    return Field(min_length=least, max_length=limit, description=description, examples=[example])
-
-
-bounded = _f
 check_build = build_tools.check_build
 check_question = question_tools.check_question
 _few = build_tools.few
@@ -341,16 +341,6 @@ def check_plan(
     return errors
 
 
-@dataclass(frozen=True)
-class Spec:
-    """One tool's name, description, argument model and the step ending an accepted call causes."""
-
-    name: str
-    description: str
-    model: type[Args]
-    ending: Literal["result", "ask", "premise", "missing-tool"]
-
-
 SUBMIT = Spec(
     "submit_result",
     "Submit this step's result once: after committing your work and running every task check on that commit. "
@@ -414,6 +404,7 @@ def results(role: str, *, ui: bool = False, judging: bool = False) -> list[str]:
         return [SUBMIT.name, *extra]
     extra = [FIRST_LOOK] if role == "design-judge" else [SCAN_DESIGN] if role == "builder" and ui else []
     extra += [LOOKUP] if role in LOOKERS and not judging else []
+    extra += [approval_tools.REQUEST.name] if approval_tools.offered(role, judging=judging) else []
     return [*(s.name for s in SPECS if s is not ASK or asks(role, judging=judging)), *extra]
 
 

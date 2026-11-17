@@ -393,9 +393,10 @@ def test_delivery_next_browser_tests_run_in_their_own_job_with_chromium() -> Non
     job = _jobs("python-browser.yml")["delivery-next-browser"]
     runs = _runs(job)
 
-    assert {"serve/delivery-next/**", "serve/decisions/**", "serve/memory/**"} <= set(ci_scope.SUITES["python-browser"])
+    suite = {"serve/delivery-next/**", "serve/decisions/**", "serve/memory/**", "serve/quality/**"}
+    assert suite <= set(ci_scope.SUITES["python-browser"])
     fingerprint = next(s["run"] for s in job["steps"] if s.get("id") == "fingerprint")
-    assert "serve/delivery-next serve/decisions serve/memory" in fingerprint
+    assert "serve/delivery-next serve/decisions serve/memory serve/quality" in fingerprint
     assert "uv sync --locked --package owlbear-delivery-next --group dev" in runs
     assert "uv run --no-sync playwright install chromium" in runs
     assert "--with-deps" not in runs  # apt on the runner stalls; the image has what headless Chromium needs

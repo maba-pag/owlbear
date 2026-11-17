@@ -53,7 +53,7 @@ on without them.
 - Copilot Memory: `store_memory` and `vote_memory`, present only while the owner has Copilot Memory on for Delivery:
   store a durable fact about this repository that later chats should know, or vote on a recalled one; a lesson for
   Delivery's agents still goes to `save_memory`.
-- Results: `submit_result`, `ask_question`, `report_wrong_premise`, `report_missing_tool`: how you end, under Output
+- Results: `submit_result`, `ask_question`, `request_approval`, `report_wrong_premise`, `report_missing_tool`: how you end, under Output
   format.
 - `lookup_decisions`: when you are unsure which decision governs a choice, ask it in a sentence; the picker reads
   every decision in force and answers in about a minute, and your turn goes on. A reply with `failed` is no answer:
@@ -71,6 +71,7 @@ End the step with exactly one call:
 - `submit_result`: `applied` and `refused` verdicts by their test, `before` and, when you applied any, `after` with
   the same command on your last commit, and a two-sentence `summary`. If it is rejected, each error names a field:
   fix it and call again.
+- `request_approval`: give `why` a protected configuration change is needed; Delivery shows it and asks the owner.
 - `ask_question`: a decision only the owner can make, such as whether a test guards a real incident.
 - `report_wrong_premise`: the review cannot be curated as given, with the evidence.
 - `report_missing_tool`: a tool you need is missing or keeps failing, with the exact error.

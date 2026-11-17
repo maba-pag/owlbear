@@ -9,19 +9,23 @@ import subprocess
 import sys
 import threading
 import time
+from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
 
 import pytest
+from owlbear_quality import run as runner
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.local_system import lint, processes
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.results import ACCEPTED, ENDED, Gate
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings import profile
 
 RUFF = '[tool.ruff]\nline-length = 100\n\n[tool.ruff.lint]\nselect = ["F"]\n'
 
@@ -38,7 +42,7 @@ def head(work: Path) -> str:
     return worktree.head(work)
 
 
-def gate(work: Path, since: str, log: list[dict]) -> Gate:
+def gate(work: Path, since: str, log: list[dict], commands: tuple[tuple[str, ...], ...] = ()) -> Gate:
     cfg = sdk_adapter.Session(
         StepKind.BUILD,
         work,
@@ -48,6 +52,7 @@ def gate(work: Path, since: str, log: list[dict]) -> Gate:
         policy=Policy(work),
         observe=lambda: worktree.observe(work, "main", since),
         checks=(),
+        lint_commands=commands,
     )
     return Gate(cfg, Run("s1"), lambda **e: log.append(e), lambda: None)
 
@@ -98,10 +103,10 @@ def test_lint_refusals_never_end_the_step_and_pass_with_lint_unresolved_after_th
     change_repo: Path, monkeypatch
 ) -> None:
     ran = {  # what ruff reports for new.py; the test above runs the real ruff
-        "ruff check": lint.Outcome("failed", "F401 [*] `sys` imported but unused\n --> new.py:1:8\nFound 1 error."),
-        "ruff format": lint.Outcome("passed", "1 file already formatted"),
+        "ruff check": runner.Outcome("failed", "F401 [*] `sys` imported but unused\n --> new.py:1:8\nFound 1 error."),
+        "ruff format": runner.Outcome("passed", "1 file already formatted"),
     }
-    monkeypatch.setattr(lint, "run", lambda _root, linter, _timeout: ran[linter.name])
+    monkeypatch.setattr(runner, "run", lambda _root, linter, _timeout: ran[linter.name])
     commit(change_repo, {"pyproject.toml": RUFF})
     since, log = head(change_repo), []
     commit(change_repo, {"new.py": "import sys\n"})
@@ -123,7 +128,7 @@ def test_python_without_a_ruff_configuration_is_not_linted(change_repo: Path) ->
 
 
 def test_a_deleted_or_unlintable_file_runs_no_linter(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setattr(lint, "run", lambda *_: pytest.fail("no linter runs"))
+    monkeypatch.setattr(runner, "run", lambda *_: pytest.fail("no linter runs"))
     (tmp_path / "pyproject.toml").write_text(RUFF)
     (tmp_path / "notes.md").write_text("x\n")
     log: list[dict] = []
@@ -207,7 +212,7 @@ def test_a_node_linter_resolving_outside_the_repository_is_skipped(tmp_path: Pat
     root.mkdir()
     escape(root, outside)
     (root / "web" / "biome.json").write_text("{}")
-    linters, skipped = lint.plan(root, ["web/a.ts"])
+    linters, skipped = runner.plan(root, ["web/a.ts"])
     assert linters == []
     assert skipped == ["biome for web: its executable or folder resolves outside the repository"]
 
@@ -217,7 +222,7 @@ def test_a_node_linter_linked_inside_the_repository_runs_from_its_real_path(tmp_
     (tmp_path / "web" / "node_modules" / ".bin").mkdir()
     (tmp_path / "web" / "node_modules" / ".bin" / "biome").symlink_to("../@biomejs/biome/bin/biome")
     (tmp_path / "web" / "biome.json").write_text("{}")
-    linters, skipped = lint.plan(tmp_path, ["web/a.ts"])
+    linters, skipped = runner.plan(tmp_path, ["web/a.ts"])
     assert (skipped, [x.command[0] for x in linters]) == ([], [str(real.resolve())])
 
 
@@ -231,13 +236,13 @@ def test_linters_share_one_budget_and_later_ones_are_skipped(tmp_path: Path, mon
     (tmp_path / "a.ts").write_text("x\n")
     clock, timeouts = [0.0], []
 
-    def fake(_root: Path, _linter: lint.Linter, timeout: float) -> lint.Outcome:
+    def fake(_root: Path, _linter: runner.Linter, timeout: float) -> runner.Outcome:
         timeouts.append(timeout)
         clock[0] += 100
-        return lint.Outcome("passed")
+        return runner.Outcome("passed")
 
     monkeypatch.setattr(lint, "monotonic", lambda: clock[0])
-    monkeypatch.setattr(lint, "run", fake)
+    monkeypatch.setattr(runner, "run", fake)
     log: list[dict] = []
     assert lint.Lint(lambda **e: log.append(e)).check(tmp_path, ["a.py", "a.ts"]) == []
     assert timeouts == [120, 80]
@@ -254,10 +259,10 @@ def test_a_timed_out_linter_is_reported_even_when_a_detached_child_holds_its_out
         "slow",
         f'"{sys.executable}" -c "{child}" &\nwhile [ ! -s "{pidfile}" ]; do sleep 0.05; done\nsleep 30',
     )
-    monkeypatch.setattr(lint, "DRAIN", 0.5)
+    monkeypatch.setattr(runner, "DRAIN", 0.5)
     started = time.monotonic()
     try:
-        out = lint.run(tmp_path, lint.Linter("slow", (str(script),), PurePosixPath(), ()), 1)
+        out = runner.run(tmp_path, runner.Linter("slow", (str(script),), PurePosixPath(), ()), 1)
     finally:
         with contextlib.suppress(OSError, ValueError):
             os.kill(int(pidfile.read_text()), signal.SIGKILL)
@@ -271,8 +276,8 @@ def test_a_linter_keeps_the_runners_session_and_its_leftover_is_found(tmp_path: 
         tmp_path, "leave", f"echo $$ > {tmp_path}/leader; sleep 300 >/dev/null 2>&1 & echo $! > {tmp_path}/left"
     )
     code = (
-        "import os; from pathlib import Path, PurePosixPath; from owlbear_delivery_next.local_system import lint; "
-        f"print(os.getpid(), lint.run(Path({str(tmp_path)!r}), lint.Linter('leave', ({str(script)!r},), "
+        "import os; from pathlib import Path, PurePosixPath; from owlbear_quality import run as runner; "
+        f"print(os.getpid(), runner.run(Path({str(tmp_path)!r}), runner.Linter('leave', ({str(script)!r},), "
         "PurePosixPath(), ())).state)"
     )
     started = time.time()
@@ -355,7 +360,7 @@ def test_ruff_runs_through_uv_when_the_repository_locks_it(tmp_path: Path, monke
     monkeypatch.setenv("PATH", str(tmp_path / "bin"))
     (tmp_path / "pyproject.toml").write_text(RUFF)
     (tmp_path / "uv.lock").write_text('[[package]]\nname = "ruff"\nversion = "0.16.5"\n')
-    linters, skipped = lint.plan(tmp_path, ["a.py"])
+    linters, skipped = runner.plan(tmp_path, ["a.py"])
     assert skipped == []
     assert [x.command[:6] for x in linters] == [(str(uv), "run", "--locked", "--offline", "--quiet", "ruff")] * 2
 
@@ -389,3 +394,21 @@ def test_names_git_quotes_reach_the_gates_and_lint_as_real_paths(change_repo: Pa
         ["my file.py", "Über sicht.py"],
         "failed",
     )
+
+
+def test_confirmed_lint_commands_run_at_root_with_changed_files_appended(change_repo: Path) -> None:
+    script = tool(change_repo / "bin", "check", 'printf "%s\\n" "$PWD" "$@"; exit 1')
+    value = f'{script} --check\n{sys.executable} -c "print(123)"'
+    unconfirmed = Profile(entries={profile.LINT: ProfileEntry(state="known", value=value, evidence="detected")})
+    assert profile.lint_commands(unconfirmed) == ()
+    prof = profile.confirm(unconfirmed, profile.LINT, value, datetime.now(UTC))
+    commands = profile.lint_commands(prof)
+    assert commands == ((str(script), "--check"), (sys.executable, "-c", "print(123)"))
+    commit(change_repo, {"notes.md": "before\n"})
+    since = head(change_repo)
+    commit(change_repo, {"notes.md": "after\n", "-odd name.md": "text\n"})
+    log = []
+    text, ok = submit(gate(change_repo, since, log, commands))
+    assert not ok
+    assert f"{change_repo}\n--check\n./-odd name.md\nnotes.md" in text
+    assert [r["state"] for r in next(e for e in log if e["event"] == "lint")["ran"]] == ["failed", "passed"]

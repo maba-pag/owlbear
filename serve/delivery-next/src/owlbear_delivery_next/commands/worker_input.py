@@ -6,10 +6,10 @@ from datetime import UTC, datetime
 from functools import partial
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts.models import StepKind
-from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.change_contracts.models import StepKind, Waiting
+from owlbear_delivery_next.change_flow import loop, worktree
 from owlbear_delivery_next.impeccable import design_tools
-from owlbear_delivery_next.workflow_steps import design, overlap, sessions
+from owlbear_delivery_next.workflow_steps import design, engine, overlap, sessions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -38,3 +38,9 @@ def planning(store: Store, lock: Lock, slug: str, path: Path) -> dict[str, list[
         store.log(lock, slug, {"event": "shelved", "at": datetime.now(UTC).isoformat(timespec="seconds")})
         sessions.out(f"{slug}: uncommitted edits kept in `git stash list` as '{message}'")
     return overlap.scopes(store, slug)
+
+
+def shaping(_ctx: engine.Ctx, c: Change) -> tuple[Change, loop.StepResult]:
+    """Shaping happens in chat; the step waits for a revised brief and its approval."""
+    why = c.outcome.reason if c.outcome else f"brief v{c.brief.version} is not approved for planning"
+    return c, engine.pending(Waiting.CHAT, f"brief needs a change: {why} · revise in chat, then approve", None, "you")
