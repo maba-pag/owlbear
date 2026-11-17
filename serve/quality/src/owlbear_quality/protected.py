@@ -32,6 +32,13 @@ WHOLE = frozenset(
         ".yamllint.yml",
         "lefthook.yml",
     }
+        "mypy.ini",
+        ".mypy.ini",
+        "pyrightconfig.json",
+        "pylintrc",
+        ".pylintrc",
+        ".flake8",
+        ".isort.cfg",
 )
 LINTERS = re.compile(
     r"^\.(?:eslintrc|prettierrc|stylelintrc)(?:\..*)?$|^(?:eslint|prettier|stylelint)\.config\.\w+$"
