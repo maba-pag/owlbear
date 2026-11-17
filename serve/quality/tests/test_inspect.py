@@ -60,7 +60,8 @@ def test_inventory_scope_and_added_copies_come_from_commits(tmp_path: Path) -> N
         "# zizmor: ignore[unpinned-uses]\n"
         "key: value  # yamllint disable-line rule:line-length\n"
         "# yamllint disable-line\nnext: value\n"
-        "# yamllint disable rule:comments\nkey: other\n# yamllint enable rule:comments\n"
+        "# yamllint disable rule:comments\nkey: other\n# yamllint enable rule:line-length\n"
+        "still: covered\n# yamllint enable rule:comments\n"
         "<!-- markdownlint-disable-next-line MD013 -->\nlong text\n"
         "<!-- markdownlint-disable-line MD013 -->\n"
         "<!-- markdownlint-disable MD013 -->\ntext\n<!-- markdownlint-enable MD013 -->\n"
@@ -83,7 +84,12 @@ def test_inventory_scope_and_added_copies_come_from_commits(tmp_path: Path) -> N
     assert len(py) == 3  # the directive inside the string is not a comment
     assert py[0].code == "value = (\n    1\n)  # fmt: skip\n"
     assert "y = 2" not in py[1].code
-    assert len([d for d in items if d.path == "forms.txt"]) == 10
+    forms_found = [d for d in items if d.path == "forms.txt"]
+    assert len(forms_found) == 10
+    assert "still: covered" in next(d.code for d in forms_found if d.directive == "yamllint disable rule:comments")
+    assert next(d.directive for d in forms_found if d.directive.startswith("markdownlint-disable MD013")) == (
+        "markdownlint-disable MD013"
+    )
     head = commit(
         tmp_path,
         {

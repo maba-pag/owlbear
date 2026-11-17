@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_quality import trees
 from owlbear_quality.comments import comments as source_comments
-from owlbear_quality.directives import SUPPRESSIONS
+from owlbear_quality.directives import SUPPRESSIONS, TERMINATORS
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -85,6 +85,33 @@ def _kind(token: str, number: int, lines: list[str], statements: list[tuple[int,
     return "file"
 
 
+def _rules(token: str) -> set[str]:
+    family = re.match(
+        r"(?:eslint|markdownlint)-(?:disable|enable)|yamllint\s+(?:disable|enable)"
+        r"|biome-ignore-(?:start|end)",
+        token,
+    )
+    return set(re.split(r"[,\s]+", token[family.end() :].strip())) - {""} if family else set()
+
+
+def _block_end(token: str, number: int, comments: dict[int, str], length: int) -> int:
+    pending = _rules(token)
+    for line, text in comments.items():
+        if line <= number:
+            continue
+        for match in TERMINATORS.finditer(text):
+            if not re.match(_terminator(token), match[0]):
+                continue
+            enabled = _rules(match[0])
+            if not enabled:
+                return line
+            if pending:
+                pending -= enabled
+                if not pending:
+                    return line
+    return length + 1
+
+
 def _covered(
     token: str,
     number: int,
@@ -96,8 +123,7 @@ def _covered(
     if kind == "file":
         return "".join(lines)
     if kind == "block":
-        terminator = _terminator(token)
-        end = next((n for n, text in comments.items() if n > number and re.search(terminator, text)), len(lines) + 1)
+        end = _block_end(token, number, comments, len(lines))
         return "".join(lines[number - 1 : end - 1])
     at = number + (kind == "next")
     span = _statement(at, statements, following=kind == "next")
@@ -118,6 +144,8 @@ def directives(path: str, source: str) -> list[Directive]:
     for number, comment in comments.items():
         for match in SUPPRESSIONS.finditer(comment):
             token = match[0].strip()
+            if number != 1 and token.startswith(("yamllint disable-file", "editorconfig-checker-disable-file")):
+                continue
             code = _covered(token, number, lines, comments, statements)
             content = json.dumps([path, token, code], ensure_ascii=False)
             identity = hashlib.sha256(content.encode()).hexdigest()

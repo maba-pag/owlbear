@@ -24,14 +24,14 @@ SUPPRESSIONS = re.compile(
     r"|\beslint-disable(?:-next-line|-line)?(?:\s+[\w@/-]+(?:\s*,\s*[\w@/-]+)*)?"
     r"|\bzizmor:\s*ignore\[[^\]]*\]"
     r"|\byamllint\s+disable(?:-line|-file)?(?:[ \t]+rule:[\w-]+)*"
-    r"|\bmarkdownlint-disable(?:-next-line|-line|-file)?(?:[ \t]+[\w-]+)*"
+    r"|\bmarkdownlint-disable(?:-next-line|-line|-file)?(?:[ \t]+\w[\w-]*)*"
     r"|\beditorconfig-checker-disable(?:-next-line|-line|-file)?(?![\w-])"
     r"|@ts-(?:ignore|nocheck|expect-error)"
 )
 TERMINATORS = re.compile(
     r"\bfmt:\s*on|\bbiome-ignore-end(?:\s+[\w/()*-]+)*"
     r"|\byamllint\s+enable(?:[ \t]+rule:[\w-]+)*"
-    r"|\bmarkdownlint-enable(?:[ \t]+[\w-]+)*|\beditorconfig-checker-enable\b"
+    r"|\bmarkdownlint-enable(?:[ \t]+\w[\w-]*)*|\beditorconfig-checker-enable\b"
     r"|\beslint-enable(?:\s+[\w@/-]+(?:\s*,\s*[\w@/-]+)*)?"
 )
 ESLINT_OPENER = re.compile(r"/\*\s*(eslint-(?:disable(?:-next-line|-line)?|enable))\b")
