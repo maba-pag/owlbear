@@ -12,22 +12,20 @@ an issue (``defect_issue``).
 
 from __future__ import annotations
 
-import os
-import shlex
 import tomllib
 from datetime import UTC, datetime
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from traceback import format_exception_only
 from typing import TYPE_CHECKING
 
-from owlbear_quality.inspect import suppressions
+from owlbear_quality.inspect import protected, suppressions
 
-from owlbear_delivery_next.change_contracts import check_hint, evidence, repair_tools, tools
+from owlbear_delivery_next.change_contracts import check_hint, repair_tools, tools
 from owlbear_delivery_next.change_contracts.failures import ENVIRONMENT, WRONG_MODEL, kind_of
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Outcome, StepKind, Stop
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.repair_records import KEPT, Tried, Witness
-from owlbear_delivery_next.change_flow import amending, budgets, curation_flow, loop, rebuilds, stuck, worktree
+from owlbear_delivery_next.change_flow import amending, budgets, curation_flow, loop, quality, rebuilds, stuck, worktree
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.settings import profile, roles
@@ -44,7 +42,7 @@ from owlbear_delivery_next.workflow_steps import (
     repair_messages,
     sessions,
 )
-from owlbear_delivery_next.workflow_steps.check_sources import console_script as _console_script
+from owlbear_delivery_next.workflow_steps.repair_scope import hold as _check_hold, in_scope as _in_scope, named as _named
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change
@@ -251,7 +249,12 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
     if why := _witnessed(store, lock, change, at, (witness, within, prof)):
         _stopped(store, lock, change, why)
         return
-    r.held = [f"changes {p}, configuration that is yours" for p in r.paths if check_weakening.configured(p)]
+    protected_change = protected(path, r.base, r.commit, commands=profile.lint_commands(prof))
+    protected_paths = protected_change.paths if protected_change else ()
+    r.held = [
+        f"changes {p}, configuration that is yours"
+        for p in r.paths if check_weakening.configured(p) or p in protected_paths
+    ]
     r.held += [f"makes {p} a link or submodule" for p, how in changed if how.split()[0] in check_weakening.LINKS]
     r.held += [
         f"adds or broadens a suppression that is yours to approve: {line}"
@@ -313,7 +316,12 @@ def _apply(store: Store, lock: Lock, change: Change, path: Path, prof: Profile) 
             return
     else:
         message = f"fix: {stuck.obstruction(r.found)}\n\nRepaired by an agent; applied by Delivery (#1066)."
+        commands = profile.lint_commands(prof)
+        before = quality.current(change, path, commands)[2] if r.phase == "approved" else None
+        covered = r.phase == "approved" and (before is None or quality.approved(change, before.digest))
         made = repair_copy.apply(path, change.names.branch, r.base, r.commit, message)
+        if covered and (after := quality.current(change, path, commands)[2]) is not None:
+            r.approved_configuration = after.digest
         repair_copy.git(path, ["update-ref", "-d", f"{KEPT}{change.slug}"])
     _log(store, lock, change, f"applied {made}; the step runs again.{repair_messages.defect(r)}")
     stuck.applied(change, made, datetime.now(UTC))
@@ -377,57 +385,6 @@ def _installs(change: Change, prof: Profile) -> tuple[str, ...]:
     return tuple(check_hint.qualified(p, c) for p, c in worktree.installs(prof, change.brief.scope or ["."]))
 
 
-def _check_hold(path: str, witness: tuple[str, ...], source: Path) -> str:
-    """Incomplete original-source discovery holds the fix with the whole error, never applies it."""
-    try:
-        named = _named(path, witness, source)
-    except (OSError, SyntaxError, tomllib.TOMLDecodeError) as error:
-        detail = "".join(format_exception_only(error)).strip()
-        return f"cannot inspect the unchanged check for {path}: {detail}; its altered witness proves nothing alone"
-    return f"changes {path}, which the step's check runs, so it proves nothing alone" if named else ""
-
-
-def _named(path: str, witness: tuple[str, ...], source: Path | None = None) -> bool:
-    """Whether a check command names *path*: a fix to the check it is proven by needs the owner (never weakened).
-
-    A script by its path, a Python module run with ``-m`` by its file, or the root selector's imported machinery;
-    a command that can't be parsed names every path.
-    """
-    for one in witness:
-        where, command = _split(one)
-        try:
-            words = list(shlex.shlex(command, posix=True, punctuation_chars=True))
-        except ValueError:
-            return True
-        if source is not None and _console_script(path, words, source):
-            return True
-        for before, word in zip(["", *words], words, strict=False):
-            found = [word.strip("{}")]
-            if before == "-m":
-                module = word.replace(".", "/")
-                found = [f"{module}.py", f"{module}/__main__.py", f"{module}/__init__.py"]
-            for name in found:
-                named = os.path.normpath(PurePosixPath(where or ".", name))
-                if named == os.path.normpath(path):
-                    return True
-                if before == "-m" and path.endswith(f"/{name}") and (not where or evidence.within(where, path)):
-                    return True  # a module found on the path, as a src/ layout puts it
-                if not where and PurePosixPath(name).name == path:
-                    return True
-    return False
-
-
-def _split(check: str) -> tuple[str | None, str]:
-    """A resolved check as (its directory, the command run there), as ``check_hint`` writes it: `cd <dir> && {…}`."""
-    found = check_hint.CD_CHECK.fullmatch(check.strip())
-    if not found:
-        return None, check
-    body = found[2].strip()
-    return shlex.split(found[1])[0], body[1:-1] if body.startswith("{") and body.endswith("}") else body
-
-
-def _in_scope(change: Change, path: str) -> bool:
-    return not change.brief.scope or any(evidence.within(s, path) for s in change.brief.scope)
 
 
 def _ran(at: Path, commands: tuple[str, ...], within: float, store: Store, lock: Lock) -> Witness:
