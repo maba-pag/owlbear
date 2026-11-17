@@ -146,7 +146,8 @@ jobs:
             .github/scripts/check_uv_version.py \
             .github/scripts/ci_shard.py .python-version conftest.py serve/tools/src/owlbear_tools/flaky.py \
             serve/tools/src/owlbear_tools/test_dependencies.py \
-            pyproject.toml uv.lock serve/delivery-next serve/decisions serve/memory | sha256sum | cut -c1-40)"
+            pyproject.toml uv.lock serve/delivery-next serve/decisions serve/memory serve/quality \
+            | sha256sum | cut -c1-40)"
           echo "value=$value" >> "$GITHUB_OUTPUT"
 
       # Each shard has its own key: one shard's pass must never let the other skip its tests.
