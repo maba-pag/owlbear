@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from owlbear_quality.inspect import suppressions
+
 from owlbear_delivery_next.impeccable_runs import pack_rounds
 from owlbear_delivery_next.impeccable_runs.pack_repair_content import IMPECCABLE, Kind
 from owlbear_delivery_next.workflow_steps import check_weakening
@@ -87,7 +89,7 @@ def held(  # noqa: PLR0913 - the copy, its head, the change, the package with it
     are a quick filter, not a proof; every other edit of an existing test file is held for the owner's review.
     """
     held = [p for p, how in changed if configured(p) or how.split()[0] in LINKS]
-    held += [p for p, _ in changed if p not in held and check_weakening.suppressions(run, at, head, p)]
+    held += [p for p, _ in changed if p not in held and suppressions(run, at, head, p)]
     found = {path: weakened(run, at, head, path, how) for path, how in changed}
     refused = [f"{p} ({found[p][0]})" for p, how in changed if how.endswith("D") and found[p][0]]
     refused += [

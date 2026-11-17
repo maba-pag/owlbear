@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from owlbear_quality.inspect import suppressions
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.change_contracts import tools
@@ -48,7 +49,7 @@ from owlbear_delivery_next.impeccable_runs.pack_repair_edits import held as _hel
 from owlbear_delivery_next.impeccable_runs.pack_repair_edits import staged as _staged
 from owlbear_delivery_next.runtimes import sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
-from owlbear_delivery_next.workflow_steps import check_weakening, follow, sessions
+from owlbear_delivery_next.workflow_steps import follow, sessions
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.github.provider import Provider, PullRequest
@@ -317,7 +318,7 @@ def _made(job: Job, ctx: Context, src: pack_git.Source, gh: Provider) -> Outcome
         job.keep(ctx)
         package, skills = _package(job, src), kind.pinned(ctx)
         r.held, r.refused, r.reviewed = _held(run, at, r.stop.head, paths, package=package, skills=skills, kind=kind)
-        r.suppressions = [line for p in r.paths for line in check_weakening.suppressions(run, at, r.stop.head, p)]
+        r.suppressions = [line for p in r.paths for line in suppressions(run, at, r.stop.head, p)]
         if asked := _asked(r):  # the diff of what he is asked about, whole, or no push from his question
             changed = ["--cached", r.stop.head, "--", *asked]
             diff, r.diff_binary = run(at, ["diff", *changed]), _binary(run, at, changed)

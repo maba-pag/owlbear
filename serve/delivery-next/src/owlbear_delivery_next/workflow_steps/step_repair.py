@@ -20,6 +20,8 @@ from pathlib import Path, PurePosixPath
 from traceback import format_exception_only
 from typing import TYPE_CHECKING
 
+from owlbear_quality.inspect import suppressions
+
 from owlbear_delivery_next.change_contracts import check_hint, evidence, repair_tools, tools
 from owlbear_delivery_next.change_contracts.failures import ENVIRONMENT, WRONG_MODEL, kind_of
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Outcome, StepKind, Stop
@@ -254,7 +256,7 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
     r.held += [
         f"adds or broadens a suppression that is yours to approve: {line}"
         for p in r.paths
-        for line in check_weakening.suppressions(repair_copy.git, at, r.base, p)
+        for line in suppressions(repair_copy.git, at, r.base, p)
     ]
     r.held += [f"{found[p][1]} the test {p}" for p in r.paths if found[p][1]]
     r.held += [reason for p in r.paths if (reason := _check_hold(p, witness, path))]
