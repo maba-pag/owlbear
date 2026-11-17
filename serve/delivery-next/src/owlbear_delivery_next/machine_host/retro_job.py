@@ -294,6 +294,14 @@ class RetroJob:
         report = ctx.meter.report() if ctx.meter else None
         spent = ctx.spent + (report["credits"] if report else 0.0)
         known = ctx.known and (report["credits_known"] if report else True)
+        if (
+            ctx.mode == "correct-grades"
+            and (spent > 0 or not known)
+            and set(ctx.records) <= retro_regrade.awaiting().keys()
+        ):
+            result += (
+                "; automatic correction held: no grades corrected; explicitly retry this Change's grade correction"
+            )
         store.run_event(ctx.id, "ended", result=result, credits=report, spent=spent, known=known, **(out or {}))
         if ctx.rev and ctx.mode not in {"grade-only", "correct-grades"} and not (out or {}).get("held"):
             units.settle(ctx.uid, ctx.rev, result.split(":", 1)[0], run=ctx.id, result=result)
