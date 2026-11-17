@@ -57,11 +57,21 @@ def test_protected_compares_parsed_tables_and_invoked_scripts_not_dependencies(t
         {
             "pyproject.toml": '[project.scripts]\nscan = "app:new"\n[tool.ruff]\nline-length = 100\n',
             ".github/workflows/check.yml": "name: checks\n",
+            ".yamllint": "rules: {}\n",
+            "setup.cfg": "[mypy-app.*]\nignore_errors = True\n",
+            "package.json": '{"scripts": null}',
         },
     )
     evidence = protected(git, tmp_path, deps, changed, (("uv", "run", "scan"),))
     assert evidence is not None
-    assert evidence.paths == (".github/workflows/check.yml", ".husky/pre-commit", "pyproject.toml")
+    assert evidence.paths == (
+        ".github/workflows/check.yml",
+        ".husky/pre-commit",
+        ".yamllint",
+        "package.json",
+        "pyproject.toml",
+        "setup.cfg",
+    )
     assert "symlink" in evidence.text
     assert "other:old" not in evidence.text
     assert all(text in evidence.text for text in ("tool.ruff", "project.scripts", "app:old", "app:new"))

@@ -33,7 +33,10 @@ WHOLE = frozenset(
         "lefthook.yml",
     }
 )
-LINTERS = re.compile(r"^\.(?:eslintrc|prettierrc|stylelintrc)(?:\..*)?$|^(?:eslint|prettier|stylelint)\.config\.\w+$")
+LINTERS = re.compile(
+    r"^\.(?:eslintrc|prettierrc|stylelintrc)(?:\..*)?$|^(?:eslint|prettier|stylelint)\.config\.\w+$"
+    r"|^\.yamllint(?:\.ya?ml)?$|^\.markdownlint(?:-cli2)?\.(?:jsonc?|ya?ml|[cm]js)$"
+)
 TABLES = ("ruff", "mypy", "pyright", "pylint", "flake8", "isort", "black")
 SECTIONS = ("flake8", "mypy", "isort", "pycodestyle")
 KEYS = ("eslintConfig", "prettier", "stylelint", "lint-staged", "husky")
