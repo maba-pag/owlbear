@@ -94,8 +94,12 @@ def _invoked(command: Sequence[str]) -> str:
 
 
 def _scripts(scripts: dict, commands: Sequence[Sequence[str]], prefixes: tuple[str, ...]) -> dict:
+    """The lint entries, those the confirmed commands run, and every entry one of them names in its own command."""
     invoked = {_invoked(command) for command in commands if command}
-    return {k: v for k, v in scripts.items() if k.startswith(prefixes) or k in invoked}
+    chosen = {k for k in scripts if k.startswith(prefixes) or k in invoked}
+    while more := {k for k in scripts if k not in chosen and any(k in str(scripts[c]).split() for c in chosen)}:
+        chosen |= more
+    return {k: v for k, v in scripts.items() if k in chosen}
 
 
 def _parts(path: str, text: str, commands: Sequence[Sequence[str]]) -> object:
