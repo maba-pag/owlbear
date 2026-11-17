@@ -20,7 +20,8 @@ from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import approvals, repair_copy, session_choice
-from owlbear_delivery_next.workflow_steps.step_repair import _apply as apply_repair, _proven as prove_repair
+from owlbear_delivery_next.workflow_steps.step_repair import _apply as apply_repair
+from owlbear_delivery_next.workflow_steps.step_repair import _proven as prove_repair
 
 from .test_approval_view import big
 from .test_change_page_view import opened
@@ -46,7 +47,8 @@ def project(change_repo: Path) -> tuple[Path, Change, str]:
     base = commit(change_repo, {"pyproject.toml": MANIFEST})
     worktree.git(change_repo, "branch", "-f", "main", base)
     c = Change(
-        slug="c1", names=Names(branch="owlbear/c1", target="main", worktree=str(change_repo)),
+        slug="c1",
+        names=Names(branch="owlbear/c1", target="main", worktree=str(change_repo)),
         brief=Brief(version=1, approved_version=1, challenged=1, scope=["."]),
         plan=Plan(tasks=[Task(id="t1", title="Build", scope=["."], base=base)]),
         step=Step(kind=StepKind.BUILD, task="t1", session="builder"),
@@ -56,9 +58,16 @@ def project(change_repo: Path) -> tuple[Path, Change, str]:
 
 def gate(path: Path, c: Change, since: str) -> Gate:
     cfg = sdk_adapter.Session(
-        kind=StepKind.BUILD, worktree=path, session_id="builder", message="Build", resume=False,
-        policy=Policy(path), observe=lambda: worktree.observe(path, c.names.target, since), checks=(),
-        lint_commands=COMMANDS, quality=lambda: quality.check(c, path, COMMANDS),
+        kind=StepKind.BUILD,
+        worktree=path,
+        session_id="builder",
+        message="Build",
+        resume=False,
+        policy=Policy(path),
+        observe=lambda: worktree.observe(path, c.names.target, since),
+        checks=(),
+        lint_commands=COMMANDS,
+        quality=lambda: quality.check(c, path, COMMANDS),
     )
     run = Run("builder", model_check="verified", termination=Termination(confirmed=True))
     return Gate(cfg, run, lambda **_e: None, lambda: None)
@@ -85,16 +94,21 @@ def test_dependency_only_is_accepted_but_configuration_needs_the_exact_approval(
     configuration = dependency.replace("100", "110")
     commit(path, {"pyproject.toml": configuration})
     refused, ok = submit(gate(path, c, base))
-    assert not ok and "pyproject.toml" in refused and "request_approval" in refused
+    assert not ok
+    assert "pyproject.toml" in refused
+    assert "request_approval" in refused
     c, _ = request(path, c, base)
     q = c.questions[-1]
-    assert "-line-length = 100" in q.text and "+line-length = 110" in q.text and WHY in q.text
+    assert "-line-length = 100" in q.text
+    assert "+line-length = 110" in q.text
+    assert WHY in q.text
     c = loop.fold(c, [AnswerItem(question=q.id, option="approve", at=NOW)], NOW)
     assert answer_kinds.delivered_next(c).id == q.id
     store = Store(tmp_path / "store")
     store.write(Lock(c.slug), c)
     answered, _, _, resume = session_choice.opening(store, Lock(c.slug), c, c.plan.tasks[0])
-    assert resume and c.step.session == "builder"
+    assert resume
+    assert c.step.session == "builder"
     assert "Approve: resume the step" in step_answers.answer(answered)
     assert submit(gate(path, c, base))[1]
     commit(path, {"pyproject.toml": configuration.replace("110", "120")})
@@ -108,11 +122,15 @@ def test_configuration_still_refuses_after_the_five_lint_refusals(project, monke
     g = gate(path, c, base)
     for _ in range(lint.REFUSALS):
         text, ok = submit(g)
-        assert not ok and "lint: " in text
+        assert not ok
+        assert "lint: " in text
     assert g.run.invalid == 0
     text, ok = submit(g)
-    assert not ok and "configuration:" in text and "lint: " not in text
-    assert not g.done and g.run.invalid == 1
+    assert not ok
+    assert "configuration:" in text
+    assert "lint: " not in text
+    assert not g.done
+    assert g.run.invalid == 1
     assert not submit(g)[1]
 
 
@@ -129,7 +147,9 @@ def test_a_merged_target_update_in_the_builders_shared_file_needs_no_approval(pr
 
 @pytest.mark.parametrize("earlier_unapproved", [False, True])
 def test_an_approved_repair_covers_its_patch_but_not_earlier_unapproved_configuration(
-    project, tmp_path, earlier_unapproved,
+    project,
+    tmp_path,
+    earlier_unapproved,
 ) -> None:
     path, c, base = project
     if earlier_unapproved:
@@ -141,7 +161,8 @@ def test_an_approved_repair_covers_its_patch_but_not_earlier_unapproved_configur
     content = (at / "pyproject.toml").read_text()
     content = (
         content.replace("dependencies = []", 'dependencies = ["requests"]')
-        if earlier_unapproved else content.replace("100", "110")
+        if earlier_unapproved
+        else content.replace("100", "110")
     )
     (at / "pyproject.toml").write_text(content)
     if not earlier_unapproved:
@@ -166,14 +187,17 @@ def test_requests_refuse_unshowable_or_already_approved_changes_without_asking(p
     g = gate(path, c, base)
     g.call(approval_tools.REQUEST, {"why": WHY})
     result = approvals.requested(c, g.run, path, COMMANDS, session_result.to_result(g.run, StepKind.BUILD, NOW))
-    assert result.exit == Exit.RETRY and "no unapproved" in result.reason
+    assert result.exit == Exit.RETRY
+    assert "no unapproved" in result.reason
     for content in ("x" * (repair_copy.SHOWN + 1), b"\x00binary"):
         commit(path, {"lefthook.yml": content})
         g = gate(path, c, base)
         g.call(approval_tools.REQUEST, {"why": WHY})
         result = approvals.requested(c, g.run, path, COMMANDS, session_result.to_result(g.run, StepKind.BUILD, NOW))
-        assert result.exit == Exit.RETRY and "too long or binary" in result.reason
-        assert c.questions == [] and "request_approval:" in c.step.question_errors[0]
+        assert result.exit == Exit.RETRY
+        assert "too long or binary" in result.reason
+        assert c.questions == []
+        assert "request_approval:" in c.step.question_errors[0]
 
 
 @pytest.mark.browser
@@ -214,5 +238,6 @@ def test_configuration_question_shows_the_patch_and_resumes_after_the_answer(c1,
         expect(page.locator("section.act", has_text="Question q1")).to_have_count(0)
         expect(page.locator("#detail .status")).to_contain_text("starting builder")
         answered = store.read("c1-fixture").questions[-1]
-        assert answered.answer.option == "approve" and answered.delivered_at is None
+        assert answered.answer.option == "approve"
+        assert answered.delivered_at is None
         assert answered.id == q.id
