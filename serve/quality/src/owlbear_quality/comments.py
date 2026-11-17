@@ -8,7 +8,20 @@ import tokenize
 
 import yaml
 
-JS_TOKENS = re.compile(r""""(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|//[^\n]*|/\*.*?\*/""", re.DOTALL)
+# Quoted strings end on their line, so a lone quote in a regular expression cannot hide a later comment.
+JS_TOKENS = re.compile(r""""(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'|`(?:\\.|[^`\\])*`|//[^\n]*|/\*.*?\*/""", re.DOTALL)
+MARKUP = re.compile(r"<!--.*?-->", re.DOTALL)
+
+
+def _lines(source: str, pattern: re.Pattern[str], openers: tuple[str, ...]) -> dict[int, str]:
+    """Each line's comment text; several comments on one line are kept together."""
+    found: dict[int, str] = {}
+    for match in pattern.finditer(source):
+        if match[0].startswith(openers):
+            first = source.count("\n", 0, match.start()) + 1
+            for number, text in enumerate(match[0].splitlines(), first):
+                found[number] = f"{found[number]} {text}" if number in found else text
+    return found
 
 
 def python(source: str) -> tuple[dict[int, str], list[tuple[int, int]]]:
@@ -67,16 +80,7 @@ def comments(path: str, source: str) -> tuple[dict[int, str], list[tuple[int, in
     if path.endswith((".yml", ".yaml")):
         return _yaml(source), []
     if path.endswith((".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".css")):
-        found = {}
-        for match in JS_TOKENS.finditer(source):
-            if match[0].startswith(("//", "/*")):
-                first = source.count("\n", 0, match.start()) + 1
-                found.update(enumerate(match[0].splitlines(), first))
-        return found, []
+        return _lines(source, JS_TOKENS, ("//", "/*")), []
     if path.endswith((".md", ".html")):
-        found = {}
-        for match in re.finditer(r"<!--.*?-->", source, re.DOTALL):
-            first = source.count("\n", 0, match.start()) + 1
-            found.update(enumerate(match[0].splitlines(), first))
-        return found, []
+        return _lines(source, MARKUP, ("<!--",)), []
     return dict(enumerate(source.splitlines(), 1)), []
