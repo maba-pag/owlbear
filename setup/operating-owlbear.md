@@ -496,6 +496,11 @@ The `lint` profile value accepts one command per line, parsed into arguments wit
 from the repository root with changed files appended. Only owner-confirmed commands count; without one, Delivery
 keeps discovering configured Ruff, Biome and ESLint tools. The existing time budgets and five-refusal limit stay.
 
+A build that changes lint, format, CI or hook configuration is refused until you approve the exact protected
+change. The builder calls `request_approval` with its reason. Changes shows the whole patch and offers Approve,
+Decline (resume and take it back), or Pause. An edit after approval needs approval again. This gate has no lint
+refusal allowance; target updates already merged into the Change do not ask for approval.
+
 Run `owlbear quality lint [--base REF]` by hand without the host. It includes committed, staged, working and
 untracked changes against the merge-base with `REF`, defaulting to the profile's target branch. It prints each
 linter's result and exits 1 for problems or 2 when a tool cannot run.

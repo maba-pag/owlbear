@@ -1,7 +1,6 @@
 """The findings loop's repair chances (TD-123, TD-175): the producing session repairs once; a fresh one is told."""
 
 import asyncio
-
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path

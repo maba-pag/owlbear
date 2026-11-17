@@ -24,7 +24,9 @@ def cause(digest: str) -> str:
 def approved(c: Change, digest: str) -> bool:
     """An explicit Approve answer or an applied, owner-approved repair covers this digest only."""
     return any(
-        q.cause == cause(digest) and q.answer is not None and q.answer.option == "approve"
+        q.cause == cause(digest)
+        and q.answer is not None
+        and q.answer.option == "approve"
         and q.answer.superseded_at is None
         for q in c.questions
     ) or any(r.approved_configuration == digest for r in c.repairs.done)
@@ -44,6 +46,8 @@ def check(c: Change, path: Path, commands: tuple[tuple[str, ...], ...] = ()) -> 
     if found is None or approved(c, found.digest):
         return []
     return [
-        f"configuration: {', '.join(found.paths)} changes lint, format, CI or hook configuration without the "
-        "owner's approval. Call request_approval with why this change is needed, or take it back and commit."
+        (
+            f"configuration: {', '.join(found.paths)} changes lint, format, CI or hook configuration without the "
+            "owner's approval. Call request_approval with why this change is needed, or take it back and commit."
+        )
     ]

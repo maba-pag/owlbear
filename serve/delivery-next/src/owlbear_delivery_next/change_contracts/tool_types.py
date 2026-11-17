@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-from pydantic.fields import FieldInfo
+
+if TYPE_CHECKING:
+    from pydantic.fields import FieldInfo
+
 
 class Args(BaseModel):
     """Strict tool arguments: unknown fields are an error the agent sees."""
@@ -27,4 +30,3 @@ class Spec:
     description: str
     model: type[Args]
     ending: Literal["result", "ask", "premise", "missing-tool"]
-

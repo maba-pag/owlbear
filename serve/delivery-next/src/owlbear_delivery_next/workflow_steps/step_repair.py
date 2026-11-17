@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import tomllib
 from datetime import UTC, datetime
-from pathlib import Path
 from traceback import format_exception_only
 from typing import TYPE_CHECKING
 
@@ -42,9 +41,12 @@ from owlbear_delivery_next.workflow_steps import (
     repair_messages,
     sessions,
 )
-from owlbear_delivery_next.workflow_steps.repair_scope import hold as _check_hold, in_scope as _in_scope, named as _named
+from owlbear_delivery_next.workflow_steps.repair_scope import hold as _check_hold
+from owlbear_delivery_next.workflow_steps.repair_scope import in_scope as _in_scope
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.change_contracts.repair_records import Repair
     from owlbear_delivery_next.runtimes.session_result import Run
@@ -253,7 +255,8 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
     protected_paths = protected_change.paths if protected_change else ()
     r.held = [
         f"changes {p}, configuration that is yours"
-        for p in r.paths if check_weakening.configured(p) or p in protected_paths
+        for p in r.paths
+        if check_weakening.configured(p) or p in protected_paths
     ]
     r.held += [f"makes {p} a link or submodule" for p, how in changed if how.split()[0] in check_weakening.LINKS]
     r.held += [
@@ -383,8 +386,6 @@ def _resolved_witness(change: Change, prof: Profile, source: Path) -> tuple[str,
 
 def _installs(change: Change, prof: Profile) -> tuple[str, ...]:
     return tuple(check_hint.qualified(p, c) for p, c in worktree.installs(prof, change.brief.scope or ["."]))
-
-
 
 
 def _ran(at: Path, commands: tuple[str, ...], within: float, store: Store, lock: Lock) -> Witness:

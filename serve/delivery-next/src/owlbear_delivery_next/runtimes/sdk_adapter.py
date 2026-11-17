@@ -29,6 +29,7 @@ from owlbear_delivery_next.runtimes import (
     lessons,
     sdk_spend,
     sdk_teardown,
+    session_config,
     spotter_act,
     step_budget,
     step_decisions,
@@ -41,7 +42,6 @@ from owlbear_delivery_next.runtimes.command_marks import opened as session_optio
 from owlbear_delivery_next.runtimes.copilot_cli import cli_path
 from owlbear_delivery_next.runtimes.model_choices import takes_effort
 from owlbear_delivery_next.runtimes.results import Gate
-from owlbear_delivery_next.runtimes.session_config import Journal as Journal, Session as Session
 from owlbear_delivery_next.runtimes.sdk_teardown import CALL
 from owlbear_delivery_next.runtimes.sdk_teardown import call as _call
 from owlbear_delivery_next.runtimes.sdk_usage import USAGE_PAUSE, unexpected_models, unproven, unread, usage_read
@@ -49,12 +49,12 @@ from owlbear_delivery_next.runtimes.session_result import PROVEN, Run, limit_rea
 from owlbear_delivery_next.runtimes.step_tools import StepTools
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from copilot.session import CopilotSession
 
-    from owlbear_delivery_next.local_system.processes import Pids
     from owlbear_delivery_next.runtimes.session_result import Ending
+
+Journal = session_config.Journal
+Session = session_config.Session
 
 DEADLINES = {StepKind.PLAN: 1800.0, StepKind.BUILD: 2400.0, StepKind.REVIEW: 1200.0, StepKind.CHECK: 1800.0}  # TD-286
 ROLES = {StepKind.PLAN: "planner", StepKind.BUILD: "builder", StepKind.REVIEW: "reviewer", StepKind.CHECK: "preparer"}
@@ -79,8 +79,6 @@ def agent(kind: StepKind, *, ui: bool = False, role: str = "", judging: bool = F
 def role_of(cfg: Session) -> str:
     """The session's agent role: its own, else its step kind's."""
     return cfg.role or ROLES[cfg.kind]
-
-
 
 
 class _Step(StepTools):

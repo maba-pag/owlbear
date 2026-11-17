@@ -68,5 +68,5 @@ def _split(check: str) -> tuple[str | None, str]:
 
 
 def in_scope(change: Change, path: str) -> bool:
+    """Whether the brief permits the repair to edit this repository-relative path."""
     return not change.brief.scope or any(evidence.within(s, path) for s in change.brief.scope)
-

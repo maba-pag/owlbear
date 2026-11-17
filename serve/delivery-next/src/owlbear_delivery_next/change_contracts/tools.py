@@ -9,10 +9,19 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field
 
-from owlbear_delivery_next.change_contracts import approval_tools, build_tools, check_hint, question_tools
-from owlbear_delivery_next.change_contracts.option_records import OptionAction
-from owlbear_delivery_next.change_contracts.tool_types import Args as Args, Spec as Spec, bounded as bounded
+from owlbear_delivery_next.change_contracts import (
+    approval_tools,
+    build_tools,
+    check_hint,
+    option_records,
+    question_tools,
+    tool_types,
+)
 
+Args = tool_types.Args
+Spec = tool_types.Spec
+bounded = tool_types.bounded
+OptionAction = option_records.OptionAction
 _f = bounded
 
 if TYPE_CHECKING:
@@ -330,8 +339,6 @@ def check_plan(
             if relative(p) and not within(p, scope)
         ]
     return errors
-
-
 
 
 SUBMIT = Spec(

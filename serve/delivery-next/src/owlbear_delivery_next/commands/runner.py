@@ -101,8 +101,6 @@ TARGET = ("target", StepKind.BUILD, Exit.BACK)  # a builder's accepted target pr
 type Result = loop.StepResult
 
 
-
-
 ENGINE: dict[StepKind, engine.Step] = {
     StepKind.SHAPE: worker_input.shaping,
     StepKind.PUBLISH: publish.run,

@@ -6,18 +6,17 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import tools, user_config
-from owlbear_delivery_next.change_contracts.models import StepKind
-from owlbear_delivery_next.local_system import pds_skill
-from owlbear_delivery_next.runtimes import watch_feed
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from owlbear_delivery_next.change_contracts.models import ItemRef
+    from owlbear_delivery_next.change_contracts.models import ItemRef, StepKind
     from owlbear_delivery_next.change_contracts.permissions import Policy
     from owlbear_delivery_next.change_contracts.preparation import Preparing
+    from owlbear_delivery_next.local_system import pds_skill
     from owlbear_delivery_next.local_system.processes import Pids
+    from owlbear_delivery_next.runtimes import watch_feed
 
 
 @dataclass(frozen=True)
@@ -79,4 +78,3 @@ class Session:
     helpers: tuple[tuple[tools.Spec, Callable[[tools.Args], str]], ...] = ()  # Delivery tools that answer, not end
     preparing: Preparing | None = None  # check preparation: the declared options a recipe is validated against
     watch: watch_feed.Watching | None = None  # a Change-owned session's watcher; None when the master switch is off
-

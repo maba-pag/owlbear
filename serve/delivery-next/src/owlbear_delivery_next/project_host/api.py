@@ -61,7 +61,7 @@ from owlbear_delivery_next.state_store import spend_ledger, tool_metrics, watch_
 from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
 from owlbear_delivery_next.state_store.database import DIAGNOSTIC_EVENTS
 from owlbear_delivery_next.state_store.store import StoreError
-from owlbear_delivery_next.workflow_steps import captures, check, decision, held, visual
+from owlbear_delivery_next.workflow_steps import approvals, captures, check, decision, held, visual
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -366,9 +366,11 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         merge = offer(c, events)
         q = loop.open_question(c) if not merge else None
         q = q.model_copy(update={"options": held.offered(store, c, q)}) if q else None
-        shown = q and q.model_dump(mode="json", include={"id", "text", "cause", "options"}) | answers.shown(q, events)
-        if q and shown and (r := c.repairs.current) and r.phase == "asked" and r.question == q.id and r.fix == "patch":
-            shown |= {"text": q.text.removesuffix(f"\n\nThe fix:\n{r.diff}"), "diff": r.diff}
+        shown = q and (
+            q.model_dump(mode="json", include={"id", "text", "cause", "options"})
+            | answers.shown(q, events)
+            | approvals.presentation(q, c.repairs.current)
+        )
         waiting = o and o.exit == Exit.PENDING and o.waiting == Waiting.PERSON_CHECK and o.who == "you"
         unread = q and q.cause == failures.cause_key(ErrorKind.STATE, q.step, failures.READ_ONLY_UNREAD)
         checks = [

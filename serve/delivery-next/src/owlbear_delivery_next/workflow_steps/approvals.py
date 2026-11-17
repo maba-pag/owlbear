@@ -18,7 +18,9 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.runtimes.session_result import Run
 
 
-def requested(c: Change, run: Run, path: Path, commands: tuple[tuple[str, ...], ...], result: loop.StepResult) -> loop.StepResult:
+def requested(
+    c: Change, run: Run, path: Path, commands: tuple[tuple[str, ...], ...], result: loop.StepResult
+) -> loop.StepResult:
     """Compose only after the runtime's process and model checks allowed the request to reach the engine."""
     marker = cause_key(ErrorKind.RESULT, c.step.kind, approval_tools.LABEL)
     if result.cause != marker or not isinstance(run.payload, approval_tools.RequestApproval):
@@ -29,7 +31,9 @@ def requested(c: Change, run: Run, path: Path, commands: tuple[tuple[str, ...], 
         return _refused(c, marker, "There is no unapproved protected configuration change to approve.")
     diff, cut = repair_copy.shown(path, base, head, list(found.paths))
     if cut:
-        return _refused(c, marker, "The configuration change is too long or binary to show whole; approval was not asked.")
+        return _refused(
+            c, marker, "The configuration change is too long or binary to show whole; approval was not asked."
+        )
     text = (
         "Approve this Change's lint, format, CI or hook configuration change?\n\n"
         f"Changed files: {', '.join(found.paths)}\n\nWhy the worker needs it: {run.payload.why}"

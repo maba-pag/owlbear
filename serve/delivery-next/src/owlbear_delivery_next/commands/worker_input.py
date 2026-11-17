@@ -44,4 +44,3 @@ def shaping(_ctx: engine.Ctx, c: Change) -> tuple[Change, loop.StepResult]:
     """Shaping happens in chat; the step waits for a revised brief and its approval."""
     why = c.outcome.reason if c.outcome else f"brief v{c.brief.version} is not approved for planning"
     return c, engine.pending(Waiting.CHAT, f"brief needs a change: {why} · revise in chat, then approve", None, "you")
-
