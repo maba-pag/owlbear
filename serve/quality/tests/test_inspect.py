@@ -60,6 +60,8 @@ def test_protected_compares_parsed_tables_and_invoked_scripts_not_dependencies(t
             ".yamllint": "rules: {}\n",
             "setup.cfg": "[mypy-app.*]\nignore_errors = True\n",
             "package.json": '{"scripts": null}',
+            "mypy.ini": "[mypy]\nignore_errors = True\n",
+            "hook.sh": "echo checked\n",
         },
     )
     evidence = protected(git, tmp_path, deps, changed, (("uv", "run", "scan"),))
@@ -68,6 +70,8 @@ def test_protected_compares_parsed_tables_and_invoked_scripts_not_dependencies(t
         ".github/workflows/check.yml",
         ".husky/pre-commit",
         ".yamllint",
+        "hook.sh",
+        "mypy.ini",
         "package.json",
         "pyproject.toml",
         "setup.cfg",
@@ -77,6 +81,8 @@ def test_protected_compares_parsed_tables_and_invoked_scripts_not_dependencies(t
     assert all(text in evidence.text for text in ("tool.ruff", "project.scripts", "app:old", "app:new"))
     further = commit(tmp_path, {".github/workflows/check.yml": "name: changed\n"})
     assert protected(git, tmp_path, deps, further).digest != evidence.digest
+    retargeted = commit(tmp_path, {"hook.sh": "echo skipped\n"})  # the link itself is unchanged
+    assert protected(git, tmp_path, further, retargeted).paths == (".husky/pre-commit", "hook.sh")
 
 
 def test_inventory_scope_and_added_copies_come_from_commits(tmp_path: Path) -> None:
