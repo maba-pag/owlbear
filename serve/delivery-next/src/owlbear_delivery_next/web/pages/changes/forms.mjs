@@ -326,8 +326,8 @@ export function restartButton(d) {
 
 // A notice's action: a button in its text, since the notice's own action button cannot show a send's checkmark.
 function noteAction(label, onclick) {
-  return html`<div class="note-action">${button(label, onclick, { variant: "secondary", icon: "refresh", aria: DIALOG })}
-    </div>`;
+  const control = button(label, onclick, { variant: "secondary", icon: "refresh", aria: DIALOG });
+  return html`<div class="note-action">${control}</div>`;
 }
 
 export function pullbackNote(p, d) {

@@ -159,4 +159,3 @@ class Look extends Directive {
   }
 }
 export const control = directive(Look);
-
