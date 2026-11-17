@@ -182,7 +182,7 @@ def test_an_approved_repair_covers_its_patch_but_not_earlier_unapproved_configur
     assert submit(gate(path, c, base))[1] is not earlier_unapproved
 
 
-def test_requests_refuse_unshowable_or_already_approved_changes_without_asking(project) -> None:
+def test_requests_refuse_empty_or_unshowable_changes_without_asking(project) -> None:
     path, c, base = project
     g = gate(path, c, base)
     g.call(approval_tools.REQUEST, {"why": WHY})
@@ -229,7 +229,11 @@ def test_configuration_question_shows_the_patch_and_resumes_after_the_answer(c1,
         expect(primary).to_have_text("Answer")
         big(primary)
         measure = form.locator(".configuration-question")
-        assert measure.evaluate("e => e.getBoundingClientRect().width <= parseFloat(getComputedStyle(e).fontSize) * 75")
+        assert measure.evaluate("""e => {
+            const context = document.createElement('canvas').getContext('2d');
+            context.font = getComputedStyle(e).font;
+            return e.getBoundingClientRect().width <= context.measureText('0'.repeat(75)).width + 1;
+        }""")
         form.get_by_label("Approve:", exact=False).check()
         with page.expect_response(lambda r: r.request.method == "POST" and r.url.split("?")[0].endswith("/answers")):
             form.get_by_role("button", name="Answer").click()
