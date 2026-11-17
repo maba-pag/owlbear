@@ -74,10 +74,12 @@ def accept_repair(c: Change, path: Path, folder: Path, span: tuple[str, str]) ->
         exception_gate.accept(c, folder, span[1], items)
 
 
-def record_answers(c: Change, folder: Path) -> None:
+def record_answers(c: Change, folder: Path, previous: Change) -> None:
     """Record an owner's suppression approval as soon as the answered question is persisted."""
+    already = {q.id for q in previous.questions if q.answer and q.answer.option == "approve"}
     if not any(
-        q.cause
+        q.id not in already
+        and q.cause
         and ":suppressions-" in q.cause
         and q.answer
         and q.answer.option == "approve"

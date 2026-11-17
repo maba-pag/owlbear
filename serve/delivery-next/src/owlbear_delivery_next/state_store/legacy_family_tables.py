@@ -20,7 +20,7 @@ CURRENT_MODULES = (
     ("commands/dispatch.py", "8af7e2e296eae5cd7a70dd441af65472745988da535b558121d8ab3ccbc3851c"),
     ("commands/mcp_server.py", "fd9a1493aecfca728ecc48971d4cac79809d9bd5b0e6259a37caac03991f5a8b"),
     ("commands/project_commands.py", "3d6f564adaa5ba2906e224a09434beca22d9c7d4de37f76c7b6a5cd6b1ba9415"),
-    ("commands/runner.py", "7ec1df35d3ac11e939fe04464fe753bb198f6024f76796b1b787773afe67ffd3"),
+    ("commands/runner.py", "d2cb84751e7100f3856468e42e3b181530e3ac71b6a147c66fb362a822fbe73d"),
     ("commands/setup.py", "f539fb4d2b44c53abace17715eec2c7f4ddb563a0a2c596b05dace427056c267"),
     ("local_system/data_place.py", "cb0055fe9256259e85b9cb595f0ba23a159499519709dff1d97fde66eeec0e69"),
     ("local_system/data_repo.py", "2dfd592b00d130405686a6ff186e16cb0c0bd44b83086ad9bd55721a13ab9d38"),
@@ -49,5 +49,5 @@ CURRENT_MODULES = (
     ("state_store/project_home.py", "09b8175a64ade927a3a78ad786c6abab3bb7a2962ea5d8842ec681a35d725982"),
     ("state_store/project_move.py", "df85983badd83d2d857ec877865faf449ba9eb0d866321877ad1ae6d01a7f19e"),
     ("state_store/project_switch.py", "a33aa43982231c62d593202ba68dbcabc029829e324022d712a39b21777385e7"),
-    ("state_store/store.py", "100ee5e0adf7acadce839e7c7e6ef2be2d9600cad68afde3868bcfde63c131f6"),
+    ("state_store/store.py", "3d530c3a571c3afa7a8d8133f36572bae70e3bf0c6da623e9e8bf14dadf3fa2f"),
 )

@@ -7,6 +7,7 @@ import json
 from typing import TYPE_CHECKING
 
 from owlbear_quality.inspect import configured
+from owlbear_quality.protected import lint_file
 
 from owlbear_delivery_next.state_store import spend_ledger
 from owlbear_delivery_next.workflow_steps import exceptions, sessions
@@ -36,7 +37,13 @@ def items(path: Path, change: Protected) -> list[dict]:
                 {"identity": item.identity, "place": f"{item.path} {item.table}".strip(), "content": item.content}
             )
     for name, delta in changes.items():
+        if not lint_file(name):
+            continue
         old, new = delta["before"], delta["after"]
+        if not any(item["place"].split(" ", 1)[0] == name for item in found) and (new is None or "symlink" in new):
+            content = json.dumps(delta, sort_keys=True, indent=2)
+            identity = hashlib.sha256(json.dumps([name, content]).encode()).hexdigest()
+            found.append({"identity": identity, "place": name, "content": content})
         previous = old.get("content") if old else None
         current = new.get("content") if new else None
         if not isinstance(previous, dict):
@@ -61,7 +68,9 @@ class Advice:
         if not selected:
             return ""
         context = exceptions.authority(self.store, c) | {"for": c.slug, "commit": commit}
-        where = spend_ledger.where() or spend_ledger.Where.of(self.store, job=exceptions.JOB)
+        where = spend_ledger.where()
+        if not where.project:
+            where = spend_ledger.Where.of(self.store, change=c.slug, step=str(c.step.kind), job=exceptions.JOB)
         lines = ["\n\nQuality judge's advice (your approval is still required):"]
         for start in range(0, len(selected), exceptions.LIMIT):
             said, done = exceptions.judge(self.store, path, selected[start : start + exceptions.LIMIT], where, context)

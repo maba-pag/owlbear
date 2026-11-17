@@ -197,6 +197,17 @@ class Configuration:
     table: str
     content: str
     identity: str
+    digest: str
+
+
+def lint_file(path: str) -> bool:
+    """Whether a protected path configures lint rather than only CI or hooks."""
+    return (
+        _protected(path)
+        and not path.startswith(".github/workflows/")
+        and not any(p in {".husky", ".githooks"} for p in PurePosixPath(path).parts)
+        and PurePosixPath(path).name != "lefthook.yml"
+    )
 
 
 def configured(root: Path) -> list[Configuration]:
@@ -207,11 +218,7 @@ def configured(root: Path) -> list[Configuration]:
         for name in sorted(names):
             file = folder / name
             path = file.relative_to(root).as_posix()
-            if not file.is_file() or file.is_symlink() or not _protected(path):
-                continue
-            if path.startswith(".github/workflows/") or any(p in {".husky", ".githooks"} for p in file.parts):
-                continue
-            if name == "lefthook.yml":
+            if not file.is_file() or file.is_symlink() or not lint_file(path):
                 continue
             text = file.read_text(encoding="utf-8")
             parts = _parts(path, text, ())
@@ -219,5 +226,5 @@ def configured(root: Path) -> list[Configuration]:
             for table, data in tables.items():
                 content = json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False) if table else data
                 digest = hashlib.sha256(json.dumps([path, table, content]).encode()).hexdigest()
-                found.append(Configuration(path, table, content, digest))
+                found.append(Configuration(path, table, content, digest, hashlib.sha256(content.encode()).hexdigest()))
     return found

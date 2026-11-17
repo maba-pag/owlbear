@@ -24,15 +24,18 @@ def _locked(root: Path) -> Iterator[dict[str, list[dict]]]:
         fcntl.flock(lock, fcntl.LOCK_EX)
         path = root / FILE
         lock.seek(0)
-        if not path.exists() and not lock.read():
+        initialized = bool(lock.read())
+        if not path.exists() and not initialized:
             _write(path, {})
-            lock.write("initialized\n")
-            lock.flush()
         try:
             rows = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             msg = f"Exception ledger {path} could not be read: {exc}"
             raise RuntimeError(msg) from exc
+        if not initialized:
+            lock.write("initialized\n")
+            lock.flush()
+            os.fsync(lock.fileno())
         yield rows
 
 

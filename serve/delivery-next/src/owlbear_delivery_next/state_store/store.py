@@ -466,7 +466,7 @@ class Store:
             db.executemany("DELETE FROM inbox WHERE id = ?", [(row[0],) for row in rows])
             for event in events:
                 append_activity(db, slug, json.dumps(event, default=str, sort_keys=True), ACTIVITY_LIMIT)
-        quality.record_answers(change, self.root)
+        quality.record_answers(change, self.root, before)
         return change, step
 
     def events(self, slug: str) -> list[dict[str, Any]]:

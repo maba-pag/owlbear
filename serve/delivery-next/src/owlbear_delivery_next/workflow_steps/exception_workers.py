@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
 
 from owlbear_quality import ledger
@@ -56,10 +55,13 @@ class Asked(lookup.Asked):
 
     def __init__(self, store: Store, lock: Lock, current: Callable[[], Change], root: Path) -> None:
         """Bind host-owned Change, checkout and spend location, never agent-supplied identity."""
-        place = spend_ledger.where() or spend_ledger.Where.of(store, job=exceptions.JOB)
+        place = spend_ledger.where()
+        if not place.project:
+            change = current()
+            place = spend_ledger.Where.of(store, change=change.slug, step=str(change.step.kind), job=exceptions.JOB)
         super().__init__(store, lock, current, answer=lambda _: worker(store, current(), root, place))
         self.label = exceptions.JOB
 
     def helper(self) -> tuple[tools.Spec, Callable[[tools.Args], str]]:
         """No arguments: all items and identities come from committed Git trees."""
-        return exception_tools.HELPER, lambda args: json.dumps(json.loads(self(args)))
+        return exception_tools.HELPER, self

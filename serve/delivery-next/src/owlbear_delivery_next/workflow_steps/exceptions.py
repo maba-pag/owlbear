@@ -15,7 +15,9 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.runtimes import loop_owner, sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
+from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store import decision_store, spend_ledger
+from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import decisions_gate, lookup, sessions
 
 if TYPE_CHECKING:
@@ -106,7 +108,7 @@ def judge(
             for n, item in enumerate(items, 1)
         ]
         ledger.add(store.root, rows)
-    except (OSError, ValueError, RuntimeError) as exc:
+    except (OSError, ValueError, RuntimeError, StoreError, SettingsUnset, sessions.SessionGrantError) as exc:
         return {"failed": failure(exc)}, done
     finally:
         shutil.rmtree(folder)

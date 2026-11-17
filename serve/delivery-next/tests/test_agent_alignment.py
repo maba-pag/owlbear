@@ -55,7 +55,12 @@ CHAT_TOOLS |= {"start_code_audit"}  # project maintenance from a lead chat, not 
 WINDOW_TOOLS = {"ask_user"}  # a window chat's structured question (live probe, TD-109)
 VOCABULARY = SDK_TOOLS | MEMORY_TOOLS | CURATOR_TOOLS | CHAT_TOOLS | WINDOW_TOOLS | {s.name for s in tools.SPECS}
 VOCABULARY |= {tools.FIRST_LOOK, tools.SCAN_DESIGN, tools.LOOKUP} | COPILOT_MEMORY
-VOCABULARY |= {project_audit_tools.SET_TARGET.name, repair_tools.PROGRESS.name, approval_tools.REQUEST.name, "judge_exceptions"}
+VOCABULARY |= {
+    project_audit_tools.SET_TARGET.name,
+    repair_tools.PROGRESS.name,
+    approval_tools.REQUEST.name,
+    "judge_exceptions",
+}
 ALIASES = (f"{preload.MEMORY}/", f"{setup.SERVER}/")  # a server's tool is named bare or as <server>/<tool>
 SHAPER_TOOLS = [  # the names a window chat's agent file grants, each verified live (TD-109)
     *("view", "glob", "grep", "web_fetch", "ask_user", "owlbear-memory/recall_memory", "owlbear-memory/save_memory"),
@@ -164,7 +169,8 @@ def test_judges_are_never_offered_or_told_of_a_question() -> None:
             "curator",
             "auditor",
             "project-auditor",
-            "audit-verifier", "quality-judge",
+            "audit-verifier",
+            "quality-judge",
             "repairer",
         }
         assert asks == (role not in never), role
