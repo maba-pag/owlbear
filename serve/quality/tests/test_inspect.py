@@ -83,6 +83,16 @@ def test_protected_compares_parsed_tables_and_invoked_scripts_not_dependencies(t
     assert protected(git, tmp_path, deps, further).digest != evidence.digest
     retargeted = commit(tmp_path, {"hook.sh": "echo skipped\n"})  # the link itself is unchanged
     assert protected(git, tmp_path, further, retargeted).paths == (".husky/pre-commit", "hook.sh")
+    (tmp_path / "hook.sh").chmod(0o755)
+    assert protected(git, tmp_path, retargeted, commit(tmp_path, {})).paths == (".husky/pre-commit", "hook.sh")
+    nested = '{"scripts": {"lint": "npm run check:eslint --", "check:eslint": "%s", "build": "tsc"}}'
+    scripts = commit(tmp_path, {"package.json": nested % "eslint .", ".ecrc": "{}"})
+    off = commit(tmp_path, {"package.json": (nested % "true").replace("tsc", "tsc -b")})
+    evidence = protected(git, tmp_path, scripts, off)
+    assert evidence.paths == ("package.json",)
+    assert "check:eslint" in evidence.text  # the script the lint script runs
+    assert "tsc" not in evidence.text
+    assert ".ecrc" in protected(git, tmp_path, retargeted, scripts).paths
 
 
 def test_inventory_scope_and_added_copies_come_from_commits(tmp_path: Path) -> None:

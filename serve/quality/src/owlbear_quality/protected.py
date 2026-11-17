@@ -135,11 +135,11 @@ def _protected(path: str) -> bool:
     )
 
 
-def _target(path: str, link: str, tree: dict[str, tuple[str, str]]) -> tuple[str, str] | None:
-    """The tracked regular file a protected link names inside the repository, with its blob, if there is one."""
+def _target(path: str, link: str, tree: dict[str, tuple[str, str]]) -> tuple[str, str, str] | None:
+    """The tracked regular file a protected link names inside the repository: its path, mode and blob."""
     at = posixpath.normpath(posixpath.join(posixpath.dirname(path), link))
     entry = tree.get(at)
-    return (at, entry[1]) if entry and entry[0] in {"100644", "100755"} else None
+    return (at, *entry) if entry and entry[0] in {"100644", "100755"} else None
 
 
 def _content(
@@ -151,8 +151,9 @@ def _content(
     mode, oid = entry
     source = trees.blob(run, repo, oid)
     if mode == "120000":  # the link is configuration, and so is the tracked file it names
-        aim = _target(path, source, tree)
-        return {"symlink": source, "target": trees.blob(run, repo, aim[1]) if aim else None}
+        aim = _target(path, source, tree)  # a hook runs only while its target is executable: the mode counts
+        named = {"mode": aim[1], "content": trees.blob(run, repo, aim[2])} if aim else None
+        return {"symlink": source, "target": named}
     try:
         data = _parts(path, source, commands)
     except tomllib.TOMLDecodeError, json.JSONDecodeError, configparser.Error, AttributeError, TypeError:
