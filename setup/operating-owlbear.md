@@ -185,7 +185,11 @@ writing or paying. `owlbear improvement retro run --change PROJECT/SLUG --repair
 rejudging. Originals remain in the append-only grade history. Until corrected, they show **Awaiting evidence
 correction** and count toward no current grade or proposal. Corrections preserve logical references and do not
 double count. This run only rejudges; it does not propose lessons or start the Spotter experiment. Each run keeps
-the configured credit limit. If it stops early, remaining grades stay pending until another explicit request.
+the configured credit limit. Registered grades left pending are picked up by later idle runs when
+`retro_when_idle` allows them, before ordinary chat reviews. Each run uses the same configured per-run limit
+and normal idle admission; no further repair request is needed.
+If a paid run corrects no grades, its result reports an automatic correction hold. That cohort waits for an
+explicit `--repair-grades` request instead of repeatedly spending without progress.
 Captures needed by pending corrections remain pinned until those corrections finish.
 Existing case proposals backed by those grades cannot be accepted or applied on their old review. An ordinary
 Retro proposal pass can refresh a still-open case proposal for review against the corrected grade.
