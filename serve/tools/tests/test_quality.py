@@ -394,3 +394,24 @@ def test_text_check_prints_an_unreadable_file_with_its_whole_error(
         format_eof()
 
     assert capsys.readouterr().out == f"{path}: unable to read: OSError: {error}\n"
+
+
+def test_quality_files_are_check_only_and_reach_hooks_and_biome() -> None:
+    paths = ["README.md", "package.json"]
+    with (
+        patch.object(sys, "argv", ["quality", "--no-fix", "--files", *paths]),
+        patch("owlbear_tools.quality_runtime.subprocess.call", return_value=0) as call,
+        patch("owlbear_tools.quality.run_todo", return_value=0) as todo,
+        pytest.raises(SystemExit, match="0"),
+    ):
+        quality()
+    commands = [item.args[0] for item in call.call_args_list]
+    hooks = [c for c in commands if c[0] == "pre-commit"]
+    assert hooks
+    assert all(c[-3:] == ["--files", *paths] for c in hooks)
+    assert not any(c[2].endswith("-fix") for c in hooks)
+    biome = [c for c in commands if c[0] == "node"]
+    assert [c[2:] for c in biome] == [[mode, *paths, "--no-errors-on-unmatched"] for mode in ("format", "check")]
+    todo.assert_called_once_with()
+    with patch.object(sys, "argv", ["quality", "--files", *paths]), pytest.raises(SystemExit, match="2"):
+        quality()
