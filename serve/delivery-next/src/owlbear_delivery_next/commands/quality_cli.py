@@ -35,9 +35,11 @@ def run(repo: Path, prof: Profile, base: str = "") -> int:
         ref = base or worktree.tracking(root, target)
         paths = changed(root, ref)
         linters, skipped = runner.plan(root, paths, profile.lint_commands(prof))
+        result = 0
         for reason in skipped:
             sys.stdout.write(f"skipped: {reason}\n")
-        result = 0
+            if "no configuration" not in reason:  # a configured tool that cannot run is no pass
+                result = 2
         for linter in linters:
             out = runner.run(root, linter)
             sys.stdout.write(f"{linter.name}: {out.state}" + (f" ({out.reason})" if out.reason else "") + "\n")
