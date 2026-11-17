@@ -106,7 +106,7 @@ def _parts(path: str, text: str, commands: Sequence[Sequence[str]]) -> object:
     if name in {"setup.cfg", "tox.ini"}:
         parser = configparser.ConfigParser(interpolation=None)
         parser.read_string(text)
-        return {s: dict(parser[s]) for s in SECTIONS if parser.has_section(s)}
+        return {s: dict(parser[s]) for s in parser.sections() if s in SECTIONS or s.startswith("mypy-")}
     return text
 
 
