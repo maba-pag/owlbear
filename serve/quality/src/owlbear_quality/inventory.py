@@ -163,17 +163,17 @@ def inventory(root: Path, paths: Iterable[str]) -> list[Directive]:
     ]
 
 
-def _at(repo: Path, tree: dict[str, str], paths: set[str]) -> list[Directive]:
-    return [d for path, oid in tree.items() if path in paths for d in directives(path, trees.blob(repo, oid))]
+def _at(run: trees.Git, repo: Path, tree: dict[str, str], paths: set[str]) -> list[Directive]:
+    return [d for path, oid in tree.items() if path in paths for d in directives(path, trees.blob(run, repo, oid))]
 
 
-def added(repo: Path, base: str, head: str) -> list[Addition]:
+def added(run: trees.Git, repo: Path, base: str, head: str) -> list[Addition]:
     """Count new copies from immutable commits, reporting the head's places, never reading the index."""
-    old, new = trees.files(repo, base), trees.files(repo, head)
+    old, new = trees.files(run, repo, base), trees.files(run, repo, head)
     paths = {path for path in old.keys() | new.keys() if old.get(path) != new.get(path)}
-    before = Counter(d.identity for d in _at(repo, old, paths))
+    before = Counter(d.identity for d in _at(run, repo, old, paths))
     after = defaultdict(list)
-    for directive in _at(repo, new, paths):
+    for directive in _at(run, repo, new, paths):
         after[directive.identity].append(directive)
     return [
         Addition(key, len(places) - before[key], tuple(places))

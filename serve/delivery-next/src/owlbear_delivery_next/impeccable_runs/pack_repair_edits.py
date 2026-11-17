@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_quality.inspect import protected, suppressions
 
+from owlbear_delivery_next.change_flow import quality
 from owlbear_delivery_next.impeccable_runs import pack_rounds
 from owlbear_delivery_next.impeccable_runs.pack_repair_content import IMPECCABLE, Kind
 from owlbear_delivery_next.workflow_steps import check_weakening
@@ -88,7 +89,7 @@ def held(  # noqa: PLR0913 - the copy, its head, the change, the package with it
     The weakening patterns (a deleted test, an added skip or early return, a removed assertion or test)
     are a quick filter, not a proof; every other edit of an existing test file is held for the owner's review.
     """
-    configuration = protected(at, head, run(at, ["write-tree"]))
+    configuration = protected(quality.git, at, head, run(at, ["write-tree"]))
     protected_paths = configuration.paths if configuration else ()
     held = [p for p, how in changed if configured(p) or p in protected_paths or how.split()[0] in LINKS]
     held += [p for p, _ in changed if p not in held and suppressions(run, at, head, p)]

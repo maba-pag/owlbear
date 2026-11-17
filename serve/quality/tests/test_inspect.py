@@ -1,9 +1,23 @@
 """Commit-bound exception counts and protected-data evidence."""
 
+import asyncio
 from pathlib import Path
 
-from owlbear_quality import trees
 from owlbear_quality.inspect import added, inventory, protected
+
+
+def git(repo: Path, args: list[str]) -> str:
+    """The tests' Git runner, in the shape the package takes from its caller."""
+
+    async def call() -> str:
+        proc = await asyncio.create_subprocess_exec(
+            "git", *args, cwd=repo, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
+        out, err = await proc.communicate()
+        assert proc.returncode == 0, err.decode()
+        return out.decode()
+
+    return asyncio.run(call())
 
 
 def commit(repo: Path, contents: dict[str, str]) -> str:
@@ -11,13 +25,13 @@ def commit(repo: Path, contents: dict[str, str]) -> str:
         file = repo / path
         file.parent.mkdir(parents=True, exist_ok=True)
         file.write_text(text)
-    trees.git(repo, "add", "--all")
-    trees.git(repo, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "work")
-    return trees.git(repo, "rev-parse", "HEAD").strip()
+    git(repo, ["add", "--all"])
+    git(repo, ["-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-qm", "work"])
+    return git(repo, ["rev-parse", "HEAD"]).strip()
 
 
 def test_protected_compares_parsed_tables_and_invoked_scripts_not_dependencies(tmp_path: Path) -> None:
-    trees.git(tmp_path, "init", "-q")
+    git(tmp_path, ["init", "-q"])
     base = commit(
         tmp_path,
         {
@@ -34,8 +48,8 @@ def test_protected_compares_parsed_tables_and_invoked_scripts_not_dependencies(t
             "package.json": '{"dependencies": {"lib": "1"}}',
         },
     )
-    assert protected(tmp_path, base, deps) is None
-    assert protected(tmp_path, base, deps, (("uv", "run", "scan"),)) is None
+    assert protected(git, tmp_path, base, deps) is None
+    assert protected(git, tmp_path, base, deps, (("uv", "run", "scan"),)) is None
     (tmp_path / ".husky").mkdir()
     (tmp_path / ".husky" / "pre-commit").symlink_to("../hook.sh")
     changed = commit(
@@ -45,18 +59,18 @@ def test_protected_compares_parsed_tables_and_invoked_scripts_not_dependencies(t
             ".github/workflows/check.yml": "name: checks\n",
         },
     )
-    evidence = protected(tmp_path, deps, changed, (("uv", "run", "scan"),))
+    evidence = protected(git, tmp_path, deps, changed, (("uv", "run", "scan"),))
     assert evidence is not None
     assert evidence.paths == (".github/workflows/check.yml", ".husky/pre-commit", "pyproject.toml")
     assert "symlink" in evidence.text
     assert "other:old" not in evidence.text
     assert all(text in evidence.text for text in ("tool.ruff", "project.scripts", "app:old", "app:new"))
     further = commit(tmp_path, {".github/workflows/check.yml": "name: changed\n"})
-    assert protected(tmp_path, deps, further).digest != evidence.digest
+    assert protected(git, tmp_path, deps, further).digest != evidence.digest
 
 
 def test_inventory_scope_and_added_copies_come_from_commits(tmp_path: Path) -> None:
-    trees.git(tmp_path, "init", "-q")
+    git(tmp_path, ["init", "-q"])
     source = (
         'text = "# noqa: F401"\n'
         "value = (\n    1\n)  # fmt: skip\n"
@@ -106,8 +120,8 @@ def test_inventory_scope_and_added_copies_come_from_commits(tmp_path: Path) -> N
     )
     # Deliberately leave a different index: added must still inspect head's immutable blobs.
     (tmp_path / "a.py").write_text("no_directives = True\n")
-    trees.git(tmp_path, "add", "a.py")
-    changes = added(tmp_path, base, head)
+    git(tmp_path, ["add", "a.py"])
+    changes = added(git, tmp_path, base, head)
     assert len(changes) == 3
     assert all(d.count == 1 for d in changes)
     copies = next(d for d in changes if len(d.places) == 2)

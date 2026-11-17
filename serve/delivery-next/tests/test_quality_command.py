@@ -4,9 +4,8 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from owlbear_quality import trees
-
 from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.commands import cli, project_commands
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store.store import Store
@@ -17,12 +16,12 @@ def test_quality_lint_runs_without_host_and_reports_problems_and_broken_tools(
     monkeypatch,
     capsys,
 ) -> None:
-    trees.git(change_repo, "branch", "baseline")
+    worktree.git(change_repo, "branch", "baseline")
     (change_repo / "committed.txt").write_text("committed\n")
-    trees.git(change_repo, "add", "committed.txt")
-    trees.git(change_repo, "commit", "-qm", "work")
+    worktree.git(change_repo, "add", "committed.txt")
+    worktree.git(change_repo, "commit", "-qm", "work")
     (change_repo / "staged.txt").write_text("staged\n")
-    trees.git(change_repo, "add", "staged.txt")
+    worktree.git(change_repo, "add", "staged.txt")
     (change_repo / "committed.txt").write_text("working\n")
     (change_repo / "untracked name.txt").write_text("untracked\n")
     prof = profile.confirm(Profile(), profile.DEFAULT, "baseline", datetime.now(UTC))

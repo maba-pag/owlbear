@@ -253,7 +253,7 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
     if why := _witnessed(store, lock, change, at, (witness, within, prof)):
         _stopped(store, lock, change, why)
         return
-    protected_change = protected(path, r.base, r.commit, commands=profile.lint_commands(prof))
+    protected_change = protected(quality.git, path, r.base, r.commit, commands=profile.lint_commands(prof))
     protected_paths = protected_change.paths if protected_change else ()
     r.held = [
         f"changes {p}, configuration that is yours"

@@ -29,9 +29,9 @@ Only owner-confirmed commands run. Otherwise the existing Ruff, Biome and ESLint
 - `inspect.inventory(root, paths)` returns directive copies with their file, line, text, covered code and identity.
   Python directives must be comment tokens. Identities bind the file, directive rules and covered code, not a
   line number. Unknown statement boundaries bind the whole file.
-- `inspect.added(repo, base, head)` compares immutable commits, not the index. Each addition holds its identity,
+- `inspect.added(run, repo, base, head)` compares immutable commits, not the index. Each addition holds its identity,
   excess copy count and all candidate places in head. Identical copies are interchangeable.
-- `inspect.protected(repo, base, head, commands=())` returns canonical before/after text, its digest and paths,
+- `inspect.protected(run, repo, base, head, commands=())` returns canonical before/after text, its digest and paths,
   or `None` when no protected configuration changed. Shared manifests are compared as parsed data, including
   the script entries the confirmed commands invoke; dependency-only edits are not protected changes.
 

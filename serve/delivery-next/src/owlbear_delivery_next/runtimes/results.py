@@ -151,7 +151,8 @@ class Gate:
             args, errors, tree, kind = self._check(spec, arguments)
         if tree is not None and not errors and isinstance(args, tools.BuildResult | curation_tools.TestCurationResult):
             with self._linting:
-                errors = self.lint.check(self.cfg.worktree, tree.changed)
+                if isinstance(args, tools.BuildResult):  # the test curator's result is not linted (TD-87)
+                    errors = self.lint.check(self.cfg.worktree, tree.changed)
                 if not errors and self.cfg.quality is not None:
                     errors = self.cfg.quality()
         return args, errors, tree, kind

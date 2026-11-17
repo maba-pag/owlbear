@@ -16,6 +16,11 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change
 
 
+def git(at: Path, args: list[str]) -> str:
+    """The Git runner the quality package reads commits through."""
+    return worktree.git(at, *args)
+
+
 def cause(digest: str) -> str:
     """One cause across tasks and sessions for the exact protected before/after content."""
     return cause_key(ErrorKind.GATE, StepKind.BUILD, f"configuration-{digest}")
@@ -37,7 +42,7 @@ def current(c: Change, path: Path, commands: tuple[tuple[str, ...], ...] = ()) -
     head = worktree.head(path)
     target = worktree.tracking(path, c.names.target)
     base = worktree.git(path, "merge-base", target, head).strip()
-    return base, head, protected(path, base, head, commands=commands)
+    return base, head, protected(git, path, base, head, commands=commands)
 
 
 def check(c: Change, path: Path, commands: tuple[tuple[str, ...], ...] = ()) -> list[str]:

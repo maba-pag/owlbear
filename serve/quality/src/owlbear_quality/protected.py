@@ -118,11 +118,13 @@ def _protected(path: str) -> bool:
     )
 
 
-def _content(repo: Path, path: str, entry: tuple[str, str] | None, commands: Sequence[Sequence[str]]) -> object:
+def _content(
+    run: trees.Git, repo: Path, path: str, entry: tuple[str, str] | None, commands: Sequence[Sequence[str]]
+) -> object:
     if entry is None:
         return None
     mode, oid = entry
-    source = trees.blob(repo, oid)
+    source = trees.blob(run, repo, oid)
     if mode == "120000":
         return {"symlink": source}
     data = _parts(path, source, commands)
@@ -132,18 +134,19 @@ def _content(repo: Path, path: str, entry: tuple[str, str] | None, commands: Seq
 
 
 def protected(
+    run: trees.Git,
     repo: Path,
     base: str,
     head: str,
     commands: Sequence[Sequence[str]] = (),
 ) -> Protected | None:
     """Compare protected data in two commits; dependency-only edits produce no change."""
-    before, after = trees.entries(repo, base), trees.entries(repo, head)
+    before, after = trees.entries(run, repo, base), trees.entries(run, repo, head)
     changes = {}
     for path in sorted(before.keys() | after.keys()):
         if not _protected(path) or before.get(path) == after.get(path):
             continue
-        old, new = [_content(repo, path, tree.get(path), commands) for tree in (before, after)]
+        old, new = [_content(run, repo, path, tree.get(path), commands) for tree in (before, after)]
         if old != new:
             changes[path] = {"before": old, "after": new}
     if not changes:
