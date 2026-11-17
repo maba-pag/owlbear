@@ -127,7 +127,10 @@ def _content(
     source = trees.blob(run, repo, oid)
     if mode == "120000":
         return {"symlink": source}
-    data = _parts(path, source, commands)
+    try:
+        data = _parts(path, source, commands)
+    except tomllib.TOMLDecodeError, json.JSONDecodeError, configparser.Error:
+        data = source  # a file that does not parse is compared whole: nobody can tell which part changed
     if not data and PurePosixPath(path).name in {"pyproject.toml", "package.json", "setup.cfg", "tox.ini"}:
         return None
     return {"mode": mode, "content": data}
