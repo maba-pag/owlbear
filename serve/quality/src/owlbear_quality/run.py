@@ -51,6 +51,7 @@ class Outcome:
 
 
 def few(paths: Sequence[str]) -> str:
+    """Show a bounded list of affected files in lint messages."""
     return ", ".join(paths[:5]) + (f" and {len(paths) - 5} more" if len(paths) > 5 else "")  # noqa: PLR2004
 
 

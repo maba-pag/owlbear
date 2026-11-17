@@ -43,7 +43,11 @@ def python(source: str) -> tuple[dict[int, str], list[tuple[int, int]]]:
 
 
 def _yaml(source: str) -> dict[int, str]:
-    scalars = [(t.start_mark.index, t.end_mark.index) for t in yaml.scan(source) if isinstance(t, yaml.ScalarToken)]
+    scalars = [
+        (source.find("\n", t.start_mark.index) if t.style in {"|", ">"} else t.start_mark.index, t.end_mark.index)
+        for t in yaml.scan(source)
+        if isinstance(t, yaml.ScalarToken)
+    ]
     comments = {}
     offset = 0
     for number, line in enumerate(source.splitlines(keepends=True), 1):

@@ -68,11 +68,17 @@ def test_inventory_scope_and_added_copies_come_from_commits(tmp_path: Path) -> N
         "text // editorconfig-checker-disable-line\n"
         "// editorconfig-checker-disable\ntext\n// editorconfig-checker-enable\n"
     )
-    files = {"a.py": source, "forms.txt": forms, "file.py": "# ruff: noqa\nx = 1\n"}
+    files = {
+        "a.py": source,
+        "forms.txt": forms,
+        "file.py": "# ruff: noqa\nx = 1\n",
+        "workflow.yml": 'run: | # zizmor: ignore[template-injection]\n  echo "# zizmor: ignore[fake]"\n',
+    }
     for name in ("yamllint disable-file", "markdownlint-disable-file", "editorconfig-checker-disable-file"):
         files[name.split()[0] + ".txt"] = f"# {name}\ntext\n"
     base = commit(tmp_path, files)
     items = inventory(tmp_path, files)
+    assert [d.directive for d in items if d.path == "workflow.yml"] == ["zizmor: ignore[template-injection]"]
     py = [d for d in items if d.path == "a.py"]
     assert len(py) == 3  # the directive inside the string is not a comment
     assert py[0].code == "value = (\n    1\n)  # fmt: skip\n"
