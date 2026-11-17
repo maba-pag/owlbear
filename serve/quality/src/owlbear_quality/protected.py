@@ -9,14 +9,13 @@ import posixpath
 import re
 import tomllib
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from owlbear_quality import trees
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from pathlib import Path
 
 WHOLE = frozenset(
     {
@@ -188,3 +187,37 @@ def protected(
         return None
     text = json.dumps(changes, sort_keys=True, indent=2, ensure_ascii=False, default=str)
     return Protected(text, hashlib.sha256(text.encode()).hexdigest(), tuple(sorted(paths)))
+
+
+@dataclass(frozen=True)
+class Configuration:
+    """One lint configuration file or parsed table and its content-bound identity."""
+
+    path: str
+    table: str
+    content: str
+    identity: str
+
+
+def configured(root: Path) -> list[Configuration]:
+    """Existing protected lint configuration, sharing the protected-diff parser."""
+    found = []
+    for folder, dirs, names in root.walk():
+        dirs[:] = sorted(d for d in dirs if d not in {".git", ".venv", "node_modules"})
+        for name in sorted(names):
+            file = folder / name
+            path = file.relative_to(root).as_posix()
+            if not file.is_file() or file.is_symlink() or not _protected(path):
+                continue
+            if path.startswith(".github/workflows/") or any(p in {".husky", ".githooks"} for p in file.parts):
+                continue
+            if name == "lefthook.yml":
+                continue
+            text = file.read_text(encoding="utf-8")
+            parts = _parts(path, text, ())
+            tables = parts if isinstance(parts, dict) else {"": parts}
+            for table, data in tables.items():
+                content = json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False) if table else data
+                digest = hashlib.sha256(json.dumps([path, table, content]).encode()).hexdigest()
+                found.append(Configuration(path, table, content, digest))
+    return found
