@@ -480,8 +480,9 @@ class RetroJob:
         for item in [*retro_regrade.pending(), *units.due_chats(enrolled(), datetime.now(UTC))]:
             if self.skips.blocked(item["unit"]):
                 continue
-            self._start(Running(item["unit"], "idle", rev=item["rev"], mode=item.get("mode", "judge"),
-                                records=item.get("records", [])))  # fmt: skip
+            ctx = Running(item["unit"], "idle", rev=item["rev"])
+            ctx.mode, ctx.records = item.get("mode", "judge"), item.get("records", [])
+            self._start(ctx)
             if self.waiting:
                 return
         self._late("chat:", "idle")
