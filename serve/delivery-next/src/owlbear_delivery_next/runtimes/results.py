@@ -7,6 +7,7 @@ import threading
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import (
+    approval_tools,
     audit_tools,
     curation_tools,
     pack_tools,
@@ -94,7 +95,9 @@ class Gate:
         first = (self.cfg.first_look,) if self.cfg.first_look else ()
         helpers = tuple(spec for spec, _ in self.cfg.helpers)
         ask = (tools.ASK,) if tools.asks(self.cfg.role, judging=self.cfg.judging) else ()
-        return self.cfg.submit, *first, *helpers, *ask, tools.PREMISE, tools.MISSING
+        role = self.cfg.role or ("builder" if self.cfg.kind == "build" else "")
+        approval = (approval_tools.REQUEST,) if approval_tools.offered(role, judging=self.cfg.judging) else ()
+        return self.cfg.submit, *first, *helpers, *ask, *approval, tools.PREMISE, tools.MISSING
 
     def call(self, spec: tools.Spec, arguments: Any) -> tuple[str, bool]:  # noqa: ANN401 - the agent's JSON arguments
         """Validate one call; return the text the agent reads and whether it was accepted."""
@@ -146,9 +149,11 @@ class Gate:
             if self._closed():  # before any check: a late call never touches the accepted head
                 return None
             args, errors, tree, kind = self._check(spec, arguments)
-        if tree is not None and not errors and isinstance(args, tools.BuildResult):
+        if tree is not None and not errors and isinstance(args, tools.BuildResult | curation_tools.TestCurationResult):
             with self._linting:
                 errors = self.lint.check(self.cfg.worktree, tree.changed)
+                if not errors and self.cfg.quality is not None:
+                    errors = self.cfg.quality()
         return args, errors, tree, kind
 
     def _check(self, spec: tools.Spec, arguments: Any) -> Checked:  # noqa: ANN401 - the agent's JSON arguments

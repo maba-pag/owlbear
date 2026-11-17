@@ -84,6 +84,7 @@ class Repair(BaseModel):
     commit: str = ""  # the fix, committed by Delivery on that baseline; kept under ``KEPT`` until it ends
     applied: str = ""  # its commit on the Change's branch
     applied_at: datetime | None = None
+    approved_configuration: str = ""  # the whole Change digest covered by this repair's owner approval
     witness: Witness | None = None
     replaces: str = ""  # the confirmed check command the owner is asked to replace or remove, as it was then
     held: list[str] = Field(default_factory=list)  # why the owner is asked before it is applied

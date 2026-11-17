@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field
 
-from owlbear_delivery_next.change_contracts import build_tools, check_hint, question_tools
+from owlbear_delivery_next.change_contracts import approval_tools, build_tools, check_hint, question_tools
 from owlbear_delivery_next.change_contracts.option_records import OptionAction
 from owlbear_delivery_next.change_contracts.tool_types import Args as Args, Spec as Spec, bounded as bounded
 
@@ -397,6 +397,7 @@ def results(role: str, *, ui: bool = False, judging: bool = False) -> list[str]:
         return [SUBMIT.name, *extra]
     extra = [FIRST_LOOK] if role == "design-judge" else [SCAN_DESIGN] if role == "builder" and ui else []
     extra += [LOOKUP] if role in LOOKERS and not judging else []
+    extra += [approval_tools.REQUEST.name] if approval_tools.offered(role, judging=judging) else []
     return [*(s.name for s in SPECS if s is not ASK or asks(role, judging=judging)), *extra]
 
 
