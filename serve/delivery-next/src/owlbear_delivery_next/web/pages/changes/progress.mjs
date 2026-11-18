@@ -77,9 +77,18 @@ export function planInfo(d) {
   };
   const done = d.plan.filter((t) => t.done).length;
   return info("Plan", now ? html`<ol class="plan">${item(now, ", the current task")}</ol>` : nothing,
+    suppressionList(d),
     d.plan.length ? toggle("plan-tasks", `Tasks: ${done} of ${d.plan.length} done`,
       html`<ol class="plan">${d.plan.map((t) => item(t))}</ol>`) : nothing,
     versionList(d.plan_versions, "Plan versions"));
+}
+
+function suppressionList(d) {
+  const shown = (d.suppressions ?? []).filter((s) => detailsOn() || s.verdict !== "accepted");
+  if (!shown.length) return nothing;
+  return html`<div class="suppressions">${hd(4, "Added suppressions", "sm")}${list(shown.map((s) => html`
+    <span class="recorded">${s.place}: ${s.directive} (${s.verdict})</span>
+    ${text(s.reason, { size: "sm", cls: "recorded" })}${s.by ? meta(`Ruled by ${s.by}`) : nothing}`))}</div>`;
 }
 
 // TD-217: a round's marker is its most urgent finding's kind, in words with a count; the loop's latest round is bold.

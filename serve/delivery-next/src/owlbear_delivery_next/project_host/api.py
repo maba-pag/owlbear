@@ -7,7 +7,6 @@ import re
 import shlex
 import shutil
 import time
-from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -27,8 +26,7 @@ from owlbear_delivery_next.change_contracts.inbox import (
 )
 from owlbear_delivery_next.change_contracts.models import Change, ErrorKind, Exit, PersonCheck, Waiting
 from owlbear_delivery_next.change_flow import loop, moves, rebuilds, round_flow, round_marks, versions
-from owlbear_delivery_next.change_flow.progress import progress
-from owlbear_delivery_next.change_flow.status import card, for_chat, status, unloadable
+from owlbear_delivery_next.change_flow.status import for_chat
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable_runs import pack_job
 from owlbear_delivery_next.project_host import (
@@ -52,12 +50,13 @@ from owlbear_delivery_next.project_host import (
     token_guard,
 )
 from owlbear_delivery_next.project_host.admission import admitted
+from owlbear_delivery_next.project_host.change_view import summary
 from owlbear_delivery_next.project_host.launches import Launches, Refused
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.runtimes.vscode_adapter import open_chat
 from owlbear_delivery_next.runtimes.window_files import HARNESS
 from owlbear_delivery_next.settings.config import SettingsUnset
-from owlbear_delivery_next.state_store import spend_ledger, tool_metrics, watch_reports, work_block
+from owlbear_delivery_next.state_store import watch_reports, work_block
 from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
 from owlbear_delivery_next.state_store.database import DIAGNOSTIC_EVENTS
 from owlbear_delivery_next.state_store.store import StoreError
@@ -69,7 +68,6 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.change_contracts.inbox import InboxItem
     from owlbear_delivery_next.change_contracts.models import Inputs
-    from owlbear_delivery_next.change_flow.status import Activity
     from owlbear_delivery_next.project_host.host import Host, HostRecord
     from owlbear_delivery_next.project_host.launches import Ended
     from owlbear_delivery_next.runtimes.vscode_contract import Outcome
@@ -163,36 +161,6 @@ def offer(c: Change, events: list[dict[str, Any]]) -> dict[str, Any] | None:
         return None
     last = next((e for e in reversed(events) if e.get("event") == "merge-offer"), None)
     return last and last | {"diff": f"{last['url']}/files"}
-
-
-def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, Any]:
-    """One Change's status line, next action, chat handle and open question; shared with the chat fallback."""
-    try:
-        c = store.read(slug)
-    except StoreError as exc:
-        s = unloadable(exc.stop(now).model_copy(update={"reason": failure(exc)}))
-        return {"slug": slug, **asdict(s)}
-    tool = store.now(slug)
-    s = status(c, act, now, tool)
-    out = {"slug": slug, "handle": c.handle, "step": c.step.kind, **asdict(s)}
-    out["title"] = c.brief.title
-    out |= card(c, act, store.events(slug), now, tool, pending=store.shared.pending if store.shared else None)
-    out["progress"] = asdict(progress(c))
-    out["spend"] = c.spend.model_dump()
-    out["tool_use"] = tool_metrics.of_change(spend_ledger.Where.of(store).clone, slug).model_dump()
-    out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
-    out["watcher"] = watch_reports.counts(store.db, slug)  # observed calls writing outside, unresolved ones apart
-    if q := loop.open_question(c):
-        options = [o.model_dump(include={"id", "label"}) for o in held.offered(store, c, q)]
-        where = "chat" if loop.ordinary(q) else "changes-page"
-        out["question"] = {
-            "id": f"{c.handle or slug}.{q.id}",
-            "text": q.text,
-            "cause": q.cause,
-            "options": options,
-            "answer_in": where,
-        }
-    return out
 
 
 def display_prefs(store: Store) -> tuple[dict[str, bool | None], str | None]:
