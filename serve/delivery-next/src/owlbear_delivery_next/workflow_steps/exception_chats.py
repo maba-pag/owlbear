@@ -101,11 +101,13 @@ class Runs:
 
     def finish(self, run_id: str, request: Request) -> None:
         """Keep the complete failure as an answer too, then release the host's running slot."""
-        said = {"failed": "The exception run was interrupted."}
         try:
             said = answer(self.store, request)
         except (OSError, ValueError, RuntimeError, StoreError, subprocess.SubprocessError) as exc:
             said = {"failed": failure(exc)}
+        except BaseException as exc:
+            said = {"failed": failure(exc)}
+            raise
         finally:
             with self.runs.lock:
                 self.runs.answers[run_id] = said

@@ -51,6 +51,7 @@ CHAT_TOOLS |= {"lookup_decisions"}  # TD-456, TD-459: the picker's answer, not g
 CHAT_TOOLS |= {"await_lookup"}  # #972: the wait for a lookup that outlasts the client's tool limit, not the shaper's
 CHAT_TOOLS |= {"correct_decision_origin"}  # the owner's provenance correction (2026-10-23), not the shaper's
 CHAT_TOOLS |= {"complete_decision"}  # the lead's finite OwlBear completion, not granted to the shaper
+CHAT_TOOLS |= {"judge_exceptions", "await_exceptions"}
 CHAT_TOOLS |= {"start_code_audit"}  # project maintenance from a lead chat, not granted to the shaper
 WINDOW_TOOLS = {"ask_user"}  # a window chat's structured question (live probe, TD-109)
 VOCABULARY = SDK_TOOLS | MEMORY_TOOLS | CURATOR_TOOLS | CHAT_TOOLS | WINDOW_TOOLS | {s.name for s in tools.SPECS}
