@@ -61,12 +61,14 @@ def check(c: Change, path: Path, commands: tuple[tuple[str, ...], ...] = (), *, 
 
 
 def accept_repair(c: Change, path: Path, folder: Path, span: tuple[str, str]) -> None:
-    """An owner-approved repair covers only the suppression copies its shown patch added."""
-    items = [
-        {"identity": a.identity, "place": f"{p.path}:{p.line}"}
-        for a in added(git, path, *span)
-        for p in a.places[: a.count]
-    ]
+    """An owner-approved repair covers the copies its shown patch added that this Change has not accepted yet."""
+    delta = {a.identity: a.count for a in added(git, path, *span)}
+    base, head, _ = current(c, path)
+    items = []
+    for item in exception_gate.pending(c, path, folder, (base, head)):
+        if delta.get(item["identity"], 0) > 0:  # never more receipts than the patch added
+            delta[item["identity"]] -= 1
+            items.append(item)
     if items:
         exception_gate.accept(c, folder, span[1], items)
 
