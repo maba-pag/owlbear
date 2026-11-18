@@ -39,7 +39,7 @@ def worker(store: Store, c: Change, root: Path, where: spend_ledger.Where) -> tu
             return said, done
     verdicts = []
     for addition in added(quality.git, root, base, head):
-        rows = ledger.counting(store.root, addition.identity, scope=c.slug)
+        rows = exception_gate.ordered(ledger.counting(store.root, addition.identity, scope=c.slug))
         verdicts.extend(
             {"place": row["place"], "verdict": row["verdict"], "reason": row["reason"]}
             for row in rows[: addition.count]

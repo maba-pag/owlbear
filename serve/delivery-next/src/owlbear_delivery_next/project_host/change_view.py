@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_quality import ledger
 from owlbear_quality.inspect import added
 
-from owlbear_delivery_next.change_flow import loop, quality, worktree
+from owlbear_delivery_next.change_flow import exception_gate, loop, quality, worktree
 from owlbear_delivery_next.change_flow.progress import progress
 from owlbear_delivery_next.change_flow.status import card, status, unloadable
 from owlbear_delivery_next.git.command_failure import failure
@@ -74,7 +74,7 @@ def suppressions(store: Store, c: Change) -> list[dict[str, str]]:
     base = worktree.git(root, "merge-base", target, head).strip()
     found = []
     for addition in added(quality.git, root, base, head):
-        rows = ledger.counting(store.root, addition.identity, scope=c.slug)
+        rows = exception_gate.ordered(ledger.counting(store.root, addition.identity, scope=c.slug))
         for n, place in enumerate(addition.places[: addition.count]):
             row = rows[n] if n < len(rows) else {}
             found.append(

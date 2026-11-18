@@ -21,6 +21,11 @@ def _git(at: Path, args: list[str]) -> str:
     return worktree.git(at, *args)
 
 
+def ordered(rows: list[dict]) -> list[dict]:
+    """A Change's verdicts for one identity as the gate counts them: acceptances cover copies first."""
+    return sorted(rows, key=lambda row: row["verdict"] != "accepted")
+
+
 def pending(c: Change, path: Path, folder: Path, span: tuple[str, str]) -> list[dict]:
     """One host-owned item for each added copy that this Change's acceptances do not cover."""
     found = []
