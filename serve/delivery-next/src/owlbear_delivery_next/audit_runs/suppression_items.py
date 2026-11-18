@@ -13,6 +13,8 @@ from owlbear_quality.inspect import configured, inventory
 
 from owlbear_delivery_next.change_flow import worktree
 
+FOR = "maintenance.review"  # a Change slug never holds a dot, so no Change's gate counts the review's verdicts
+
 if TYPE_CHECKING:
     from pathlib import Path
 

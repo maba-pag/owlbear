@@ -59,7 +59,7 @@ def review(audits: Audits, state: dict, save: Callable[[], None]) -> None:
                         copy.path,
                         batch,
                         where,
-                        authority | {"for": "review", "commit": state["commit"]},
+                        authority | {"for": suppression_items.FOR, "commit": state["commit"]},
                     )
                 except session_result.ReturnedRunError as exc:
                     # A session that ended without a usable run stops judging; earlier batches still publish.
@@ -75,9 +75,10 @@ def review(audits: Audits, state: dict, save: Callable[[], None]) -> None:
                 if "failed" in said:
                     state["judging_reason"] = str(said["failed"])
                     break
-    suppression_publish.prepare(store, state)
-    state.update(state="publishing", phase="opening issues")
-    save()
+        # Before the workspace is removed: a failed removal still leaves the findings to Finish publishing.
+        suppression_publish.prepare(store, state)
+        state.update(state="publishing", phase="opening issues")
+        save()
 
 
 def finish(state: dict) -> None:

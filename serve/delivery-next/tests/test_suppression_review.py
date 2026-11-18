@@ -63,7 +63,7 @@ def review(tmp_path, change_repo, shared_repo, monkeypatch, github):
         assert spend_ledger.where().job == "Suppression review"
         context = json.loads((cfg.worktree / "exceptions-context.json").read_text())
         assert worktree.head(cfg.worktree / "repo") == context["commit"] == pinned[-1]
-        assert context["for"] == "review"
+        assert context["for"] == "maintenance.review"
         calls.append(context)
         done = Run(cfg.session_id, model_check="verified", termination=Termination(confirmed=True))
         if len(calls) == script["fail"]:

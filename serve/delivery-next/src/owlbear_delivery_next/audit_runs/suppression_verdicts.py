@@ -56,7 +56,7 @@ def change(audits: Audits, token: str, action: Literal["again", "accept"]) -> li
         else:
             current = ledger.current(audits.store.root)
             replacements = []
-            for member in group["members"]:
+            for member, place in zip(group["members"], group["places"], strict=True):
                 identity, index = member["identity"], member["index"]
                 row = next(r for r in current[identity] if r["index"] == index)
                 replacements.append(
@@ -66,9 +66,9 @@ def change(audits: Audits, token: str, action: Literal["again", "accept"]) -> li
                         "verdict": "accepted",
                         "by": "owner",
                         "reason": f"Owner accepted the suppression. Previous refusal: {row['reason']}",
-                        "for": "review",
-                        "commit": row["commit"],
-                        "place": row["place"],
+                        "for": suppression_items.FOR,
+                        "commit": state["commit"],
+                        "place": place,
                         "directive": row["directive"],
                     }
                 )
