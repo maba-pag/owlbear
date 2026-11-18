@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import subprocess
 from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -40,7 +41,10 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     out["progress"] = asdict(progress(c))
     out["spend"] = c.spend.model_dump()
     out["tool_use"] = tool_metrics.of_change(spend_ledger.Where.of(store).clone, slug).model_dump()
-    out["suppressions"] = suppressions(store, c)
+    try:
+        out["suppressions"] = suppressions(store, c)
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+        out["suppressions_fault"] = failure(exc)
     out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
     out["watcher"] = watch_reports.counts(store.db, slug)  # observed calls writing outside, unresolved ones apart
     if q := loop.open_question(c):
@@ -58,7 +62,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
 
 def suppressions(store: Store, c: Change) -> list[dict[str, str]]:
     """Current added copies and only this Change's verdicts; a removed worktree has nothing to display."""
-    if not c.names.worktree or not (root := Path(c.names.worktree)).exists():
+    if not c.names.target or not c.names.worktree or not (root := Path(c.names.worktree)).exists():
         return []
     head = worktree.head(root)
     target = worktree.tracking(root, c.names.target)

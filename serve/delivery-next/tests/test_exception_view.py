@@ -96,5 +96,10 @@ def test_change_suppressions_need_the_owner_by_default_and_acceptances_are_detai
         )
         touch.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
         expect(shown.locator(":scope > ul > li")).to_have_count(2)
+        quality.git(root, ["branch", "-D", "main"])
+        page.reload()
+        expect(page.get_by_text("Suppressions could not be read", exact=True)).to_be_visible()
+        expect(page.locator("#detail")).to_contain_text("fatal: Not a valid object name main")
+        expect(page.get_by_role("button", name="Pause", exact=True)).to_be_enabled()
     shutil.rmtree(root)
     assert change_view.suppressions(store, store.read("c1-fixture")) == []

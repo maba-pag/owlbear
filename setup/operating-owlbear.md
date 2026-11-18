@@ -509,7 +509,7 @@ Changed lint configuration also gets the judge's advice, but always needs your a
 
 The Change's page lists added suppressions below the build task, with place, directive, whole reason and who ruled.
 Refused and not judged entries show by default; accepted ones show with **Show details**. The list ends when the
-worktree is removed.
+worktree is removed. An inspection failure shows its whole reason without hiding the Change's other controls.
 
 Chats use `judge_exceptions(path, base)`: an absolute checkout and the ref they branched from. Only committed
 additions against the merge-base are judged, and a dirty tree is reported. Verdicts are recorded for that checkout

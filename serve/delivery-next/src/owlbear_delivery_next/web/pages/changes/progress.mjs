@@ -1,5 +1,5 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
-import { toggle, disclosure, hd, text, list, meta, info } from "./widgets.mjs";
+import { toggle, disclosure, hd, text, list, meta, info, notice } from "./widgets.mjs";
 import { detailsOn } from "./details.mjs";
 import { versionList } from "./versions.mjs";
 
@@ -84,6 +84,7 @@ export function planInfo(d) {
 }
 
 function suppressionList(d) {
+  if (d.suppressions_fault) return notice("error", "Suppressions could not be read", d.suppressions_fault);
   const shown = (d.suppressions ?? []).filter((s) => detailsOn() || s.verdict !== "accepted");
   if (!shown.length) return nothing;
   return html`<div class="suppressions">${hd(4, "Added suppressions", "sm")}${list(shown.map((s) => html`
