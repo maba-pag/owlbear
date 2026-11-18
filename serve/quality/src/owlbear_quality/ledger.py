@@ -19,23 +19,16 @@ FILE = "exceptions.json"
 
 @contextmanager
 def _locked(root: Path) -> Iterator[dict[str, list[dict]]]:
+    """One writer at a time; a ledger that does not exist yet is empty, and a lost one costs a new judgement."""
     root.mkdir(parents=True, exist_ok=True)
     with (root / ".exceptions.lock").open("a+", encoding="utf-8") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         path = root / FILE
-        lock.seek(0)
-        initialized = bool(lock.read())
-        if not path.exists() and not initialized:
-            _write(path, {})
         try:
-            rows = json.loads(path.read_text(encoding="utf-8"))
+            rows = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
         except (OSError, ValueError) as exc:
             msg = f"Exception ledger {path} could not be read: {exc}"
             raise RuntimeError(msg) from exc
-        if not initialized:
-            lock.write("initialized\n")
-            lock.flush()
-            os.fsync(lock.fileno())
         yield rows
 
 
