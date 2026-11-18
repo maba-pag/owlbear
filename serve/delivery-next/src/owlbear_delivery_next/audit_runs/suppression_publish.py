@@ -88,3 +88,18 @@ def findings(store: Store, state: dict, save: Callable[[], None]) -> None:
             part["pending"] = None
             save()
         ledger.published(store.root, members, finding["number"])
+
+
+def links(store: Store, state: dict) -> list[dict]:
+    """All pinned counting refusals' receipts, not only the latest run's new findings."""
+    numbers = sorted(
+        {
+            int(i["judgment"]["backlog"])
+            for i in suppression_items.joined(store.root, state.get("inventory", []))
+            if i["judgment"] and i["judgment"]["backlog"]
+        }
+    )
+    if not numbers:
+        return []
+    book = backlog.Backlog.of(store)
+    return [{"number": n, "url": f"https://{book.issues.host}/{book.repository}/issues/{n}"} for n in numbers]

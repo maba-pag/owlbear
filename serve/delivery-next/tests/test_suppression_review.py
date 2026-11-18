@@ -149,6 +149,8 @@ def test_bounded_runs_continue_and_owner_verdicts_replace_history(review):
     assert second["counts"]["unjudged"] == 0
     assert len(review.calls[-1]["items"]) == 3
     assert len(review.calls) == 11
+    offered = next(a for a in review.client.get("/maintenance/audits").json()["audits"] if a["audit"] == "suppressions")
+    assert len(offered["last"]["backlog_entries"]) == 2
     assert ledger.counting(review.store.root, "removed")[0]["backlog"] == ""
     groups = review.client.get(f"{BASE}/verdicts").json()["verdicts"]
     refused = next(g for g in groups if g["verdict"] == "refused")

@@ -94,6 +94,11 @@ class Audits:
         rows = []
         for audit in self.offered():
             last = self.read(audit)
+            if audit == "suppressions" and last:
+                try:
+                    last["backlog_entries"] = suppression_publish.links(self.store, last)
+                except (StoreError, ProviderError, backlog.BacklogError, OSError, ValueError, RuntimeError) as exc:
+                    last["backlog_error"] = failure(exc)
             rows.append(
                 {
                     "audit": audit,
