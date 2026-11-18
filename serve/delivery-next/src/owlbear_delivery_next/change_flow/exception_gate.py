@@ -91,6 +91,7 @@ def accept(c: Change, folder: Path, commit: str, items: list[dict]) -> None:
                 "for": c.slug,
                 "commit": commit,
                 "place": item["place"],
+                "directive": item.get("directive", ""),
                 "replaces": [item["refusal"]["index"]] if item.get("refusal") else [],
             }
             for item in items
