@@ -61,8 +61,13 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
 
 
 def suppressions(store: Store, c: Change) -> list[dict[str, str]]:
-    """Current added copies and only this Change's verdicts; a removed worktree has nothing to display."""
-    if not c.names.target or not c.names.worktree or not (root := Path(c.names.worktree)).exists():
+    """Current added copies or the recorded verdicts when the worktree is gone."""
+    if not c.names.worktree or not (root := Path(c.names.worktree)).exists():
+        return [
+            {key: row.get(key, "") for key in ("place", "directive", "verdict", "reason", "by")}
+            for row in ledger.counting_scope(store.root, c.slug)
+        ]
+    if not c.names.target:
         return []
     head = worktree.head(root)
     target = worktree.tracking(root, c.names.target)

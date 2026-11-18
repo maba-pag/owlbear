@@ -54,6 +54,12 @@ def counting(root: Path, identity: str, *, scope: str | None = None) -> list[dic
         ]
 
 
+def counting_scope(root: Path, scope: str) -> list[dict]:
+    """Counting verdicts given for one Change, across all identities."""
+    with _locked(root) as rows:
+        return [v for entries in rows.values() for v in entries if not v["aside"] and v["for"] == scope]
+
+
 def add(root: Path, verdicts: Sequence[dict]) -> None:
     """Append one verdict per copy; a replacement explicitly names entries to set aside first."""
     with _locked(root) as rows:

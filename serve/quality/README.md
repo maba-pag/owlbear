@@ -41,7 +41,8 @@ Only owner-confirmed commands run. Otherwise the existing Ruff, Biome and ESLint
   Each identity holds a list with `verdict`, `reason`, `by`, `for`, `at`, `commit`, `place`, `backlog` and `aside`.
   `by` names the judge and model or the owner; `for` names the caller, including a Change slug.
   `ledger.counting(folder, identity, scope=slug)` counts only active verdicts for that Change; omitting `scope`
-  returns every active verdict. `ledger.set_aside(folder, identity, indexes)` preserves entries as history.
+  returns every active verdict. `ledger.counting_scope(folder, scope)` returns active verdicts across identities.
+  `ledger.set_aside(folder, identity, indexes)` preserves entries as history.
   `.exceptions.lock` serializes writers. A ledger that does not exist is empty, so a lost one costs a new
   judgement; unreadable JSON raises with its path and error. A killed writer leaves the earlier ledger intact.
 

@@ -101,5 +101,51 @@ def test_change_suppressions_need_the_owner_by_default_and_acceptances_are_detai
         expect(page.get_by_text("Suppressions could not be read", exact=True)).to_be_visible()
         expect(page.locator("#detail")).to_contain_text("fatal: Not a valid object name main")
         expect(page.get_by_role("button", name="Pause", exact=True)).to_be_enabled()
-    shutil.rmtree(root)
-    assert change_view.suppressions(store, store.read("c1-fixture")) == []
+        ledger.add(
+            store.root,
+            [
+                {
+                    "identity": "extra",
+                    "verdict": "refused",
+                    "reason": "Another verdict.",
+                    "by": "quality-judge (fixture-model)",
+                    "for": "c1-fixture",
+                    "commit": head,
+                    "place": "extra.txt:1",
+                }
+            ],
+        )
+        shutil.rmtree(root)
+        rows = change_view.suppressions(store, store.read("c1-fixture"))
+        assert sorted(rows, key=lambda row: row["place"]) == [
+            {
+                "place": "accepted.txt:1",
+                "directive": "",
+                "verdict": "accepted",
+                "reason": "The generated boundary requires this exception.",
+                "by": "quality-judge (fixture-model)",
+            },
+            {
+                "place": "extra.txt:1",
+                "directive": "",
+                "verdict": "refused",
+                "reason": "Another verdict.",
+                "by": "quality-judge (fixture-model)",
+            },
+            {
+                "place": "refused.txt:1",
+                "directive": "",
+                "verdict": "refused",
+                "reason": reason,
+                "by": "quality-judge (fixture-model)",
+            },
+        ]
+        page.reload()
+        pds.settled(page)
+        if not switch.evaluate("e => e.checked"):
+            switch.click()
+        expect(page.locator(".suppressions")).to_contain_text("accepted.txt:1 (accepted)")
+        (store.root / ledger.FILE).unlink()
+        page.reload()
+        expect(page.locator(".suppressions")).to_have_count(0)
+        expect(page.get_by_role("heading", name="Added suppressions")).to_have_count(0)

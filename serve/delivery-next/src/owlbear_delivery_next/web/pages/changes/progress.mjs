@@ -88,7 +88,7 @@ function suppressionList(d) {
   const shown = (d.suppressions ?? []).filter((s) => detailsOn() || s.verdict !== "accepted");
   if (!shown.length) return nothing;
   return html`<div class="suppressions">${hd(4, "Added suppressions", "sm")}${list(shown.map((s) => html`
-    <span class="recorded">${s.place}: ${s.directive} (${s.verdict})</span>
+    <span class="recorded">${s.place}${s.directive ? `: ${s.directive}` : ""} (${s.verdict})</span>
     ${text(s.reason, { size: "sm", cls: "recorded" })}${s.by ? meta(`Ruled by ${s.by}`) : nothing}`))}</div>`;
 }
 
