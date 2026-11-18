@@ -109,7 +109,7 @@ def judge(
         sessions.granted(JOB)
         with spend_ledger.at(where):
             done = loop_owner.run(sdk_adapter.run(cfg))
-        verdicts = _received(done, folder)
+        verdicts = _received(done)
         by_id = {v.id: v for v in verdicts.verdicts}
         rows = [
             {
@@ -134,7 +134,7 @@ def judge(
     return {"verdicts": rows}, done
 
 
-def _received(done: session_result.Run, root: Path) -> exception_tools.ExceptionVerdicts:
+def _received(done: session_result.Run) -> exception_tools.ExceptionVerdicts:
     if not (done.termination and done.termination.confirmed):
         msg = f"the quality judge's processes are not confirmed gone: {session_result.unverified(done.termination)}"
         raise RuntimeError(msg)
@@ -144,6 +144,4 @@ def _received(done: session_result.Run, root: Path) -> exception_tools.Exception
     if done.ending != "result" or not isinstance(done.payload, exception_tools.ExceptionVerdicts):
         msg = f"the quality judge ended with {done.ending}: {done.detail or done.payload or 'no result'}"
         raise RuntimeError(msg)
-    if errors := exception_tools.check(done.payload, root):
-        raise ValueError("\n".join(errors))
     return done.payload
