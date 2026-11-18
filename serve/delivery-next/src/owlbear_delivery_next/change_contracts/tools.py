@@ -16,11 +16,12 @@ from owlbear_delivery_next.change_contracts import (
     option_records,
     question_tools,
     tool_types,
-    worker_roles,
 )
 
-JUDGES = worker_roles.JUDGES
-LOOKERS = worker_roles.LOOKERS
+JUDGES = frozenset({"challenger", "design-judge", "test-reviewer", "picker", "curator"}) | frozenset(
+    {"auditor", "project-auditor", "audit-verifier", "quality-judge"}
+)
+LOOKERS = frozenset({"planner", "builder", "reviewer", "preparer", "test-curator", "repairer"})
 Args = tool_types.Args
 Spec = tool_types.Spec
 bounded = tool_types.bounded
