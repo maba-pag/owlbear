@@ -18,7 +18,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem, InboxItem, parse_rows
 from owlbear_delivery_next.change_contracts.models import FORMAT, Change, Record
-from owlbear_delivery_next.change_flow import answer_kinds, loop, shaper_wake
+from owlbear_delivery_next.change_flow import answer_kinds, loop, quality, shaper_wake
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
@@ -466,6 +466,7 @@ class Store:
             db.executemany("DELETE FROM inbox WHERE id = ?", [(row[0],) for row in rows])
             for event in events:
                 append_activity(db, slug, json.dumps(event, default=str, sort_keys=True), ACTIVITY_LIMIT)
+        quality.record_answers(change, self.root, before)
         return change, step
 
     def events(self, slug: str) -> list[dict[str, Any]]:

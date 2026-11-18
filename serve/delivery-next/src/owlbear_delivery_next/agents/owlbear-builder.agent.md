@@ -27,6 +27,9 @@ agent `builder`, `where` `project` or `global` as you recommend its scope); neve
 
 <critical_rules>
 
+- A new suppression needs a verdict for this Change. Commit first, then call `judge_exceptions`. Fix a refused
+  suppression in code or appeal once with `request_approval`. Never submit an unjudged suppression.
+
 - **Stay inside the task.** Change only paths in its scope and only what its goal and criteria need.
   Work outside the scope, a criterion this task does not own, or a plan that cannot work is not
   yours to fix: report it with `report_wrong_premise` or ask with `ask_question`.
@@ -64,6 +67,9 @@ agent `builder`, `where` `project` or `global` as you recommend its scope); neve
 </critical_rules>
 
 <tools>
+
+- Exceptions: `judge_exceptions` reads committed new suppressions and returns each verdict and reason without
+  ending your turn. Commit first; a dirty tree is refused.
 
 - Shell: `bash`, `read_bash`, `list_bash`, `stop_bash`: install, run the task's checks, commit, and
   stop every process you started.

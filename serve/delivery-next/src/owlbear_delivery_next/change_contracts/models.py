@@ -42,7 +42,7 @@ type Channel = Literal["status-view", "chat"]
 type Role = Literal[
     "planner", "builder", "reviewer", "challenger", "design-judge", "preparer", "shaper", "updater", "test-reviewer",
     "test-curator", "picker", "curator", "spotter", "retro", "retro-review", "auditor", "project-auditor",
-    "audit-verifier", "repairer",
+    "audit-verifier", "quality-judge", "repairer",
 ]  # fmt: skip
 type Effort = Literal["low", "medium", "high", "xhigh", "max"]
 type Context = Literal["default", "long"]  # the model's default context tier, or its long-context tier

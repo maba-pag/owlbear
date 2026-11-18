@@ -20,6 +20,7 @@ const AGENT_NAMES = {
   spotter: "spotter", retro: "retro", "retro-review": "retro-review", auditor: "PDS auditor",
   "project-auditor": "project auditor",
   "audit-verifier": "audit verifier",
+  "quality-judge": "quality judge",
   repairer: "repairer (the builder's while its model, effort and context are unset)",
 };
 export function agentName(role) {

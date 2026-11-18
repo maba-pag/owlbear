@@ -9,14 +9,13 @@ import posixpath
 import re
 import tomllib
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 from owlbear_quality import trees
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from pathlib import Path
 
 WHOLE = frozenset(
     {
@@ -124,6 +123,14 @@ def _parts(path: str, text: str, commands: Sequence[Sequence[str]]) -> object:
     return text
 
 
+def _parsed(path: str, source: str, commands: Sequence[Sequence[str]]) -> object:
+    try:
+        return _parts(path, source, commands)
+    except tomllib.TOMLDecodeError, json.JSONDecodeError, configparser.Error, AttributeError, TypeError:
+        # An unparseable shared manifest is configuration as a whole, not an empty set of exceptions.
+        return source
+
+
 def _protected(path: str) -> bool:
     p = PurePosixPath(path)
     return (
@@ -154,11 +161,7 @@ def _content(
         aim = _target(path, source, tree)  # a hook runs only while its target is executable: the mode counts
         named = {"mode": aim[1], "content": trees.blob(run, repo, aim[2])} if aim else None
         return {"symlink": source, "target": named}
-    try:
-        data = _parts(path, source, commands)
-    except tomllib.TOMLDecodeError, json.JSONDecodeError, configparser.Error, AttributeError, TypeError:
-        # A file that does not parse, or parses to another shape, is compared whole: no part can be told apart.
-        data = source
+    data = _parsed(path, source, commands)
     if not data and PurePosixPath(path).name in {"pyproject.toml", "package.json", "setup.cfg", "tox.ini"}:
         return None
     return {"mode": mode, "content": data}
@@ -188,3 +191,51 @@ def protected(
         return None
     text = json.dumps(changes, sort_keys=True, indent=2, ensure_ascii=False, default=str)
     return Protected(text, hashlib.sha256(text.encode()).hexdigest(), tuple(sorted(paths)))
+
+
+@dataclass(frozen=True)
+class Configuration:
+    """One lint configuration file or parsed table and its content-bound identity."""
+
+    path: str
+    table: str
+    content: str
+    identity: str
+
+
+def lint_file(path: str) -> bool:
+    """Whether a protected path configures lint rather than only CI or hooks."""
+    return (
+        _protected(path)
+        and not path.startswith(".github/workflows/")
+        and not any(p in {".husky", ".githooks"} for p in PurePosixPath(path).parts)
+        and PurePosixPath(path).name != "lefthook.yml"
+    )
+
+
+def configured(root: Path, commands: tuple[tuple[str, ...], ...] = ()) -> list[Configuration]:
+    """Existing protected lint configuration, sharing the protected-diff parser."""
+    found = []
+    for folder, dirs, names in root.walk():
+        dirs[:] = sorted(d for d in dirs if d not in {".git", ".venv", "node_modules"})
+        for name in sorted(names):
+            file = folder / name
+            path = file.relative_to(root).as_posix()
+            if not (file.is_file() or file.is_symlink()) or not lint_file(path):
+                continue
+            if file.is_symlink():
+                target = file.resolve()
+                content = (
+                    target.read_text(encoding="utf-8")
+                    if target.is_relative_to(root.resolve()) and target.is_file()
+                    else None
+                )
+                parts = json.dumps({"symlink": str(file.readlink()), "target": content}, sort_keys=True, indent=2)
+            else:
+                parts = _parsed(path, file.read_text(encoding="utf-8"), commands)
+            tables = parts if isinstance(parts, dict) else {"": parts}
+            for table, data in tables.items():
+                content = json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False) if table else data
+                digest = hashlib.sha256(json.dumps([path, table, content]).encode()).hexdigest()
+                found.append(Configuration(path, table, content, digest))
+    return found

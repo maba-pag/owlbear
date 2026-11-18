@@ -10,6 +10,7 @@ from owlbear_delivery_next.change_contracts import (
     approval_tools,
     audit_tools,
     curation_tools,
+    exception_tools,
     pack_tools,
     preparation,
     project_audit_tools,
@@ -239,8 +240,13 @@ class Gate:
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
             return [f"changes: the worktree could not be read ({failure(exc)}); try again"], None
         cfg = self.cfg
-        if isinstance(args, design_tools.DesignLook):
-            return design_tools.check(args, tree, cfg.targets), tree
+        if isinstance(args, design_tools.DesignLook | exception_tools.ExceptionVerdicts):
+            errors = (
+                exception_tools.check(args, cfg.policy.root)
+                if isinstance(args, exception_tools.ExceptionVerdicts)
+                else design_tools.check(args, tree, cfg.targets)
+            )
+            return errors, tree
         if isinstance(args, tools.CheckRecipe):  # TD-96, TD-107: a declared, permitted option and setup edits only
             return preparation.check(args, tree, cfg.policy.root, cfg.preparing or preparation.Preparing()), tree
         if isinstance(args, curation_tools.TestCurationResult):  # TD-339: committed, clean, only tests

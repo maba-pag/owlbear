@@ -1,0 +1,85 @@
+"""Configuration judgments are advice on the owner-authored approval question, never approval themselves."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from typing import TYPE_CHECKING
+
+from owlbear_quality.inspect import configured
+from owlbear_quality.protected import lint_file
+
+from owlbear_delivery_next.state_store import spend_ledger
+from owlbear_delivery_next.state_store.store import Lock
+from owlbear_delivery_next.workflow_steps import exceptions, sessions
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from owlbear_quality.inspect import Protected
+
+    from owlbear_delivery_next.change_contracts.models import Change
+    from owlbear_delivery_next.state_store.store import Store
+
+
+def items(path: Path, change: Protected, commands: tuple[tuple[str, ...], ...]) -> list[dict]:
+    """Changed lint files or tables only; deletions are judged as the removal of their old content."""
+    changes = json.loads(change.text)
+    found = []
+    for item in configured(path, commands):
+        if item.path not in changes:
+            continue
+        old = changes[item.path]["before"]
+        previous = old.get("content") if old else None
+        if item.table and isinstance(previous, dict):
+            previous = json.dumps(previous.get(item.table), sort_keys=True, indent=2, ensure_ascii=False)
+        if previous != item.content:
+            found.append(
+                {"identity": item.identity, "place": f"{item.path} {item.table}".strip(), "content": item.content}
+            )
+    for name, delta in changes.items():
+        if not lint_file(name):
+            continue
+        old, new = delta["before"], delta["after"]
+        if not any(item["place"].split(" ", 1)[0] == name for item in found) and (new is None or "symlink" in new):
+            content = json.dumps(delta, sort_keys=True, indent=2)
+            identity = hashlib.sha256(json.dumps([name, content]).encode()).hexdigest()
+            found.append({"identity": identity, "place": name, "content": content})
+        previous = old.get("content") if old else None
+        current = new.get("content") if new else None
+        if not isinstance(previous, dict):
+            continue
+        for table in previous.keys() - (current.keys() if isinstance(current, dict) else set()):
+            content = f"Removed table {table}:\n" + json.dumps(previous[table], sort_keys=True, indent=2)
+            identity = hashlib.sha256(json.dumps([name, table, content]).encode()).hexdigest()
+            found.append({"identity": identity, "place": f"{name} {table}", "content": content})
+    return found
+
+
+def run(
+    store: Store,
+    c: Change,
+    path: Path,
+    protection: tuple[Protected, str],
+    commands: tuple[tuple[str, ...], ...],
+) -> str:
+    """Every changed configuration item receives advice, or the whole failure appears in the question."""
+    change, commit = protection
+    selected = items(path, change, commands)
+    if not selected:
+        return ""
+    # Advice for the owner's question: it is no verdict on a suppression, so nothing goes to the ledger.
+    context = exceptions.authority(store, c) | {"for": c.slug, "commit": commit, "advice": True}
+    where = spend_ledger.where()
+    if not where.project:
+        where = spend_ledger.Where.of(store, change=c.slug, step=str(c.step.kind), job=exceptions.JOB)
+    lines = ["\n\nQuality judge's advice (your approval is still required):"]
+    for start in range(0, len(selected), exceptions.LIMIT):
+        said, done = exceptions.judge(store, path, selected[start : start + exceptions.LIMIT], where, context)
+        if done:
+            sessions.logged(store, Lock(c.slug), c, done, {"kind": exceptions.JOB, "exit": "advice"})
+        if "failed" in said:
+            lines.append(f"The quality judge failed: {said['failed']}")
+            break
+        lines.extend(f"{v['place']}: {v['verdict']}: {v['reason']}" for v in said["verdicts"])
+    return "\n".join(lines)

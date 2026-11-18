@@ -65,6 +65,7 @@ from owlbear_delivery_next.workflow_steps import (
     decisions_gate,
     design,
     engine,
+    exception_workers,
     follow,
     held,
     held_writes,
@@ -149,6 +150,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
 
     ctx = prepare.context(store, change, settings, path) if s.kind == StepKind.CHECK else None  # TD-107
     asked = lookup.Asked(store, lock, lambda: change)  # the worker's lookup_decisions (TD-456)
+    judged = exception_workers.Asked(store, lock, lambda: change, path)
 
     def config(at: Path) -> sdk_adapter.Session:
         parts = step_input.session(change, profile, at, others, ctx)
@@ -172,7 +174,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
             observe=lambda: worktree.observe(at, change.names.target, since),
             checks=parts.checks,
             lint_commands=lint_commands(profile),
-            quality=lambda: quality.check(change, at, lint_commands(profile)),
+            quality=lambda: quality.check(change, at, lint_commands(profile), folder=store.root),
             packages=parts.packages,
             submit=parts.submit,
             scope=tuple(change.brief.scope),
@@ -196,19 +198,21 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
             user=roles.user_config(settings),  # D-01M5YE4P5317N1HWD0QN6N05E0: the owner's own instructions and skills
             memory=sessions.memory(store),
             ui=change.brief.ui,
-            helpers=worker_input.helpers(change, at, asked),
+            helpers=worker_input.helpers(change, at, asked, judged),
             preparing=ctx,
             watch=watched.watching(store, lock, session, settings, at, _out, look_limit, asked),  # W1a's switch
         )
 
     made = (lambda at: curation_build.curator(config(at), change, settings)) if curated else config
-    run = accepted or asked.settled(partial(_kept, store, lock, change, path, made))
+    run = accepted or asked.settled(lambda: judged.settled(partial(_kept, store, lock, change, path, made)))
     end = datetime.now(UTC)
     # The session's callbacks replace ``change``; objects taken from it before the session are stale.
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     curation_build.recorded(change, run, path)
     post = held_writes.Deferred(store, slug) if accepted else store  # an accepted hold's writes wait for its receipt
-    result = approvals.requested(change, run, path, lint_commands(profile), session_result.to_result(run, s.kind, end))
+    result = approvals.Requests(post, lint_commands(profile)).requested(
+        change, run, path, session_result.to_result(run, s.kind, end)
+    )
     private = run.ending == "ask" and result.cause == cause_key(ErrorKind.RESULT, s.kind, worker_questions.LABEL)
     kept = worker_questions.unbound(post, lock, change, run, run.checks) if private else None
     if kept is None:

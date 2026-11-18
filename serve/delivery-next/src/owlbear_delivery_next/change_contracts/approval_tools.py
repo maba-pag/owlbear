@@ -11,14 +11,15 @@ class RequestApproval(Args):
 
     why: str = bounded(
         2000,
-        "Why this configuration change is needed for the approved work",
+        "Why this configuration change or refused suppression is needed for the approved work",
         "The new package needs its tests included in CI.",
     )
 
 
 REQUEST = Spec(
     "request_approval",
-    "Request approval of the current committed lint, format, CI or hook configuration change. Delivery reads "
+    "Request approval of committed lint, format, CI or hook configuration, or appeal a judged refusal of a "
+    "suppression once. Call judge_exceptions first for new suppressions. Delivery reads "
     "and shows the whole change to the owner. Your step ends and resumes with the answer or a refusal.",
     RequestApproval,
     "ask",

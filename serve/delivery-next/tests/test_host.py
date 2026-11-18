@@ -376,6 +376,7 @@ def test_status_reads_the_host_lock_and_shows_host_down(store):
         "  auditor: gpt-6.1-sol effort medium",
         "  project-auditor: gpt-6.1-sol effort medium",
         "  audit-verifier: gpt-6.1-sol effort medium",
+        "  quality-judge: gpt-6.1-sol effort medium",
         "  repairer: claude-opus-5.5 effort medium (builder)",  # D-01M6SY11CY5SN5ZKYJNM0K6BDM: the builder's, unset
     ]
 

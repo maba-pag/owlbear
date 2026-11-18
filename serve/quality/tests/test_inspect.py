@@ -3,7 +3,7 @@
 import asyncio
 from pathlib import Path
 
-from owlbear_quality.inspect import added, inventory, protected
+from owlbear_quality.inspect import added, configured, inventory, protected
 
 
 def git(repo: Path, args: list[str]) -> str:
@@ -93,6 +93,11 @@ def test_protected_compares_parsed_tables_and_invoked_scripts_not_dependencies(t
     assert "check:eslint" in evidence.text  # the script the lint script runs
     assert "tsc" not in evidence.text
     assert ".ecrc" in protected(git, tmp_path, retargeted, scripts).paths
+    assert "build" in next(
+        c.content
+        for c in configured(tmp_path, (("npm", "run", "build"),))
+        if c.path == "package.json" and c.table == "scripts"
+    )
 
 
 def test_inventory_scope_and_added_copies_come_from_commits(tmp_path: Path) -> None:
