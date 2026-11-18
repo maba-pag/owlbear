@@ -37,7 +37,13 @@ def change(audits: Audits, token: str, action: Literal["again", "accept"]) -> li
             raise ValueError(msg)
         store = audits.store
         running = {s for s in store.slugs() if not store.read(s).finished_at}
-        # A running Change's verdicts cover copies that are not on the target yet; they are not a removed copy's.
+        if held := sorted({m["for"] for m in group["members"]} & running):
+            msg = (
+                f"Running Change {', '.join(held)} holds a verdict that covers these suppressions; "
+                "change them after it has finished."
+            )
+            raise ValueError(msg)
+        # Nor are a running Change's other verdicts a removed copy's: they cover copies not on the target yet.
         spare = [
             m
             for m in suppression_items.spare(

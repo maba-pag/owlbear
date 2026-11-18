@@ -255,6 +255,10 @@ def test_a_removed_copy_s_verdict_does_not_undo_the_owner_s_action(review):
     assert mine["verdict"] == "accepted"
     verdict(review, mine, "again")
     assert [r["for"] for r in ledger.counting(review.store.root, item["identity"])] == [running.slug]
+    covered = next(g for g in review.client.get(f"{BASE}/verdicts").json()["verdicts"] if item["place"] in g["places"])
+    held = review.client.post(f"{BASE}/verdicts", json={"id": covered["id"], "action": "again"})
+    assert held.status_code == 409
+    assert running.slug in held.text
 
 
 def test_a_raised_session_error_still_publishes_the_completed_batches(review):

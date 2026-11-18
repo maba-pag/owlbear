@@ -86,7 +86,9 @@ def groups(root: Path, items: list[dict]) -> list[dict]:
             grouped[(item["directive"], place(item), row["verdict"], row["reason"])].append(item)
     result = []
     for (directive, location, verdict, reason), copies in sorted(grouped.items()):
-        members = [{"identity": i["identity"], "index": i["judgment"]["index"]} for i in copies]
+        members = [
+            {"identity": i["identity"], "index": i["judgment"]["index"], "for": i["judgment"]["for"]} for i in copies
+        ]
         token = hashlib.sha256(json.dumps(members, sort_keys=True).encode()).hexdigest()
         result.append(
             {
