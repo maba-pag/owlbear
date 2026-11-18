@@ -16,6 +16,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_delivery_next.audit_runs.job import Audits
+    from owlbear_delivery_next.runtimes.sdk_adapter import Session
+    from owlbear_delivery_next.runtimes.session_result import Run
 
 BATCHES = 10
 RETAINED = "Completed verdicts remain recorded."
@@ -29,6 +31,13 @@ def review(audits: Audits, state: dict, save: Callable[[], None]) -> None:
     store = audits.store
     where = spend_ledger.Where.of(store, job="Suppression review")
     with workspace.opened(audits.maintenance, audits.repo, state["commit"]) as copy:
+
+        def execute(cfg: Session) -> Run:
+            try:
+                return audits.run(cfg)
+            finally:
+                workspace.inspect(copy, state["commit"])
+
         items = suppression_items.scan(copy.path, profile.lint_commands(store.read_profile() or Profile()))
         state.update(inventory=items, counts=suppression_items.counts(store.root, items), phase="judging suppressions")
         save()
@@ -45,13 +54,14 @@ def review(audits: Audits, state: dict, save: Callable[[], None]) -> None:
                     {k: v for k, v in i.items() if k != "judgment"} for i in pending[offset : offset + exceptions.LIMIT]
                 ]
                 try:
-                    said, done = exceptions.Judge(store, run=audits.run, folder=copy.path.parent)(
+                    said, done = exceptions.Judge(store, run=execute, folder=copy.path.parent)(
                         copy.path,
                         batch,
                         where,
                         authority | {"for": "review", "commit": state["commit"]},
                     )
                 finally:
+                    # The judge returns session errors as data; shared-Git mutation must still fail the audit.
                     workspace.inspect(copy, state["commit"])
                 if done:
                     state["session"] = done.session_id

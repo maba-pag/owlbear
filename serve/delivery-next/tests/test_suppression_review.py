@@ -215,12 +215,28 @@ def test_failed_batch_keeps_verdicts_and_finish_recovers_a_lost_publication(revi
     assert len(refused) == 60
     assert all(r["backlog"] for r in refused)
     assert sum(len(m) for m in last["suppression_members"]) == 60
+    check_authority_and_readonly(review, monkeypatch)
+
+
+def check_authority_and_readonly(review, monkeypatch):
     before = len(review.calls)
-    monkeypatch.setattr(
-        job.suppression_review.exceptions, "chat_authority", lambda _s: {"failed": "decisions unreadable"}
-    )
-    failed = start(review)
-    assert failed["state"] == "failed"
-    assert "decisions unreadable" in failed["reason"]
-    assert len(review.calls) == before
-    assert record.load(review.store)["suppressions"]["counts"]["refused"] == 60
+    with monkeypatch.context() as blocked:
+        blocked.setattr(
+            job.suppression_review.exceptions, "chat_authority", lambda _s: {"failed": "decisions unreadable"}
+        )
+        failed = start(review)
+        assert failed["state"] == "failed"
+        assert "decisions unreadable" in failed["reason"]
+        assert len(review.calls) == before
+        assert record.load(review.store)["suppressions"]["counts"]["refused"] == 60
+    run = review.audits.run
+
+    def mutate(cfg):
+        worktree.git(review.audits.repo, "tag", "fixture-review-mutation")
+        return run(cfg)
+
+    review.audits.run = mutate
+    tampered = start(review)
+    assert tampered["state"] == "failed"
+    assert "fixture-review-mutation" in tampered["reason"]
+    assert tampered["counts"]["refused"] == 60

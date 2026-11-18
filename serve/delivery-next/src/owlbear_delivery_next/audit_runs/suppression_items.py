@@ -53,15 +53,10 @@ def counts(root: Path, items: list[dict]) -> dict[str, int]:
 
 def place(item: dict) -> str:
     """Package or top folder, distinguished by tests and source."""
-    parts = PurePosixPath(item["place"].split(":")[0]).parts
-    package = (
-        "/".join(parts[:2])
-        if parts[0] == "serve" and len(parts) >= len(("serve", "package", "file"))
-        else parts[0]
-        if len(parts) > 1
-        else "."
-    )
-    kind = "tests" if any(p in {"tests", "test"} or p.startswith("test_") for p in parts) else "source"
+    path = PurePosixPath(item["place"].split(":")[0])
+    folders = path.parent.parts
+    package = "/".join(folders[:2]) if folders and folders[0] == "serve" else folders[0] if folders else "."
+    kind = "tests" if any(p in {"tests", "test"} or p.startswith("test_") for p in path.parts) else "source"
     return f"{package} ({kind})"
 
 
