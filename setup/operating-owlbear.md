@@ -507,6 +507,16 @@ exceptions and refuses workarounds. The worker fixes a refusal in code or appeal
 The question shows the suppression, covered code and judge's reason. Your Approve is recorded as acceptance.
 Changed lint configuration also gets the judge's advice, but always needs your approval.
 
+The Change's page lists added suppressions below the build task, with place, directive, whole reason and who ruled.
+Refused and not judged entries show by default; accepted ones show with **Show details**. The list ends when the
+worktree is removed.
+
+Chats use `judge_exceptions(path, base)`: an absolute checkout and the ref they branched from. Only committed
+additions against the merge-base are judged, and a dirty tree is reported. Verdicts are recorded for that checkout
+and branch, never for a Change. Before editing, pass `proposed` (up to 20 items: file, line, directive and reason)
+for advice with no ledger write. A running answer gives a `run_id` for `await_exceptions`. Chats still ask you before
+adding a suppression, even when the judge accepts it.
+
 Set **quality judge** in **Settings** before starting work. Its model, effort, context, minutes and subagent switch
 start unset, like every new role's. Unset settings disable work-starting controls and automatic steps until set.
 The recommendations are `gpt-6.1-sol`, high effort, default context, 15 minutes and subagents on; they are not defaults.
