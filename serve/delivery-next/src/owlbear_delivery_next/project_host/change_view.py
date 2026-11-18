@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import subprocess
 from dataclasses import asdict
 from pathlib import Path
@@ -20,6 +21,8 @@ from owlbear_delivery_next.workflow_steps import held
 
 if TYPE_CHECKING:
     from datetime import datetime
+
+    from owlbear_quality.inspect import Addition
 
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.change_flow.status import Activity
@@ -60,6 +63,12 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     return out
 
 
+@functools.lru_cache(maxsize=32)
+def _added(root: Path, base: str, head: str) -> list[Addition]:
+    """What two commits add never changes, and the page asks every few seconds: read each pair once."""
+    return added(quality.git, root, base, head)
+
+
 def suppressions(store: Store, c: Change) -> list[dict[str, str]]:
     """Current added copies or the recorded verdicts when the worktree is gone."""
     if not c.names.worktree or not (root := Path(c.names.worktree)).exists():
@@ -73,7 +82,7 @@ def suppressions(store: Store, c: Change) -> list[dict[str, str]]:
     target = worktree.tracking(root, c.names.target)
     base = worktree.git(root, "merge-base", target, head).strip()
     found = []
-    for addition in added(quality.git, root, base, head):
+    for addition in _added(root, base, head):
         rows = exception_gate.ordered(ledger.counting(store.root, addition.identity, scope=c.slug))
         for n, place in enumerate(addition.places[: addition.count]):
             row = rows[n] if n < len(rows) else {}
