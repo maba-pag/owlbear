@@ -80,7 +80,7 @@ def review(tmp_path, change_repo, shared_repo, monkeypatch, github):
                     {
                         "id": i["id"],
                         "verdict": "refused" if script["refuse"] else "accepted",
-                        "reason": "The code can meet the rule. Full fixture reason.",
+                        "reason": f"The code can meet the rule. Full fixture reason for {i['place']}.",
                     }
                     for i in context["items"]
                 ]
@@ -162,6 +162,9 @@ def test_bounded_runs_continue_and_owner_verdicts_replace_history(review):
     assert ledger.counting(review.store.root, "removed")[0]["backlog"] == ""
     groups = review.client.get(f"{BASE}/verdicts").json()["verdicts"]
     refused = next(g for g in groups if g["verdict"] == "refused")
+    assert refused["count"] == 601  # every judged copy of the rule and place, although each reason differs
+    assert refused["reason"] == ""
+    assert all(r.endswith(f"for {p}.") for p, r in zip(refused["places"], refused["reasons"], strict=True))
     denied = review.client.post(
         f"{BASE}/verdicts", json={"id": refused["id"], "action": "accept"}, headers={"x-owlbear-use": "chat"}
     )
@@ -173,7 +176,9 @@ def test_bounded_runs_continue_and_owner_verdicts_replace_history(review):
     assert rows[-1]["verdict"] == "accepted"
     history = json.loads((review.store.root / ledger.FILE).read_text())[member["identity"]]
     assert history[member["index"]]["aside"]
-    accepted_group = next(g for g in groups if g["verdict"] == "accepted" and g["reason"].startswith("Owner"))
+    accepted_group = next(g for g in groups if g["verdict"] == "accepted" and g["by"] == "owner")
+    assert accepted_group["count"] == 601
+    assert all(r.startswith("Owner accepted") for r in accepted_group["reasons"])
     verdict(review, accepted_group, "again")
     review.script["refuse"] = False
     before = len(review.calls)

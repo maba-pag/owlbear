@@ -81,13 +81,15 @@ def place(item: dict) -> str:
 
 
 def groups(root: Path, items: list[dict]) -> list[dict]:
-    """Whole reasons remain visible; only equivalent lines share an owner action."""
+    """One owner action per rule, place, verdict and who ruled; each copy's whole reason stays with its place."""
     grouped: dict[tuple, list[dict]] = defaultdict(list)
     for item in joined(root, items):
         if row := item["judgment"]:
-            grouped[(item["directive"], place(item), row["verdict"], row["reason"])].append(item)
+            by = "owner" if row["by"] == "owner" else "judge"
+            grouped[(item["directive"], place(item), row["verdict"], by)].append(item)
     result = []
-    for (directive, location, verdict, reason), copies in sorted(grouped.items()):
+    for (directive, location, verdict, by), copies in sorted(grouped.items()):
+        reasons = [i["judgment"]["reason"] for i in copies]
         members = [
             {"identity": i["identity"], "index": i["judgment"]["index"], "for": i["judgment"]["for"]} for i in copies
         ]
@@ -98,7 +100,9 @@ def groups(root: Path, items: list[dict]) -> list[dict]:
                 "directive": directive,
                 "place": location,
                 "verdict": verdict,
-                "reason": reason,
+                "by": by,
+                "reason": reasons[0] if len(set(reasons)) == 1 else "",
+                "reasons": reasons,
                 "count": len(copies),
                 "places": [i["place"] for i in copies],
                 "members": members,

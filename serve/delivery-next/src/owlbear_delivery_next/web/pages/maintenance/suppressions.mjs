@@ -96,10 +96,12 @@ export function suppressionReview(show, reload) {
           state.reading}. The last successful list remains below.</p-text>` : nothing}
         ${state.verdicts.length ? html`<ul class="suppression-verdicts">${state.verdicts.map((line) => html`<li>
           <p-text class="review-text" size="sm">${line.directive} · ${line.place} · ${line.count} · ${
-            line.verdict}</p-text>
-          <p-text class="review-text" size="sm">${line.reason}</p-text>
-          <details><summary>${line.count === 1 ? "1 place" : `${line.count} places`}</summary>
-            <p-text class="review-text" size="sm">${line.places.join("\n")}</p-text></details>
+            line.verdict}${line.by === "owner" ? " by you" : ""}</p-text>
+          ${line.reason ? html`<p-text class="review-text" size="sm">${line.reason}</p-text>` : nothing}
+          <details><summary>${line.count === 1 ? "1 place" : `${line.count} places`}${
+            line.reason ? "" : " and reasons"}</summary>
+            <p-text class="review-text" size="sm">${line.reason ? line.places.join("\n")
+              : line.places.map((place, n) => `${place}\n${line.reasons[n]}`).join("\n\n")}</p-text></details>
           <div class="verdict-actions">
             <p-button type="button" variant="secondary" compact="true" ?disabled=${busy}
               @click=${() => change(line, "again")}>Judge again</p-button>
