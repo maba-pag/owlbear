@@ -273,7 +273,11 @@ def scripted_judge(monkeypatch):
         context = json.loads((cfg.worktree / "exceptions-context.json").read_text())
         contexts.append(context)
         verdicts = [
-            {"id": i["id"], "verdict": replies[0], "reason": "Evidence: this boundary is generated."}
+            {
+                "id": i["id"],
+                "verdict": "accepted" if replies[0] == "omit" else replies[0],
+                "reason": "Evidence: this boundary is generated.",
+            }
             for i in context["items"]
         ]
         done = Run(
@@ -283,7 +287,8 @@ def scripted_judge(monkeypatch):
         if replies[0] == "omit":
             text, ok = judge.call(exception_tools.SUBMIT, {"verdicts": verdicts[:-1]})
             assert not ok
-            assert "verdicts.id" in text
+            assert len(verdicts) == 2
+            assert verdicts[-1]["id"] in text
             assert not judge.done
             return Run(
                 cfg.session_id, "error", detail=text, model_check="verified", termination=Termination(confirmed=True)
@@ -391,9 +396,14 @@ def test_an_extra_identical_copy_above_an_accepted_one_needs_its_own_change_verd
 def test_a_judge_cannot_omit_an_item_and_a_failed_run_writes_no_verdict(project, picking, scripted_judge):
     path, c, base = project
     scripted_judge[1][0] = "omit"
-    head = commit(path, {"edge.txt": "# editorconfig-checker-disable-next-line\ngenerated_name\n"})
+    commit(
+        path,
+        {
+            "edge.txt": "# editorconfig-checker-disable-next-line\nfirst\n"
+            "# editorconfig-checker-disable-next-line\nsecond\n"
+        },
+    )
     g = gate(path, c, base, picking.store)
-    assert "verdicts.id" in judged(g)["failed"]
-    identity = added(quality.git, path, base, head)[0].identity
-    assert ledger.counting(picking.store.root, identity, scope=c.slug) == []
+    assert "e2" in judged(g)["failed"]
+    assert not (picking.store.root / ledger.FILE).exists()
     assert not submit(g)[1]
