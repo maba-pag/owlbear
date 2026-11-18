@@ -81,7 +81,7 @@ class Requests:
 
     def _advice(self, c: Change, path: Path, found: Protected, head: str) -> str:
         try:
-            said = exception_advice.Advice(self.store, Lock(c.slug)).run(c, path, found, head)
+            said = exception_advice.Advice(self.store, Lock(c.slug)).run(c, path, found, head, self.commands)
         except (OSError, ValueError, RuntimeError, StoreError) as exc:
             said = f"\n\nThe quality judge failed: {failure(exc)}"
         return said

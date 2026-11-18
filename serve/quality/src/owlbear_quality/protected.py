@@ -214,7 +214,7 @@ def lint_file(path: str) -> bool:
     )
 
 
-def configured(root: Path) -> list[Configuration]:
+def configured(root: Path, commands: tuple[tuple[str, ...], ...] = ()) -> list[Configuration]:
     """Existing protected lint configuration, sharing the protected-diff parser."""
     found = []
     for folder, dirs, names in root.walk():
@@ -233,7 +233,7 @@ def configured(root: Path) -> list[Configuration]:
                 )
                 parts = json.dumps({"symlink": str(file.readlink()), "target": content}, sort_keys=True, indent=2)
             else:
-                parts = _parsed(path, file.read_text(encoding="utf-8"), ())
+                parts = _parsed(path, file.read_text(encoding="utf-8"), commands)
             tables = parts if isinstance(parts, dict) else {"": parts}
             for table, data in tables.items():
                 content = json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False) if table else data

@@ -21,11 +21,11 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Lock, Store
 
 
-def items(path: Path, change: Protected) -> list[dict]:
+def items(path: Path, change: Protected, commands: tuple[tuple[str, ...], ...]) -> list[dict]:
     """Changed lint files or tables only; deletions are judged as the removal of their old content."""
     changes = json.loads(change.text)
     found = []
-    for item in configured(path):
+    for item in configured(path, commands):
         if item.path not in changes:
             continue
         old = changes[item.path]["before"]
@@ -62,9 +62,11 @@ class Advice:
         """Keep the caller's store and lock, never an identity from the agent."""
         self.store, self.lock = store, lock
 
-    def run(self, c: Change, path: Path, change: Protected, commit: str) -> str:
+    def run(
+        self, c: Change, path: Path, change: Protected, commit: str, commands: tuple[tuple[str, ...], ...]
+    ) -> str:
         """Every changed configuration item receives advice, or the whole failure appears in the question."""
-        selected = items(path, change)
+        selected = items(path, change, commands)
         if not selected:
             return ""
         context = exceptions.authority(self.store, c) | {"for": c.slug, "commit": commit}

@@ -35,7 +35,7 @@ Only owner-confirmed commands run. Otherwise the existing Ruff, Biome and ESLint
   or `None` when no protected configuration changed. Shared manifests are compared as parsed data, including
   the script entries the confirmed commands invoke; dependency-only edits are not protected changes.
 
-- `inspect.configured(root)` returns each existing protected lint configuration file or parsed table, its content
+- `inspect.configured(root, commands=())` returns each existing protected lint configuration file or parsed table, its content
   and a digest identity. It reuses the protected-change parser.
 - `ledger.add(folder, verdicts)` atomically appends copy verdicts to `exceptions.json` in the caller's folder.
   Each identity holds a list with `verdict`, `reason`, `by`, `for`, `at`, `commit`, `place`, `backlog` and `aside`.
