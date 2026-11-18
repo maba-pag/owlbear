@@ -34,7 +34,7 @@ def answer(store: Store, request: Request) -> dict[str, Any]:
     if "failed" in context:
         return context
     context["advice"] = request.proposed is not None
-    items = _proposed(root, request) if request.proposed is not None else _added(store, root, base, head, scope)
+    items = _proposed(request) if request.proposed is not None else _added(store, root, base, head, scope)
     verdicts = []
     where = spend_ledger.Where.of(store, job="chat exception judgment")
     for start in range(0, len(items), exceptions.LIMIT):
@@ -69,27 +69,17 @@ def _added(store: Store, root: Path, base: str, head: str, scope: str) -> list[d
     return items
 
 
-def _proposed(root: Path, request: Request) -> list[dict]:
-    items = []
-    for n, item in enumerate(request.proposed or []):
-        path = (root / item.file).resolve()
-        if not path.is_relative_to(root) or not path.is_file():
-            msg = f"proposed.{n}.file: {item.file} must be an existing file inside {root}"
-            raise ValueError(msg)
-        code = path.read_text(encoding="utf-8")
-        if item.line > len(code.splitlines()):
-            msg = f"proposed.{n}.line: {item.line} is beyond the end of {item.file}"
-            raise ValueError(msg)
-        items.append(
-            {
-                "identity": f"proposed-{n}",
-                "place": f"{item.file}:{item.line}",
-                "directive": item.directive,
-                "code": code,
-                "reason": item.reason,
-            }
-        )
-    return items
+def _proposed(request: Request) -> list[dict]:
+    """The chat's proposals as it sent them; the judge reads the named lines itself in repo/."""
+    return [
+        {
+            "identity": f"proposed-{n}",
+            "place": f"{item.file}:{item.line}",
+            "directive": item.directive,
+            "reason": item.reason,
+        }
+        for n, item in enumerate(request.proposed or [])
+    ]
 
 
 class Runs:
