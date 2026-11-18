@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import fcntl
 import json
-import os
 import uuid
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -37,8 +36,6 @@ def _write(path: Path, rows: dict) -> None:
     try:
         with sibling.open("w", encoding="utf-8") as stream:
             stream.write(json.dumps(rows, indent=2, ensure_ascii=False) + "\n")
-            stream.flush()
-            os.fsync(stream.fileno())
         sibling.replace(path)
     finally:
         sibling.unlink(missing_ok=True)
