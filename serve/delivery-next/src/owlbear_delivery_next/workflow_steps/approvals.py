@@ -9,7 +9,7 @@ from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, Question
 from owlbear_delivery_next.change_flow import exception_gate, loop, quality, worktree
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.state_store.store import Lock, StoreError
+from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import exception_advice, repair_copy
 
 if TYPE_CHECKING:
@@ -81,7 +81,7 @@ class Requests:
 
     def _advice(self, c: Change, path: Path, found: Protected, head: str) -> str:
         try:
-            said = exception_advice.Advice(self.store, Lock(c.slug)).run(c, path, found, head, self.commands)
+            said = exception_advice.run(self.store, c, path, (found, head), self.commands)
         except (OSError, ValueError, RuntimeError, StoreError) as exc:
             said = f"\n\nThe quality judge failed: {failure(exc)}"
         return said

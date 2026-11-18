@@ -10,6 +10,7 @@ from owlbear_quality.inspect import configured
 from owlbear_quality.protected import lint_file
 
 from owlbear_delivery_next.state_store import spend_ledger
+from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.workflow_steps import exceptions, sessions
 
 if TYPE_CHECKING:
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
     from owlbear_quality.inspect import Protected
 
     from owlbear_delivery_next.change_contracts.models import Change
-    from owlbear_delivery_next.state_store.store import Lock, Store
+    from owlbear_delivery_next.state_store.store import Store
 
 
 def items(path: Path, change: Protected, commands: tuple[tuple[str, ...], ...]) -> list[dict]:
@@ -55,31 +56,29 @@ def items(path: Path, change: Protected, commands: tuple[tuple[str, ...], ...]) 
     return found
 
 
-class Advice:
-    """Bind the project and Change lock for caller-owned run accounting."""
-
-    def __init__(self, store: Store, lock: Lock) -> None:
-        """Keep the caller's store and lock, never an identity from the agent."""
-        self.store, self.lock = store, lock
-
-    def run(
-        self, c: Change, path: Path, change: Protected, commit: str, commands: tuple[tuple[str, ...], ...]
-    ) -> str:
-        """Every changed configuration item receives advice, or the whole failure appears in the question."""
-        selected = items(path, change, commands)
-        if not selected:
-            return ""
-        context = exceptions.authority(self.store, c) | {"for": c.slug, "commit": commit}
-        where = spend_ledger.where()
-        if not where.project:
-            where = spend_ledger.Where.of(self.store, change=c.slug, step=str(c.step.kind), job=exceptions.JOB)
-        lines = ["\n\nQuality judge's advice (your approval is still required):"]
-        for start in range(0, len(selected), exceptions.LIMIT):
-            said, done = exceptions.judge(self.store, path, selected[start : start + exceptions.LIMIT], where, context)
-            if done:
-                sessions.logged(self.store, self.lock, c, done, {"kind": exceptions.JOB, "exit": "advice"})
-            if "failed" in said:
-                lines.append(f"The quality judge failed: {said['failed']}")
-                break
-            lines.extend(f"{v['place']}: {v['verdict']}: {v['reason']}" for v in said["verdicts"])
-        return "\n".join(lines)
+def run(
+    store: Store,
+    c: Change,
+    path: Path,
+    protection: tuple[Protected, str],
+    commands: tuple[tuple[str, ...], ...],
+) -> str:
+    """Every changed configuration item receives advice, or the whole failure appears in the question."""
+    change, commit = protection
+    selected = items(path, change, commands)
+    if not selected:
+        return ""
+    context = exceptions.authority(store, c) | {"for": c.slug, "commit": commit}
+    where = spend_ledger.where()
+    if not where.project:
+        where = spend_ledger.Where.of(store, change=c.slug, step=str(c.step.kind), job=exceptions.JOB)
+    lines = ["\n\nQuality judge's advice (your approval is still required):"]
+    for start in range(0, len(selected), exceptions.LIMIT):
+        said, done = exceptions.judge(store, path, selected[start : start + exceptions.LIMIT], where, context)
+        if done:
+            sessions.logged(store, Lock(c.slug), c, done, {"kind": exceptions.JOB, "exit": "advice"})
+        if "failed" in said:
+            lines.append(f"The quality judge failed: {said['failed']}")
+            break
+        lines.extend(f"{v['place']}: {v['verdict']}: {v['reason']}" for v in said["verdicts"])
+    return "\n".join(lines)
