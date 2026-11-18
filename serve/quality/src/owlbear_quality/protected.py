@@ -201,7 +201,6 @@ class Configuration:
     table: str
     content: str
     identity: str
-    digest: str
 
 
 def lint_file(path: str) -> bool:
@@ -238,5 +237,5 @@ def configured(root: Path, commands: tuple[tuple[str, ...], ...] = ()) -> list[C
             for table, data in tables.items():
                 content = json.dumps(data, sort_keys=True, indent=2, ensure_ascii=False) if table else data
                 digest = hashlib.sha256(json.dumps([path, table, content]).encode()).hexdigest()
-                found.append(Configuration(path, table, content, digest, hashlib.sha256(content.encode()).hexdigest()))
+                found.append(Configuration(path, table, content, digest))
     return found
