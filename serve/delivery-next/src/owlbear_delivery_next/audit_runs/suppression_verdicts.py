@@ -31,13 +31,14 @@ def change(audits: Audits, token: str, action: Literal["again", "accept"]) -> li
         if action == "accept" and group["verdict"] != "refused":
             msg = "Only refused suppressions can be accepted."
             raise ValueError(msg)
-        replacements = []
-        for member in group["members"]:
-            identity, index = member["identity"], member["index"]
-            if action == "again":
-                ledger.set_aside(audits.store.root, identity, [index])
-            else:
-                row = next(r for r in ledger.counting(audits.store.root, identity) if r["index"] == index)
+        if action == "again":
+            ledger.set_aside(audits.store.root, group["members"])
+        else:
+            current = ledger.current(audits.store.root)
+            replacements = []
+            for member in group["members"]:
+                identity, index = member["identity"], member["index"]
+                row = next(r for r in current[identity] if r["index"] == index)
                 replacements.append(
                     {
                         "identity": identity,
@@ -51,6 +52,5 @@ def change(audits: Audits, token: str, action: Literal["again", "accept"]) -> li
                         "directive": row["directive"],
                     }
                 )
-        if replacements:
             ledger.add(audits.store.root, replacements)
         return read(audits)
