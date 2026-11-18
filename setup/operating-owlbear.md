@@ -177,7 +177,8 @@ whole reason. Fix the code, or accept the suppression on Maintenance. There is n
 stops part-way, **Finish publishing** completes the saved entries and comments without judging again or opening
 them twice. Finish it before starting another run.
 
-**Verdicts** opens the recorded verdicts in the row, by rule and place, with their counts and whole reasons.
+**Verdicts** opens the recorded verdicts in the row, one line per rule, place, verdict and who ruled (the judge
+or you), with the count; each copy's place and whole reason are listed in the line.
 **Judge again** asks for confirmation, then sets those counting verdicts aside: history stays, no session starts,
 and the next review judges those copies afresh. **Accept**, on a refused line, asks for confirmation and replaces
 those refusals with your acceptance, keeping history. Neither action closes existing Backlog entries; triage them

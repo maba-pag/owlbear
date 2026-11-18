@@ -173,7 +173,9 @@ def test_bounded_runs_continue_and_owner_verdicts_replace_history(review):
     assert rows[-1]["verdict"] == "accepted"
     history = json.loads((review.store.root / ledger.FILE).read_text())[member["identity"]]
     assert history[member["index"]]["aside"]
-    accepted_group = next(g for g in groups if g["verdict"] == "accepted" and g["reason"].startswith("Owner"))
+    accepted_group = next(g for g in groups if g["verdict"] == "accepted" and g["by"] == "owner")
+    assert accepted_group["count"] == 601
+    assert accepted_group["reason"].startswith("Owner accepted")
     verdict(review, accepted_group, "again")
     review.script["refuse"] = False
     before = len(review.calls)
