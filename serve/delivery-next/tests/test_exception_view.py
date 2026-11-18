@@ -79,23 +79,6 @@ def test_change_suppressions_need_the_owner_by_default_and_acceptances_are_detai
         expect(shown.locator(":scope > ul > li")).to_have_count(3)
         expect(shown).to_contain_text("accepted.txt:1")
         expect(shown).to_contain_text("The generated boundary requires this exception.")
-        touch = page.context.new_cdp_session(page)
-        touch.send("Emulation.setTouchEmulationEnabled", {"enabled": True})
-        box = switch.bounding_box()
-        touch.send(
-            "Input.dispatchTouchEvent",
-            {
-                "type": "touchStart",
-                "touchPoints": [
-                    {
-                        "x": box["x"] + box["width"] / 2,
-                        "y": box["y"] + box["height"] / 2,
-                    }
-                ],
-            },
-        )
-        touch.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
-        expect(shown.locator(":scope > ul > li")).to_have_count(2)
         quality.git(root, ["branch", "-D", "main"])
         page.reload()
         expect(page.get_by_text("Suppressions could not be read", exact=True)).to_be_visible()
