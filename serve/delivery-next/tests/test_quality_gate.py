@@ -366,6 +366,25 @@ def test_a_refused_suppression_needs_the_owners_approve(project, picking, script
     assert submit(gate(path, c, base, picking.store))[1]
 
 
+def test_a_declined_appeal_is_not_asked_again(project, picking, scripted_judge):
+    path, c, base = project
+    scripted_judge[1][0] = "refused"
+    commit(path, {"edge.txt": "# editorconfig-checker-disable-next-line\ngenerated_name\n"})
+    assert judged(gate(path, c, base, picking.store))["verdicts"][0]["verdict"] == "refused"
+    c = request(path, c, base, picking.store)
+    picking.store.write(Lock(c.slug), c)
+    picking.store.put_inbox(c.slug, AnswerItem(question=c.questions[-1].id, option="decline", at=NOW))
+    c, _ = picking.store.fold(Lock(c.slug), c.slug, NOW)
+    g = gate(path, c, base, picking.store)
+    assert g.call(approval_tools.REQUEST, {"why": WHY})[1]
+    result = session_result.to_result(g.run, c.step.kind, NOW)
+    again = approvals.Requests(picking.store, COMMANDS).requested(c, g.run, path, result)
+    assert again.exit == Exit.RETRY
+    assert "edge.txt:1" in again.reason
+    assert "appealed once" in again.reason
+    assert not submit(gate(path, c, base, picking.store))[1]
+
+
 def test_removing_an_accepted_blocks_terminator_needs_another_verdict(project, picking, scripted_judge):
     path, c, base = project
     block = "# fmt: off\nvalue = 1\n# fmt: on\nother = 2\n"

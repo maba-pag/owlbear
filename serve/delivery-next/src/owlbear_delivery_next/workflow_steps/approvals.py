@@ -39,8 +39,8 @@ class Requests:
         base, head, found = quality.current(c, path, self.commands)
         items = exception_gate.pending(c, path, self.store.root, (base, head))
         items = exception_gate.approved(c, self.store.root, head, items)
-        if any(not item["refusal"] for item in items):
-            return _refused(c, marker, "A suppression has not been judged. Commit, then call judge_exceptions first.")
+        if why := _unaskable(c, items):
+            return _refused(c, marker, why)
         configuration = found if found and not quality.approved(c, found.digest) else None
         if not configuration and not items:
             return _refused(
@@ -85,6 +85,16 @@ class Requests:
         except (OSError, ValueError, RuntimeError, StoreError) as exc:
             said = f"\n\nThe quality judge failed: {failure(exc)}"
         return said
+
+
+def _unaskable(c: Change, items: list[dict]) -> str:
+    """Why the suppressions cannot go to the owner: one is not judged yet, or he already declined one."""
+    if any(not item["refusal"] for item in items):
+        return "A suppression has not been judged. Commit, then call judge_exceptions first."
+    if again := exception_gate.declined(c, items):
+        places = ", ".join(item["place"] for item in again)
+        return f"The owner declined the appeal for {places}. A suppression is appealed once: fix the code."
+    return ""
 
 
 def _refused(c: Change, cause: str, reason: str) -> loop.StepResult:

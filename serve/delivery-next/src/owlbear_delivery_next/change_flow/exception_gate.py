@@ -45,10 +45,32 @@ def pending(c: Change, path: Path, folder: Path, span: tuple[str, str]) -> list[
     return found
 
 
+def _one(item: dict) -> str:
+    """One shown copy's identity, copy number and evidence, independent of line-number shifts."""
+    text = json.dumps([item["identity"], item["copy"], item["directive"], item["code"]])
+    return hashlib.sha256(text.encode()).hexdigest()[:16]
+
+
 def digest(items: list[dict]) -> str:
-    """A shown set's identities, copy count and evidence, independent of line-number shifts."""
-    text = json.dumps(sorted((i["identity"], i["copy"], i["directive"], i["code"]) for i in items))
-    return hashlib.sha256(text.encode()).hexdigest() if items else ""
+    """The shown copies, each by its own short digest, so an answer is known per suppression."""
+    return "+".join(sorted(_one(i) for i in items))
+
+
+def _answered(c: Change, option: str) -> set[str]:
+    """The shown copies of every live answer of one kind to an appeal of this Change."""
+    return {
+        short
+        for q in c.questions
+        if q.cause and ":suppressions-" in q.cause and q.answer and q.answer.superseded_at is None
+        if q.answer.option == option
+        for short in q.cause.rpartition(":suppressions-")[2].split("+")
+    }
+
+
+def declined(c: Change, items: list[dict]) -> list[dict]:
+    """Refused copies the owner already declined: a suppression is appealed once."""
+    said = _answered(c, "decline")
+    return [item for item in items if item["refusal"] and _one(item) in said]
 
 
 def accept(c: Change, folder: Path, commit: str, items: list[dict]) -> None:
@@ -72,20 +94,12 @@ def accept(c: Change, folder: Path, commit: str, items: list[dict]) -> None:
 
 
 def approved(c: Change, folder: Path, commit: str, items: list[dict]) -> list[dict]:
-    """Consume only explicit, live Approve answers for the exact shown suppression set."""
-    refused = [item for item in items if item["refusal"]]
-    stamp = digest(refused)
-    if stamp and any(
-        q.cause
-        and q.cause.endswith(f":suppressions-{stamp}")
-        and q.answer
-        and q.answer.option == "approve"
-        and q.answer.superseded_at is None
-        for q in c.questions
-    ):
-        accept(c, folder, commit, refused)
-        return [item for item in items if not item["refusal"]]
-    return items
+    """Consume only explicit, live Approve answers, each for exactly the copies its question showed."""
+    said = _answered(c, "approve")
+    covered = [item for item in items if item["refusal"] and _one(item) in said]
+    if covered:
+        accept(c, folder, commit, covered)
+    return [item for item in items if item not in covered]
 
 
 def errors(items: list[dict]) -> list[str]:
