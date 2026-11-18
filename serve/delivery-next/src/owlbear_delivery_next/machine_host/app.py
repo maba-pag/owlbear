@@ -53,6 +53,7 @@ if TYPE_CHECKING:
 
 PROJECT = re.compile(r"^/p/([0-9a-f]{16})(?=/|$)")
 OWLBEAR_AUDIT = "/api/next/owlbear/chat/audits/code"
+OWLBEAR_EXCEPTIONS = "/api/next/owlbear/chat/exceptions"
 
 
 class RegisterBody(api.Body):
@@ -100,7 +101,10 @@ class Dispatcher:
                 self.machine.auto.use()
         found = PROJECT.match(scope.get("path", "")) if scope["type"] == "http" else None
         audit = scope["type"] == "http" and scope.get("path") == OWLBEAR_AUDIT and scope.get("method") == "POST"
-        if found is None and not audit:
+        exceptions = scope["type"] == "http" and (
+            scope.get("path") == OWLBEAR_EXCEPTIONS or scope.get("path", "").startswith(OWLBEAR_EXCEPTIONS + "/")
+        )
+        if found is None and not (audit or exceptions):
             await self.app(scope, receive, send)
             return
         headers = dict(scope.get("headers", []))
@@ -116,7 +120,7 @@ class Dispatcher:
             )  # reads only (§5.3)
             await JSONResponse({"detail": said}, 503)(scope, receive, send)
             return
-        if audit:
+        if audit or exceptions:
             await self._audit(scope, receive, send)
         elif found is not None:
             await self._serve(scope, receive, send, found[0])
@@ -134,7 +138,7 @@ class Dispatcher:
             await target(scope, receive, send)
             return
         prefix = f"/p/{target}"
-        path = f"{prefix}/api/next/chat/audits/code"
+        path = prefix + scope["path"].replace("/api/next/owlbear/", "/api/next/", 1)
         await self._serve({**scope, "path": path, "raw_path": path.encode()}, receive, send, prefix)
 
     async def _serve(self, scope: Scope, receive: Receive, send: Send, prefix: str) -> None:

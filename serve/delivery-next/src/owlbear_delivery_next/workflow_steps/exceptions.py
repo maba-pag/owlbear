@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_quality import ledger
 
+from owlbear_decisions import Scope, State
 from owlbear_delivery_next.change_contracts import exception_tools, tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
@@ -40,6 +41,21 @@ def authority(store: Store, c: Change) -> dict[str, Any]:
         return blocked
     found += lookup.own(c, store.name, found)
     return {"decisions": [lookup.row(d, "") for d in found]}
+
+
+def chat_authority(store: Store) -> dict[str, Any]:
+    """Global and project decisions in force, whole, as supplied to audit planning."""
+    if store.shared is None:
+        return {"failed": lookup.NO_SHARED}
+    view = decision_store.load(store.shared, store.name)
+    found = [
+        e.decision
+        for e in view.snapshot.entries
+        if e.decision.state is State.IN_FORCE and e.decision.scope is not Scope.CHANGE
+    ]
+    if blocked := lookup.unresolved(view.snapshot, found):
+        return {"failed": str(blocked)}
+    return {"decisions": [d.model_dump(mode="json") for d in found]}
 
 
 def judge(
@@ -104,10 +120,13 @@ def judge(
                 "for": context["for"],
                 "commit": context["commit"],
                 "place": item["place"],
+                "directive": item.get("directive", ""),
+                "replaces": item.get("replaces", []),
             }
             for n, item in enumerate(items, 1)
         ]
-        ledger.add(store.root, rows)
+        if not context.get("advice"):
+            ledger.add(store.root, rows)
     except (OSError, ValueError, RuntimeError, StoreError, SettingsUnset, sessions.SessionGrantError) as exc:
         return {"failed": failure(exc)}, done
     finally:

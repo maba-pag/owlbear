@@ -1,0 +1,2338 @@
+{
+  "own_waits": [
+    "Approve brief",
+    "Continue in the shaping chat"
+  ],
+  "replies": {
+    "GET /changes": [
+      "[].handle",
+      "[].slug",
+      "[].step",
+      "[].line",
+      "[].action",
+      "[].actor"
+    ],
+    "GET /chat/brief/{slug}": [
+      "challenge.version",
+      "challenge.attempt"
+    ],
+    "GET /chat/capture/{slug}": [
+      "running",
+      "version"
+    ],
+    "GET /chat/challenge/{slug}": [
+      "running",
+      "version"
+    ],
+    "GET /chat/contract": [
+      "supported"
+    ],
+    "GET /decisions": [
+      "available",
+      "decisions[].id",
+      "decisions[].title",
+      "decisions[].statement",
+      "decisions[].scope",
+      "decisions[].origin",
+      "decisions[].state",
+      "decisions[].conflict",
+      "decisions[].read_back",
+      "decisions[].revision",
+      "decisions[].created_at"
+    ],
+    "GET /decisions/lookups/{lookup_id}": [
+      "running"
+    ],
+    "GET /decisions/{decision_id}": [
+      "title",
+      "statement",
+      "scope",
+      "state",
+      "origin",
+      "rationale",
+      "links[].type",
+      "links[].id"
+    ],
+    "POST /briefs/challenge": [
+      "slug",
+      "attempt",
+      "paused"
+    ],
+    "POST /decisions/lookups": [
+      "lookup_id"
+    ]
+  },
+  "routes": {
+    "POST /briefs": {
+      "parameters": [],
+      "body": {
+        "additionalProperties": false,
+        "properties": {
+          "change": {
+            "default": "",
+            "pattern": "^(c\\d{1,4})?$",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "outcome": {
+            "maxLength": 2000,
+            "minLength": 20,
+            "type": "string"
+          },
+          "criteria": {
+            "items": {
+              "maxLength": 500,
+              "minLength": 10,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "type": "array"
+          },
+          "scope": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "type": "array"
+          },
+          "non_goals": {
+            "items": {
+              "maxLength": 300,
+              "minLength": 3,
+              "type": "string"
+            },
+            "maxItems": 10,
+            "type": "array"
+          },
+          "decisions": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "question": {
+                  "maxLength": 300,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "answer": {
+                  "maxLength": 500,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "origin": {
+                  "enum": [
+                    "decided",
+                    "approved",
+                    "autonomous"
+                  ],
+                  "type": "string"
+                },
+                "reason": {
+                  "default": "",
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                "scope": {
+                  "default": "change",
+                  "enum": [
+                    "change",
+                    "project"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "question",
+                "answer",
+                "origin"
+              ],
+              "type": "object"
+            },
+            "maxItems": 30,
+            "type": "array"
+          },
+          "person_checks": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                  "type": "string"
+                },
+                "steps": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 10,
+                  "minItems": 1,
+                  "type": "array"
+                },
+                "expect": {
+                  "maxLength": 300,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "covers": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 30,
+                  "type": "array"
+                },
+                "visual": {
+                  "default": false,
+                  "type": "boolean"
+                },
+                "owner": {
+                  "default": false,
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "steps",
+                "expect"
+              ],
+              "type": "object"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
+          "ui": {
+            "default": false,
+            "type": "boolean"
+          },
+          "visual": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                  "type": "string"
+                },
+                "path": {
+                  "pattern": "^/\\S{0,199}$",
+                  "type": "string"
+                },
+                "expect": {
+                  "maxLength": 300,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "owner": {
+                  "default": false,
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "path",
+                "expect"
+              ],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "type": "array"
+          },
+          "steps": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "state": {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                  "type": "string"
+                },
+                "do": {
+                  "enum": [
+                    "click",
+                    "type"
+                  ],
+                  "type": "string"
+                },
+                "target": {
+                  "maxLength": 120,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "text": {
+                  "default": "",
+                  "maxLength": 300,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "state",
+                "do",
+                "target"
+              ],
+              "type": "object"
+            },
+            "maxItems": 30,
+            "type": "array"
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "command": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "directory": {
+                    "maxLength": 300,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "ready_url": {
+                    "maxLength": 300,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "command",
+                  "directory",
+                  "ready_url"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "preparation": {
+            "default": "",
+            "maxLength": 40,
+            "type": "string"
+          },
+          "specified": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "type": "array"
+          }
+        },
+        "required": [
+          "title",
+          "outcome",
+          "criteria",
+          "scope"
+        ],
+        "type": "object"
+      }
+    },
+    "POST /briefs/visual": {
+      "parameters": [],
+      "body": {
+        "additionalProperties": false,
+        "properties": {
+          "change": {
+            "pattern": "^c\\d{1,4}$",
+            "type": "string"
+          },
+          "ui": {
+            "type": "boolean"
+          },
+          "states": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                  "type": "string"
+                },
+                "path": {
+                  "pattern": "^/\\S{0,199}$",
+                  "type": "string"
+                },
+                "expect": {
+                  "maxLength": 300,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "owner": {
+                  "default": false,
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "path",
+                "expect"
+              ],
+              "type": "object"
+            },
+            "maxItems": 6,
+            "type": "array"
+          },
+          "steps": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "state": {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                  "type": "string"
+                },
+                "do": {
+                  "enum": [
+                    "click",
+                    "type"
+                  ],
+                  "type": "string"
+                },
+                "target": {
+                  "maxLength": 120,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "text": {
+                  "default": "",
+                  "maxLength": 300,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "state",
+                "do",
+                "target"
+              ],
+              "type": "object"
+            },
+            "maxItems": 30,
+            "type": "array"
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "command": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "directory": {
+                    "maxLength": 300,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "ready_url": {
+                    "maxLength": 300,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "command",
+                  "directory",
+                  "ready_url"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "preparation": {
+            "default": "",
+            "maxLength": 40,
+            "type": "string"
+          }
+        },
+        "required": [
+          "change",
+          "ui"
+        ],
+        "type": "object"
+      }
+    },
+    "POST /briefs/challenge": {
+      "parameters": [],
+      "body": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "change": {
+                  "type": "string",
+                  "maxLength": 20,
+                  "minLength": 1
+                },
+                "version": {
+                  "type": "integer",
+                  "minimum": 1.0
+                },
+                "rejected": {
+                  "items": {
+                    "properties": {
+                      "finding": {
+                        "type": "string",
+                        "maxLength": 10,
+                        "minLength": 1
+                      },
+                      "reason": {
+                        "type": "string",
+                        "maxLength": 1000,
+                        "minLength": 1
+                      }
+                    },
+                    "additionalProperties": false,
+                    "type": "object",
+                    "required": [
+                      "finding",
+                      "reason"
+                    ]
+                  },
+                  "type": "array",
+                  "maxItems": 20
+                },
+                "retry_pick": {
+                  "type": "boolean",
+                  "default": false
+                }
+              },
+              "type": "object",
+              "required": [
+                "change",
+                "version"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "GET /changes": {
+      "parameters": [],
+      "body": null
+    },
+    "GET /chat/brief/{slug}": {
+      "parameters": [
+        {
+          "name": "slug",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "body": null
+    },
+    "GET /chat/challenge/{slug}": {
+      "parameters": [
+        {
+          "name": "slug",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "version",
+          "in": "query",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        {
+          "name": "attempt",
+          "in": "query",
+          "required": true,
+          "schema": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      ],
+      "body": null
+    },
+    "GET /chat/capture/{slug}": {
+      "parameters": [
+        {
+          "name": "slug",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "body": null
+    },
+    "POST /changes/{slug}/answers": {
+      "parameters": [
+        {
+          "name": "slug",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "body": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "question": {
+                  "type": "string",
+                  "maxLength": 16
+                },
+                "option": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "maxLength": 64
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "text": {
+                  "type": "string",
+                  "maxLength": 2000,
+                  "default": ""
+                },
+                "channel": {
+                  "type": "string",
+                  "enum": [
+                    "status-view",
+                    "chat"
+                  ],
+                  "default": "status-view"
+                },
+                "round": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1.0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "head": {
+                  "type": "string",
+                  "maxLength": 40,
+                  "default": ""
+                },
+                "pack": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "default": ""
+                },
+                "findings": {
+                  "items": {
+                    "type": "string",
+                    "maxLength": 40
+                  },
+                  "type": "array",
+                  "maxItems": 60
+                },
+                "tasks": {
+                  "items": {
+                    "type": "string",
+                    "maxLength": 16
+                  },
+                  "type": "array",
+                  "maxItems": 200
+                },
+                "attempt": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1.0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "kind": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "event",
+                        "clarification",
+                        "brief_change"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "statement": {
+                  "type": "string",
+                  "maxLength": 240,
+                  "default": ""
+                },
+                "confirmed": {
+                  "type": "boolean",
+                  "default": false
+                }
+              },
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "question"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "GET /decisions": {
+      "parameters": [
+        {
+          "name": "where",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "project",
+              "global",
+              "all",
+              "owlbear"
+            ],
+            "type": "string",
+            "default": "all"
+          }
+        },
+        {
+          "name": "text",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "maxLength": 200,
+            "default": ""
+          }
+        },
+        {
+          "name": "topic",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "maxLength": 80,
+            "default": ""
+          }
+        },
+        {
+          "name": "origin",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "maxLength": 16,
+            "default": ""
+          }
+        },
+        {
+          "name": "state",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "maxLength": 16,
+            "default": ""
+          }
+        },
+        {
+          "name": "read_back",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "",
+              "none",
+              "pending",
+              "done"
+            ],
+            "type": "string",
+            "default": ""
+          }
+        },
+        {
+          "name": "retired",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      ],
+      "body": null
+    },
+    "GET /decisions/{decision_id}": {
+      "parameters": [
+        {
+          "name": "decision_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "where",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "project",
+              "global",
+              "all",
+              "owlbear"
+            ],
+            "type": "string",
+            "default": "all"
+          }
+        }
+      ],
+      "body": null
+    },
+    "POST /decisions/lookup": {
+      "parameters": [],
+      "body": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "question": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "question"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "POST /decisions/lookups": {
+      "parameters": [],
+      "body": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "question": {
+                  "type": "string",
+                  "maxLength": 1000,
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "question"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "GET /decisions/lookups/{lookup_id}": {
+      "parameters": [
+        {
+          "name": "lookup_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "maxLength": 64
+          }
+        }
+      ],
+      "body": null
+    },
+    "POST /decisions/propose": {
+      "parameters": [
+        {
+          "name": "where",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "project",
+              "global",
+              "all",
+              "owlbear"
+            ],
+            "type": "string",
+            "default": "all"
+          }
+        }
+      ],
+      "body": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "minLength": 1
+                },
+                "topic": {
+                  "type": "string",
+                  "maxLength": 80,
+                  "default": ""
+                },
+                "statement": {
+                  "type": "string",
+                  "maxLength": 240,
+                  "minLength": 1
+                },
+                "rationale": {
+                  "type": "string",
+                  "maxLength": 4000,
+                  "default": ""
+                },
+                "confirmed": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "origin": {
+                  "type": "string",
+                  "enum": [
+                    "decided",
+                    "approved"
+                  ],
+                  "default": "decided"
+                },
+                "scope": {
+                  "type": "string",
+                  "enum": [
+                    "here",
+                    "global"
+                  ],
+                  "default": "here"
+                },
+                "replaces": {
+                  "type": "string",
+                  "pattern": "^D-[0-7][0-9A-HJKMNP-TV-Z]{25}$|^$",
+                  "default": ""
+                },
+                "revision": {
+                  "type": "string",
+                  "pattern": "^([0-9a-f]{64})?$",
+                  "default": ""
+                },
+                "reason": {
+                  "type": "string",
+                  "maxLength": 4000,
+                  "default": ""
+                },
+                "redecide": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "effect": {
+                  "type": "string",
+                  "enum": [
+                    "",
+                    "forbids",
+                    "wording"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "title",
+                "statement"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "GET /chat/contract": {
+      "parameters": [],
+      "body": null
+    },
+    "POST /decisions/{decision_id}/retire": {
+      "parameters": [
+        {
+          "name": "decision_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "where",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "project",
+              "global",
+              "all",
+              "owlbear"
+            ],
+            "type": "string",
+            "default": "all"
+          }
+        }
+      ],
+      "body": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "revision": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "redecide": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "reason": {
+                  "type": "string",
+                  "maxLength": 4000,
+                  "default": ""
+                },
+                "confirmed": {
+                  "type": "boolean",
+                  "default": false
+                }
+              },
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "revision"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "POST /decisions/{decision_id}/read-back": {
+      "parameters": [
+        {
+          "name": "decision_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "where",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "project",
+              "global",
+              "all",
+              "owlbear"
+            ],
+            "type": "string",
+            "default": "all"
+          }
+        }
+      ],
+      "body": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "revision": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "confirmed": {
+                  "type": "boolean",
+                  "default": false
+                }
+              },
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "revision"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "POST /decisions/{decision_id}/correct-origin": {
+      "parameters": [
+        {
+          "name": "decision_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "where",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "project",
+              "global",
+              "all",
+              "owlbear"
+            ],
+            "type": "string",
+            "default": "all"
+          }
+        }
+      ],
+      "body": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "revision": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "confirmed": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "origin": {
+                  "type": "string",
+                  "enum": [
+                    "approved",
+                    "autonomous"
+                  ]
+                },
+                "reason": {
+                  "type": "string",
+                  "maxLength": 4000,
+                  "default": ""
+                }
+              },
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "revision",
+                "origin"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "POST /decisions/{decision_id}/queue-read-back": {
+      "parameters": [
+        {
+          "name": "decision_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "where",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "project",
+              "global",
+              "all",
+              "owlbear"
+            ],
+            "type": "string",
+            "default": "all"
+          }
+        }
+      ],
+      "body": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "why": {
+                  "type": "string",
+                  "maxLength": 600,
+                  "minLength": 1
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "safety",
+                    "blocked",
+                    "uncertain",
+                    "improvement"
+                  ]
+                },
+                "revision": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                }
+              },
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "why",
+                "kind",
+                "revision"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "POST /decisions/{decision_id}/complete": {
+      "parameters": [
+        {
+          "name": "decision_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "where",
+          "in": "query",
+          "required": false,
+          "schema": {
+            "enum": [
+              "project",
+              "global",
+              "all",
+              "owlbear"
+            ],
+            "type": "string",
+            "default": "all"
+          }
+        }
+      ],
+      "body": {
+        "required": true,
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "revision": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "condition": {
+                  "type": "string",
+                  "maxLength": 4000,
+                  "minLength": 1
+                },
+                "evidence": {
+                  "type": "string",
+                  "maxLength": 4000,
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "revision",
+                "condition",
+                "evidence"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "POST /chat/audits/code": {
+      "parameters": [],
+      "body": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "note": {
+                  "type": "string",
+                  "maxLength": 2000,
+                  "default": ""
+                }
+              },
+              "additionalProperties": false,
+              "type": "object"
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "POST /chat/exceptions": {
+      "parameters": [],
+      "body": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "maxLength": 4096,
+                  "minLength": 1
+                },
+                "base": {
+                  "type": "string",
+                  "maxLength": 256,
+                  "minLength": 1
+                },
+                "proposed": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "properties": {
+                          "file": {
+                            "type": "string",
+                            "maxLength": 4096,
+                            "minLength": 1
+                          },
+                          "line": {
+                            "type": "integer",
+                            "maximum": 1000000.0,
+                            "minimum": 1.0
+                          },
+                          "directive": {
+                            "type": "string",
+                            "maxLength": 1000,
+                            "minLength": 1
+                          },
+                          "reason": {
+                            "type": "string",
+                            "maxLength": 4000,
+                            "minLength": 1
+                          }
+                        },
+                        "additionalProperties": false,
+                        "type": "object",
+                        "required": [
+                          "file",
+                          "line",
+                          "directive",
+                          "reason"
+                        ]
+                      },
+                      "type": "array",
+                      "maxItems": 20,
+                      "minItems": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "type": "object",
+              "required": [
+                "path",
+                "base"
+              ]
+            }
+          }
+        },
+        "required": true
+      }
+    },
+    "GET /chat/exceptions/{run_id}": {
+      "parameters": [
+        {
+          "name": "run_id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        }
+      ],
+      "body": null
+    }
+  },
+  "tools": {
+    "save_brief": {
+      "input": {
+        "$defs": {
+          "DecisionDraft": {
+            "additionalProperties": false,
+            "properties": {
+              "question": {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              "answer": {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              "origin": {
+                "enum": [
+                  "decided",
+                  "approved",
+                  "autonomous"
+                ],
+                "type": "string"
+              },
+              "reason": {
+                "default": "",
+                "maxLength": 500,
+                "type": "string"
+              },
+              "scope": {
+                "default": "change",
+                "enum": [
+                  "change",
+                  "project"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "question",
+              "answer",
+              "origin"
+            ],
+            "type": "object"
+          },
+          "PersonCheckDraft": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                "type": "string"
+              },
+              "steps": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 10,
+                "minItems": 1,
+                "type": "array"
+              },
+              "expect": {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              "covers": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 30,
+                "type": "array"
+              },
+              "visual": {
+                "default": false,
+                "type": "boolean"
+              },
+              "owner": {
+                "default": false,
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "steps",
+              "expect"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "title": {
+            "default": "",
+            "type": "string"
+          },
+          "outcome": {
+            "default": "",
+            "type": "string"
+          },
+          "criteria": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "non_goals": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "decisions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/DecisionDraft"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "person_checks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/PersonCheckDraft"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "specified": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "change": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "save_visual_check": {
+      "input": {
+        "$defs": {
+          "RecipeDraft": {
+            "additionalProperties": false,
+            "properties": {
+              "command": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "directory": {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              "ready_url": {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "command",
+              "directory",
+              "ready_url"
+            ],
+            "type": "object"
+          },
+          "VisualStateDraft": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                "type": "string"
+              },
+              "path": {
+                "pattern": "^/\\S{0,199}$",
+                "type": "string"
+              },
+              "expect": {
+                "maxLength": 300,
+                "minLength": 1,
+                "type": "string"
+              },
+              "owner": {
+                "default": false,
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "name",
+              "path",
+              "expect"
+            ],
+            "type": "object"
+          },
+          "VisualStepDraft": {
+            "additionalProperties": false,
+            "properties": {
+              "state": {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+                "type": "string"
+              },
+              "do": {
+                "enum": [
+                  "click",
+                  "type"
+                ],
+                "type": "string"
+              },
+              "target": {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              "text": {
+                "default": "",
+                "maxLength": 300,
+                "type": "string"
+              }
+            },
+            "required": [
+              "state",
+              "do",
+              "target"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "change": {
+            "type": "string"
+          },
+          "ui": {
+            "type": "boolean"
+          },
+          "states": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/VisualStateDraft"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/VisualStepDraft"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/RecipeDraft"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "preparation": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "required": [
+          "change",
+          "ui"
+        ],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "challenge_brief": {
+      "input": {
+        "$defs": {
+          "Rejection": {
+            "additionalProperties": false,
+            "properties": {
+              "finding": {
+                "maxLength": 10,
+                "minLength": 1,
+                "type": "string"
+              },
+              "reason": {
+                "maxLength": 1000,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "finding",
+              "reason"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "change": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          },
+          "rejected": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/Rejection"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "retry_pick": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "change",
+          "version"
+        ],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "await_challenge": {
+      "input": {
+        "properties": {
+          "change": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "change",
+          "version"
+        ],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "await_capture": {
+      "input": {
+        "properties": {
+          "change": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "change"
+        ],
+        "type": "object"
+      },
+      "output": null
+    },
+    "show_status": {
+      "input": {
+        "properties": {
+          "change": {
+            "default": "",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "start_code_audit": {
+      "input": {
+        "properties": {
+          "note": {
+            "default": "",
+            "maxLength": 2000,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "answer_question": {
+      "input": {
+        "properties": {
+          "question": {
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "event",
+              "clarification",
+              "brief_change"
+            ],
+            "type": "string"
+          },
+          "option": {
+            "default": "",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "maxLength": 2000,
+            "type": "string"
+          },
+          "statement": {
+            "default": "",
+            "maxLength": 240,
+            "type": "string"
+          },
+          "confirmed": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "question",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "find_decisions": {
+      "input": {
+        "properties": {
+          "text": {
+            "default": "",
+            "maxLength": 200,
+            "type": "string"
+          },
+          "where": {
+            "default": "all",
+            "enum": [
+              "project",
+              "global",
+              "all",
+              "owlbear"
+            ],
+            "type": "string"
+          },
+          "include_retired": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "lookup_decisions": {
+      "input": {
+        "properties": {
+          "question": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "question"
+        ],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "await_lookup": {
+      "input": {
+        "properties": {
+          "lookup_id": {
+            "maxLength": 64,
+            "type": "string"
+          }
+        },
+        "required": [
+          "lookup_id"
+        ],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "judge_exceptions": {
+      "input": {
+        "$defs": {
+          "Proposed": {
+            "additionalProperties": false,
+            "properties": {
+              "file": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              },
+              "line": {
+                "maximum": 1000000,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "directive": {
+                "maxLength": 1000,
+                "minLength": 1,
+                "type": "string"
+              },
+              "reason": {
+                "maxLength": 4000,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "file",
+              "line",
+              "directive",
+              "reason"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "base": {
+            "type": "string"
+          },
+          "proposed": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/Proposed"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "path",
+          "base"
+        ],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "await_exceptions": {
+      "input": {
+        "properties": {
+          "run_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id"
+        ],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "record_decision": {
+      "input": {
+        "$defs": {
+          "Replacement": {
+            "additionalProperties": false,
+            "properties": {
+              "decision": {
+                "type": "string"
+              },
+              "revision": {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              "redecide": {
+                "default": false,
+                "type": "boolean"
+              },
+              "effect": {
+                "default": "",
+                "enum": [
+                  "",
+                  "forbids",
+                  "wording"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "decision",
+              "revision"
+            ],
+            "type": "object"
+          }
+        },
+        "properties": {
+          "title": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "statement": {
+            "maxLength": 240,
+            "type": "string"
+          },
+          "rationale": {
+            "default": "",
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "topic": {
+            "default": "",
+            "maxLength": 80,
+            "type": "string"
+          },
+          "scope": {
+            "default": "here",
+            "enum": [
+              "here",
+              "global"
+            ],
+            "type": "string"
+          },
+          "confirmed": {
+            "default": false,
+            "type": "boolean"
+          },
+          "origin": {
+            "default": "decided",
+            "enum": [
+              "decided",
+              "approved"
+            ],
+            "type": "string"
+          },
+          "replaces": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Replacement"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "title",
+          "statement"
+        ],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "retire_decision": {
+      "input": {
+        "properties": {
+          "decision": {
+            "type": "string"
+          },
+          "revision": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "redecide": {
+            "default": false,
+            "type": "boolean"
+          },
+          "confirmed": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "decision",
+          "revision",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "complete_decision": {
+      "input": {
+        "properties": {
+          "decision": {
+            "pattern": "^D-[0-7][0-9A-HJKMNP-TV-Z]{25}$",
+            "type": "string"
+          },
+          "revision": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "condition": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "evidence": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "revision",
+          "condition",
+          "evidence"
+        ],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "read_back_decision": {
+      "input": {
+        "properties": {
+          "decision": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "confirmed": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "decision",
+          "revision"
+        ],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "correct_decision_origin": {
+      "input": {
+        "properties": {
+          "decision": {
+            "type": "string"
+          },
+          "revision": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "origin": {
+            "enum": [
+              "approved",
+              "autonomous"
+            ],
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 4000,
+            "type": "string"
+          },
+          "confirmed": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "decision",
+          "revision",
+          "origin",
+          "reason"
+        ],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    },
+    "queue_read_back": {
+      "input": {
+        "properties": {
+          "decision": {
+            "type": "string"
+          },
+          "revision": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "why": {
+            "maxLength": 600,
+            "minLength": 1,
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "safety",
+              "blocked",
+              "uncertain",
+              "improvement"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "decision",
+          "revision",
+          "why",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "output": {
+        "additionalProperties": true,
+        "type": "object"
+      }
+    }
+  }
+}

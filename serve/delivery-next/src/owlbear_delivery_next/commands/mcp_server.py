@@ -13,10 +13,13 @@ from typing import Annotated, Any, Literal
 
 from mcp.server import MCPServer
 from mcp.types import ImageContent, TextContent, ToolAnnotations
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from owlbear_decisions.models import ID_PATTERN
-from owlbear_delivery_next.change_contracts import tools  # noqa: TC001 - MCP resolves the tools' annotations at runtime
+from owlbear_delivery_next.change_contracts import (
+    exception_chat,
+    tools,
+)
 from owlbear_delivery_next.change_flow import brief_tools
 from owlbear_delivery_next.commands.chat_client import WAIT, Chat, Closed, workspace
 from owlbear_delivery_next.commands.mcp_launch import serve_stdio
@@ -27,7 +30,7 @@ _STATE: dict[str, Chat | Closed] = {}
 ASKED = Field(min_length=1, max_length=1000, description="What you need to decide; a reply with failed is no answer")
 
 
-def _d(name: str, model: type[tools.Args] = brief_tools.BriefDraft) -> Any:  # noqa: ANN401 - a pydantic FieldInfo
+def _d(name: str, model: type[BaseModel] = brief_tools.BriefDraft) -> Any:  # noqa: ANN401 - a pydantic FieldInfo
     field = model.model_fields[name]
     return Field(description=field.description, examples=field.examples)
 
@@ -219,6 +222,37 @@ def await_lookup(
     While it says running, call it again at once.
     """
     return lookup.agent_reply(_STATE["chat"].await_lookup(lookup_id))
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
+def judge_exceptions(
+    path: Annotated[str, _d("path", exception_chat.Request)],
+    base: Annotated[str, _d("base", exception_chat.Request)],
+    proposed: Annotated[list[exception_chat.Proposed] | None, _d("proposed", exception_chat.Request)] = None,
+) -> dict[str, Any]:
+    """Judge committed added suppressions, or proposed ones as advice without recording them; waits about 70 s.
+
+    Gives each place, verdict and reason, failed, or running with a run_id for await_exceptions.
+    Ask the owner before adding a suppression, even when the judge accepts it.
+    """
+    items = [item.model_dump() for item in proposed] if proposed is not None else None
+    return _STATE["chat"].judge_exceptions(path, base, items)
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, destructive_hint=False))
+def await_exceptions(
+    run_id: Annotated[
+        str,
+        Field(
+            description="The run_id judge_exceptions gave, 1-64 characters",
+            min_length=1,
+            max_length=64,
+            examples=["a" * 32],
+        ),
+    ],
+) -> dict[str, Any]:
+    """Wait about 70 s more for a judgment; asks for nothing. While running, call again at once."""
+    return _STATE["chat"].await_exceptions(run_id)
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=False, idempotent_hint=False, destructive_hint=False))
