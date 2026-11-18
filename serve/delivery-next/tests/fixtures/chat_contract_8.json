@@ -1,32 +1,11 @@
 {
-  "own_waits": [
-    "Approve brief",
-    "Continue in the shaping chat"
-  ],
+  "own_waits": ["Approve brief", "Continue in the shaping chat"],
   "replies": {
-    "GET /changes": [
-      "[].handle",
-      "[].slug",
-      "[].step",
-      "[].line",
-      "[].action",
-      "[].actor"
-    ],
-    "GET /chat/brief/{slug}": [
-      "challenge.version",
-      "challenge.attempt"
-    ],
-    "GET /chat/capture/{slug}": [
-      "running",
-      "version"
-    ],
-    "GET /chat/challenge/{slug}": [
-      "running",
-      "version"
-    ],
-    "GET /chat/contract": [
-      "supported"
-    ],
+    "GET /changes": ["[].handle", "[].slug", "[].step", "[].line", "[].action", "[].actor"],
+    "GET /chat/brief/{slug}": ["challenge.version", "challenge.attempt"],
+    "GET /chat/capture/{slug}": ["running", "version"],
+    "GET /chat/challenge/{slug}": ["running", "version"],
+    "GET /chat/contract": ["supported"],
     "GET /decisions": [
       "available",
       "decisions[].id",
@@ -40,9 +19,7 @@
       "decisions[].revision",
       "decisions[].created_at"
     ],
-    "GET /decisions/lookups/{lookup_id}": [
-      "running"
-    ],
+    "GET /decisions/lookups/{lookup_id}": ["running"],
     "GET /decisions/{decision_id}": [
       "title",
       "statement",
@@ -53,14 +30,8 @@
       "links[].type",
       "links[].id"
     ],
-    "POST /briefs/challenge": [
-      "slug",
-      "attempt",
-      "paused"
-    ],
-    "POST /decisions/lookups": [
-      "lookup_id"
-    ]
+    "POST /briefs/challenge": ["slug", "attempt", "paused"],
+    "POST /decisions/lookups": ["lookup_id"]
   },
   "routes": {
     "POST /briefs": {
@@ -125,11 +96,7 @@
                   "type": "string"
                 },
                 "origin": {
-                  "enum": [
-                    "decided",
-                    "approved",
-                    "autonomous"
-                  ],
+                  "enum": ["decided", "approved", "autonomous"],
                   "type": "string"
                 },
                 "reason": {
@@ -139,18 +106,11 @@
                 },
                 "scope": {
                   "default": "change",
-                  "enum": [
-                    "change",
-                    "project"
-                  ],
+                  "enum": ["change", "project"],
                   "type": "string"
                 }
               },
-              "required": [
-                "question",
-                "answer",
-                "origin"
-              ],
+              "required": ["question", "answer", "origin"],
               "type": "object"
             },
             "maxItems": 30,
@@ -193,11 +153,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "name",
-                "steps",
-                "expect"
-              ],
+              "required": ["name", "steps", "expect"],
               "type": "object"
             },
             "maxItems": 5,
@@ -229,11 +185,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "name",
-                "path",
-                "expect"
-              ],
+              "required": ["name", "path", "expect"],
               "type": "object"
             },
             "maxItems": 6,
@@ -248,10 +200,7 @@
                   "type": "string"
                 },
                 "do": {
-                  "enum": [
-                    "click",
-                    "type"
-                  ],
+                  "enum": ["click", "type"],
                   "type": "string"
                 },
                 "target": {
@@ -265,11 +214,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "state",
-                "do",
-                "target"
-              ],
+              "required": ["state", "do", "target"],
               "type": "object"
             },
             "maxItems": 30,
@@ -296,11 +241,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "command",
-                  "directory",
-                  "ready_url"
-                ],
+                "required": ["command", "directory", "ready_url"],
                 "type": "object"
               },
               {
@@ -322,12 +263,7 @@
             "type": "array"
           }
         },
-        "required": [
-          "title",
-          "outcome",
-          "criteria",
-          "scope"
-        ],
+        "required": ["title", "outcome", "criteria", "scope"],
         "type": "object"
       }
     },
@@ -365,11 +301,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "name",
-                "path",
-                "expect"
-              ],
+              "required": ["name", "path", "expect"],
               "type": "object"
             },
             "maxItems": 6,
@@ -384,10 +316,7 @@
                   "type": "string"
                 },
                 "do": {
-                  "enum": [
-                    "click",
-                    "type"
-                  ],
+                  "enum": ["click", "type"],
                   "type": "string"
                 },
                 "target": {
@@ -401,11 +330,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "state",
-                "do",
-                "target"
-              ],
+              "required": ["state", "do", "target"],
               "type": "object"
             },
             "maxItems": 30,
@@ -432,11 +357,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "command",
-                  "directory",
-                  "ready_url"
-                ],
+                "required": ["command", "directory", "ready_url"],
                 "type": "object"
               },
               {
@@ -451,10 +372,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "change",
-          "ui"
-        ],
+        "required": ["change", "ui"],
         "type": "object"
       }
     },
@@ -490,10 +408,7 @@
                     },
                     "additionalProperties": false,
                     "type": "object",
-                    "required": [
-                      "finding",
-                      "reason"
-                    ]
+                    "required": ["finding", "reason"]
                   },
                   "type": "array",
                   "maxItems": 20
@@ -504,10 +419,7 @@
                 }
               },
               "type": "object",
-              "required": [
-                "change",
-                "version"
-              ]
+              "required": ["change", "version"]
             }
           }
         },
@@ -614,10 +526,7 @@
                 },
                 "channel": {
                   "type": "string",
-                  "enum": [
-                    "status-view",
-                    "chat"
-                  ],
+                  "enum": ["status-view", "chat"],
                   "default": "status-view"
                 },
                 "round": {
@@ -672,11 +581,7 @@
                   "anyOf": [
                     {
                       "type": "string",
-                      "enum": [
-                        "event",
-                        "clarification",
-                        "brief_change"
-                      ]
+                      "enum": ["event", "clarification", "brief_change"]
                     },
                     {
                       "type": "null"
@@ -695,9 +600,7 @@
               },
               "additionalProperties": false,
               "type": "object",
-              "required": [
-                "question"
-              ]
+              "required": ["question"]
             }
           }
         }
@@ -710,12 +613,7 @@
           "in": "query",
           "required": false,
           "schema": {
-            "enum": [
-              "project",
-              "global",
-              "all",
-              "owlbear"
-            ],
+            "enum": ["project", "global", "all", "owlbear"],
             "type": "string",
             "default": "all"
           }
@@ -765,12 +663,7 @@
           "in": "query",
           "required": false,
           "schema": {
-            "enum": [
-              "",
-              "none",
-              "pending",
-              "done"
-            ],
+            "enum": ["", "none", "pending", "done"],
             "type": "string",
             "default": ""
           }
@@ -802,12 +695,7 @@
           "in": "query",
           "required": false,
           "schema": {
-            "enum": [
-              "project",
-              "global",
-              "all",
-              "owlbear"
-            ],
+            "enum": ["project", "global", "all", "owlbear"],
             "type": "string",
             "default": "all"
           }
@@ -830,9 +718,7 @@
               },
               "additionalProperties": false,
               "type": "object",
-              "required": [
-                "question"
-              ]
+              "required": ["question"]
             }
           }
         },
@@ -854,9 +740,7 @@
               },
               "additionalProperties": false,
               "type": "object",
-              "required": [
-                "question"
-              ]
+              "required": ["question"]
             }
           }
         },
@@ -884,12 +768,7 @@
           "in": "query",
           "required": false,
           "schema": {
-            "enum": [
-              "project",
-              "global",
-              "all",
-              "owlbear"
-            ],
+            "enum": ["project", "global", "all", "owlbear"],
             "type": "string",
             "default": "all"
           }
@@ -927,18 +806,12 @@
                 },
                 "origin": {
                   "type": "string",
-                  "enum": [
-                    "decided",
-                    "approved"
-                  ],
+                  "enum": ["decided", "approved"],
                   "default": "decided"
                 },
                 "scope": {
                   "type": "string",
-                  "enum": [
-                    "here",
-                    "global"
-                  ],
+                  "enum": ["here", "global"],
                   "default": "here"
                 },
                 "replaces": {
@@ -962,19 +835,12 @@
                 },
                 "effect": {
                   "type": "string",
-                  "enum": [
-                    "",
-                    "forbids",
-                    "wording"
-                  ]
+                  "enum": ["", "forbids", "wording"]
                 }
               },
               "additionalProperties": false,
               "type": "object",
-              "required": [
-                "title",
-                "statement"
-              ]
+              "required": ["title", "statement"]
             }
           }
         }
@@ -999,12 +865,7 @@
           "in": "query",
           "required": false,
           "schema": {
-            "enum": [
-              "project",
-              "global",
-              "all",
-              "owlbear"
-            ],
+            "enum": ["project", "global", "all", "owlbear"],
             "type": "string",
             "default": "all"
           }
@@ -1036,9 +897,7 @@
               },
               "additionalProperties": false,
               "type": "object",
-              "required": [
-                "revision"
-              ]
+              "required": ["revision"]
             }
           }
         }
@@ -1059,12 +918,7 @@
           "in": "query",
           "required": false,
           "schema": {
-            "enum": [
-              "project",
-              "global",
-              "all",
-              "owlbear"
-            ],
+            "enum": ["project", "global", "all", "owlbear"],
             "type": "string",
             "default": "all"
           }
@@ -1087,9 +941,7 @@
               },
               "additionalProperties": false,
               "type": "object",
-              "required": [
-                "revision"
-              ]
+              "required": ["revision"]
             }
           }
         }
@@ -1110,12 +962,7 @@
           "in": "query",
           "required": false,
           "schema": {
-            "enum": [
-              "project",
-              "global",
-              "all",
-              "owlbear"
-            ],
+            "enum": ["project", "global", "all", "owlbear"],
             "type": "string",
             "default": "all"
           }
@@ -1137,10 +984,7 @@
                 },
                 "origin": {
                   "type": "string",
-                  "enum": [
-                    "approved",
-                    "autonomous"
-                  ]
+                  "enum": ["approved", "autonomous"]
                 },
                 "reason": {
                   "type": "string",
@@ -1150,10 +994,7 @@
               },
               "additionalProperties": false,
               "type": "object",
-              "required": [
-                "revision",
-                "origin"
-              ]
+              "required": ["revision", "origin"]
             }
           }
         }
@@ -1174,12 +1015,7 @@
           "in": "query",
           "required": false,
           "schema": {
-            "enum": [
-              "project",
-              "global",
-              "all",
-              "owlbear"
-            ],
+            "enum": ["project", "global", "all", "owlbear"],
             "type": "string",
             "default": "all"
           }
@@ -1198,12 +1034,7 @@
                 },
                 "kind": {
                   "type": "string",
-                  "enum": [
-                    "safety",
-                    "blocked",
-                    "uncertain",
-                    "improvement"
-                  ]
+                  "enum": ["safety", "blocked", "uncertain", "improvement"]
                 },
                 "revision": {
                   "type": "string",
@@ -1212,11 +1043,7 @@
               },
               "additionalProperties": false,
               "type": "object",
-              "required": [
-                "why",
-                "kind",
-                "revision"
-              ]
+              "required": ["why", "kind", "revision"]
             }
           }
         }
@@ -1237,12 +1064,7 @@
           "in": "query",
           "required": false,
           "schema": {
-            "enum": [
-              "project",
-              "global",
-              "all",
-              "owlbear"
-            ],
+            "enum": ["project", "global", "all", "owlbear"],
             "type": "string",
             "default": "all"
           }
@@ -1271,11 +1093,7 @@
               },
               "additionalProperties": false,
               "type": "object",
-              "required": [
-                "revision",
-                "condition",
-                "evidence"
-              ]
+              "required": ["revision", "condition", "evidence"]
             }
           }
         }
@@ -1347,12 +1165,7 @@
                         },
                         "additionalProperties": false,
                         "type": "object",
-                        "required": [
-                          "file",
-                          "line",
-                          "directive",
-                          "reason"
-                        ]
+                        "required": ["file", "line", "directive", "reason"]
                       },
                       "type": "array",
                       "maxItems": 20,
@@ -1366,10 +1179,7 @@
               },
               "additionalProperties": false,
               "type": "object",
-              "required": [
-                "path",
-                "base"
-              ]
+              "required": ["path", "base"]
             }
           }
         },
@@ -1410,11 +1220,7 @@
                 "type": "string"
               },
               "origin": {
-                "enum": [
-                  "decided",
-                  "approved",
-                  "autonomous"
-                ],
+                "enum": ["decided", "approved", "autonomous"],
                 "type": "string"
               },
               "reason": {
@@ -1424,18 +1230,11 @@
               },
               "scope": {
                 "default": "change",
-                "enum": [
-                  "change",
-                  "project"
-                ],
+                "enum": ["change", "project"],
                 "type": "string"
               }
             },
-            "required": [
-              "question",
-              "answer",
-              "origin"
-            ],
+            "required": ["question", "answer", "origin"],
             "type": "object"
           },
           "PersonCheckDraft": {
@@ -1474,11 +1273,7 @@
                 "type": "boolean"
               }
             },
-            "required": [
-              "name",
-              "steps",
-              "expect"
-            ],
+            "required": ["name", "steps", "expect"],
             "type": "object"
           }
         },
@@ -1609,11 +1404,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "command",
-              "directory",
-              "ready_url"
-            ],
+            "required": ["command", "directory", "ready_url"],
             "type": "object"
           },
           "VisualStateDraft": {
@@ -1637,11 +1428,7 @@
                 "type": "boolean"
               }
             },
-            "required": [
-              "name",
-              "path",
-              "expect"
-            ],
+            "required": ["name", "path", "expect"],
             "type": "object"
           },
           "VisualStepDraft": {
@@ -1652,10 +1439,7 @@
                 "type": "string"
               },
               "do": {
-                "enum": [
-                  "click",
-                  "type"
-                ],
+                "enum": ["click", "type"],
                 "type": "string"
               },
               "target": {
@@ -1669,11 +1453,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "state",
-              "do",
-              "target"
-            ],
+            "required": ["state", "do", "target"],
             "type": "object"
           }
         },
@@ -1728,10 +1508,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "change",
-          "ui"
-        ],
+        "required": ["change", "ui"],
         "type": "object"
       },
       "output": {
@@ -1756,10 +1533,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "finding",
-              "reason"
-            ],
+            "required": ["finding", "reason"],
             "type": "object"
           }
         },
@@ -1789,10 +1563,7 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "change",
-          "version"
-        ],
+        "required": ["change", "version"],
         "type": "object"
       },
       "output": {
@@ -1810,10 +1581,7 @@
             "type": "integer"
           }
         },
-        "required": [
-          "change",
-          "version"
-        ],
+        "required": ["change", "version"],
         "type": "object"
       },
       "output": {
@@ -1828,9 +1596,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "change"
-        ],
+        "required": ["change"],
         "type": "object"
       },
       "output": null
@@ -1873,11 +1639,7 @@
             "type": "string"
           },
           "kind": {
-            "enum": [
-              "event",
-              "clarification",
-              "brief_change"
-            ],
+            "enum": ["event", "clarification", "brief_change"],
             "type": "string"
           },
           "option": {
@@ -1899,10 +1661,7 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "question",
-          "kind"
-        ],
+        "required": ["question", "kind"],
         "type": "object"
       },
       "output": {
@@ -1920,12 +1679,7 @@
           },
           "where": {
             "default": "all",
-            "enum": [
-              "project",
-              "global",
-              "all",
-              "owlbear"
-            ],
+            "enum": ["project", "global", "all", "owlbear"],
             "type": "string"
           },
           "include_retired": {
@@ -1949,9 +1703,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "question"
-        ],
+        "required": ["question"],
         "type": "object"
       },
       "output": {
@@ -1967,9 +1719,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "lookup_id"
-        ],
+        "required": ["lookup_id"],
         "type": "object"
       },
       "output": {
@@ -2004,12 +1754,7 @@
                 "type": "string"
               }
             },
-            "required": [
-              "file",
-              "line",
-              "directive",
-              "reason"
-            ],
+            "required": ["file", "line", "directive", "reason"],
             "type": "object"
           }
         },
@@ -2035,10 +1780,7 @@
             "default": null
           }
         },
-        "required": [
-          "path",
-          "base"
-        ],
+        "required": ["path", "base"],
         "type": "object"
       },
       "output": {
@@ -2055,9 +1797,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "run_id"
-        ],
+        "required": ["run_id"],
         "type": "object"
       },
       "output": {
@@ -2084,18 +1824,11 @@
               },
               "effect": {
                 "default": "",
-                "enum": [
-                  "",
-                  "forbids",
-                  "wording"
-                ],
+                "enum": ["", "forbids", "wording"],
                 "type": "string"
               }
             },
-            "required": [
-              "decision",
-              "revision"
-            ],
+            "required": ["decision", "revision"],
             "type": "object"
           }
         },
@@ -2120,10 +1853,7 @@
           },
           "scope": {
             "default": "here",
-            "enum": [
-              "here",
-              "global"
-            ],
+            "enum": ["here", "global"],
             "type": "string"
           },
           "confirmed": {
@@ -2132,10 +1862,7 @@
           },
           "origin": {
             "default": "decided",
-            "enum": [
-              "decided",
-              "approved"
-            ],
+            "enum": ["decided", "approved"],
             "type": "string"
           },
           "replaces": {
@@ -2150,10 +1877,7 @@
             "default": null
           }
         },
-        "required": [
-          "title",
-          "statement"
-        ],
+        "required": ["title", "statement"],
         "type": "object"
       },
       "output": {
@@ -2185,11 +1909,7 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "decision",
-          "revision",
-          "reason"
-        ],
+        "required": ["decision", "revision", "reason"],
         "type": "object"
       },
       "output": {
@@ -2219,12 +1939,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "decision",
-          "revision",
-          "condition",
-          "evidence"
-        ],
+        "required": ["decision", "revision", "condition", "evidence"],
         "type": "object"
       },
       "output": {
@@ -2246,10 +1961,7 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "decision",
-          "revision"
-        ],
+        "required": ["decision", "revision"],
         "type": "object"
       },
       "output": {
@@ -2268,10 +1980,7 @@
             "type": "string"
           },
           "origin": {
-            "enum": [
-              "approved",
-              "autonomous"
-            ],
+            "enum": ["approved", "autonomous"],
             "type": "string"
           },
           "reason": {
@@ -2283,12 +1992,7 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "decision",
-          "revision",
-          "origin",
-          "reason"
-        ],
+        "required": ["decision", "revision", "origin", "reason"],
         "type": "object"
       },
       "output": {
@@ -2312,21 +2016,11 @@
             "type": "string"
           },
           "kind": {
-            "enum": [
-              "safety",
-              "blocked",
-              "uncertain",
-              "improvement"
-            ],
+            "enum": ["safety", "blocked", "uncertain", "improvement"],
             "type": "string"
           }
         },
-        "required": [
-          "decision",
-          "revision",
-          "why",
-          "kind"
-        ],
+        "required": ["decision", "revision", "why", "kind"],
         "type": "object"
       },
       "output": {
