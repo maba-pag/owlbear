@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections import defaultdict
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -29,9 +31,10 @@ def prepare(store: Store, state: dict) -> None:
             groups[(item["directive"], suppression_items.place(item))].append(item)
     state["findings"], state["suppression_members"], state["suppression_details"] = [], [], []
     for (rule, place), items in sorted(groups.items()):
+        key = hashlib.sha256(json.dumps([rule, place]).encode()).hexdigest()[:16]
         state["findings"].append(
             {
-                "title": f"Review {rule[:100]} in {place[:80]}",
+                "title": f"Review {rule[:80]} in {place[:60]} [{key}]",
                 "type": "improvement",
                 "severity": "low",
                 "where": "Pinned inventory; full places in this entry's comments.",
