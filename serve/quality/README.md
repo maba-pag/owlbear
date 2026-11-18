@@ -43,6 +43,10 @@ Only owner-confirmed commands run. Otherwise the existing Ruff, Biome and ESLint
   `ledger.counting(folder, identity, scope=slug)` counts only active verdicts for that Change; omitting `scope`
   returns every active verdict. `ledger.counting_scope(folder, scope)` returns active verdicts across identities.
   `ledger.set_aside(folder, identity, indexes)` preserves entries as history.
+  `ledger.current(folder)` reads all counting verdicts with their history indexes in one snapshot.
+  `ledger.published(folder, members, number)` writes the Backlog number to the named history rows after publishing.
+  Maintenance's Suppression review counts non-chat verdicts against its pinned inventory and sets verdicts aside
+  or replaces refusals with owner acceptances, keeping history. Publication receipts also cover detail comments.
   `.exceptions.lock` serializes writers. A ledger that does not exist is empty, so a lost one costs a new
   judgement; unreadable JSON raises with its path and error. A killed writer leaves the earlier ledger intact.
 
