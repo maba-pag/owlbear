@@ -76,3 +76,20 @@ def set_aside(root: Path, identity: str, indexes: Sequence[int]) -> None:
         for index in indexes:
             rows[identity][index]["aside"] = True
         _write(root / FILE, rows)
+
+
+def published(root: Path, members: Sequence[dict], number: int) -> None:
+    """Receipt a refused copy's Backlog entry without replacing its verdict or history."""
+    with _locked(root) as rows:
+        for member in members:
+            rows[member["identity"]][member["index"]]["backlog"] = str(number)
+        _write(root / FILE, rows)
+
+
+def current(root: Path) -> dict[str, list[dict]]:
+    """One consistent read of every counting verdict, with indexes for history-preserving actions."""
+    with _locked(root) as rows:
+        return {
+            identity: [row | {"index": n} for n, row in enumerate(entries) if not row["aside"]]
+            for identity, entries in rows.items()
+        }

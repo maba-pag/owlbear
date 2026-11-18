@@ -9,7 +9,15 @@ import threading
 import uuid
 from typing import TYPE_CHECKING, Any
 
-from owlbear_delivery_next.audit_runs import context, publish, record, sessions, workspace
+from owlbear_delivery_next.audit_runs import (
+    context,
+    publish,
+    record,
+    sessions,
+    suppression_publish,
+    suppression_review,
+    workspace,
+)
 from owlbear_delivery_next.change_contracts import project_audit_tools
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.git.command_failure import failure
@@ -57,7 +65,11 @@ class Audits:
 
     def offered(self) -> tuple[str, ...]:
         """Only OwlBear's shared project folder offers an agent audit."""
-        return ("doc", "agent", "code") if self.store.name == "owlbear" else ("doc", "code")
+        return (
+            ("doc", "agent", "code", "suppressions")
+            if self.store.name == "owlbear"
+            else ("doc", "code", "suppressions")
+        )
 
     def busy(self) -> bool:
         """Whether the project's stop must wait for an audit or its publication."""
@@ -70,12 +82,13 @@ class Audits:
 
     def offer(self) -> dict[str, Any]:
         """The page's offered actions, models, target and reports."""
-        branch, role, verifier, problem = "", {}, {}, ""
+        branch, role, verifier, judge, problem = "", {}, {}, {}, ""
         try:
             branch = profile.value(self.store.read_profile() or Profile(), profile.DEFAULT, "")
             settings = self.store.settings()
             role = settings.roles.get("project-auditor") or {}
             verifier = settings.roles.get("audit-verifier") or {}
+            judge = settings.roles.get("quality-judge") or {}
         except (StoreError, SettingsUnset, OSError, ValueError) as exc:
             problem = failure(exc)
         rows = []
@@ -84,9 +97,9 @@ class Audits:
             rows.append(
                 {
                     "audit": audit,
-                    "name": f"{audit.title()} audit",
+                    "name": "Suppression review" if audit == "suppressions" else f"{audit.title()} audit",
                     "branch": branch,
-                    "role": {key: role.get(key) for key in ("model", "effort")},
+                    "role": {key: (judge if audit == "suppressions" else role).get(key) for key in ("model", "effort")},
                     "verifier": {key: verifier.get(key) for key in ("model", "effort")},
                     "last": last,
                     "blocked": problem or self.refusal(audit),
@@ -111,14 +124,12 @@ class Audits:
             return blocked
         try:
             settings = self.store.settings()
-            roles.chosen(settings, f"{audit}-audit")
-            roles.limit(settings, f"{audit}-audit")
-            allowed = roles.subagents(settings, f"{audit}-audit")
-            if audit == "code" and not allowed:
-                return "the code audit requires project-auditor subagents on; change it on the Settings page"
-            roles.chosen(settings, "audit-verify")
-            roles.limit(settings, "audit-verify")
-            roles.subagents(settings, "audit-verify")
+            if audit == "suppressions":
+                roles.chosen(settings, "exception-judgment")
+                roles.limit(settings, "exception-judgment")
+                roles.subagents(settings, "exception-judgment")
+            else:
+                self._audit_settings(audit)
             roles.user_config(settings)
             backlog.Backlog.of(self.store)
             record.load(self.store)
@@ -126,11 +137,26 @@ class Audits:
             return failure(exc)
         return ""
 
+    def _audit_settings(self, audit: str) -> None:
+        settings = self.store.settings()
+        roles.chosen(settings, f"{audit}-audit")
+        roles.limit(settings, f"{audit}-audit")
+        allowed = roles.subagents(settings, f"{audit}-audit")
+        if audit == "code" and not allowed:
+            msg = "the code audit requires project-auditor subagents on; change it on the Settings page"
+            raise ValueError(msg)
+        roles.chosen(settings, "audit-verify")
+        roles.limit(settings, "audit-verify")
+        roles.subagents(settings, "audit-verify")
+
     def start(self, audit: str, note: str = "", *, discard_report: str = "") -> dict[str, Any]:
         """Pin the selected branch and launch its audit, refusing an undisposed partial publication."""
         with self.lock:
             if why := self.refusal(audit):
                 raise AuditBusyError(why)
+            if audit == "suppressions" and note:
+                msg = "Suppression review takes no note"
+                raise ValueError(msg)
             if len(note) > NOTE_LIMIT:
                 msg = "the audit note exceeds 2000 characters"
                 raise ValueError(msg)
@@ -178,6 +204,8 @@ class Audits:
                 record.save(self.store, audit, state)
                 logger.exception("%s audit could not pin its initial commit", audit)
                 raise AuditBusyError(state["reason"]) from exc
+            if audit == "suppressions":
+                state.update(inventory=[], counts={}, suppression_members=[], judging_reason="")
             started = state.copy()
             self._launch(audit, state, resume=False)
             return started
@@ -216,6 +244,12 @@ class Audits:
             record.save(self.store, audit, state)
 
         try:
+            if audit == "suppressions":
+                if not resume:
+                    suppression_review.review(self, state, save)
+                suppression_publish.findings(self.store, state, save)
+                suppression_review.finish(state)
+                return
             if not resume:
                 with spend_ledger.at(spend_ledger.Where.of(self.store, job=f"{audit.title()} audit")):
                     self._audit(audit, state, save)
@@ -225,6 +259,8 @@ class Audits:
             state.update(reason=failure(exc), ended_at=record.now())
             if state["state"] != "publishing":
                 state.update(state="failed", phase="")
+            if audit == "suppressions":
+                state["reason"] += "\nCompleted verdicts remain recorded."
             logger.exception("%s audit failed", audit)
         finally:
             try:

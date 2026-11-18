@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.audit_runs import job as audit_job
+from owlbear_delivery_next.audit_runs import suppression_verdicts
 from owlbear_delivery_next.project_host import decision_routes, pack_routes, pds_routes, session_slots
 from owlbear_delivery_next.project_host.admission import admitted
 
@@ -34,6 +35,15 @@ class StartBody(NoteBody):
     discard_report: str = Field(default="", max_length=32)
 
 
+class VerdictBody(BaseModel):
+    """An owner confirmation of one exact displayed verdict group."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    action: Literal["again", "accept"]
+
+
 def maintenance_page(rec: HostRecord) -> str | None:
     """The Maintenance address for this host's project, or its machine overview."""
     if not rec.token:
@@ -46,7 +56,7 @@ def start_audit(audits: audit_job.Audits, host: Host, audit: str, body: StartBod
     try:
         with admitted(host):
             return audits.start(audit, body.note, discard_report=body.discard_report)
-    except audit_job.AuditBusyError as exc:
+    except (audit_job.AuditBusyError, ValueError) as exc:
         raise HTTPException(409, str(exc)) from exc
 
 
@@ -57,6 +67,18 @@ def router(audits: audit_job.Audits, host: Host) -> APIRouter:
     @routes.get("/maintenance/audits")
     def read() -> dict[str, Any]:
         return audits.offer()
+
+    @routes.get("/maintenance/audits/suppressions/verdicts")
+    def verdicts() -> dict[str, Any]:
+        return {"verdicts": suppression_verdicts.read(audits)}
+
+    @routes.post("/maintenance/audits/suppressions/verdicts", dependencies=[Depends(decision_routes.owner)])
+    def verdict(body: VerdictBody) -> dict[str, Any]:
+        try:
+            with admitted(host):
+                return {"verdicts": suppression_verdicts.change(audits, body.id, body.action)}
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
 
     @routes.post("/maintenance/audits/{audit}", dependencies=[Depends(decision_routes.owner)])
     def start(audit: str, body: StartBody) -> dict[str, Any]:

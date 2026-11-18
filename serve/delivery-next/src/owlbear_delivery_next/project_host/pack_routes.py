@@ -160,7 +160,10 @@ def overview(store: Store) -> list[dict[str, Any]]:
 def _audits(store: Store) -> list[dict[str, Any]]:
     reports = audit_record.read(store)
     offered = ["doc", "agent", "code"] if store.name == "owlbear" else ["doc", "code"]
+    offered.append("suppressions")
     notes = {
+        "suppressions": "Judges existing suppressions and lint configuration at a pinned commit, read-only. "
+        "Refused suppressions become Backlog improvements. Each run judges at most 10 batches of 60.",
         "doc": "Checks the documentation against the code and itself: accuracy, staleness, broken links, "
         "duplication, structure, audience. Reads a pinned commit and never edits.",
         "agent": "Checks the instructions, agents and skills that steer agents in OwlBear's repository. "
@@ -170,7 +173,7 @@ def _audits(store: Store) -> list[dict[str, Any]]:
     }
     return [
         {
-            "name": f"{name.title()} audit",
+            "name": "Suppression review" if name == "suppressions" else f"{name.title()} audit",
             "where": "Maintenance",
             "href": f"#audit-{name}",
             "built": True,
@@ -205,7 +208,7 @@ def subagent_use(store: Store) -> list[dict[str, Any]]:
         if last.get("session"):
             ran = _ran(last)
             steps[(f"audit:{name}", last["session"])] = (
-                f"{name}-audit",
+                "exception-judgment" if name == "suppressions" else f"{name}-audit",
                 [row for row in ran if row.get("audit_role") != "audit-verifier"],
             )
             if last.get("verifier_session"):
