@@ -90,5 +90,5 @@ def test_record_preserves_legacy_receipts_and_verified_summary_only_work(tmp_pat
     checked["findings"], checked["verdicts"] = [], []
     checked["summary_issue"]["complete"] = False
     assert record.unpublished(checked) == 1
-    assert job.Audits(store).offered() == ("doc", "agent", "code")
-    assert job.Audits(Store(tmp_path / "consumer", name="consumer")).offered() == ("doc", "code")
+    assert job.Audits(store).offered() == ("doc", "agent", "code", "suppressions")
+    assert job.Audits(Store(tmp_path / "consumer", name="consumer")).offered() == ("doc", "code", "suppressions")

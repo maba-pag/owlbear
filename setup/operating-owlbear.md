@@ -161,6 +161,28 @@ the project auditor's subagents switch on: a context helper precedes one worker 
 In an OwlBear developer checkout it targets the registered OwlBear project, not that developer checkout; it
 never drops unpublished results from chat. Live audit quality is separate from the scripted `audit-replay` proof.
 
+**Suppression review** is another Maintenance action, without a note. **Start review** fetches and pins the target
+branch and sends existing suppression directives and lint configuration to the quality judge, read-only. Set the
+**quality judge** role in Settings and connect a shared repository for the Backlog first. Only one project audit
+runs at a time. The confirmation names the branch, role and model; the run asks nothing and uses AI credits.
+
+Each run judges at most 10 batches of 60 items, saving each completed batch before the next starts. Verdicts from
+Changes, chats, reviews and the owner count; advice on a proposed suppression is not recorded. The row shows the time, branch and commit, how many
+items the pinned tree holds, accepted, refused and not yet judged, and links to the Backlog entries. Start again
+to continue when items remain. A failed or interrupted run keeps its completed verdicts.
+
+Refused copies still present at the pinned commit become Backlog improvements, grouped by directive and rules,
+package or top folder, and tests or source. Each entry's comments preserve every member's place and the judge's
+whole reason. Fix the code, or accept the suppression on Maintenance. There is no summary issue. If publication
+stops part-way, **Finish publishing** completes the saved entries and comments without judging again or opening
+them twice. Finish it before starting another run.
+
+**Verdicts** opens the recorded verdicts in the row, by rule and place, with their counts and whole reasons.
+**Judge again** asks for confirmation, then sets those counting verdicts aside: history stays, no session starts,
+and the next review judges those copies afresh. **Accept**, on a refused line, asks for confirmation and replaces
+those refusals with your acceptance, keeping history. Neither action closes existing Backlog entries; triage them
+on Backlog. You can later set an owner acceptance aside with Judge again.
+
 The Spotter looks at agents' work beside them, in Delivery's steps and in the VS Code chats of the folders listed in
 `enrolled_chats`, and acts on each finding as its settings in **Settings → Spotter** say: it records it, steers the
 agent, refuses its hand-off, stops it and resumes it with a note, stops it to ask you, or shows it to you on the
