@@ -3,6 +3,7 @@
 import contextlib
 import json
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -12,6 +13,7 @@ from owlbear_quality import ledger
 
 from owlbear_delivery_next.audit_runs import job, record, suppression_items
 from owlbear_delivery_next.change_contracts import exception_tools
+from owlbear_delivery_next.change_contracts.models import Change
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError
@@ -22,7 +24,7 @@ from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import backlog, spend_ledger
-from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import sessions
 
 BASE = "/maintenance/audits/suppressions"
@@ -240,14 +242,19 @@ def test_a_removed_copy_s_verdict_does_not_undo_the_owner_s_action(review):
         "place": "gone.py:1",
         "directive": item["directive"],
     }
-    ledger.add(review.store.root, [row, row | {"place": item["place"]}])
+    running = Change.model_validate_json((Path(__file__).parent / "fixtures" / "c1_v4_waiting.json").read_text())
+    review.store.write(Lock(running.slug), running)
+    ledger.add(
+        review.store.root,
+        [row, row | {"place": item["place"]}, row | {"place": "new.py:1", "verdict": "accepted", "for": running.slug}],
+    )
     assert start(review)["counts"]["refused"] == 2
     refused = next(g for g in review.client.get(f"{BASE}/verdicts").json()["verdicts"] if item["place"] in g["places"])
     groups = verdict(review, refused, "accept")
     mine = next(g for g in groups if item["place"] in g["places"])
     assert mine["verdict"] == "accepted"
     verdict(review, mine, "again")
-    assert ledger.counting(review.store.root, item["identity"]) == []
+    assert [r["for"] for r in ledger.counting(review.store.root, item["identity"])] == [running.slug]
 
 
 def test_a_raised_session_error_still_publishes_the_completed_batches(review):

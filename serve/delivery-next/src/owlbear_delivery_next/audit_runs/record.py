@@ -139,6 +139,12 @@ def load(store: Store) -> dict[str, Any]:
     }
 
 
+def shown(row: dict[str, Any] | None) -> dict[str, Any] | None:
+    """A report for a page: the review's lists of thousands of rows stay behind their own routes."""
+    hidden = {"inventory", "suppression_members", "suppression_details"}
+    return row and {k: v for k, v in row.items() if k not in hidden}
+
+
 def read(store: Store) -> dict[str, Any]:
     """Last reports; an interrupted session fails visibly, publication remains recoverable."""
     with _guard:

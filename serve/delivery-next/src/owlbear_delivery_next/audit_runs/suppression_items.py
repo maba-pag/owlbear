@@ -47,7 +47,7 @@ def _matched(root: Path, items: list[dict]) -> tuple[list[dict], list[dict]]:
         for item in places:
             row = taken.get(item["place"]) or (rows.pop(0) if rows else None)
             found.append(item | {"judgment": row})
-        spare.extend({"identity": identity, "index": r["index"]} for r in rows)
+        spare.extend({"identity": identity, "index": r["index"], "for": r["for"]} for r in rows)
     return sorted(found, key=lambda i: (i["directive"], i["place"])), spare
 
 

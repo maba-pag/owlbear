@@ -99,12 +99,7 @@ class Audits:
                     last["backlog_entries"] = suppression_publish.links(self.store, last)
                 except (StoreError, ProviderError, backlog.BacklogError, OSError, ValueError, RuntimeError) as exc:
                     last["backlog_error"] = failure(exc)
-                # The page reads the lists through its own routes; thousands of rows do not travel with each poll.
-                last = {
-                    k: v
-                    for k, v in last.items()
-                    if k not in {"inventory", "suppression_members", "suppression_details"}
-                }
+                last = record.shown(last)
             rows.append(
                 {
                     "audit": audit,

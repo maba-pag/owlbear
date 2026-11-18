@@ -178,7 +178,7 @@ def _audits(store: Store) -> list[dict[str, Any]]:
             "href": f"#audit-{name}",
             "built": True,
             "recorded": True,
-            "last": reports.get(name),
+            "last": audit_record.shown(reports.get(name)),
             "note": notes[name],
         }
         for name in offered

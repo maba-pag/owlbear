@@ -35,9 +35,16 @@ def change(audits: Audits, token: str, action: Literal["again", "accept"]) -> li
         if action == "accept" and group["verdict"] != "refused":
             msg = "Only refused suppressions can be accepted."
             raise ValueError(msg)
-        spare = suppression_items.spare(
-            audits.store.root, state.get("inventory", []), {m["identity"] for m in group["members"]}
-        )
+        store = audits.store
+        running = {s for s in store.slugs() if not store.read(s).finished_at}
+        # A running Change's verdicts cover copies that are not on the target yet; they are not a removed copy's.
+        spare = [
+            m
+            for m in suppression_items.spare(
+                store.root, state.get("inventory", []), {m["identity"] for m in group["members"]}
+            )
+            if m["for"] not in running
+        ]
         if action == "again":
             ledger.set_aside(audits.store.root, group["members"] + spare)
         else:
