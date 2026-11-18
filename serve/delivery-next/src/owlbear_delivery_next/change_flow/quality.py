@@ -46,9 +46,7 @@ def current(c: Change, path: Path, commands: tuple[tuple[str, ...], ...] = ()) -
     return base, head, protected(git, path, base, head, commands=commands)
 
 
-def check(
-    c: Change, path: Path, commands: tuple[tuple[str, ...], ...] = (), *, folder: Path | None = None
-) -> list[str]:
+def check(c: Change, path: Path, commands: tuple[tuple[str, ...], ...] = (), *, folder: Path) -> list[str]:
     """Refuse unapproved configuration and suppressions, without lint's refusal allowance."""
     base, head, found = current(c, path, commands)
     if found is not None and not approved(c, found.digest):
@@ -58,7 +56,6 @@ def check(
                 "owner's approval. Call request_approval with why this change is needed, or take it back and commit."
             )
         ]
-    folder = folder if folder is not None else path / ".owlbear" / "quality"
     items = exception_gate.pending(c, path, folder, (base, head))
     return exception_gate.errors(exception_gate.approved(c, folder, head, items))
 
