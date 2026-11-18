@@ -68,7 +68,8 @@ def run(
     selected = items(path, change, commands)
     if not selected:
         return ""
-    context = exceptions.authority(store, c) | {"for": c.slug, "commit": commit}
+    # Advice for the owner's question: it is no verdict on a suppression, so nothing goes to the ledger.
+    context = exceptions.authority(store, c) | {"for": c.slug, "commit": commit, "advice": True}
     where = spend_ledger.where()
     if not where.project:
         where = spend_ledger.Where.of(store, change=c.slug, step=str(c.step.kind), job=exceptions.JOB)
