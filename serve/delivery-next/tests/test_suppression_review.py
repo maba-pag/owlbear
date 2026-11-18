@@ -23,6 +23,7 @@ from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import backlog, spend_ledger
 from owlbear_delivery_next.state_store.store import Store
+from owlbear_delivery_next.workflow_steps import sessions
 
 BASE = "/maintenance/audits/suppressions"
 
@@ -64,6 +65,9 @@ def review(tmp_path, change_repo, shared_repo, monkeypatch, github):
         calls.append(context)
         done = Run(cfg.session_id, model_check="verified", termination=Termination(confirmed=True))
         if len(calls) == script["fail"]:
+            if script.get("raises"):
+                done.usage_unread = "fixture usage unreadable"
+                raise sessions.UsageUnreadError(done)
             done.ending, done.detail = "error", "fixture model connection ended"
             return done
         gate = Gate(cfg, done, lambda **_e: None, lambda: None)
@@ -132,25 +136,27 @@ def test_bounded_runs_continue_and_owner_verdicts_replace_history(review):
         review.store.root,
         [
             row | {"identity": accepted["identity"]},
-            row | {"identity": items[2]["identity"], "for": "chat:advice"},
+            row | {"identity": items[2]["identity"], "for": "chat:/checkout:branch"},
             row | {"identity": "removed", "verdict": "refused"},
         ],
     )
     last = start(review)
     assert last["state"] == "done", last["reason"]
-    assert last["counts"] == {"held": 604, "accepted": 1, "refused": 600, "unjudged": 3}
+    assert last["counts"] == {"held": 604, "accepted": 2, "refused": 600, "unjudged": 2}
     assert len(review.calls) == 10
     assert all(len(c["items"]) == 60 for c in review.calls)
+    assert all(i["code"] for c in review.calls for i in c["items"])
+    assert not any("code" in i for i in last["inventory"])
     judged = {i["identity"] for c in review.calls for i in c["items"]}
-    assert accepted["identity"] not in judged
-    assert items[2]["identity"] in judged
+    assert not {accepted["identity"], items[2]["identity"]} & judged
     assert last["commit"] == review.pinned[0]
     second = start(review)
     assert second["counts"]["unjudged"] == 0
-    assert len(review.calls[-1]["items"]) == 3
+    assert len(review.calls[-1]["items"]) == 2
     assert len(review.calls) == 11
     offered = next(a for a in review.client.get("/maintenance/audits").json()["audits"] if a["audit"] == "suppressions")
     assert len(offered["last"]["backlog_entries"]) == 2
+    assert "inventory" not in offered["last"]
     assert ledger.counting(review.store.root, "removed")[0]["backlog"] == ""
     groups = review.client.get(f"{BASE}/verdicts").json()["verdicts"]
     refused = next(g for g in groups if g["verdict"] == "refused")
@@ -171,7 +177,7 @@ def test_bounded_runs_continue_and_owner_verdicts_replace_history(review):
     before = len(review.calls)
     third = start(review)
     assert len(review.calls) > before
-    assert third["counts"]["unjudged"] == 2
+    assert third["counts"]["unjudged"] == 1
     assert start(review)["counts"]["unjudged"] == 0
     assert review.client.post(BASE, json={"note": "scope"}).status_code == 409
 
@@ -198,6 +204,10 @@ def test_failed_batch_keeps_verdicts_and_finish_recovers_a_lost_publication(revi
     assert "fixture response lost" in partial["reason"]
     assert partial["findings"][0]["pending"]
     assert len(github.issues) == 1
+    shown = review.client.get(f"{BASE}/verdicts").json()["verdicts"][0]
+    held = review.client.post(f"{BASE}/verdicts", json={"id": shown["id"], "action": "accept"})
+    assert held.status_code == 409
+    assert "Finish publishing" in held.text
     assert review.client.post(f"{BASE}/publish", json={}).status_code == 200
     review.audits.thread.join()
     assert "two minutes" in review.audits.read("suppressions")["reason"]
@@ -216,6 +226,38 @@ def test_failed_batch_keeps_verdicts_and_finish_recovers_a_lost_publication(revi
     assert all(r["backlog"] for r in refused)
     assert sum(len(m) for m in last["suppression_members"]) == 60
     check_authority_and_readonly(review, monkeypatch)
+
+
+def test_a_removed_copy_s_verdict_does_not_undo_the_owner_s_action(review):
+    item = inventory(review, 1)[0]
+    row = {
+        "identity": item["identity"],
+        "verdict": "refused",
+        "reason": "Earlier refusal",
+        "by": "judge",
+        "for": "review",
+        "commit": worktree.head(review.audits.repo),
+        "place": "gone.py:1",
+        "directive": item["directive"],
+    }
+    ledger.add(review.store.root, [row, row | {"place": item["place"]}])
+    assert start(review)["counts"]["refused"] == 2
+    refused = next(g for g in review.client.get(f"{BASE}/verdicts").json()["verdicts"] if item["place"] in g["places"])
+    groups = verdict(review, refused, "accept")
+    mine = next(g for g in groups if item["place"] in g["places"])
+    assert mine["verdict"] == "accepted"
+    verdict(review, mine, "again")
+    assert ledger.counting(review.store.root, item["identity"]) == []
+
+
+def test_a_raised_session_error_still_publishes_the_completed_batches(review):
+    inventory(review, 65)
+    review.script.update(fail=2, raises=True)
+    last = start(review)
+    assert last["state"] == "failed"
+    assert "fixture usage unreadable" in last["reason"]
+    assert last["findings"]
+    assert all(f["number"] for f in last["findings"])
 
 
 def check_authority_and_readonly(review, monkeypatch):

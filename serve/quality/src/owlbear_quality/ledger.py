@@ -70,9 +70,8 @@ def add(root: Path, verdicts: Sequence[dict]) -> None:
         _write(root / FILE, rows)
 
 
-def set_aside(root: Path, identity: str | Sequence[dict], indexes: Sequence[int] = ()) -> None:
-    """Set aside one identity's indexes or a snapshot's members, preserving history in one write."""
-    members = [{"identity": identity, "index": n} for n in indexes] if isinstance(identity, str) else identity
+def set_aside(root: Path, members: Sequence[dict]) -> None:
+    """Set aside a snapshot's members (identity and index), preserving history in one write."""
     with _locked(root) as rows:
         for member in members:
             rows[member["identity"]][member["index"]]["aside"] = True

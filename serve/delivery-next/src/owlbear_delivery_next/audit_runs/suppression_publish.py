@@ -10,16 +10,13 @@ from typing import TYPE_CHECKING
 
 from owlbear_quality import ledger
 
-from owlbear_delivery_next.audit_runs import publish, record, suppression_items
+from owlbear_delivery_next.audit_runs import publish, record, report_publish, suppression_items
 from owlbear_delivery_next.state_store import backlog
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_delivery_next.state_store.store import Store
-
-
-DETAIL_CHARS = 15_000  # at most 60,000 UTF-8 bytes, below GitHub's comment limit
 
 
 def prepare(store: Store, state: dict) -> None:
@@ -53,10 +50,7 @@ def prepare(store: Store, state: dict) -> None:
             f"{i['place']}: {i['judgment']['reason']}" for i in items
         )
         state["suppression_details"].append(
-            [
-                record.SummaryPart(body=detail[offset : offset + DETAIL_CHARS]).model_dump(mode="json")
-                for offset in range(0, len(detail), DETAIL_CHARS)
-            ]
+            [record.SummaryPart(body=part).model_dump(mode="json") for part in report_publish.chunks(detail)]
         )
 
 

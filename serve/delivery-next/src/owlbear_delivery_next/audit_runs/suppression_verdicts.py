@@ -24,6 +24,10 @@ def change(audits: Audits, token: str, action: Literal["again", "accept"]) -> li
         if audits.busy():
             msg = "An audit is running for this project; wait before changing verdicts."
             raise ValueError(msg)
+        state = audits.read("suppressions") or {}
+        if state.get("state") == "publishing":
+            msg = "Finish publishing the previous run before changing verdicts."
+            raise ValueError(msg)
         group = next((g for g in read(audits) if g["id"] == token), None)
         if group is None:
             msg = "These verdicts changed; reopen Verdicts and confirm the current line."
@@ -31,8 +35,11 @@ def change(audits: Audits, token: str, action: Literal["again", "accept"]) -> li
         if action == "accept" and group["verdict"] != "refused":
             msg = "Only refused suppressions can be accepted."
             raise ValueError(msg)
+        spare = suppression_items.spare(
+            audits.store.root, state.get("inventory", []), {m["identity"] for m in group["members"]}
+        )
         if action == "again":
-            ledger.set_aside(audits.store.root, group["members"])
+            ledger.set_aside(audits.store.root, group["members"] + spare)
         else:
             current = ledger.current(audits.store.root)
             replacements = []
@@ -42,7 +49,7 @@ def change(audits: Audits, token: str, action: Literal["again", "accept"]) -> li
                 replacements.append(
                     {
                         "identity": identity,
-                        "replaces": [index],
+                        "replaces": [index, *(m["index"] for m in spare if m["identity"] == identity)],
                         "verdict": "accepted",
                         "by": "owner",
                         "reason": f"Owner accepted the suppression. Previous refusal: {row['reason']}",

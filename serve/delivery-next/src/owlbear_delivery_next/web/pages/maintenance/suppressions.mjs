@@ -62,7 +62,8 @@ export function suppressionReview(show, reload) {
     const sure = await window.ask({
       title: again ? "Judge these suppressions again?" : "Accept these suppressions?",
       yes: again ? "Judge again" : "Accept", no: "Cancel", destructive: again,
-      now: `${line.count} ${line.directive} in ${line.place}. ` + (again
+      now: `${line.count} ${line.directive} in ${line.place}: ${line.places.slice(0, 5).join(", ")}${
+        line.count > 5 ? `, and ${line.count - 5} more, listed on the line` : ""}. ` + (again
         ? "Their counting verdicts are set aside. History is kept; no session starts now."
         : "Your acceptance replaces these refusals. The refusals stay in history; no session starts."),
       then: again
@@ -85,7 +86,8 @@ export function suppressionReview(show, reload) {
   }
 
   function verdicts(a) {
-    const busy = state.writing || a.blocked === "an audit is running for this project" || a.last?.state === "running";
+    const busy = state.writing || a.blocked === "an audit is running for this project"
+      || ["running", "publishing"].includes(a.last?.state);
     return html`<div><p-button type="button" variant="secondary" compact="true"
         @click=${toggle}>${state.open ? "Hide verdicts" : "Verdicts"}</p-button></div>
       ${state.open ? html`<section aria-label="Suppression verdicts">
@@ -96,6 +98,8 @@ export function suppressionReview(show, reload) {
           <p-text class="review-text" size="sm">${line.directive} · ${line.place} · ${line.count} · ${
             line.verdict}</p-text>
           <p-text class="review-text" size="sm">${line.reason}</p-text>
+          <details><summary>${line.count === 1 ? "1 place" : `${line.count} places`}</summary>
+            <p-text class="review-text" size="sm">${line.places.join("\n")}</p-text></details>
           <div class="verdict-actions">
             <p-button type="button" variant="secondary" compact="true" ?disabled=${busy}
               @click=${() => change(line, "again")}>Judge again</p-button>
@@ -117,8 +121,8 @@ export function suppressionReview(show, reload) {
       when(last.ended_at || last.started_at)} · ${pin} · ${last.state}${last.phase ? ` · ${last.phase}` : ""}</p-text>
       ${counts && "held" in counts ? html`<p-text class="review-text" size="sm">${counts.held} held · ${
         counts.accepted} accepted · ${counts.refused} refused · ${counts.unjudged} not yet judged</p-text>
-        ${counts.unjudged ? html`<p-text class="review-text" size="sm">${
-          `${counts.unjudged} not yet judged: start again to continue.`}</p-text>` : nothing}` : nothing}
+        ${counts.unjudged ? html`<p-text class="review-text" size="sm">Start again to continue.</p-text>`
+          : nothing}` : nothing}
       ${last.reason ? html`<p-text class="review-text" size="sm">${last.state === "publishing"
         ? "Publishing unfinished" : "Failed"}: ${last.reason}</p-text>` : nothing}
       ${last.backlog_error ? html`<p-text class="review-text" size="sm">Could not read the Backlog links: ${

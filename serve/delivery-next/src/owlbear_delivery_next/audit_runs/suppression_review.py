@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.audit_runs import record, suppression_items, suppression_publish, workspace
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import spend_ledger
 from owlbear_delivery_next.state_store.store import StoreError
@@ -20,7 +21,6 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.runtimes.session_result import Run
 
 BATCHES = 10
-RETAINED = "Completed verdicts remain recorded."
 
 
 def review(audits: Audits, state: dict, save: Callable[[], None]) -> None:
@@ -39,7 +39,8 @@ def review(audits: Audits, state: dict, save: Callable[[], None]) -> None:
                 workspace.inspect(copy, state["commit"])
 
         items = suppression_items.scan(copy.path, profile.lint_commands(store.read_profile() or Profile()))
-        state.update(inventory=items, counts=suppression_items.counts(store.root, items), phase="judging suppressions")
+        held = [{k: v for k, v in i.items() if k != "code"} for i in items]
+        state.update(inventory=held, counts=suppression_items.counts(store.root, held), phase="judging suppressions")
         save()
         try:
             authority = exceptions.chat_authority(store)
@@ -60,6 +61,9 @@ def review(audits: Audits, state: dict, save: Callable[[], None]) -> None:
                         where,
                         authority | {"for": "review", "commit": state["commit"]},
                     )
+                except session_result.ReturnedRunError as exc:
+                    # A session that ended without a usable run stops judging; earlier batches still publish.
+                    said, done = {"failed": failure(exc)}, exc.run
                 finally:
                     # The judge returns session errors as data; shared-Git mutation must still fail the audit.
                     workspace.inspect(copy, state["commit"])
@@ -82,6 +86,6 @@ def finish(state: dict) -> None:
     state.update(
         state="failed" if reason else "done",
         phase="",
-        reason=f"{reason}\n{RETAINED}" if reason else "",
+        reason=f"{reason}\nCompleted verdicts remain recorded." if reason else "",
         ended_at=record.now(),
     )

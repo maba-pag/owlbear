@@ -104,16 +104,18 @@ def test_suppression_review_is_visible_bounded_and_owner_confirmed(tmp_path, pds
         expect(row).to_contain_text("3 held")
         expect(row).to_contain_text("1 accepted")
         expect(row).to_contain_text("1 refused")
-        expect(row).to_contain_text("1 not yet judged: start again to continue")
+        expect(row).to_contain_text("1 not yet judged")
         expect(row.get_by_role("link", name="#12", exact=False)).to_have_attribute("href", finding["url"])
         verdict_controls(page, row, pds)
         assert not github.issues
 
 
 def verdict_controls(page, row, pds):
+    expect(row).to_contain_text("Start again to continue.")
     row.get_by_role("button", name="Verdicts", exact=True).click()
     lines = row.locator(".suppression-verdicts > li")
     expect(lines).to_have_count(2)
+    expect(lines.nth(1).locator("summary")).to_have_text("1 place")
     expect(lines.nth(1)).to_contain_text(("The code can meet the rule. " * 20).strip())
     for control in row.get_by_role("button").all():
         big(control)

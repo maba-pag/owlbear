@@ -1,4 +1,4 @@
-"""Pinned suppression copies joined to counting, non-chat verdicts."""
+"""Pinned suppression copies joined to counting verdicts."""
 
 from __future__ import annotations
 
@@ -31,16 +31,34 @@ def scan(root: Path, commands: tuple[tuple[str, ...], ...]) -> list[dict]:
     return sorted(items, key=lambda i: (i["directive"], i["place"]))
 
 
-def joined(root: Path, items: list[dict]) -> list[dict]:
-    """At most one counting verdict per pinned copy; chat advice never covers a review."""
+def _matched(root: Path, items: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Each pinned copy takes the verdict given at its place, else the earliest left; the rest cover no copy."""
     copies: dict[str, list[dict]] = defaultdict(list)
     for item in items:
         copies[item["identity"]].append(item)
-    found, verdicts = [], ledger.current(root)
+    found, spare, verdicts = [], [], ledger.current(root)
     for identity, places in copies.items():
-        rows = [r for r in verdicts.get(identity, []) if not r["for"].startswith("chat:")]
-        found.extend(item | {"judgment": rows[n] if n < len(rows) else None} for n, item in enumerate(places))
-    return sorted(found, key=lambda i: (i["directive"], i["place"]))
+        rows = list(verdicts.get(identity, []))
+        taken = {}
+        for item in places:
+            if row := next((r for r in rows if r["place"] == item["place"]), None):
+                rows.remove(row)
+                taken[item["place"]] = row
+        for item in places:
+            row = taken.get(item["place"]) or (rows.pop(0) if rows else None)
+            found.append(item | {"judgment": row})
+        spare.extend({"identity": identity, "index": r["index"]} for r in rows)
+    return sorted(found, key=lambda i: (i["directive"], i["place"])), spare
+
+
+def joined(root: Path, items: list[dict]) -> list[dict]:
+    """At most one counting verdict per pinned copy."""
+    return _matched(root, items)[0]
+
+
+def spare(root: Path, items: list[dict], identities: set[str]) -> list[dict]:
+    """Counting verdicts of removed copies, which would otherwise take the place of one the owner changes."""
+    return [m for m in _matched(root, items)[1] if m["identity"] in identities]
 
 
 def counts(root: Path, items: list[dict]) -> dict[str, int]:
@@ -78,6 +96,7 @@ def groups(root: Path, items: list[dict]) -> list[dict]:
                 "verdict": verdict,
                 "reason": reason,
                 "count": len(copies),
+                "places": [i["place"] for i in copies],
                 "members": members,
             }
         )

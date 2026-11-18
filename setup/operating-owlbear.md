@@ -167,7 +167,7 @@ branch and sends existing suppression directives and lint configuration to the q
 runs at a time. The confirmation names the branch, role and model; the run asks nothing and uses AI credits.
 
 Each run judges at most 10 batches of 60 items, saving each completed batch before the next starts. Verdicts from
-Changes, reviews and the owner count; chat advice does not. The row shows the time, branch and commit, how many
+Changes, chats, reviews and the owner count; advice on a proposed suppression is not recorded. The row shows the time, branch and commit, how many
 items the pinned tree holds, accepted, refused and not yet judged, and links to the Backlog entries. Start again
 to continue when items remain. A failed or interrupted run keeps its completed verdicts.
 
