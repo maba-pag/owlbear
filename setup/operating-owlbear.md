@@ -183,7 +183,6 @@ and the next review judges those copies afresh. **Accept**, on a refused line, a
 those refusals with your acceptance, keeping history. Neither action closes existing Backlog entries; triage them
 on Backlog. You can later set an owner acceptance aside with Judge again.
 
-
 The Spotter looks at agents' work beside them, in Delivery's steps and in the VS Code chats of the folders listed in
 `enrolled_chats`, and acts on each finding as its settings in **Settings → Spotter** say: it records it, steers the
 agent, refuses its hand-off, stops it and resumes it with a note, stops it to ask you, or shows it to you on the

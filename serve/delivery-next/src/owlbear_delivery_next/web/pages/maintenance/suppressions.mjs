@@ -67,7 +67,8 @@ export function suppressionReview(show, reload) {
         : "Your acceptance replaces these refusals. The refusals stay in history; no session starts."),
       then: again
         ? "These copies count as not yet judged. The next Start takes them to the judge, using AI credits."
-        : "These copies count as owner-accepted and the next review leaves them out. Existing Backlog entries stay open.",
+        : "These copies count as owner-accepted and the next review leaves them out. "
+          + "Existing Backlog entries stay open.",
       after: again
         ? "Start a review here when ready. Earlier Backlog entries remain for you to triage."
         : "You can use Judge again later. Triage any existing entry on the Backlog page.",
@@ -116,7 +117,8 @@ export function suppressionReview(show, reload) {
       when(last.ended_at || last.started_at)} · ${pin} · ${last.state}${last.phase ? ` · ${last.phase}` : ""}</p-text>
       ${counts && "held" in counts ? html`<p-text class="review-text" size="sm">${counts.held} held · ${
         counts.accepted} accepted · ${counts.refused} refused · ${counts.unjudged} not yet judged</p-text>
-        ${counts.unjudged ? html`<p-text class="review-text" size="sm">${`${counts.unjudged} not yet judged: start again to continue.`}</p-text>` : nothing}` : nothing}
+        ${counts.unjudged ? html`<p-text class="review-text" size="sm">${
+          `${counts.unjudged} not yet judged: start again to continue.`}</p-text>` : nothing}` : nothing}
       ${last.reason ? html`<p-text class="review-text" size="sm">${last.state === "publishing"
         ? "Publishing unfinished" : "Failed"}: ${last.reason}</p-text>` : nothing}
       ${last.backlog_error ? html`<p-text class="review-text" size="sm">Could not read the Backlog links: ${
@@ -124,15 +126,18 @@ export function suppressionReview(show, reload) {
       ${last.judging_reason && last.state === "publishing" ? html`<p-text class="review-text" size="sm">
         Judging stopped: ${last.judging_reason}. Completed verdicts remain recorded.</p-text>` : nothing}
       ${links.length ? html`<p-text size="sm">Backlog entries:</p-text><ul>${links.map((f) => html`<li>
-        <a href=${f.url} target="_blank" rel="noopener noreferrer">#${f.number}${f.title ? ` ${f.title}` : ""}</a></li>`)}</ul>` : nothing}
+        <a href=${f.url} target="_blank" rel="noopener noreferrer">#${f.number}${
+          f.title ? ` ${f.title}` : ""}</a></li>`)}</ul>` : nothing}
       ${last.state === "publishing" ? html`<p-text class="review-text" size="sm">Refused groups or their detail comments
         are not all published. Finish publishing uses the saved receipts.</p-text>
-        <div><p-button type="button" variant="secondary" compact="true" ?disabled=${state.writing || a.blocked === "an audit is running for this project"}
+        <div><p-button type="button" variant="secondary" compact="true"
+          ?disabled=${state.writing || a.blocked === "an audit is running for this project"}
           @click=${finish}>Finish publishing</p-button></div>` : nothing}`;
   }
 
   function row(a, why) {
-    const blocked = why || (a.last?.state === "publishing" ? "Finish publishing the previous run before starting again." : "");
+    const blocked = why || (a.last?.state === "publishing"
+      ? "Finish publishing the previous run before starting again." : "");
     return html`<div id="audit-suppressions" class="audit suppression-review">
       <div><p-button type="button" variant="primary" compact="true" .loading=${state.writing}
         ?disabled=${state.writing || !!blocked} @click=${() => start(a)}>Start review</p-button></div>
