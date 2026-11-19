@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 from owlbear_memory import MemoryBusyError, MemoryState, storage, writer_lock
 
 from owlbear_delivery_next.git.command_failure import failed, failure
+from owlbear_delivery_next.git.git_executable import git_executable_in
 from owlbear_delivery_next.local_system import curation_apply
 from owlbear_delivery_next.local_system.data_place import HELD
 from owlbear_delivery_next.local_system.data_repo import CONFIG, MEMORY, DataRepoError
@@ -42,8 +43,7 @@ def _git(cwd: Path, *args: str, index: Path | None = None) -> str:
     """One git command's standard output; a failure raises, naming the command and what Git said."""
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"} | ({"GIT_INDEX_FILE": str(index)} if index else {})
     try:
-        if (git := shutil.which("git")) is None:
-            raise FileNotFoundError(2, "No such file or directory", "git")
+        git = git_executable_in(cwd)
         command = ["git", *args]
         done = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector
             command, executable=str(Path(git).absolute()),

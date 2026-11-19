@@ -9,7 +9,6 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
-import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.audit_runs import record as audit_record
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.git.git_executable import git_executable_in
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.impeccable.detector import DetectorError
 from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_job, pack_replay
@@ -79,8 +79,7 @@ def owner_last(store: Store) -> dict[str, Any] | None:
         return None
     marker = f"memory {store.name}: "  # the subject memory_routes commits each action with
     args = ["log", "-1", "--format=%cI%x00%s", "--fixed-strings", f"--grep={marker}", "--"]
-    if (git := shutil.which("git")) is None:
-        raise FileNotFoundError(2, "No such file or directory", "git")
+    git = git_executable_in(store.shared.root)
     command = ["git", *args, str(store.shared.memory_path(store.name))]
     # The memory marker is one --grep value and the memory path follows --.
     done = subprocess.run(  # noqa: S603 - resolved Git and code-owned log query, no shell

@@ -7,13 +7,13 @@ A command that reaches a remote runs as TD-402's account on the repository it re
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import time
 from pathlib import Path
 
 from owlbear_delivery_next.git.access import Access
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.git.git_executable import git_executable_in
 from owlbear_delivery_next.git.remote_git import RemoteGitError
 from owlbear_delivery_next.github.account import AccountMissing, Origin, Writer
 
@@ -105,8 +105,7 @@ def _default(cwd: Path, kind: str, deadline: float) -> str:
 
 
 def _read(cwd: Path, args: tuple[str, ...], deadline: float) -> str:
-    if (git := shutil.which("git")) is None:
-        raise FileNotFoundError(2, "No such file or directory", "git")
+    git = git_executable_in(cwd)
     # _default alone builds symbolic-ref/for-each-ref queries; the returned branch is one operand.
     command = ["git", *args]
     done = subprocess.run(  # noqa: S603 - resolved Git and internal metadata-query argv, no shell
