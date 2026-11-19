@@ -100,9 +100,6 @@ AGENT = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHEC
 TARGET = ("target", StepKind.BUILD, Exit.BACK)  # a builder's accepted target premise; a stop on its processes wins
 
 
-type Result = loop.StepResult
-
-
 ENGINE: dict[StepKind, engine.Step] = {
     StepKind.SHAPE: worker_input.shaping,
     StepKind.PUBLISH: publish.run,
@@ -340,7 +337,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         sessions.log_held(store, lock, [label for label, _ in [*mine, *theirs]], [run for _, run in ran])
 
 
-def _ready(prof: Profile, path: Path, now: datetime, writer: Writer) -> Result | None:
+def _ready(prof: Profile, path: Path, now: datetime, writer: Writer) -> loop.StepResult | None:
     """DR2 before publishing: the publishing readiness facts, their first failure as its exit."""
     host = profile.value(prof, profile.HOST, "github.com")
     return publish.gate(readiness.publishing(host, git_files.probe_in(path), readiness.reach(host), writer), now)
@@ -477,14 +474,11 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
         elif step.kind == StepKind.TESTS or change.amending is not None:
             (curation.run if step.kind == StepKind.TESTS else amendment.run)(store, lock, change, repo)
         elif step.kind in AGENT:
-            refreshed = repair_recovery.ready(store, lock, change, repo)
-            if refreshed is None:
-                return
-            change = refreshed
-            agent = _reused(store, lock, change)
-            agent = agent or prepare.refused(store, lock, change) or review.completed(store, lock, change, repo)
-            agent = agent or plan_round.continued(store, lock, change, repo)
-            agent or _agent(store, lock, change, repo)
+            if (ready := repair_recovery.ready(store, lock, change, repo)) is not None:
+                agent = _reused(store, lock, ready)
+                agent = agent or prepare.refused(store, lock, ready) or review.completed(store, lock, ready, repo)
+                agent = agent or plan_round.continued(store, lock, ready, repo)
+                agent or _agent(store, lock, ready, repo)
         elif shaping_capture.owed(change):  # the draft's pages, before its challenge and the chat's wait
             _out(f"{change.slug}: {captures.at_target(store, lock, change, repo)}")
         elif step.kind == StepKind.SHAPE and brief_round.due(change):  # TD-221: before approval
