@@ -7,13 +7,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from pathlib import Path
 
-
-class StepKind(Protocol):
-    """The step kind's serialized name."""
-
-    @property
-    def value(self) -> str:
-        """The kind as the manifest stores it."""
+    from owlbear_delivery_next.change_contracts.models import StepKind
 
 
 class StepConfig(Protocol):
