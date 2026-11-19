@@ -58,10 +58,6 @@ def test_ci_env_lists_the_open_issues_named_by_tracked_flaky_marks(
     subprocess.run(  # noqa: S603 - Fixture Git init argv with literal operands; no shell.
         [git_executable, "init", "-q"], cwd=tmp_path, check=True
     )
-    git_executable = shutil.which("git")
-    if git_executable is None:
-        message = "git executable is unavailable"
-        raise FileNotFoundError(message)
     subprocess.run(  # noqa: S603 - Fixture Git add argv with literal operands; no shell.
         [git_executable, "add", "test_a.py"], cwd=tmp_path, check=True
     )
