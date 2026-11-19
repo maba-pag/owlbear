@@ -369,7 +369,7 @@ export function stopNotice(d) {
         + "branch or an opened PR.",
       instead: "The Change stays stopped; Pause and your other controls still work.",
     });
-    if (!sure || !(await send("/recovery", { action, at: r.at, remedy: r.remedy ?? null }, d))
+    if (!sure || !(await send("/recovery", { action, at: r.at, ...(r.remedy ? { remedy: r.remedy } : {}) }, d))
       || state.selected !== d.key) return;
     state.started = { text: r.label ? `Recovery accepted: ${r.label}. Existing pauses are kept.`
       : "Recovery accepted: Delivery reruns the step when it can run. Existing pauses are kept." };

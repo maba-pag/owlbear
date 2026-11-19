@@ -77,14 +77,13 @@ def shown(c: Change, store: Store) -> dict[str, Any] | None:
         if remedy
         else ""
     )
-    return c.stop.model_dump(mode="json", include={"reason", "action", "at"}) | {
-        "action": continuation or c.stop.action,
-        "remedy": remedy,
-        "label": continuation,
-        "fixed": fixed,
+    recovery = c.stop.model_dump(mode="json", include={"reason", "action", "at"}) | {
         "unset": _wait(block),
         "settings": {"count": len(block.keys), "reason": block.reason},
     }
+    if remedy:
+        recovery |= {"action": continuation, "remedy": remedy, "label": continuation, "fixed": fixed}
+    return recovery
 
 
 def retained(c: Change) -> dict[str, str] | None:
