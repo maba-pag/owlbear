@@ -9,7 +9,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import profile_share
+from owlbear_delivery_next.state_store.pending_intents import shared_pending
 from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -62,16 +62,16 @@ def test_an_owner_clear_supersedes_a_refused_config_edit_and_a_stale_write_canno
         },
     )
     assert edited.status_code == 200
-    pending = profile_share._shared_pending(store)  # noqa: SLF001
+    pending = shared_pending(store)
     assert pending  # the refused edit is recorded as pending, by its digest
 
     stale = c.put("/api/next/config/project", json={"rev": original["project_rev"], "layer": original["project"]})
     assert stale.status_code == 409
-    assert profile_share._shared_pending(store) == pending  # noqa: SLF001
+    assert shared_pending(store) == pending
 
     store.update_config(lambda cur: cur.model_copy(update={"prefs_imported": True}), "automatic carry")
     # an automatic write that is not the owner's cannot replace the pending intent
-    assert profile_share._shared_pending(store) == pending  # noqa: SLF001
+    assert shared_pending(store) == pending
 
     current = c.get("/api/next/config").json()
     cleared = c.put(
@@ -79,7 +79,7 @@ def test_an_owner_clear_supersedes_a_refused_config_edit_and_a_stale_write_canno
         json={"rev": current["project_rev"], "layer": current["project"] | {"agents": {}}, "prefs_reviewed": True},
     )
     assert cleared.status_code == 200
-    assert profile_share._shared_pending(store) == ""  # noqa: SLF001
+    assert shared_pending(store) == ""
 
     fresh = fresh_config(remote, tmp_path)
     assert fresh.read_config().agents == {}

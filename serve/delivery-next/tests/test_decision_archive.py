@@ -371,7 +371,7 @@ def test_a_raw_archive_is_refused_while_a_batch_is_interrupted(store) -> None:
     generation = decision_batch.begin(
         store.shared,
         "shop-site",
-        decision_store._head(store.shared),  # noqa: SLF001
+        decision_store.head(store.shared),
         "decisions: left",
         ["D-LEFT"],
         [("shop-site/decisions/D-LEFT.md", None, b"left\n")],  # the smallest valid batch: one new file, by its id
