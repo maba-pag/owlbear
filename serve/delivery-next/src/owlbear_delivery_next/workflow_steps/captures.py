@@ -90,12 +90,8 @@ def at_target(store: Store, lock: Lock, change: Change, repo: Path) -> str:
         and o.cause == brief_starts.REFUSED
         and o.reason.endswith(shaping_capture.CAPTURING)
     ):
-        change.outcome = o.model_copy(
-            update={
-                "cause": "",
-                "reason": f"approve brief v{change.brief.version}: review its current-page capture",
-            }
-        )
+        o.cause = ""
+        o.reason = f"approve brief v{change.brief.version}: review its current-page capture"
     if out.is_dir():  # a failed fetch made none
         out.rename(folder(store, change.slug, change.shaped))
     store.write(lock, change)
