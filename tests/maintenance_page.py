@@ -14,7 +14,6 @@ from owlbear_delivery_next.state_store.store import Store
 
 @contextmanager
 def opened(root, pds, *, startup=None):
-
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         server = uvicorn.Server(uvicorn.Config(api.create_app(Store(root), "tok", None), log_level="warning"))

@@ -474,7 +474,6 @@ def test_task_consumers_exclude_docs_but_keep_markdown_fixtures_and_runtime_reso
 
 
 def test_a_known_source_reader_cannot_hide_an_unresolved_runtime_resource(tmp_path: Path) -> None:
-
     source = "serve/demo/src/demo/read.py"
     resource = "serve/demo/src/demo/no-reader.bin"
     test = "serve/demo/tests/test_reader.py"
@@ -503,7 +502,6 @@ def test_a_known_source_reader_cannot_hide_an_unresolved_runtime_resource(tmp_pa
 
 
 def test_observed_runtime_readers_do_not_expand_unrelated_importer_methods(tmp_path: Path) -> None:
-
     reader = "serve/demo/src/demo/reader.py"
     common = "serve/demo/src/demo/common.py"
     resource = "serve/demo/src/demo/data.md"
@@ -574,7 +572,6 @@ def test_observed_runtime_readers_do_not_expand_unrelated_importer_methods(tmp_p
 
 
 def test_a_module_level_resource_value_retains_importing_tests_without_function_footprints(tmp_path: Path) -> None:
-
     reader, resource = "serve/demo/src/demo/value.py", "serve/demo/src/demo/data.md"
     test = "serve/demo/tests/test_value.py"
     texts = {
@@ -595,7 +592,6 @@ def test_a_module_level_resource_value_retains_importing_tests_without_function_
 
 
 def test_source_relative_resource_paths_do_not_claim_an_unread_sibling_with_the_same_name(tmp_path: Path) -> None:
-
     reader = "serve/demo/src/demo/a/reader.py"
     resource, sibling = "serve/demo/src/demo/a/data.md", "serve/demo/src/demo/b/data.md"
     packaged = "serve/demo/src/demo/packaged.py"
@@ -692,7 +688,6 @@ def test_commands_reject_consumer_checkouts(tmp_path: Path, monkeypatch: pytest.
 
 
 def test_dependency_artifacts_cannot_name_tests_outside_the_checkout(tmp_path: Path) -> None:
-
     node = "serve/tools/tests/../../../outside.py::test_escape"
     artifact = tmp_path / "dependencies.json"
     artifact.write_text(
@@ -726,7 +721,6 @@ def test_dependency_artifacts_cannot_name_tests_outside_the_checkout(tmp_path: P
 
 
 def test_page_consumers_keep_real_indirect_http_but_not_dictionary_gets(tmp_path: Path) -> None:
-
     test, other = "serve/demo/tests/test_web.py", "serve/demo/tests/test_other.py"
     page = "serve/demo/src/demo/web/changes.html"
     texts = {
@@ -759,7 +753,6 @@ def test_page_consumers_keep_real_indirect_http_but_not_dictionary_gets(tmp_path
 
 
 def test_observed_changes_keep_platform_callers_and_only_relevant_test_drift(tmp_path: Path) -> None:
-
     source, caller = "serve/demo/src/demo/source.py", "serve/demo/src/demo/caller.py"
     test, guarded, newer, other = (f"serve/demo/tests/test_{name}.py" for name in ("direct", "guard", "new", "other"))
     helper, data = "serve/demo/tests/other_helper.py", "serve/demo/tests/other.json"
@@ -853,7 +846,6 @@ def test_observed_changes_keep_platform_callers_and_only_relevant_test_drift(tmp
 
 
 def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules(tmp_path: Path) -> None:
-
     source = "serve/demo/src/demo/tables.py"
     entry = "serve/demo/src/demo/entry.py"
     orphan = "serve/demo/src/demo/deleted_only.py"

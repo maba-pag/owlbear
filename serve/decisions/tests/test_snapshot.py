@@ -149,7 +149,6 @@ def test_readable_foreign_layer_still_counts_beside_an_unreadable_layer(tmp_path
 
 def test_another_projects_unreadable_folder_keeps_its_whole_error(tmp_path, make, monkeypatch):
     """#971: the finding says the error's type and every line of its message, never only its start."""
-
     module = importlib.import_module("owlbear_decisions.snapshot")
     put(tmp_path, make, project="shop")
     said = (

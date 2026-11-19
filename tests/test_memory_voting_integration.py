@@ -143,7 +143,6 @@ class TestMemoryVotingLifecycle:
         Entry A and B have zero activity; C through V have high total activity.
         A and B must appear in recall result; the pool logic must include them.
         """
-
         # Two entries with zero activity → will land in explore pool
         entry_low_a = _make_approved_entry(_ID_SCORE_A, "Low Activity A", confidence=0.7)
         entry_low_b = _make_approved_entry(_ID_SCORE_B, "Low Activity B", confidence=0.7)
@@ -177,7 +176,6 @@ class TestMemoryVotingLifecycle:
         Twenty entries have high outstanding → go to regular pool.
         The zero-outstanding entries appear in challenge pool.
         """
-
         # Give these two entries some total activity (didnt_use=1) so they're
         # NOT the lowest-activity entries (explore pool gets truly-zero ones).
         # We seed 20 entries with no activity (→ explore candidates by activity=0),
@@ -214,7 +212,6 @@ class TestMemoryVotingLifecycle:
 
     @pytest.mark.asyncio
     async def test_ratings_persist_reorder_replay_and_follow_content_revision(self, tmp_path: Path) -> None:
-
         # Rated lesson has the larger ID and lower confidence: neither ID nor legacy score can rank it first.
         rated = _make_approved_entry(_ID_SCORE_B, "Rated lesson", confidence=0.7)
         competitor = _make_approved_entry(_ID_SCORE_A, "Competitor", confidence=0.8)
@@ -281,7 +278,6 @@ class TestMemoryVotingLifecycle:
         - challenge<2: ChallengeEntry displaced by high-outstanding entries
         - regular>16: RegularLow 00/01 appear in results
         """
-
         # Explore pool candidates: total activity=0 (lowest _explore_metric)
         for eid, name in [
             (_ID_SLOT_EXPLORE_0, "ExploreEntry 0"),
@@ -343,7 +339,6 @@ class TestMemoryVotingLifecycle:
     @pytest.mark.asyncio
     async def test_recall_id_order_matches_source_head_selection(self, tmp_path: Path) -> None:
         """Pin selection and ordering for entries spanning all recall states and scores."""
-
         specifications = [
             ("550e8400-e29b-41d4-a716-446655486001", "Explore approved", MemoryState.APPROVED, 0.70, 0, 0),
             ("550e8400-e29b-41d4-a716-446655486002", "Explore contested", MemoryState.CONTESTED, 0.70, 0, 0),
@@ -432,7 +427,6 @@ class TestMemoryVotingStateTransitions:
         Entry B: approved → contested → disputed → excluded from recall
         Entry C: approved → stale (via 51 didnt_use) → excluded from recall
         """
-
         entry_a = _make_approved_entry(_ID_TRANS_A, "Entry A Contested")
         entry_b = _make_approved_entry(_ID_TRANS_B, "Entry B Disputed")
         entry_c = _make_approved_entry(_ID_STALE_A, "Entry C Stale", didnt_use_count=50)

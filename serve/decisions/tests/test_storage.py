@@ -195,7 +195,6 @@ def test_a_regular_utf8_file_is_read_as_before_and_other_failures_keep_their_nam
 
 def test_a_schema_or_yaml_error_keeps_the_whole_report(make):
     """#971: every failing field with its message and input, and the YAML parser's every line, as the parser said."""
-
     text = serialize(make()).replace("origin: decided", "origin: maybe").replace("state: active", "state: gone")
     with pytest.raises(DecisionFileError) as refused:
         storage.parse(text)
