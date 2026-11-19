@@ -313,7 +313,7 @@ def test_write_keeps_prev_and_restore_brings_it_back(store):
 
 
 def test_lock_excludes_a_second_process_until_it_dies(repo, store):
-    child = subprocess.Popen(  # noqa: S603
+    child = subprocess.Popen(  # noqa: S603 - sys.executable runs the literal HOLD lock-holder script with the temporary repo path; no shell.
         [sys.executable, "-c", HOLD, str(repo)], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
     )
     try:

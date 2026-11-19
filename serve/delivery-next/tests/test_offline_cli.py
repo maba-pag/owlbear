@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.machine_host import command
 from owlbear_delivery_next.state_store import legacy_family, offline_protocol, project_home
 from owlbear_delivery_next.state_store.database import MARKER
@@ -16,7 +17,9 @@ AFTER = "BBBBBBBB-0000-4000-8000-000000000002"
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     path = tmp_path / "shop"
-    subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with path operands; no shell.
+        [resolve_git_executable(), "init", "-q", "-b", "main", str(path)], check=True, capture_output=True
+    )
     return path
 
 

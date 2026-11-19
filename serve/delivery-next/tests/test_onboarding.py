@@ -24,6 +24,7 @@ from playwright.sync_api import Error, expect, sync_playwright
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.commands import setup, setup_profile
 from owlbear_delivery_next.git.access import Access
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github import branch_rules, repo_target
 from owlbear_delivery_next.github.provider import MergeMethod
 from owlbear_delivery_next.local_system import codebase, onboarding_git
@@ -42,7 +43,9 @@ LIMIT = "Upgrade to GitHub Pro or make this repository public to enable this fea
 
 
 def git(cwd: Path, *args: str, strip: bool = True) -> str:
-    done = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=True)  # noqa: S603, S607
+    done = subprocess.run(  # noqa: S603 - git callers build fixture Git add/clone/commit/config argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=cwd, capture_output=True, text=True, check=True
+    )
     return done.stdout.strip() if strip else done.stdout
 
 

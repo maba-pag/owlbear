@@ -8,6 +8,7 @@ import pytest
 
 from owlbear_delivery_next.commands import cli
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import environment
 from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move, registry
@@ -22,7 +23,9 @@ def home():
 
 def clone(path: Path) -> Path:
     path.mkdir(parents=True)
-    subprocess.run(["git", "init", "-q", str(path)], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with path operands; no shell.
+        [resolve_git_executable(), "init", "-q", str(path)], check=True
+    )
     return path
 
 
@@ -69,7 +72,13 @@ def test_one_clone_is_registered_once_by_path_and_by_id(tmp_path):
 def test_a_reclone_at_the_same_path_shows_as_replaced_until_adopted_or_removed(tmp_path):
     work = clone(tmp_path / "work")
     old = registry.register(work)
-    subprocess.run(["rm", "-rf", str(work)], check=True)  # noqa: S603, S607
+    rm_executable = shutil.which("rm")
+    if rm_executable is None:
+        message = "rm executable is unavailable"
+        raise FileNotFoundError(message)
+    subprocess.run(  # noqa: S603 - Remove only the fixture-owned temporary directory via fixed rm -rf argv; no shell.
+        [rm_executable, "-rf", str(work)], check=True
+    )
     assert registry.replaced(old) == f"{work.resolve()} is gone; Remove the project"
     clone(work)
     assert registry.replaced(old) == f"the clone at {work.resolve()} is not the one registered; Remove or Adopt it"
@@ -235,7 +244,9 @@ def test_registry_publication_refuses_a_git_mapping_changed_during_final_source_
     work, other = tmp_path / "work", tmp_path / "other"
     first, second = tmp_path / "first-git", tmp_path / "second-git"
     for path, gitdir in ((work, first), (other, second)):
-        subprocess.run(["git", "init", "-q", "--separate-git-dir", str(gitdir), str(path)], check=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Fixture Git init argv with gitdir/path operands; no shell.
+            [resolve_git_executable(), "init", "-q", "--separate-git-dir", str(gitdir), str(path)], check=True
+        )
     link = tmp_path / "git-alias"
     if alias:
         link.symlink_to(first, target_is_directory=True)
@@ -292,7 +303,9 @@ def test_registry_refuses_malformed_git_references_at_final_publication(
     tmp_path, monkeypatch, action, control, malformed
 ):
     work, gitdir = tmp_path / "work", tmp_path / "external-git"
-    subprocess.run(["git", "init", "-q", "--separate-git-dir", str(gitdir), str(work)], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with gitdir/work operands; no shell.
+        [resolve_git_executable(), "init", "-q", "--separate-git-dir", str(gitdir), str(work)], check=True
+    )
     store = gitdir / project_home.STORE_DIR
     store.mkdir()
     (store / "clone-id").write_text("old\n" if action == "adopt" else "owned\n")

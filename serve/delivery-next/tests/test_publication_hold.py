@@ -19,6 +19,7 @@ import pytest
 
 from owlbear_decisions import Decision, Origin, Scope, State, new_id
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import batch_journal, data_repo, decision_authority, publication_hold
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.settings import profile
@@ -58,7 +59,9 @@ def explicit_bare_policy():
 
 
 def git(where: Path, *args: str) -> str:
-    done = subprocess.run(["git", *args], cwd=where, check=True, capture_output=True, text=True)  # noqa: S603, S607
+    done = subprocess.run(  # noqa: S603 - git callers build fixture Git add/branch/clone/commit argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=where, check=True, capture_output=True, text=True
+    )
     return done.stdout.strip()
 
 
@@ -187,7 +190,9 @@ def test_a_completion_at_the_first_push_holds_the_fill_instead_of_rebasing_it(th
     # nothing was undone or rebased: the winner's own fill commit stays on its old base for the owner to review
     root = winner.shared.root
     assert git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD") == f"{PROJECT}/config.json"
-    rebased = subprocess.run(["git", "merge-base", "--is-ancestor", remote_head(remote), "HEAD"], cwd=root, check=False)  # noqa: S603, S607
+    rebased = subprocess.run(  # noqa: S603 - Fixture Git merge-base argv with remote/remote_head operands; no shell.
+        [resolve_git_executable(), "merge-base", "--is-ancestor", remote_head(remote), "HEAD"], cwd=root, check=False
+    )
     assert rebased.returncode == 1
     assert winner.config_path.exists()
 
@@ -558,7 +563,9 @@ def test_an_owner_rebase_in_progress_is_left_alone_by_an_automatic_save(three):
     assert other.shared.publish(other.shared.root / "shared.txt", "theirs") == ""
     (root / "shared.txt").write_text("mine\n")
     git(root, "commit", "-qam", "owner: mine")
-    stopped = subprocess.run(["git", "pull", "-q", "--rebase"], cwd=root, capture_output=True, check=False)  # noqa: S607
+    stopped = subprocess.run(  # noqa: S603 - Fixture Git pull argv with literal operands; no shell.
+        [resolve_git_executable(), "pull", "-q", "--rebase"], cwd=root, capture_output=True, check=False
+    )
     assert stopped.returncode
     admin = Path(git(root, "rev-parse", "--absolute-git-dir"))
     head, status = git(root, "rev-parse", "HEAD"), git(root, "status", "--porcelain")

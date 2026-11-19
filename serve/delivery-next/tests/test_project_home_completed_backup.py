@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.state_store import fd_tree, project_home, project_move
 from owlbear_delivery_next.state_store.database import StoreError
@@ -34,7 +35,7 @@ def immutable_51aa(tmp_path):
     root = tmp_path / "audited"
     root.mkdir()
     archive = subprocess.run(  # noqa: S603
-        ["git", "archive", AUDITED, "serve/delivery-next/src"],  # noqa: S607
+        [resolve_git_executable(), "archive", AUDITED, "serve/delivery-next/src"],
         cwd=Path(__file__).resolve().parents[3],
         check=True,
         capture_output=True,

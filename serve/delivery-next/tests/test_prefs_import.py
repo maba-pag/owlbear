@@ -9,6 +9,7 @@ import pytest
 
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile, ProfileEntry
 from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.provider import MergeMethod
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.settings import config, migrations, profile, roles
@@ -231,7 +232,9 @@ def test_a_command_line_role_override_publishes_and_a_fresh_clone_reads_it(share
     out = cli.show_profile(store, tmp_path, [], [roles.parse("builder=m-cli:low")])
     assert "Notice:" not in out
     clone = tmp_path / "fresh"
-    subprocess.run(["git", "clone", "-q", str(remote), str(clone)], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git clone argv with clone/remote operands; no shell.
+        [resolve_git_executable(), "clone", "-q", str(remote), str(clone)], check=True, capture_output=True
+    )
     fresh = Store(tmp_path / "fresh-store", DataRepo(clone), "shop-site")
     assert fresh.read_config().agents["builder"].model == "m-cli"
 
@@ -305,7 +308,9 @@ def test_refused_import_config_publishes_current_bytes_on_native_retry(shared_re
     retried = Store(store.root, DataRepo(root), store.name)
     prefs_import.run(retried)
     second = tmp_path / "fresh"
-    subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git clone argv with remote/second operands; no shell.
+        [resolve_git_executable(), "clone", "-q", str(remote), str(second)], check=True, capture_output=True
+    )
     fresh = Store(tmp_path / "fresh-store", DataRepo(second), "shop-site")
     assert fresh.config_path.read_bytes() == current
     assert fresh.read_config().prefs.ci_poll_seconds == (45 if action == "unchanged" else None)

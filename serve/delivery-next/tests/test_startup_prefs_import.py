@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.local_system.git_files import probe_in
 from owlbear_delivery_next.runtimes import readiness
@@ -171,7 +172,7 @@ def test_a_refused_completion_is_reported_at_start_and_published_by_the_next_sta
 
 def remote_subjects(remote: Path) -> list[str]:
     return subprocess.run(  # noqa: S603
-        ["git", f"--git-dir={remote}", "log", "--reverse", "--format=%s", "main"],  # noqa: S607
+        [resolve_git_executable(), f"--git-dir={remote}", "log", "--reverse", "--format=%s", "main"],
         check=True,
         capture_output=True,
         text=True,

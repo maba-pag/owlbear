@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.project_host import api
@@ -40,7 +41,9 @@ def client(store: Store) -> TestClient:
 
 
 def clone(remote: Path, where: Path, name: str) -> Store:
-    subprocess.run(["git", "clone", "-q", str(remote), str(where)], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git clone argv with remote/where operands; no shell.
+        [resolve_git_executable(), "clone", "-q", str(remote), str(where)], check=True, capture_output=True
+    )
     return Store(where.parent / f"{name}-store", DataRepo(where), "shop-site")
 
 
@@ -69,7 +72,7 @@ def no_network(monkeypatch) -> None:
 
 def remote_subjects(remote: Path) -> list[str]:
     return subprocess.run(  # noqa: S603
-        ["git", f"--git-dir={remote}", "log", "--reverse", "--format=%s", "main"],  # noqa: S607
+        [resolve_git_executable(), f"--git-dir={remote}", "log", "--reverse", "--format=%s", "main"],
         check=True,
         capture_output=True,
         text=True,

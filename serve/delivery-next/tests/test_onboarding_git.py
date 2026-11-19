@@ -8,6 +8,7 @@ import pytest
 
 from owlbear_delivery_next.git.access import Access
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.git.remote_git import RemoteGitFailed
 from owlbear_delivery_next.local_system import onboarding_git as og
 from owlbear_delivery_next.runtimes import readiness
@@ -16,7 +17,9 @@ BOECHT = "https://github.com/boecht/new"
 
 
 def _git(cwd, *args):
-    return subprocess.run(("git", "-C", str(cwd), *args), capture_output=True, text=True, check=True).stdout.strip()  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - _git callers build fixture Git add/config/init/log argv and repository operands; no shell.
+        (resolve_git_executable(), "-C", str(cwd), *args), capture_output=True, text=True, check=True
+    ).stdout.strip()
 
 
 def _bare(path):
