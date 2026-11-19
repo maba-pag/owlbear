@@ -43,7 +43,11 @@ def _refresh(ctx: engine.Ctx, c: Change) -> tuple[Change, loop.StepResult | None
         msg = f"{c.slug}: recovered CI task {r.task} is missing from the plan"
         raise ValueError(msg)
     if state.failed:
-        task.title, task.detail = follow.ci_task(ctx.gh, ctx.repository, state.failed[0])
+        fix = follow.fix_ci(ctx, c, state, c.step.kind).fix_task
+        if fix is None:
+            msg = f"{c.slug}: CI failure produced no fix task"
+            raise ValueError(msg)
+        task.title, task.detail = fix.title, fix.detail
     else:
         task.detail = (
             f"CI checks now pass at PR #{pr.number}, head {pr.head_sha}. "
