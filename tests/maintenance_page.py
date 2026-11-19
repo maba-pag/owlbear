@@ -6,6 +6,7 @@ import time
 from contextlib import contextmanager
 
 import uvicorn
+from playwright.sync_api import sync_playwright
 
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.state_store.store import Store
@@ -13,7 +14,6 @@ from owlbear_delivery_next.state_store.store import Store
 
 @contextmanager
 def opened(root, pds, *, startup=None):
-    from playwright.sync_api import sync_playwright  # noqa: PLC0415 - optional browser runtime
 
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
