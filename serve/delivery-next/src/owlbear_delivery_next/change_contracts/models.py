@@ -407,6 +407,8 @@ class Stop(Record):
     actor: Actor = "you"
     resume: str
     at: datetime
+    runtime: str = ""
+    fixed_defects: list[int] | None = None  # None: stopped before runtime provenance was recorded
 
 
 class Names(Record):

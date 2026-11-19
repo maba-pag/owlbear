@@ -556,6 +556,12 @@ never applied; its refused patch is kept too. Keeping an existing suppression on
 does not count as adding one. Design-pack CI repairs use the same distinction and show the
 whole candidate before asking you to approve a suppression.
 
+When a repair stops on a Delivery defect, its stop records the OwlBear version.
+A newer version alone does not permit the same attempt again. Once the running release contains the
+applicable fix, Changes offers its recovery action. Confirm it to continue with the repair history intact;
+existing pauses still hold. An amendment in progress continues where it stopped, rather than starting over.
+A recovered CI task refreshes its check evidence before a fresh builder runs.
+
 When your answer on Changes leaves brief work for the shaper, Delivery posts one continuation
 to the chat that saved that brief version. The brief panel says whether it posted, waits for
 Resume, failed, or could not be confirmed, with the whole available error. Posting means the

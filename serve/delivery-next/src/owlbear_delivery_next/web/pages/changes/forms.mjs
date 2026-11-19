@@ -351,14 +351,16 @@ export function stopNotice(d) {
   const wait = !r?.unset ? "" : r.settings.reason ? r.unset : `${settingsWait(r.settings.count)} to run the step again`;
   const held = !r || wait;  // no stop he may clear, or its rerun waits on the settings: no action
   // a reason in paragraphs (#1220) keeps what to do apart from its details
-  const said = [`${reason}.`, action ? `What to do: ${action}.` : "", wait ? `${wait}.` : ""].filter(Boolean)
+  const said = [r?.fixed, `${reason}.`, action ? `What to do: ${action}.` : "", wait ? `${wait}.` : ""].filter(Boolean)
     .join(reason.includes("\n\n") ? "\n\n" : " ");
   const clear = async () => {
     const again = "If the cause is still there, it stops again with the same message.";
     const sure = await ask({
-      title: "Run the stopped step again?", yes: "Run it again", no: "Keep it stopped",
-      now: `You did what the stop asked (${action}), so the stop clears.`,
-      then: d.step === "cleanup" ? `Delivery runs the cleanup again on its next pass, even while paused. ${again}`
+      title: r.label ? `${r.label}?` : "Run the stopped step again?",
+      yes: r.label || "Run it again", no: "Keep it stopped",
+      now: r.fixed || `You did what the stop asked (${action}), so the stop clears.`,
+      then: r.label ? `Delivery clears this stop and continues: ${r.label}. Existing pauses stay in force. ${again}`
+        : d.step === "cleanup" ? `Delivery runs the cleanup again on its next pass, even while paused. ${again}`
         : `Delivery runs the ${d.step} step again on its next pass${d.paused ? ", once you resume this Change" : ""}. `
         + "While Delivery is paused only cleanups and brief challenges you asked for run; other steps wait for "
         + `Resume. ${again}`,
@@ -367,12 +369,14 @@ export function stopNotice(d) {
         + "branch or an opened PR.",
       instead: "The Change stays stopped; Pause and your other controls still work.",
     });
-    if (!sure || !(await send("/recovery", { action, at: r.at }, d)) || state.selected !== d.key) return;
-    state.started = { text: "Recovery accepted: Delivery reruns the step when it can run. Existing pauses are kept." };
+    if (!sure || !(await send("/recovery", { action, at: r.at, ...(r.remedy ? { remedy: r.remedy } : {}) }, d))
+      || state.selected !== d.key) return;
+    state.started = { text: r.label ? `Recovery accepted: ${r.label}. Existing pauses are kept.`
+      : "Recovery accepted: Delivery reruns the step when it can run. Existing pauses are kept." };
     show();
   };
   return html`<p-inline-notification class="recorded" state="error" heading="Stopped" heading-tag="h3"
-    dismiss-button="false" action-label=${held ? nothing : "Done: run the step again"}
+    dismiss-button="false" action-label=${held ? nothing : r.label || "Done: run the step again"}
     action-icon=${held ? nothing : "refresh"} @action=${held ? nothing : clear}>${
       kept ? text(said, { cls: "repair-reason" }) : said}</p-inline-notification>
     ${kept ? text("The fix kept (not applied):") : nothing}${repairPatch(kept?.diff, "The retained repair patch")}`;
