@@ -148,7 +148,7 @@ def test_held_generation_survives_prepare_finish_and_restart(offline, machines, 
     subprocess.run(  # noqa: S603 - Fixture Git init argv with other_repo operands; no shell.
         [resolve_git_executable(), "init", "-q", str(other_repo)], check=True, capture_output=True
     )
-    subprocess.run(  # noqa: S603
+    subprocess.run(  # noqa: S603 - Resolved Git makes a fixed empty commit in the fixture-owned other_repo.
         [
             resolve_git_executable(),
             "-c",

@@ -71,7 +71,7 @@ def no_network(monkeypatch) -> None:
 
 
 def remote_subjects(remote: Path) -> list[str]:
-    return subprocess.run(  # noqa: S603
+    return subprocess.run(  # noqa: S603 - Resolved Git reads fixed log fields from the fixture's bare remote.
         [resolve_git_executable(), f"--git-dir={remote}", "log", "--reverse", "--format=%s", "main"],
         check=True,
         capture_output=True,

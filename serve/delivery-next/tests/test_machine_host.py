@@ -756,13 +756,7 @@ def test_a_reclone_is_shown_replaced_until_adopted(tmp_path, http, machine):
     old = add(http, work)
     machine.remove(old["id"])
     registry.register(work)  # registered again without the host, then re-cloned at the same path
-    rm_executable = shutil.which("rm")
-    if rm_executable is None:
-        message = "rm executable is unavailable"
-        raise FileNotFoundError(message)
-    subprocess.run(  # noqa: S603 - Remove only the fixture-owned temporary directory via fixed rm -rf argv; no shell.
-        [rm_executable, "-rf", str(work)], check=True
-    )
+    shutil.rmtree(work)
     clone(work)
     machine.load_all()
     pid = registry.load().projects[0].id

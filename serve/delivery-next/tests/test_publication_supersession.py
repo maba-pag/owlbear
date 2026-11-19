@@ -40,7 +40,7 @@ def remote_bytes(remote: Path, rel: str) -> bytes:
     """Return empty only for an absent path in a successfully read remote tree."""
 
     def read(*args):
-        return subprocess.run(  # noqa: S603
+        return subprocess.run(  # noqa: S603 - Resolved Git runs fixture-owned ls-tree/show queries on its bare remote.
             [resolve_git_executable(), f"--git-dir={remote}", *args],
             check=True,
             capture_output=True,

@@ -72,13 +72,7 @@ def test_one_clone_is_registered_once_by_path_and_by_id(tmp_path):
 def test_a_reclone_at_the_same_path_shows_as_replaced_until_adopted_or_removed(tmp_path):
     work = clone(tmp_path / "work")
     old = registry.register(work)
-    rm_executable = shutil.which("rm")
-    if rm_executable is None:
-        message = "rm executable is unavailable"
-        raise FileNotFoundError(message)
-    subprocess.run(  # noqa: S603 - Remove only the fixture-owned temporary directory via fixed rm -rf argv; no shell.
-        [rm_executable, "-rf", str(work)], check=True
-    )
+    shutil.rmtree(work)
     assert registry.replaced(old) == f"{work.resolve()} is gone; Remove the project"
     clone(work)
     assert registry.replaced(old) == f"the clone at {work.resolve()} is not the one registered; Remove or Adopt it"
