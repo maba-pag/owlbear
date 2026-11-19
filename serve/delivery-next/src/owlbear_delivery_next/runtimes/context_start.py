@@ -157,7 +157,11 @@ def _chain(entry: Entry, entries: dict[str, Entry]) -> list[Entry]:
     """*entry*'s ancestors, nearest first; a cycle or a missing parent ends the chain."""
     out: list[Entry] = []
     seen = {entry.id}
-    while entry.parent_id and (entry := entries.get(entry.parent_id)) and entry.id not in seen:  # type: ignore[assignment]
+    while entry.parent_id:
+        parent = entries.get(entry.parent_id)
+        if parent is None or parent.id in seen:
+            break
+        entry = parent
         seen.add(entry.id)
         out.append(entry)
     return out

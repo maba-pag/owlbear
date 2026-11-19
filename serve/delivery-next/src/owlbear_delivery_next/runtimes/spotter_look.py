@@ -162,7 +162,8 @@ class Spent:
 
 
 async def _end(  # noqa: PLR0913 - the look's runtime, session, meter, run and measurement
-    client: Any, session: Any, limit: Limit, spent: Spent, measure: context_start.Start, *, confirmed: bool,  # noqa: ANN401
+    client: Any, session: Any,  # noqa: ANN401
+    limit: Limit, spent: Spent, measure: context_start.Start, *, confirmed: bool,
 ) -> None:  # fmt: skip
     """Reconcile the look's share with the session's reported total, then tear the session down; each bounded."""
     if session is None:
