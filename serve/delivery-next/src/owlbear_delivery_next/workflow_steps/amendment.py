@@ -45,6 +45,8 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     if a is not None and _merged(store, lock, change, repo, now):
         return
     if a is None or _left(store, lock, change, a):
+        if a is not None:
+            a.ran_at = datetime.now(UTC)
         store.write(lock, change)
         return
     am = change.amending
@@ -52,10 +54,12 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         return
     if am.phase == "ask":
         _asked(change, a, now)
+        a.ran_at = datetime.now(UTC)
         store.write(lock, change)
         return
     if am.phase == "prepare" and a.source == "revert":
         amending.opened(change, a, rounds.pinned(change, BRIEF, store.settings(), "shaper"))
+        a.ran_at = datetime.now(UTC)
         store.write(lock, change)
         return
     path = worktree.ensure(repo, git_common_dir(repo), change.slug, change.names.branch, change.names.target)
@@ -71,7 +75,9 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     # its paid run is kept until its result and spend commit together, in one of the writes below (RUN-04)
     verdict, done = pending_child.child(store, lock, change, (label, pending_child.amending(change)), start)
     step = pending_child.booked(change, done, {"exit": verdict.exit})
-    store.write(lock, _recorded(store, change, a, verdict, done))
+    recorded = _recorded(store, change, a, verdict, done)
+    next(a for a in recorded.amendments if a.id == am.id).ran_at = datetime.now(UTC)
+    store.write(lock, recorded)
     if step is not None:
         sessions.announce(store, lock, change.slug, step)
 
