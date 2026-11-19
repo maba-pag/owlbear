@@ -13,9 +13,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from websockets.datastructures import Headers
-from websockets.exceptions import InvalidStatus
-from websockets.http11 import Response
+from websockets import Headers, InvalidStatus, Response
 
 from owlbear_delivery_next.runtimes import ahp, readiness, vscode_adapter, vscode_step
 from owlbear_delivery_next.runtimes.ahp import HostError
