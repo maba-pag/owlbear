@@ -48,6 +48,7 @@ SESSIONS: dict[str, Role] = {
     "agent-audit": "project-auditor",
     "code-audit": "project-auditor",
     "audit-verify": "audit-verifier",
+    "exception-judgment": "quality-judge",
     "pds-update": "updater",  # the PDS update's page edits
     "pds-challenge": "challenger",  # a PDS update, before it is published
     "step-repair": "repairer",  # a stuck step's repair in a throwaway copy (#1066)

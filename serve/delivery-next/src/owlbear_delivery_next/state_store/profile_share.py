@@ -21,6 +21,8 @@ from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import migrations, profile
 from owlbear_delivery_next.state_store import github_writer
+from owlbear_delivery_next.state_store.database import StoreError
+from owlbear_delivery_next.state_store.layers import _parse
 from owlbear_delivery_next.state_store.pending_intents import pending_file as _pending_file
 from owlbear_delivery_next.state_store.pending_intents import pending_intents
 from owlbear_delivery_next.state_store.pending_intents import shared_pending as _shared_pending
@@ -322,8 +324,6 @@ def _writer(store: Store, *, create: bool = True, shared: bool = True) -> Iterat
 
 def read(store: Store) -> Profile | None:
     """Read both profile halves under their writer lock; absence alone returns None."""
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
-
     if not _present(path(store)):
         return None
     try:
@@ -345,7 +345,6 @@ def _read_unlocked(store: Store) -> Profile | None:
 def _current_for_write(store: Store, *, replace_unreadable: bool) -> Profile | None:
     """The saved profile whose legacy guard an ordinary save keeps, or, for the explicit repair, only that guard."""
     from owlbear_delivery_next.state_store.profile_repair import unreadable_guard  # noqa: PLC0415 - circular
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
 
     if not replace_unreadable:
         return _read_unlocked(store)
@@ -357,8 +356,6 @@ def _current_for_write(store: Store, *, replace_unreadable: bool) -> Profile | N
 
 
 def _present(source: Path) -> bool:
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
-
     try:
         source.stat()
     except FileNotFoundError:
@@ -400,8 +397,6 @@ def _read(source: Path) -> Profile:
 
 
 def _local(store: Store) -> dict[str, ProfileEntry]:
-    from owlbear_delivery_next.state_store.store import StoreError, _parse  # noqa: PLC0415 - circular at import time
-
     overlay = store.root / LOCAL
     try:
         fd = os.open(overlay, os.O_RDONLY | os.O_NOFOLLOW)
@@ -452,8 +447,6 @@ def adopt(store: Store) -> None:
 
 def checked(store: Store, repo: Path) -> Profile | None:
     """Observe shared or unbound legacy facts once in this clone; only a saved success gets its marker."""
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
-
     prof, mark, shared = store.read_profile(), store.root / DETECTED, store.shared
     if prof is None or mark.exists():
         return prof
@@ -478,8 +471,6 @@ def checked(store: Store, repo: Path) -> Profile | None:
 
 def _replaced(store: Store, old: Profile, new: Profile) -> Profile | None:
     """Keep concurrent local intent; publish fresh shared facts only against the snapshot they observed."""
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
-
     with _writer(store):
         current = _read_unlocked(store)
         before, now = _local_part(old), _local_part(current) if current is not None else _local(store)

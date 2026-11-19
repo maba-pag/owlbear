@@ -1,6 +1,6 @@
 """await_capture (chat contract 7): the shaping chat waits for its draft's capture of the target's current pages.
 
-The capture runs once a UI draft with states and a recipe is saved (D-01M61V2GR0C6JV2R6KJ0WR4PNB). The wait is only
+The capture runs once a UI draft is saved (D-01M61V2GR0C6JV2R6KJ0WR4PNB). The wait is only
 read, like await_challenge's, and ends well inside the Copilot client's 180 s cut of a tool call.
 """
 

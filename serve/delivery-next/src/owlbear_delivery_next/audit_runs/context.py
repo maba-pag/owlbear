@@ -14,7 +14,7 @@ from owlbear_delivery_next.github.provider import ProviderError
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import backlog, decision_store, github_writer
 from owlbear_delivery_next.state_store.store import StoreError
-from owlbear_delivery_next.workflow_steps.lookup import _unresolved
+from owlbear_delivery_next.workflow_steps.lookup import unresolved
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -34,7 +34,7 @@ def prepare(store: Store, root: Path, state: dict[str, Any], repository: str) ->
         for e in view.snapshot.entries
         if e.decision.state is State.IN_FORCE and e.decision.scope is not Scope.CHANGE
     ]
-    if blocked := _unresolved(view.snapshot, decisions):
+    if blocked := unresolved(view.snapshot, decisions):
         msg = "audit planning authority is unresolved:\n" + json.dumps(blocked, indent=2)
         raise ValueError(msg)
     (at / "decisions.md").write_text(

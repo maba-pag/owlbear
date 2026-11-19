@@ -6,11 +6,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pydantic
 import pytest
+from ruamel.yaml.error import YAMLError
 
 from owlbear_decisions import storage
 from owlbear_decisions.errors import ConcurrencyError, DecisionFileError, ImmutableError
-from owlbear_decisions.models import Origin, State, new_id
+from owlbear_decisions.models import Decision, Origin, State, new_id
 from owlbear_decisions.storage import decision_path, load_folder, read, serialize, write
 
 
@@ -193,11 +195,6 @@ def test_a_regular_utf8_file_is_read_as_before_and_other_failures_keep_their_nam
 
 def test_a_schema_or_yaml_error_keeps_the_whole_report(make):
     """#971: every failing field with its message and input, and the YAML parser's every line, as the parser said."""
-    import pydantic  # noqa: PLC0415
-    from ruamel.yaml.error import YAMLError  # noqa: PLC0415
-
-    from owlbear_decisions.models import Decision  # noqa: PLC0415
-
     text = serialize(make()).replace("origin: decided", "origin: maybe").replace("state: active", "state: gone")
     with pytest.raises(DecisionFileError) as refused:
         storage.parse(text)

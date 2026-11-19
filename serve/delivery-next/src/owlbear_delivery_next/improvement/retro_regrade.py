@@ -1,4 +1,4 @@
-"""Explicit repair of grades made with live callback counts or omitted Change repair evidence."""
+"""Registration and idle continuation of historical grade evidence corrections."""
 
 from __future__ import annotations
 
@@ -15,6 +15,39 @@ from owlbear_delivery_next.improvement import retro_store as store
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.improvement.retro_units import Projects
+
+
+def awaiting() -> dict[str, str]:
+    """Records still awaiting their registered correction, with the original grade identities."""
+    return {
+        g["record"]: g["id"] for g in store.grades(include_pending=True) if g["grade"] == retro_grade_history.PENDING
+    }
+
+
+def pending() -> list[dict[str, Any]]:
+    """Registered corrections for idle runs; a paid run with no saved correction holds its cohort."""
+    remaining = awaiting()
+    held = {
+        (r["unit"], r["rev"])
+        for r in store.run_states().values()
+        if r.get("mode") == "correct-grades"
+        and r["state"] == "ended"
+        and (r["spent"] > 0 or not r["known"])
+        and set(r["records"]) <= remaining.keys()
+    }
+    registered = {
+        rid: (q["change"], q["revision"], gid)
+        for q in store.lines("requests.jsonl")
+        for rid, gid in (q.get("corrections") or {}).items()
+    }
+    grouped: dict[tuple[str, str], list[str]] = {}
+    for rid, (change, rev, gid) in registered.items():
+        if remaining.get(rid) == gid and (f"chg:{change}", rev) not in held:
+            grouped.setdefault((change, rev), []).append(rid)
+    return [
+        {"unit": f"chg:{change}", "rev": rev, "mode": "correct-grades", "records": records}
+        for (change, rev), records in grouped.items()
+    ]
 
 
 def plan(uid: str, projects: Projects) -> dict[str, Any]:

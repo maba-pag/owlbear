@@ -16,6 +16,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from owlbear_decisions import Decision, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import chat_client, mcp_server
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -38,8 +39,6 @@ class Host:
     record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
 
     def activity(self, _slug: str) -> Any:
-        from owlbear_delivery_next.change_flow.status import Activity  # noqa: PLC0415
-
         return Activity(host_up=True)
 
 

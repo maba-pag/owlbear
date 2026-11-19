@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.git.command_failure import rpc_failure as failed  # an SDK request's failure, whole
-from owlbear_delivery_next.runtimes import missing
+from owlbear_delivery_next.runtimes import missing, sdk_teardown
 from owlbear_delivery_next.runtimes.sdk_usage import unexpected_models
 from owlbear_delivery_next.runtimes.session_result import limit_reached
 from owlbear_delivery_next.state_store import spend_ledger
@@ -29,8 +29,6 @@ async def meter(client: CopilotClient, st: _Step, sid: str, agent: str) -> None:
     It names the Copilot CLI the session runs, read from the runtime itself. That read is a request of its own, so
     its failure says nothing of the session: it is journalled and recorded whole, and the step goes on.
     """
-    from owlbear_delivery_next.runtimes import sdk_teardown  # noqa: PLC0415 - sdk_teardown imports this module
-
     cli = error = ""
     try:
         cli = (await sdk_teardown.call(client.get_status(), "CLI status read", sdk_teardown.CALL)).version

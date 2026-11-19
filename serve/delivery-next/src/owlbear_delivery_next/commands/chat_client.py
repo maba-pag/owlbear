@@ -23,7 +23,8 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_contracts import chat_contract, pick_tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_flow.status import APPROVE, CONTINUE
-from owlbear_delivery_next.commands import capture_wait, chat_decisions
+from owlbear_delivery_next.commands import capture_wait, chat_decisions, exception_wait
+from owlbear_delivery_next.commands.chat_closed import Closed
 from owlbear_delivery_next.local_system import codebase, data_repo, local_home
 from owlbear_delivery_next.project_host import answers, api, host
 from owlbear_delivery_next.state_store import project_home
@@ -32,7 +33,6 @@ from owlbear_delivery_next.state_store.decision_errors import SAVING
 from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from pathlib import Path
 
 NOT_RUNNING = (
@@ -369,6 +369,14 @@ class Chat:
                 return told | ({"error": _why(code, now)} if code != OK else {})
             _pause(POLL)
 
+    def judge_exceptions(self, path: str, base: str, proposed: list[dict] | None = None) -> dict[str, Any]:
+        """Judge this chat's committed additions, or give unrecorded advice on proposed suppressions."""
+        return exception_wait.start(self, path, base, proposed)
+
+    def await_exceptions(self, run_id: str) -> dict[str, Any]:
+        """Wait about 70 seconds for the whole answer of a started exception judgment."""
+        return exception_wait.read(self, run_id)
+
     def write(self, path: str, body: dict[str, Any], headers: dict[str, str] | None = None) -> dict[str, Any]:
         """One decision write through the host: its receipts, or why it was refused."""
         code, out = self.call("POST", path, body, timeout=WRITE, headers=headers)
@@ -465,16 +473,6 @@ class OwlBear(Chat):
     challenge_brief = await_challenge = show_status = answer_question = save_brief
 
 
-class Closed:
-    """A folder that is no OwlBear project: every tool says so and nothing is written."""
-
-    def __init__(self, repo: Path) -> None:
-        self.why = NOT_OWLBEAR.format(repo=repo)
-
-    def __getattr__(self, _name: str) -> Callable[..., dict[str, Any]]:
-        return lambda *_args, **_kwargs: {"error": self.why}
-
-
 def workspace(repo: Path) -> Chat | Closed:
     """The tools for the folder at *repo*, told before any state is made (``Store.open`` makes it).
 
@@ -489,4 +487,4 @@ def workspace(repo: Path) -> Chat | Closed:
         return Chat(repo, project_home.home(pid))
     if data_repo.identity(repo) == data_repo.remote_identity(codebase.URL):
         return OwlBear(repo)
-    return Closed(repo)
+    return Closed(NOT_OWLBEAR.format(repo=repo))

@@ -20,6 +20,12 @@ uv run help
 uv run test --changed
 ```
 
+### Selected-file quality checks
+
+`uv run quality --no-fix --files PATH...` checks only the named files through pre-commit and Biome.
+The TODO scan keeps its normal repository scope. `--files` requires `--no-fix`; it never runs fix hooks.
+Without `--files`, `quality` retains its existing whole-workspace behaviour.
+
 ## Configuration
 
 The commands use the repository checkout and do not require environment variables.

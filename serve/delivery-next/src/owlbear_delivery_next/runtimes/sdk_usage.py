@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.git.command_failure import rpc_failure as failed
+
 if TYPE_CHECKING:
     from copilot.session import CopilotSession
 
@@ -42,9 +44,7 @@ async def _usage(session: CopilotSession, requested: str | None) -> dict[str, An
     try:
         m = await asyncio.wait_for(session.rpc.usage.get_metrics(), READ)
     except Exception as exc:  # noqa: BLE001 - experimental RPC; usage is reported, never required
-        from owlbear_delivery_next.runtimes import sdk_spend  # noqa: PLC0415 - sdk_spend imports this module
-
-        return {"error": sdk_spend.failed(exc)}
+        return {"error": failed(exc)}
     return parsed(m, requested)
 
 

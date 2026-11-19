@@ -28,7 +28,7 @@ from owlbear_delivery_next.change_contracts.profile_record import (
     RoleModel,
 )
 from owlbear_delivery_next.change_flow.status import status, unloadable
-from owlbear_delivery_next.commands import cases_cli, project_commands, replay_client, setup
+from owlbear_delivery_next.commands import cases_cli, project_commands, quality_cli, replay_client, setup
 from owlbear_delivery_next.commands.answer_console import answer, describe
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files, pack_update
@@ -257,6 +257,8 @@ def add_backlog(store: Store, a: argparse.Namespace) -> int:
 
 def report(store: Store, a: argparse.Namespace) -> int:
     """Run ``backlog add``, or print every Change's status or the detected profile."""
+    if a.command == "quality-lint":
+        return quality_cli.run(a.repo.resolve(), store.read_profile() or Profile(), a.base)
     if a.command == "backlog":
         return add_backlog(store, a)
     if a.command == "status":
@@ -330,7 +332,7 @@ def run(a: argparse.Namespace) -> int:  # noqa: PLR0911 - one branch per command
         sys.stdout.write(text + "\n")
         return 0 if ok else 1
     store = Store.open(a.repo.resolve())
-    if a.command in {"backlog", "status", "profile"}:
+    if a.command in {"backlog", "status", "profile", "quality-lint"}:
         return report(store, a)
     if a.command == "seed":
         seed(store, a)

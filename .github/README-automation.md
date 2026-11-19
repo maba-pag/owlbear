@@ -48,7 +48,7 @@ Within a suite every job starts immediately (no `needs`) and installs only what 
 | Workflow | Jobs | Runs when the PR touches |
 | --- | --- | --- |
 | [Python](workflows/python.yml) | 4 test jobs (6 `worksteal` workers in each); [`ci_shard.py`](scripts/ci_shard.py) packs whole test files by their run times and skips other shards' files before import, a file without one by a hash of its path. Scope hands every shard the same run times from the Actions cache; the first passing Python run on `main` each week averages its own into them with [`ci_durations.py`](scripts/ci_durations.py) | Python sources, tests, manifests, locks |
-| [Python browser](workflows/python-browser.yml) | Browser-marked tests with Chromium; Delivery-next's in 2 hash-sharded jobs | `serve/browser*`, `serve/web-content`, `serve/delivery-next`, `serve/decisions`, `serve/memory`, manifests, locks |
+| [Python browser](workflows/python-browser.yml) | Browser-marked tests with Chromium; Delivery-next's in 2 hash-sharded jobs | `serve/browser*`, `serve/web-content`, `serve/delivery-next`, `serve/decisions`, `serve/memory`, `serve/quality`, manifests, locks |
 | [Static checks](workflows/static.yml) | `uv run lint --no-fix` and `uv run format --no-fix`, as locally: every hook in `.pre-commit-config.yaml` (the three validators in Agent ecosystem), each fixer through its check, plus Biome | Every change |
 | [Tooling](workflows/tooling.yml) | Lock, toolchain, workflow, hook, and diagram proofs, selected per changed surface | Manifests, locks, workflows, tool configuration, diagrams |
 | [Agent ecosystem](workflows/agent-ecosystem.yml) | Agent, skill, prompt, hook, and knowledge contracts | Agent ecosystem paths |

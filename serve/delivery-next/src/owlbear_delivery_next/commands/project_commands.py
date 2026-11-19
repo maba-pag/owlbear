@@ -49,7 +49,8 @@ def _stage(_type: object, value: str) -> None:
 app = group("owlbear-next", "OwlBear's commands for one project's clone.")
 backlog = group("backlog", "The improvement backlog: issues in the shared repository (TD-84, TD-103).")
 cases = group("cases", "The Spotter cases: stages, versions, replays (Improvement design §4).")
-for _group in (backlog, cases, improvement):
+quality = group("quality", "The project's lint and format checks, without the host.")
+for _group in (backlog, cases, improvement, quality):
     app.command(_group)
 
 
@@ -68,6 +69,16 @@ def _launch(
     if parsed is not None:
         parsed.repo = repo or Path.cwd()
     return parsed
+
+
+@quality.command(name="lint")
+def quality_lint(*, base: str = "") -> Namespace:
+    """Lint changed files, including working and untracked files.
+
+    Args:
+        base: Compare against the merge-base with this ref; the profile's target branch by default.
+    """
+    return Namespace(command="quality-lint", base=base)
 
 
 @app.command

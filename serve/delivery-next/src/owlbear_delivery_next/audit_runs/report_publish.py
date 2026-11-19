@@ -123,7 +123,8 @@ def _fits(body: str) -> bool:
     return len(body.encode("utf-8")) <= BODY_LIMIT
 
 
-def _chunks(text: str) -> list[str]:
+def chunks(text: str) -> list[str]:
+    """Parts that each fit one GitHub comment, split at a line end where one is near."""
     data, start, parts = text.encode("utf-8"), 0, []
     while start < len(data):
         end = min(start + PART_BYTES, len(data))
@@ -143,7 +144,7 @@ def _continue(state: dict[str, Any], sink: Sink, save: Callable[[], None], body:
     receipts = state.setdefault("summary_parts", [])
     if not receipts:
         detail = body.removesuffix(f"\n\n<!-- {marker} -->\n").partition("\n\n")[2]
-        parts = _chunks(detail)
+        parts = chunks(detail)
         receipts.extend(
             record.SummaryPart(
                 body=f"Audit report, part {index}/{len(parts)}\n\n{part}\n\n<!-- {marker}:part:{index} -->\n"

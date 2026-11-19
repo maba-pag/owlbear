@@ -43,11 +43,18 @@ from owlbear_delivery_next.improvement import (
 from owlbear_delivery_next.improvement.events import Kept
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import sdk_adapter, spend_reconcile, spotter_look, step_decisions, step_tools
+from owlbear_delivery_next.runtimes import (
+    sdk_adapter,
+    spend_reconcile,
+    spotter_act,
+    spotter_look,
+    step_decisions,
+    step_tools,
+)
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
 from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter
-from owlbear_delivery_next.state_store import spend_ledger, spend_shares, spotter_arms
+from owlbear_delivery_next.state_store import machine_settings, spend_ledger, spend_shares, spotter_arms
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import lookup, pending_child, sessions, watched
 
@@ -460,8 +467,6 @@ def test_the_runner_gives_the_look_its_settings_open_work_and_decisions(tmp_path
     unset.missing.append("spotter.looks")
     with pytest.raises(SettingsUnset, match=r"spotter\.looks"):
         watched.needed(unset)
-    from owlbear_delivery_next.state_store import machine_settings  # noqa: PLC0415
-
     monkeypatch.setattr(machine_settings, "BASE", None)  # no machine setting is read: there is no daily budget
     assert watched.needed(settings) == 0.75
     no_limit = resolve(None, Layer())
@@ -746,8 +751,6 @@ def test_through_passes_on_a_cancellation_that_races_the_tasks_end() -> None:
 
 
 def test_a_look_cancelled_twice_before_its_card_is_built_still_records(monkeypatch) -> None:
-    import time  # noqa: PLC0415
-
     real = card.build
     monkeypatch.setattr(card, "build", lambda *a: (time.sleep(0.2), real(*a))[1])
 
@@ -803,8 +806,6 @@ def test_a_burst_of_samples_while_looks_run_is_counted_once_not_queued() -> None
 def test_a_spotter_writes_where_it_started_whatever_changes_later(monkeypatch, tmp_path) -> None:
     async def main() -> spotter.Spotter:
         spot = spotter.Spotter(ctx(), lambda: "s-1", judge())
-        from owlbear_delivery_next.local_system import local_home  # noqa: PLC0415
-
         monkeypatch.setattr(local_home, "root", lambda: tmp_path / "elsewhere")
         spot.handed_off("c", {})
         await spot.drain()
@@ -945,8 +946,6 @@ def test_an_unread_total_keeps_the_answer_and_its_spend_is_the_calls_reported(lo
 
 
 def test_a_drain_that_stops_waiting_never_drops_queued_writes(monkeypatch) -> None:
-    import threading  # noqa: PLC0415
-
     monkeypatch.setattr(spotter, "DRAIN", 0.02)
     monkeypatch.setattr(spotter, "TEARDOWN", 0.02)
     release = threading.Event()
@@ -970,8 +969,6 @@ SHAPES = ["d", "a.", "a@", "x@y.", "<browser_context>", "</browser_context>", "<
 
 @pytest.mark.parametrize("unit", SHAPES)
 def test_cleaning_the_largest_text_takes_linear_time_whatever_its_shape(unit: str) -> None:
-    import time  # noqa: PLC0415
-
     text = (unit * (events.RAW // len(unit) + 1))[: events.RAW]
     began = time.monotonic()
     events.kept_text(text, events.RESULT)
@@ -1080,8 +1077,6 @@ def test_no_look_starts_once_the_drain_began_and_a_slow_write_never_holds_the_en
 
 
 def test_a_cancelled_submit_handler_still_keeps_delivery_s_answer(tmp_path) -> None:
-    import time  # noqa: PLC0415
-
     async def main() -> None:
         cfg = sdk_adapter.Session(
             StepKind.BUILD, tmp_path, "s1", "m", resume=False, policy=Policy(tmp_path),
@@ -1417,8 +1412,6 @@ class Transport:
 
 def handing_off(tmp_path: Path, spot: spotter.Spotter, transport: Transport | None = None) -> sdk_adapter._Step:
     """A real step and gate whose Spotter acts through its ``StepActor``, as the adapter binds it."""
-    from owlbear_delivery_next.runtimes import spotter_act  # noqa: PLC0415 - #717's actuator, bound as the adapter does
-
     cfg = sdk_adapter.Session(
         StepKind.BUILD, tmp_path, "s1", "m", resume=False, policy=Policy(tmp_path),
         observe=lambda: Worktree("a" * 40, "b" * 40), checks=(), model="gpt-6-luna",
@@ -1505,8 +1498,6 @@ def test_a_hand_off_waits_for_a_look_that_could_stop_to_ask_and_the_step_ends_wi
 def test_a_stop_to_ask_at_a_hand_off_whose_abort_outlasts_the_submits_wait_still_ends_the_step_with_its_question(
     tmp_path, monkeypatch
 ) -> None:
-    from owlbear_delivery_next.runtimes import spotter_act, step_tools  # noqa: PLC0415 - #717's actuator and submit
-
     monkeypatch.setattr(step_tools, "wait", lambda: 0.1)
     monkeypatch.setattr(spotter_act, "CALL", 0.5)  # the abort answers only after the submit stopped waiting
     asking = dict.fromkeys(CATEGORIES, "record") | {"course-and-constraints": "stop-and-ask"}

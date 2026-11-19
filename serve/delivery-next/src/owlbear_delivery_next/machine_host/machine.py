@@ -19,10 +19,15 @@ from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import data_repo, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.machine_host import cases_job, chats
+from owlbear_delivery_next.machine_host.auto_update import Auto
 from owlbear_delivery_next.machine_host.cases_job import CasesJob
 from owlbear_delivery_next.machine_host.curation import Curation
+from owlbear_delivery_next.machine_host.impeccable import Impeccable
+from owlbear_delivery_next.machine_host.onboarding import Onboarding
 from owlbear_delivery_next.machine_host.project import Project, recorded
 from owlbear_delivery_next.machine_host.retro_job import DRAIN, RetroJob
+from owlbear_delivery_next.machine_host.update import Updater
+from owlbear_delivery_next.machine_host.update_checks import Checks
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.runtimes import settings_read
 from owlbear_delivery_next.state_store import machine_settings, registry, settings_carry
@@ -75,12 +80,6 @@ class Machine:
         self.slots = Slots(self._sessions, closed=True)  # opened once every project's live steps are counted
         self.maintenance = maintenance.Maintenance(self.slots)
         self.reads = settings_read.Reader(self.say, lambda: [o.store for o in list(self.projects.values()) if o.store])
-        from owlbear_delivery_next.machine_host.auto_update import Auto  # noqa: PLC0415 - it names this class
-        from owlbear_delivery_next.machine_host.impeccable import Impeccable  # noqa: PLC0415 - it names this class
-        from owlbear_delivery_next.machine_host.onboarding import Onboarding  # noqa: PLC0415 - it names this class
-        from owlbear_delivery_next.machine_host.update import Updater  # noqa: PLC0415 - it names this class
-        from owlbear_delivery_next.machine_host.update_checks import Checks  # noqa: PLC0415 - it names this class
-
         self.updater = Updater(self)
         self.auto = Auto(self)
         self.impeccable = Impeccable(self)

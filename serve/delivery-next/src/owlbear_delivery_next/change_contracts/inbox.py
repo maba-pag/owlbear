@@ -69,6 +69,8 @@ class Recovery(_Item):
 
     kind: Literal["recovery"] = "recovery"
     action: str
+    stop_at: datetime | None = None
+    remedy: int | None = None
 
 
 class ConsentItem(_Item):

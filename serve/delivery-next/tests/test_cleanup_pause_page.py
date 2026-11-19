@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 
 import pytest
 import uvicorn
+from playwright.sync_api import expect, sync_playwright
 
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Option, Question, Step, StepKind
@@ -27,8 +28,6 @@ def test_cleanup_resume_uses_actual_completion_not_the_displayed_done_label(  # 
     abandon,
     finished,
 ):
-    from playwright.sync_api import expect, sync_playwright  # noqa: PLC0415 - optional browser runtime
-
     store = Store(tmp_path)
     c = Change(slug="c1", brief=Brief(version=1, title="Preserve remote work"),
                step=Step(kind=StepKind.CLEANUP, mode="abandon" if abandon else None))  # fmt: skip
@@ -93,8 +92,6 @@ def test_cleanup_resume_uses_actual_completion_not_the_displayed_done_label(  # 
 @pytest.mark.browser
 def test_a_resume_left_unanswered_is_not_sent_again_and_a_slow_read_is_not_called_down(tmp_path, pds):
     """A timed-out write may have been done: the page reads the Change again instead of sending it twice."""
-    from playwright.sync_api import expect, sync_playwright  # noqa: PLC0415 - optional browser runtime
-
     store = Store(tmp_path)
     c = Change(slug="c1", brief=Brief(version=1, title="Slow host"))
     c.intent.paused_at = NOW

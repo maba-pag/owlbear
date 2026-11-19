@@ -16,19 +16,23 @@ from typing import TYPE_CHECKING, Any
 import pytest
 import uvicorn
 from owlbear_memory import MemoryCategory, MemoryEngine, storage
+from playwright.sync_api import Error, expect, sync_playwright
 from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 
 from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryCurationResult
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.local_system import data_place
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.machine_host import project
+from owlbear_delivery_next.project_host import api, host
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes.session_result import Run
+from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer
 from owlbear_delivery_next.state_store import backlog_issues, machine_settings, registry
 from owlbear_delivery_next.state_store.backlog import Backlog, Entry
@@ -134,8 +138,6 @@ def serving(app: Starlette) -> Iterator[tuple[uvicorn.Server, str]]:
 
 @pytest.mark.browser
 def test_changes_show_the_current_unreadable_profile_note_beside_fresh_cards(c1, tmp_path: Path, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, app = c1
     with serving(app) as (_server, base), page_at(base, pds, (1440, 1000)) as page:
         errors: list[str] = []
@@ -179,8 +181,6 @@ def test_changes_show_the_current_unreadable_profile_note_beside_fresh_cards(c1,
 def test_one_backlog_for_both_clones_triaged_by_project_and_a_change_started_in_the_chosen_clone(
     tmp_path: Path, shared_repo, pds, monkeypatch
 ) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
     shop_clone = registry.register(clone(tmp_path / "shop", origin="https://github.com/acme/shop-site.git"))
     docs = registry.register(clone(tmp_path / "docs", origin="https://github.com/acme/docs-site.git"))
@@ -237,8 +237,6 @@ def test_a_failed_backlog_launch_shows_its_warning_whole(
     tmp_path: Path, shared_repo, pds, whole_error, monkeypatch
 ) -> None:
     """R2 (#971): what Delivery could not undo is said beside a Backlog launch that failed too, whole."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
     registry.register(clone(tmp_path / "shop", origin="https://github.com/acme/shop-site.git"))
     docs = registry.register(clone(tmp_path / "docs", origin="https://github.com/acme/docs-site.git"))
@@ -278,8 +276,6 @@ def curated(folder: Path, title: str) -> None:
 
 def moves_back_only_where_it_came_from(page, pds, entries) -> None:
     """TD-292: a Global entry moves back to the project it was made global from; one without that record cannot."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     pinned = entries.filter(has_text="Pin the runtime")
     expect(pinned.locator(".place")).to_have_text("Global")
     common = entries.filter(has_text="Sign every commit")
@@ -302,10 +298,6 @@ def test_the_backlog_page_says_whole_why_github_could_not_be_read(
 
     When no clone was read they show in the error: test_backlog_api's failed gh read on the Backlog page proves that.
     """
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    from owlbear_delivery_next.github.provider import FailureCode, ProviderError  # noqa: PLC0415
-
     monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
     shop_clone = registry.register(clone(tmp_path / "shop", origin="https://github.com/acme/shop-site.git"))
     registry.register(clone(tmp_path / "docs", origin="https://github.com/acme/docs-site.git"))
@@ -338,8 +330,6 @@ def test_the_backlog_page_says_whole_why_github_could_not_be_read(
 
 def recommendation_shows_while_pending(page, entries, folder: Path) -> None:
     """TD-293: the saver's recommended scope shows on a pending entry, and no longer once it is curated."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     engine = MemoryEngine(folder)
     prefer = engine.save(
         title="Prefer uv", content="Prefer uv: run tools with uv", categories=[MemoryCategory.PROCESS],
@@ -357,8 +347,6 @@ def recommendation_shows_while_pending(page, entries, folder: Path) -> None:
 def test_memory_shows_each_folder_once_beside_global_and_makes_an_entry_global(
     tmp_path: Path, shared_repo, pds, monkeypatch
 ) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     root = shared_repo[0]
     monkeypatch.setenv(data_place.VIEW, str(root))
     shop_clone = registry.register(clone(tmp_path / "shop", origin="https://github.com/acme/shop-site.git"))
@@ -406,8 +394,6 @@ def test_memory_shows_unreadable_settings_and_a_failed_move_whole(
     tmp_path: Path, shared_repo, pds, monkeypatch, whole_error
 ) -> None:
     """#971: the purge line says why the purge age is unknown, and a move that fails says why, each whole."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
     docs = registry.register(clone(tmp_path / "docs", origin="https://github.com/acme/docs-site.git"))
     folder = shared_repo[0] / "docs-site" / "memory"
@@ -471,8 +457,6 @@ def test_an_older_scope_label_without_its_project_label_means_the_project_it_was
 
 def machine_settings_are_saved_and_a_stale_save_is_refused(page, pds, shared: DataRepo) -> None:
     """TD-288, TD-300: the machine section edits the machine's own settings against the revision it read."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     region = page.get_by_role("region", name="This machine")
     expect(pds.select(page, "Versions this machine takes")).to_have_attribute("disabled", "")  # #809: on a project
     expect(region).to_contain_text("set on This machine or Global")
@@ -512,8 +496,6 @@ def machine_settings_are_saved_and_a_stale_save_is_refused(page, pds, shared: Da
 
 def improvement_s_machine_settings_are_typed_and_saved(page, pds) -> None:
     """Improvement (design §4): a credit limit as an amount, Retro's triggers as choices, chats as folders or none."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     limit = page.get_by_label("Retro: credit limit per run (credits)", exact=True)
     limit.press_sequentially("0.05")  # keystrokes: "0." and "0.0" stay as typed, never become 0
     expect(limit).to_have_value("0.05")
@@ -550,8 +532,6 @@ def improvement_s_machine_settings_are_typed_and_saved(page, pds) -> None:
 
 def a_saved_amount_is_edited_key_by_key(page, pds, limit, save) -> None:
     """Sol: from a saved 20, "20.0" means 20 again on the way to 20.05; its text stays, never "20" then 205."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     expect(limit).to_have_value("20")
     limit.fill("")
     for typed in ("2", "20", "20.", "20.0", "20.05"):
@@ -566,8 +546,6 @@ def a_saved_amount_is_edited_key_by_key(page, pds, limit, save) -> None:
 
 def a_read_begun_during_a_save_never_undoes_it(page, pds) -> None:
     """Sol: a refresh of the machine's values asked for while a save runs never shows the values before it."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     held, answered = [], []  # the save waits for the test; a refresh read before it is delivered after it
 
     def hold(route) -> None:
@@ -598,8 +576,6 @@ def a_read_begun_during_a_save_never_undoes_it(page, pds) -> None:
 
 def every_machine_s_settings_are_saved_with_the_global_layer(page, pds, shared: DataRepo) -> None:
     """Global's machine settings (2026-10-23): edited under the global layer, saved with it; this machine inherits."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     machine = page.get_by_role("region", name="This machine")
     expect(machine).to_contain_text("in use: Major versions only (v1, v2 …), from this machine")
     pds.pick(page, "Versions this machine takes", "inherit")  # this machine follows Global's again
@@ -626,8 +602,6 @@ def every_machine_s_settings_are_saved_with_the_global_layer(page, pds, shared: 
 
 def a_project_shows_the_machine_s_settings_read_only(page, pds, machine) -> None:
     """#809: a project holds no machine setting; each shows its value in use, disabled, and where it is set."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     channel = pds.select(page, "Versions this machine takes")
     expect(channel).to_have_js_property("value", "major")
     expect(channel).to_have_attribute("disabled", "")
@@ -658,8 +632,6 @@ def open_with_docs_needing_setup(page, base: str, path: str) -> None:
 def unsaved_edits_keep_the_page(page, here: str, pds) -> None:
     """No project choice, top-row link, menu link or link of the notes under them leaves a page with unsaved edits
     (D-01M63C8DA1D95Z7M9ZYWVYYNF7)."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     pds.pick(page, "Layer", f"go:{SHOP}")
     expect(page.locator("#error")).to_contain_text("Save or discard your edits")
     expect(pds.select(page, "Layer")).to_have_js_property("value", "project")
@@ -685,8 +657,6 @@ def unsaved_edits_keep_the_page(page, here: str, pds) -> None:
 
 def a_role_s_subagents_are_switched_off_and_saved(page, store: Store, pds) -> None:
     """TD-376: the per-role choice is saved as a switch, not as its text."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     pds.group(page, "agents")
     pds.pick(page, "Built-in subagents, reviewer", "false")
     expect(page.locator("#pending")).to_contain_text("reviewer · Subagents: inherited → false")
@@ -714,8 +684,6 @@ def a_role_s_subagents_are_switched_off_and_saved(page, store: Store, pds) -> No
 
 def the_overview_shows_what_projects_set_apart(page) -> Any:
     """TD-243, TD-295: the overview's table of what each project sets apart; returns it."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     across = page.locator("#across-table")
     expect(across).to_contain_text("Checks and merge · Screenshot widths")
     expect(across).to_contain_text("(built-in default)")
@@ -737,8 +705,6 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
 ) -> None:
     """TD-243: the global value and its source beside each project's differing value; the scope names Global and
     each project; the machine's values in their own section; a save another page overtook is refused."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     shop = Store(tmp_path / SHOP, DataRepo(shared_repo[0]), "shop-site")
     assert (
         shop.save(
@@ -792,8 +758,6 @@ def test_settings_show_what_each_project_sets_apart_and_ask_where_an_edit_goes(
 
 def a_machine_s_draft_never_shows_on_global(page, pds, region) -> None:
     """#809: This machine's edit shows on its own line, and Global's line counts only Global's edits."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     line = region.locator("#set-machine-update_when_idle p-text[size='xs']")
     pds.pick(page, "Layer", "machine")
     pds.pick(page, "Update itself when idle", "true")
@@ -814,8 +778,6 @@ def a_machine_s_draft_never_shows_on_global(page, pds, region) -> None:
 
 def a_machine_s_clear_shows_global_s_saved_value_and_global_ignores_its_draft(page, pds, region) -> None:
     """#809: the in-use line follows the shown layer's unsaved edit only, over the other layers as saved."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     channel = "Every machine: Versions this machine takes"
     line = region.locator("#set-machine-channel p-text[size='xs']")
     pds.pick(page, channel, "major")
@@ -899,9 +861,7 @@ def every_name_is_what_its_row_shows(page, pds) -> None:
     """The unset list's names are the page's own: each key's name is its row's visible name, behind its section's
     heading where the row means little alone, and its column's head in the agents and rounds tables (never built from
     the name table itself); the row sits in the group the list links to; a key with no row is named as written."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    grouped_unset_overview(page, pds, page.url.split("/config")[0], expect)
+    grouped_unset_overview(page, pds, page.url.split("/config")[0])
     retired = {"id": "n1", "key": "machine.spotter_budget", "old": "5", "new": None, "at": "2026-11-04T09:00:00Z"}
     expect(page.locator("#reads-status")).to_contain_text("Last read", timeout=30_000)  # none lands over the notice
     page.evaluate(RETIRED_NOTICE, [retired])  # it is shown as its key and can be dismissed, never a failure to draw
@@ -909,7 +869,7 @@ def every_name_is_what_its_row_shows(page, pds) -> None:
     expect(page.get_by_role("button", name="Dismiss the change of machine.spotter_budget")).to_have_count(1)
     page.evaluate(RETIRED_NOTICE, [])
     keys = page.evaluate(OVERVIEW_KEYS)
-    assert (len(keys), sum(k["unset"] for k in keys)) == (165, 161)  # audit-verifier adds five unset settings
+    assert (len(keys), sum(k["unset"] for k in keys)) == (170, 166)  # quality-judge adds five unset settings
     for group in dict.fromkeys(k["group"] for k in keys):
         pds.group(page, group)
         for shown in page.evaluate(ROW_WORDS, [k["key"] for k in keys if k["group"] == group]):
@@ -924,11 +884,11 @@ def every_name_is_what_its_row_shows(page, pds) -> None:
                 assert shown["column"], f"{key}: no column"
     pds.group(page, "agents")
     nothing = page.evaluate(NO_ROW)
-    assert (nothing["count"], nothing["wrong"]) == (64, [])  # audit-verifier adds four unsupported round keys
+    assert (nothing["count"], nothing["wrong"]) == (68, [])  # quality-judge adds four unsupported round keys
     assert "agents.planner.bogus" in nothing["unknown"]
 
 
-def grouped_unset_overview(page, pds, base: str, expect) -> None:
+def grouped_unset_overview(page, pds, base: str) -> None:
     expect(page.locator("#unset-groups > li")).to_have_count(5)
     expect(page.locator("#unset-project, #unset-overview")).to_have_count(0)
     expect(page.locator("#unset-agents")).to_have_text(
@@ -962,10 +922,6 @@ def test_with_no_machine_setting_set_anywhere_the_page_names_each_and_a_pending_
     tmp_path: Path, shared_repo, pds, monkeypatch, whole_error
 ) -> None:
     """Code ships no defaults (2026-10-23): with no built-in layer, every unset machine setting is an error."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-
     monkeypatch.setattr(machine_settings, "BASE", None)
     monkeypatch.setattr(config, "BASE", None)
     with registry.locked():
@@ -1026,17 +982,12 @@ def test_maintenance_curates_a_memory_folder_now_and_shows_its_report(
     tmp_path: Path, shared_repo, pds, monkeypatch
 ) -> None:
     """Item 5 slice 4: each folder of the shared repository with its last run; Curate now runs one at once."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     root = shared_repo[0]
     monkeypatch.setenv(data_place.VIEW, str(root))
     shop = registry.register(clone(tmp_path / "shop", origin="https://github.com/acme/shop-site.git"))
     curated(root / "shop-site" / "memory", "Run ruff first")
-    from owlbear_delivery_next.machine_host import project  # noqa: PLC0415
-    from owlbear_delivery_next.project_host.host import Host as ProjectHost  # noqa: PLC0415
-
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    monkeypatch.setattr(ProjectHost, "_launch", lambda _self, _slug: False)
+    monkeypatch.setattr(host.Host, "_launch", lambda _self, _slug: False)
     with serve() as (native, _server, base):
         report = MemoryCurationResult(summary="1 promoted, nothing left for you", entries=[])
         native.curation.run = lambda cfg: Run(

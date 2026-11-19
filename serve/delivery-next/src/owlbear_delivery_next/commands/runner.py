@@ -20,6 +20,7 @@ from owlbear_delivery_next.change_flow import (
     disputes,
     loop,
     plan_rounds,
+    quality,
     repairs,
     shaping_capture,
     stuck,
@@ -45,10 +46,12 @@ from owlbear_delivery_next.runtimes import (
 )
 from owlbear_delivery_next.settings import profile, roles
 from owlbear_delivery_next.settings.config import SettingsUnset
+from owlbear_delivery_next.settings.profile import lint_commands
 from owlbear_delivery_next.state_store import github_writer, project_home, spend_ledger
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 from owlbear_delivery_next.workflow_steps import (
     amendment,
+    approvals,
     before,
     brief_round,
     captures,
@@ -62,6 +65,7 @@ from owlbear_delivery_next.workflow_steps import (
     decisions_gate,
     design,
     engine,
+    exception_workers,
     follow,
     held,
     held_writes,
@@ -75,6 +79,7 @@ from owlbear_delivery_next.workflow_steps import (
     project_checks,
     publish,
     queue,
+    repair_recovery,
     review,
     session_choice,
     sessions,
@@ -95,17 +100,8 @@ AGENT = frozenset({StepKind.PLAN, StepKind.BUILD, StepKind.REVIEW, StepKind.CHEC
 TARGET = ("target", StepKind.BUILD, Exit.BACK)  # a builder's accepted target premise; a stop on its processes wins
 
 
-type Result = loop.StepResult
-
-
-def _shape(_ctx: engine.Ctx, c: Change) -> tuple[Change, loop.StepResult]:
-    """Shaping happens in chat; the step waits for a revised brief and its approval."""
-    why = c.outcome.reason if c.outcome else f"brief v{c.brief.version} is not approved for planning"
-    return c, engine.pending(Waiting.CHAT, f"brief needs a change: {why} · revise in chat, then approve", None, "you")
-
-
 ENGINE: dict[StepKind, engine.Step] = {
-    StepKind.SHAPE: _shape,
+    StepKind.SHAPE: worker_input.shaping,
     StepKind.PUBLISH: publish.run,
     StepKind.FOLLOW: follow.run,
     StepKind.MERGE: merge.run,
@@ -152,6 +148,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
 
     ctx = prepare.context(store, change, settings, path) if s.kind == StepKind.CHECK else None  # TD-107
     asked = lookup.Asked(store, lock, lambda: change)  # the worker's lookup_decisions (TD-456)
+    judged = exception_workers.Asked(store, lock, lambda: change, path)
 
     def config(at: Path) -> sdk_adapter.Session:
         parts = step_input.session(change, profile, at, others, ctx)
@@ -174,6 +171,8 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
             policy=permissions.Policy(at, write=parts.write),
             observe=lambda: worktree.observe(at, change.names.target, since),
             checks=parts.checks,
+            lint_commands=lint_commands(profile),
+            quality=lambda: quality.check(change, at, lint_commands(profile), folder=store.root),
             packages=parts.packages,
             submit=parts.submit,
             scope=tuple(change.brief.scope),
@@ -197,19 +196,21 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
             user=roles.user_config(settings),  # D-01M5YE4P5317N1HWD0QN6N05E0: the owner's own instructions and skills
             memory=sessions.memory(store),
             ui=change.brief.ui,
-            helpers=worker_input.helpers(change, at, asked),
+            helpers=worker_input.helpers(change, at, asked, judged),
             preparing=ctx,
             watch=watched.watching(store, lock, session, settings, at, _out, look_limit, asked),  # W1a's switch
         )
 
     made = (lambda at: curation_build.curator(config(at), change, settings)) if curated else config
-    run = accepted or asked.settled(partial(_kept, store, lock, change, path, made))
+    run = accepted or asked.settled(lambda: judged.settled(partial(_kept, store, lock, change, path, made)))
     end = datetime.now(UTC)
     # The session's callbacks replace ``change``; objects taken from it before the session are stale.
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     curation_build.recorded(change, run, path)
     post = held_writes.Deferred(store, slug) if accepted else store  # an accepted hold's writes wait for its receipt
-    result = session_result.to_result(run, s.kind, end)
+    result = approvals.Requests(post, lint_commands(profile)).requested(
+        change, run, path, session_result.to_result(run, s.kind, end)
+    )
     private = run.ending == "ask" and result.cause == cause_key(ErrorKind.RESULT, s.kind, worker_questions.LABEL)
     kept = worker_questions.unbound(post, lock, change, run, run.checks) if private else None
     if kept is None:
@@ -336,7 +337,7 @@ def _visual(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         sessions.log_held(store, lock, [label for label, _ in [*mine, *theirs]], [run for _, run in ran])
 
 
-def _ready(prof: Profile, path: Path, now: datetime, writer: Writer) -> Result | None:
+def _ready(prof: Profile, path: Path, now: datetime, writer: Writer) -> loop.StepResult | None:
     """DR2 before publishing: the publishing readiness facts, their first failure as its exit."""
     host = profile.value(prof, profile.HOST, "github.com")
     return publish.gate(readiness.publishing(host, git_files.probe_in(path), readiness.reach(host), writer), now)
@@ -473,10 +474,11 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
         elif step.kind == StepKind.TESTS or change.amending is not None:
             (curation.run if step.kind == StepKind.TESTS else amendment.run)(store, lock, change, repo)
         elif step.kind in AGENT:
-            agent = _reused(store, lock, change)
-            agent = agent or prepare.refused(store, lock, change) or review.completed(store, lock, change, repo)
-            agent = agent or plan_round.continued(store, lock, change, repo)
-            agent or _agent(store, lock, change, repo)
+            if (ready := repair_recovery.ready(store, lock, change, repo)) is not None:
+                agent = _reused(store, lock, ready)
+                agent = agent or prepare.refused(store, lock, ready) or review.completed(store, lock, ready, repo)
+                agent = agent or plan_round.continued(store, lock, ready, repo)
+                agent or _agent(store, lock, ready, repo)
         elif shaping_capture.owed(change):  # the draft's pages, before its challenge and the chat's wait
             _out(f"{change.slug}: {captures.at_target(store, lock, change, repo)}")
         elif step.kind == StepKind.SHAPE and brief_round.due(change):  # TD-221: before approval

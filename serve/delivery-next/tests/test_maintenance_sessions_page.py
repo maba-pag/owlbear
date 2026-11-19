@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from playwright.sync_api import expect
 from tests.maintenance_page import opened
 
 from owlbear_delivery_next.improvement import case_edits, cases
@@ -39,8 +40,6 @@ EMPTY = {"sessions": []}
 def test_a_held_session_is_released_only_after_a_confirmed_reboot_by_its_captured_id(
     tmp_path: Path, pds, *, still_held: bool
 ) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with opened(tmp_path, pds) as (page, base):
         posted: list[tuple[str, str | None]] = []
 

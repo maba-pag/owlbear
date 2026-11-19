@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from owlbear_memory import MemoryCategory, MemoryEngine
 
 from owlbear_delivery_next.change_contracts.models import Brief, BriefDecision, Change, Decision, VisualState
 from owlbear_delivery_next.change_contracts.profile_record import Profile
@@ -635,8 +636,6 @@ def test_renaming_moves_the_whole_folder_commits_pushes_and_is_used_from_then_on
 
 def test_after_a_rename_a_global_entry_still_moves_back_to_its_project(shared, repo) -> None:
     """TD-292, Copilot on #585: Global entries made global from the folder name its new name."""
-    from owlbear_memory import MemoryCategory, MemoryEngine  # noqa: PLC0415
-
     root, remote = shared
     store = Store.open(repo)
     engine = MemoryEngine(sessions.memory(store))

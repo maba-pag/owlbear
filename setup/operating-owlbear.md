@@ -161,6 +161,29 @@ the project auditor's subagents switch on: a context helper precedes one worker 
 In an OwlBear developer checkout it targets the registered OwlBear project, not that developer checkout; it
 never drops unpublished results from chat. Live audit quality is separate from the scripted `audit-replay` proof.
 
+**Suppression review** is another Maintenance action, without a note. **Start review** fetches and pins the target
+branch and sends existing suppression directives and lint configuration to the quality judge, read-only. Set the
+**quality judge** role in Settings and connect a shared repository for the Backlog first. Only one project audit
+runs at a time. The confirmation names the branch, role and model; the run asks nothing and uses AI credits.
+
+Each run judges at most 10 batches of 60 items, saving each completed batch before the next starts. Verdicts from
+Changes, chats, reviews and the owner count; advice on a proposed suppression is not recorded. The row shows the time, branch and commit, how many
+items the pinned tree holds, accepted, refused and not yet judged, and links to the Backlog entries. Start again
+to continue when items remain. A failed or interrupted run keeps its completed verdicts.
+
+Refused copies still present at the pinned commit become Backlog improvements, grouped by directive and rules,
+package or top folder, and tests or source. Each entry's comments preserve every member's place and the judge's
+whole reason. Fix the code, or accept the suppression on Maintenance. There is no summary issue. If publication
+stops part-way, **Finish publishing** completes the saved entries and comments without judging again or opening
+them twice. Finish it before starting another run.
+
+**Verdicts** opens the recorded verdicts in the row, one line per rule, place, verdict and who ruled (the judge
+or you), with the count; each copy's place and whole reason are listed in the line.
+**Judge again** asks for confirmation, then sets those counting verdicts aside: history stays, no session starts,
+and the next review judges those copies afresh. **Accept**, on a refused line, asks for confirmation and replaces
+those refusals with your acceptance, keeping history. Neither action closes existing Backlog entries; triage them
+on Backlog. You can later set an owner acceptance aside with Judge again.
+
 The Spotter looks at agents' work beside them, in Delivery's steps and in the VS Code chats of the folders listed in
 `enrolled_chats`, and acts on each finding as its settings in **Settings → Spotter** say: it records it, steers the
 agent, refuses its hand-off, stops it and resumes it with a note, stops it to ask you, or shows it to you on the
@@ -185,7 +208,11 @@ writing or paying. `owlbear improvement retro run --change PROJECT/SLUG --repair
 rejudging. Originals remain in the append-only grade history. Until corrected, they show **Awaiting evidence
 correction** and count toward no current grade or proposal. Corrections preserve logical references and do not
 double count. This run only rejudges; it does not propose lessons or start the Spotter experiment. Each run keeps
-the configured credit limit. If it stops early, remaining grades stay pending until another explicit request.
+the configured credit limit. Registered grades left pending are picked up by later idle runs when
+`retro_when_idle` allows them, before ordinary chat reviews. Each run uses the same configured per-run limit
+and normal idle admission; no further repair request is needed.
+If a paid run corrects no grades, its result reports an automatic correction hold. That cohort waits for an
+explicit `--repair-grades` request instead of repeatedly spending without progress.
 Captures needed by pending corrections remain pinned until those corrections finish.
 Existing case proposals backed by those grades cannot be accepted or applied on their old review. An ordinary
 Retro proposal pass can refresh a still-open case proposal for review against the corrected grade.
@@ -479,6 +506,48 @@ still gate merging. When check names cannot be fully detected, your consent to t
 through CI follow-up and merge for the same workflow and detection-policy evidence. Changed evidence needs
 fresh consent; an old confirmation cannot keep an obsolete detection result in force.
 
+### Lint before submission
+
+The builder lints changed files before accepting a submission. Confirm the project's root lint command once:
+
+```shell
+owlbear profile --confirm 'lint=uv run quality --no-fix --files'
+```
+
+That example is OwlBear's own command. For another project, use its checking-mode lint and format command.
+The `lint` profile value accepts one command per line, parsed into arguments without a shell. Each command runs
+from the repository root with changed files appended. Only owner-confirmed commands count; without one, Delivery
+keeps discovering configured Ruff, Biome and ESLint tools. The existing time budgets and five-refusal limit stay.
+
+A build that changes lint, format, CI or hook configuration is refused until you approve the exact protected
+change. The builder calls `request_approval` with its reason. Changes shows the whole patch and offers Approve,
+Decline (resume and take it back), or Pause. An edit after approval needs approval again. This gate has no lint
+refusal allowance; target updates already merged into the Change do not ask for approval.
+
+Every suppression a builder or test curator adds needs a verdict for that Change. After committing, the worker
+calls `judge_exceptions`. The quality judge reads the code and all decisions in force, accepts legitimate
+exceptions and refuses workarounds. The worker fixes a refusal in code or appeals once with `request_approval`.
+The question shows the suppression, covered code and judge's reason. Your Approve is recorded as acceptance.
+Changed lint configuration also gets the judge's advice, but always needs your approval.
+
+The Change's page lists added suppressions below the build task, with place, directive, whole reason and who ruled.
+Refused and not judged entries show by default; accepted ones show with **Show details**. The list ends when the
+worktree is removed. An inspection failure shows its whole reason without hiding the Change's other controls.
+
+Chats use `judge_exceptions(path, base)`: an absolute checkout and the ref they branched from. Only committed
+additions against the merge-base are judged, and a dirty tree is reported. Verdicts are recorded for that checkout
+and branch, never for a Change. Before editing, pass `proposed` (up to 20 items: file, line, directive and reason)
+for advice with no ledger write. A running answer gives a `run_id` for `await_exceptions`. Chats still ask you before
+adding a suppression, even when the judge accepts it.
+
+Set **quality judge** in **Settings** before starting work. Its model, effort, context, minutes and subagent switch
+start unset, like every new role's. Unset settings disable work-starting controls and automatic steps until set.
+The recommendations are `gpt-6.1-sol`, high effort, default context, 15 minutes and subagents on; they are not defaults.
+
+Run `owlbear quality lint [--base REF]` by hand without the host. It includes committed, staged, working and
+untracked changes against the merge-base with `REF`, defaulting to the profile's target branch. It prints each
+linter's result and exits 1 for problems or 2 when a tool cannot run.
+
 Delivery repairs a stuck step in a temporary copy and proves its fix with the step's checks.
 A new or broadened lint or type suppression needs your yes/no: the question shows its exact line, reason,
 proof and complete patch. Yes applies the fix and runs the step again. No stops and keeps the
@@ -486,6 +555,12 @@ patch in the repair record and stop details. A skip, a removed assertion or a de
 never applied; its refused patch is kept too. Keeping an existing suppression on an edited line
 does not count as adding one. Design-pack CI repairs use the same distinction and show the
 whole candidate before asking you to approve a suppression.
+
+When a repair stops on a Delivery defect, its stop records the OwlBear version.
+A newer version alone does not permit the same attempt again. Once the running release contains the
+applicable fix, Changes offers its recovery action. Confirm it to continue with the repair history intact;
+existing pauses still hold. An amendment in progress continues where it stopped, rather than starting over.
+A recovered CI task refreshes its check evidence before a fresh builder runs.
 
 When your answer on Changes leaves brief work for the shaper, Delivery posts one continuation
 to the chat that saved that brief version. The brief panel says whether it posted, waits for

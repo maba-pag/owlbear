@@ -55,6 +55,7 @@ from owlbear_delivery_next.change_flow import (
     picks,
     plan_rounds,
     rebuilds,
+    repair_recovery,
     round_flow,
     shaping_capture,
     stuck,
@@ -259,8 +260,8 @@ def fold(  # noqa: C901, PLR0912 - per item kind
                         check.answer = Answer(
                             text=item.note, channel=item.channel, at=item.at, passed=item.passed, inputs=item.inputs
                         )
-            case Recovery(action=action) if c.stop and c.stop.action == action:
-                c.stop = c.outcome = None
+            case Recovery():
+                repair_recovery.consume(c, item, unchanged=not stuck.exhausted(c))
             case ConsentItem() if waiting_consent(c):  # a consent a restart retired, or older, counts for nothing
                 c.consent = MergeConsent(head=item.head, at=item.at, channel=item.channel, delta=item.delta)
                 if c.outcome and c.outcome.cause == CONSENT:
@@ -393,7 +394,12 @@ def apply(change: Change, result: StepResult, now: datetime) -> Change:
     c = change.model_copy(deep=True)
     result = asking.scoped(c, result)
     kind = c.step.kind
-    if result.exit not in EXITS[kind]:
+    refreshing = (
+        repair_recovery.pending_ci(c)
+        and result.exit == Exit.PENDING
+        and result.waiting in {Waiting.CI, Waiting.CHECK_START, Waiting.NETWORK}
+    )
+    if result.exit not in EXITS[kind] and not refreshing:
         msg = f"{kind} has no {result.exit} exit"
         raise ValueError(msg)
     c.outcome = Outcome(exit=result.exit, cause=result.cause, reason=result.reason, who=result.who,

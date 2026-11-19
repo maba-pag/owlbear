@@ -49,6 +49,7 @@ SUITES: dict[str, tuple[str, ...]] = {
         "serve/delivery-next/**",
         "serve/decisions/**",
         "serve/memory/**",
+        "serve/quality/**",
     ),
     "static": ("**",),  # `uv run lint` checks every text file, EditorConfig included
     "tooling": (

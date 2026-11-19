@@ -27,6 +27,11 @@
   .read-errors { white-space: pre-wrap; overflow-wrap: anywhere; }
   .audit { display: grid; gap: var(--p-spacing-static-xs); }
   .audit-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .review-text { display: block; max-inline-size: 75ch; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .action:has(.suppression-review) > p-text { max-inline-size: 75ch; }
+  .suppression-verdicts { display: grid; gap: var(--p-spacing-static-md); padding-inline-start: 1.5rem; }
+  .verdict-actions { display: flex; flex-wrap: wrap; gap: var(--p-spacing-static-sm); }
+  .suppression-review p-button { min-width: 24px; min-height: 24px; }
   .audit a { display: inline-block; min-width: 24px; min-height: 24px; }
 </style>
 </head>

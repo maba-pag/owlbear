@@ -1,5 +1,7 @@
 import asyncio
+import functools
 import hashlib
+import http.server
 import json
 import os
 import re
@@ -17,38 +19,50 @@ from typing import Any, ClassVar
 from urllib.parse import parse_qsl
 
 import pytest
+from copilot.rpc import PermissionDecisionReject
+from copilot.session import CopilotSession
 from fastapi.testclient import TestClient
 
 from owlbear_decisions import Decision, Scope, write
 from owlbear_delivery_next.change_contracts import chat_contract, pick_tools, tools
-from owlbear_delivery_next.change_contracts.models import Change
+from owlbear_delivery_next.change_contracts.models import Change, StepKind, VisualState, VisualStep
+from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.change_contracts.user_config import UserConfig
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.git import remote_git
 from owlbear_delivery_next.git.access import Access
 from owlbear_delivery_next.github import account
+from owlbear_delivery_next.github.provider import MergeMethod
 from owlbear_delivery_next.impeccable import pack_files
+from owlbear_delivery_next.improvement import spotter
 from owlbear_delivery_next.local_system import data_repo, git_run, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import model_choices, sdk_adapter, spotter_look
+from owlbear_delivery_next.runtimes import model_choices, sdk_adapter, spend_reconcile, spotter_look
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.settings import carried, config, profile
+from owlbear_delivery_next.settings.config import Agent, MemoryValues
+from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter
 from owlbear_delivery_next.state_store import (
     backlog,
     backlog_issues,
     decision_cache,
     decision_store,
     legacy_family,
+    machine_settings,
     offline_protocol,
     project_home,
+    spend_ledger,
 )
 from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.workflow_steps import visual
 
 MACHINE_HOME = Path.home()  # read before any test replaces HOME
 CHAT_REPLIES = {  # what a chat of each contract this host serves reads from its answers
@@ -203,10 +217,6 @@ def _carried_settings(monkeypatch):
     The five preferences are a test-only layer with the values the old code defaults gave (R15): production carries
     none of them. A test of unset settings sets ``config.BASE`` or ``machine_settings.BASE`` to ``None``.
     """
-    from owlbear_delivery_next.github.provider import MergeMethod  # noqa: PLC0415
-    from owlbear_delivery_next.settings import carried, config  # noqa: PLC0415
-    from owlbear_delivery_next.state_store import machine_settings  # noqa: PLC0415
-
     prefs = config.Prefs(
         merge_method=MergeMethod.SQUASH,
         delete_remote_branch=False,
@@ -228,8 +238,6 @@ INTERVALS = ("update_check_hours_owlbear", "update_check_hours_pds", "update_che
 @pytest.fixture
 def intervals_unset(monkeypatch):
     """The three update-check intervals unset under this machine, as on a machine that never set them."""
-    from owlbear_delivery_next.state_store import machine_settings  # noqa: PLC0415
-
     monkeypatch.setattr(machine_settings, "BASE", machine_settings.BASE.model_copy(update=dict.fromkeys(INTERVALS)))
 
 
@@ -239,10 +247,6 @@ def complete_layer():
     the memory values, as they once stood in code, GitHub writes by the repository owner's account (TD-402) and the
     shaper's 15 minutes before Delivery starts a missing brief challenge (D-01M6P1685N1R5W2PPV5SHKR2H0), and the
     repairer's own minutes and subagents (D-01M6SY11CY5SN5ZKYJNM0K6BDM)."""
-    from owlbear_delivery_next.settings import carried  # noqa: PLC0415
-    from owlbear_delivery_next.settings.config import Agent, MemoryValues  # noqa: PLC0415
-    from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter  # noqa: PLC0415
-
     base = carried.layer()
     spotter = Spotter(
         switch="on", steer_share=0, intervention_cap=1, verbose="off", looks=["hand-off"], look_credit_limit=0.75,
@@ -250,7 +254,7 @@ def complete_layer():
     )  # fmt: skip
     agents = base.agents | {
         role: base.agents["curator"].model_copy(update={"model": "gpt-6.1-sol", "effort": "medium"})
-        for role in ("retro", "retro-review", "auditor", "project-auditor", "audit-verifier")
+        for role in ("retro", "retro-review", "auditor", "project-auditor", "audit-verifier", "quality-judge")
     }
     agents["shaper"] = base.agents["shaper"].model_copy(update={"challenge_wait": 15})
     agents["repairer"] = Agent(minutes=40, subagents=True)  # its model, effort and context are the builder's
@@ -269,14 +273,6 @@ def through_step(tmp_path):
     """#864: one shell command as a real step's session meets it: its pre-tool hook through the SDK's own dispatch,
     then its permission callback. Returns how it went (refused, warned, allowed), what the agent was told, the
     hook's raw output, the step's journal events and its Run."""
-    from copilot.rpc import PermissionDecisionReject  # noqa: PLC0415
-    from copilot.session import CopilotSession  # noqa: PLC0415
-
-    from owlbear_delivery_next.change_contracts.models import StepKind  # noqa: PLC0415
-    from owlbear_delivery_next.change_contracts.permissions import Policy  # noqa: PLC0415
-    from owlbear_delivery_next.change_contracts.tools import Worktree  # noqa: PLC0415
-    from owlbear_delivery_next.change_contracts.user_config import UserConfig  # noqa: PLC0415
-    from owlbear_delivery_next.runtimes import sdk_adapter  # noqa: PLC0415
 
     def run(text: str, level: str = "strict", *, write: bool = True, user: UserConfig | None = None) -> SimpleNamespace:
         at, events = tmp_path, []
@@ -307,9 +303,6 @@ def through_step(tmp_path):
 @pytest.fixture
 def user_on(monkeypatch, _carried_settings):
     """All three user-config switches on under every layer: a session site that omits them shows as off, never set."""
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-    from owlbear_delivery_next.settings.roles import UserConfig  # noqa: PLC0415
-
     switched = {
         "load_user_instructions": True,
         "load_user_skills": True,
@@ -373,10 +366,6 @@ def _no_shared_settings(tmp_path_factory, monkeypatch):
 def _spotter_writes_end(_no_shared_settings):
     """Every Spotter write a test queued ends before the test's home and patches go."""
     yield
-    from owlbear_delivery_next.improvement import spotter  # noqa: PLC0415
-    from owlbear_delivery_next.runtimes import spend_reconcile  # noqa: PLC0415
-    from owlbear_delivery_next.state_store import spend_ledger  # noqa: PLC0415
-
     assert spotter.WORK.settled(10), "Spotter writes still running after the test"
     assert spend_reconcile.settled(10), "a spend reconciling pass still running after the test"
     assert spend_ledger.WRITER.settled(10), "spend ledger writes still running after the test"
@@ -1238,13 +1227,7 @@ def failing_rebase_probe(monkeypatch: pytest.MonkeyPatch, whole_error: str) -> S
 def failed_shots(tmp_path: Path, whole_error: str) -> list:
     """The package's own capture of two states Playwright fails with *whole_error*: one that does not open, and one
     whose click step fails. Only Playwright's ``goto`` of ``/gone`` and its clicks raise, while the capture runs."""
-    import functools  # noqa: PLC0415 - only this fixture serves a page
-    import http.server  # noqa: PLC0415
-
     from playwright.sync_api import Error, Locator, Page  # noqa: PLC0415 - the optional browser runtime
-
-    from owlbear_delivery_next.change_contracts.models import VisualState, VisualStep  # noqa: PLC0415
-    from owlbear_delivery_next.workflow_steps import visual  # noqa: PLC0415
 
     site = tmp_path / "failing-site"
     site.mkdir()

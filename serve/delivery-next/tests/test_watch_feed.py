@@ -19,6 +19,7 @@ from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.change_contracts.watch_policy import Places
 from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.improvement import spotter
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import sdk_adapter, sdk_teardown, sdk_usage, watch_feed
@@ -344,8 +345,6 @@ def test_a_shell_call_seen_only_in_its_permission_request_shows_its_whole_comman
 
 
 def test_a_spotter_that_cannot_start_leaves_the_watcher_watching(place, monkeypatch) -> None:
-    from owlbear_delivery_next.improvement import spotter  # noqa: PLC0415
-
     def broken(*_a: Any) -> None:
         raise OSError(place.notes.append("spotter refused") or "unwritable")
 
@@ -364,8 +363,6 @@ def test_a_completed_write_outside_is_a_state_change_look_never_a_sample_whateve
     place, tmp_path
 ) -> None:
     """#717: the Spotter counts Delivery's own state and the exempt roots as outside; the reports leave both out."""
-    from owlbear_delivery_next.improvement import spotter  # noqa: PLC0415
-
     mine, cache = tmp_path / "store" / "changes" / "c1", tmp_path / "cache"
     for folder in (mine, cache):
         folder.mkdir(parents=True, exist_ok=True)
