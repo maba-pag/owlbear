@@ -97,6 +97,7 @@ class Amendment(_Strict):
     done: list[str] = Field(default_factory=list)  # ``plan version:task id`` done when it applied: not built on it
     objected_at: datetime | None = None
     objection: Objection | Literal[""] = ""
+    ran_at: datetime | None = None  # the runner's committed exit, even when applying clears Change.amending
 
 
 class Amending(_Strict):

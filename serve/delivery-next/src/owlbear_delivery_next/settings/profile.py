@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shlex
 import subprocess
 from dataclasses import dataclass
 from fnmatch import fnmatch
@@ -34,6 +35,7 @@ WORKFLOWS, DECLARED = "ci:workflows", "ci:declared"
 METHOD, DELETE, HOOKS = "merge:method", "cleanup:delete-remote-branch", "git:pre-push-hook"
 POLL, WINDOW, ASK = "poll:ci-seconds", "ci:start-window-seconds", "merge:ask-before"
 SETTINGS = {METHOD: "", DELETE: "no", POLL: "20", WINDOW: "300", ASK: "no"}  # R15: legacy owner settings, import-only
+LINT = "lint"
 CONFIRMED = "owner confirmed"
 OBSERVED = "; observed: "
 DIGEST = "; workflows "  # declared-CI evidence ends with the digest of the workflow files it was read from
@@ -125,6 +127,14 @@ def vouched(prof: Profile) -> Profile:
     """The profile without the check commands the owner has not confirmed: the only ones a plan may name (#968)."""
     entries = {k: e for k, e in prof.entries.items() if not k.startswith("check:") or is_confirmed(e)}
     return prof.model_copy(update={"entries": entries})
+
+
+def lint_commands(prof: Profile) -> tuple[tuple[str, ...], ...]:
+    """The owner's confirmed root lint commands, one argument vector per nonblank line, never a shell."""
+    entry = prof.entries.get(LINT)
+    if entry is None or entry.state != "known" or not is_confirmed(entry):
+        return ()
+    return tuple(tuple(shlex.split(line)) for line in entry.value.splitlines() if line.strip())
 
 
 def holds(confirmed: ProfileEntry, observed: ProfileEntry) -> bool:
@@ -319,6 +329,9 @@ def confirm(profile: Profile, key: str, value: str, now: datetime) -> Profile:
     if key in SETTINGS:
         msg = f"{key} is a project preference: set it on the Settings page"
         raise ValueError(msg)
+    if key == LINT:
+        for line in value.splitlines():
+            shlex.split(line)
     old = profile.entries.get(key) or _absent(key)
     if is_confirmed(old) and not old.observed and _detected(key):
         msg = f"{key}: a legacy confirmation has no observation to bind; detect the profile first"

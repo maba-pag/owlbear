@@ -18,6 +18,7 @@ owns it. Start with the job, then open the package guide for commands and config
 | Fetch authenticated web content | [Browser MCP](browser-mcp/README.md) | Allowlisted browser actions and Markdown accessibility snapshots |
 | Extend browser acquisition | [Browser core](browser/README.md) | Playwright-backed page acquisition and content extraction |
 | Convert HTML to Markdown | [Web content](web-content/README.md) | Shared HTML extraction and Markdown normalization for Browser and Knowledge |
+| Run project lint or inspect exceptions | [Quality](quality/README.md) | Lint execution and exception identities |
 | Run workspace commands and tooling | [Tools](tools/README.md) | Quality checks, test routing, dependency synchronization and repository utilities |
 
 ## How the packages fit
@@ -31,6 +32,7 @@ support the repository rather than the product runtime.
 ```text
 owlbear command -> Delivery engine -> pages, agent sessions, GitHub
                                    -> Memory core
+                                   -> Quality core
 VS Code agents  -> MCP packages    -> core packages
                 -> Delivery chat server
 Tools
@@ -49,6 +51,7 @@ and recovery.
 | Delivery | `delivery-next` |
 | Agent memory | `memory`, `memory-mcp` |
 | Decisions | `decisions` |
+| Quality | `quality` |
 | Knowledge | `knowledge`, `knowledge-mcp` |
 | Browser | `browser`, `browser-mcp`, `web-content` |
 | Repository maintenance | `tools` |

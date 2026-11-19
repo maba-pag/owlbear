@@ -2,6 +2,8 @@ import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { blockedOf, call, project } from "/assets/ui.mjs";
 
+import { suppressionReview } from "/assets/page/maintenance/suppressions.mjs";
+
 const ORDER = { high: 0, medium: 1, low: 2 };
 const ACTIVE = new Set(["running", "publishing"]);
 const when = (at) => new Date(at).toLocaleString();
@@ -25,6 +27,7 @@ export function auditActions(show) {
   const state = { rows: [], notes: new Map(), errors: new Map(), opened: new Set(),
     reading: "", starting: "", generation: 0, applied: 0 };
   let again;
+  const suppressions = suppressionReview(show, refresh);
 
   async function refresh() {
     const generation = ++state.generation;
@@ -34,6 +37,7 @@ export function auditActions(show) {
       state.applied = generation;
       state.rows = read.audits;
       state.reading = "";
+      await suppressions.refresh();
     } catch (e) {
       if (generation < state.applied) return;
       state.applied = generation;
@@ -175,6 +179,8 @@ export function auditActions(show) {
     if (!a) return html`<p-text class="audit-text" size="sm">${state.reading
       ? `Could not read the audits: ${state.reading}` : "Reading the project's audits."}</p-text>`;
     const why = blockedOf(project) || a.blocked;
+    if (key === "suppressions") return html`${state.reading ? html`<p-text class="audit-text" size="sm">
+      Could not refresh the audits: ${state.reading}</p-text>` : nothing}${suppressions.row(a, why)}`;
     const keep = (e) => state.notes.set(a.audit, e.target.value);
     return html`<div id=${`audit-${a.audit}`} class="audit">
       <p-textarea label=${`${a.name} note (optional)`} rows="2" max-length="2000" counter="true"

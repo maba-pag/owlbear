@@ -67,10 +67,14 @@ def captured(c: Change) -> dict[str, Any] | None:
     While it runs, only that; then the commit, the time, the widths, the pictures and why any is missing.
     """
     s = c.shaped
-    if s is None or not shaping_capture.needed(c.brief):
+    if not shaping_capture.needed(c.brief):
         return None
-    if shaping_capture.waiting(c) or (r := s.result) is None:
-        return {"running": True}
+    if s is None or shaping_capture.waiting(c) or (r := s.result) is None:
+        return (
+            {"running": True}
+            if shaping_capture.owed(c)
+            else {"running": False, "unavailable": shaping_capture.UNAVAILABLE}
+        )
     return {"running": False, "head": r.head, "at": r.at.isoformat(), "widths": r.widths, "files": r.files,
             "findings": r.findings}  # fmt: skip
 

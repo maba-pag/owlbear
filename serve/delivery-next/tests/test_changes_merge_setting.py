@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from playwright.sync_api import expect
 
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.project_host import api
@@ -83,8 +84,6 @@ async (status) => {
     indirect=["page_url"],
 )
 def test_the_changes_page_words_each_merge_and_branch_setting_as_it_is_set(page_url, pds, ask, delete) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     _store, base = page_url
     with opened(base, "flip", pds) as page:
         status = page.evaluate(

@@ -10,6 +10,7 @@ import stat
 import tempfile
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Protocol
 
 import psutil
@@ -21,7 +22,6 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write, open_loc
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
-    from pathlib import Path
 
     from owlbear_delivery_next.local_system.slots import Slots
 
@@ -344,8 +344,6 @@ class Maintenance:
     @contextlib.contextmanager
     def workspace(self, prefix: str) -> Iterator[Path]:
         """Remove a newly created workspace only if no held or recovered lease retains it."""
-        from pathlib import Path  # noqa: PLC0415 - paths are otherwise needed only for typing
-
         root = Path(tempfile.mkdtemp(prefix=prefix))
         try:
             yield root

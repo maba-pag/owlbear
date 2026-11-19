@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 import uvicorn
 from fastapi.testclient import TestClient
+from playwright.sync_api import expect
 
 from owlbear_delivery_next.change_contracts.models import Change
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -382,8 +383,6 @@ def test_notes_being_typed_and_an_open_card_survive_a_refresh_with_new_entries(s
 @pytest.mark.browser
 def test_an_inbox_entry_is_one_compact_row_triaged_with_the_keyboard_alone(store, pds):
     """B1: the kind and a text-style Drop share the title's line; tick, kind and Drop are reached and used by key."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     Backlog.of(store).add("Wider status line")
     Backlog.of(store).add("Faster first paint")  # listed first
     with backlog_page(store, pds) as page:

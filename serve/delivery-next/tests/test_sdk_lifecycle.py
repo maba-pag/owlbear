@@ -18,6 +18,7 @@ import psutil
 import pytest
 import uvicorn
 from copilot._jsonrpc import JsonRpcError
+from playwright.sync_api import Error, sync_playwright
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
@@ -1041,7 +1042,6 @@ def test_a_failed_sessions_retry_shows_its_last_try_whole_on_the_changes_page(wo
                                                                              whole_error):  # fmt: skip
     """#895 P3: the status line of a step waiting to start again ends with its last failed try, whole; a retry
     without a reason adds nothing."""
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
 
     async def broken(*_args, **_kw):
         raise RuntimeError(whole_error)

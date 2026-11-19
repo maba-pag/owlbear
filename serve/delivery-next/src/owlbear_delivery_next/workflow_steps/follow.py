@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -111,8 +111,8 @@ def ci_task(gh: Provider, repository: str, failed: Check) -> tuple[str, str]:
 
 
 def fix_ci(ctx: Ctx, c: Change, state: CiState, step: StepKind) -> StepResult:
-    """Back to build with a fix task carrying the failing check's log tail; counted per check (bounded)."""
-    failed = state.failed[0]
+    """Fix the earliest current failure, before later aggregate checks; counted per check (bounded)."""
+    failed = min(state.failed, key=lambda c: c.completed_at or datetime.max.replace(tzinfo=UTC))
     title, detail = ci_task(ctx.gh, ctx.repository, failed)
     fix = engine.task(c, title, "ci", detail)
     result = engine.back(ErrorKind.CHECKS, step, failed.name, f"fixing {failed.name}: CI failed", fix)

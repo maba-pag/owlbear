@@ -295,8 +295,13 @@ def at_target(  # noqa: PLR0913 - the capture's widths come from the settings, i
     *finish* ends its test copy in the throwaway checkout before it is removed; a fetch that fails ends it whole.
     """
     now, r, target = datetime.now(UTC), c.brief.recipe, c.names.target
+    missing = []
     if r is None:
-        return VisualResult(head="", tree="", findings=["the brief has no render recipe"], at=now)
+        missing.append("the brief has no render recipe; establish the target's preview command, directory and URL")
+    if not c.brief.visual:
+        missing.append("the brief has no page states to capture; name the current pages even for person-only proof")
+    if r is None or not c.brief.visual:
+        return VisualResult(head="", tree="", findings=missing, at=now)
     try:
         fetch(repo, target)
         base = worktree.git(repo, "rev-parse", f"{worktree.tracking(repo, target)}^{{commit}}").strip()

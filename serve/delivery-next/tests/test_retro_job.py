@@ -352,7 +352,7 @@ def test_a_button_retry_owns_the_revision_it_takes_again_so_a_stop_before_settli
     assert (rev["state"], rev["run"]) == ("judged", retry["id"])
 
 
-def test_a_run_interrupted_between_settled_calls_resumes_on_what_is_left_of_its_limit(said, tmp_path):
+def _historical_correction(tmp_path):
     spec = _large()
     events, _ = syn.events(spec)
     records = syn.records(spec) + [
@@ -369,7 +369,19 @@ def test_a_run_interrupted_between_settled_calls_resumes_on_what_is_left_of_its_
         grade["cutoff"] += 1000  # the historical live callback coordinate, not the persisted moment
     (retro_store.place() / "grades.jsonl").write_text("".join(json.dumps(g) + "\n" for g in originals))
     historical = (retro_store.place() / "grades.jsonl").read_bytes()
-    before = retro_store.known()
+    return projects, originals, historical, retro_store.known()
+
+
+def test_a_run_interrupted_between_settled_calls_resumes_on_what_is_left_of_its_limit(said, tmp_path):
+    projects, originals, historical, before = _historical_correction(tmp_path)
+    said.limit, said.retro_when_idle = 0.5, "on"
+    retro_regrade.queue("owner", "chg:p1:fix-it", projects)
+    _job(Asker(), projects=projects).tick(0.0)
+    assert "automatic correction held: no grades corrected" in _runs()[-1]["result"]
+    _job(held := Asker(), SimpleNamespace(paused=False, fence="", idle=True), restarted=True, projects=projects).tick(
+        1.0
+    )
+    assert (len(_runs()), held.seen, (retro_store.place() / "grades.jsonl").read_bytes()) == (2, [], historical)
     said.limit = 1.5
     first, calls = Asker(), []
     real = retro_store.run_event
@@ -388,19 +400,35 @@ def test_a_run_interrupted_between_settled_calls_resumes_on_what_is_left_of_its_
 
     _job(later := Asker(), restarted=True, projects=projects).tick(1.0)
 
-    _, run = _runs()
+    _, _, run = _runs()
     assert (first.seen, later.seen) == (["retro"], ["retro"])  # the first batch replayed, not asked again
     assert run["result"] == "stopped: an answer was cut off at the credit limit"
     assert (run["spent"], run["calls"]) == (2.0, 2)
     assert retro_store.known() == before  # correcting grades never settles the original unit again
-    remaining = retro_regrade.plan("chg:p1:fix-it", projects)["records"]
-    assert 0 < remaining < len(originals)
+    remaining = retro_regrade.plan("chg:p1:fix-it", projects)["corrections"]
+    assert 0 < len(remaining) < len(originals)
     assert (retro_store.place() / "grades.jsonl").read_bytes().startswith(historical)
-    retro_regrade.queue("owner", "chg:p1:fix-it", projects)  # another allowance needs an explicit request
-    _job(Asker(), projects=projects).tick(2.0)
+    state = SimpleNamespace(paused=False, fence="", idle=False)
+    idle = _job(asker := Asker(), state, projects=projects)
+    idle.tick(2.0)
+    assert (len(_runs()), asker.seen, retro_store.queued()) == (3, [], [])
+    state.idle = True
+    idle.tick(3.0)
+    _, _, _, corrected = _runs()
+    assert (
+        corrected["id"] != run["id"],
+        corrected["trigger"],
+        corrected["mode"],
+        corrected["limit"],
+        corrected["rev"],
+    ) == (True, "idle", "correct-grades", said.limit, run["rev"])
+    assert set(corrected["records"]) == set(remaining)
+    assert {r["id"] for message in asker.messages for r in _evidence(message)["records"]} == set(remaining)
     assert retro_regrade.plan("chg:p1:fix-it", projects)["records"] == 0
-    assert len(retro_store.grades()) == len(originals)
-    assert props.folded() == {}
+    assert retro_store.known() == before
+    assert (retro_store.place() / "grades.jsonl").read_bytes().startswith(historical)
+    idle.tick(4.0)
+    assert (len(_runs()), len(retro_store.grades()), props.folded()) == (4, len(originals), {})
 
 
 # Eligibility at the call, gate J3

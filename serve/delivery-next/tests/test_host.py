@@ -376,6 +376,7 @@ def test_status_reads_the_host_lock_and_shows_host_down(store):
         "  auditor: gpt-6.1-sol effort medium",
         "  project-auditor: gpt-6.1-sol effort medium",
         "  audit-verifier: gpt-6.1-sol effort medium",
+        "  quality-judge: gpt-6.1-sol effort medium",
         "  repairer: claude-opus-5.5 effort medium (builder)",  # D-01M6SY11CY5SN5ZKYJNM0K6BDM: the builder's, unset
     ]
 
@@ -1111,6 +1112,7 @@ def test_while_paused_only_a_cleanup_or_the_owners_brief_challenge_starts(store,
     fake = Fake(store, tmp_path)
     paused(fake, [True])
     c = asking(fake).model_copy(update={"outcome": None, "step": step, "shaped": shaped})
+    c.brief.ui = shaped is not None
     save(store, c)
     assert (status(c, fake.host.activity("c1"), NOW).action == "Resume Delivery") is not runs
     fake.host.draining = lambda: True

@@ -25,8 +25,12 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 import uvicorn
+from copilot._jsonrpc import JsonRpcError
 from fastapi.testclient import TestClient
+from playwright.sync_api import expect
+from websockets.exceptions import InvalidHandshake
 
+from owlbear_decisions import Decision, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.change_contracts.decision_records import Pick, PickedDecision
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.merge_records import Pullback
@@ -62,8 +66,9 @@ from owlbear_delivery_next.commands import cli, runner
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
-from owlbear_delivery_next.impeccable import pack_files
+from owlbear_delivery_next.impeccable import calibration, pack_files
 from owlbear_delivery_next.impeccable.detector import DetectorError
+from owlbear_delivery_next.impeccable_runs import machine_lock, pack_job, pack_rounds, pack_state, visual_settled
 from owlbear_delivery_next.local_system import (
     codebase,
     data_place,
@@ -72,18 +77,27 @@ from owlbear_delivery_next.local_system import (
     maintenance,
     processes,
 )
-from owlbear_delivery_next.machine_host import alias, app, project, update_checks, versions
+from owlbear_delivery_next.machine_host import alias, app, project, update_checks, update_steps, versions
 from owlbear_delivery_next.machine_host import impeccable as machine_impeccable
 from owlbear_delivery_next.machine_host import serve as host_start
 from owlbear_delivery_next.machine_host.machine import Machine
+from owlbear_delivery_next.machine_host.update import Updater
+from owlbear_delivery_next.pds_runs import job as pds_job
 from owlbear_delivery_next.project_host import api, pack_routes, runner_end
 from owlbear_delivery_next.project_host import host as host_module
 from owlbear_delivery_next.project_host import leftovers as host_leftovers
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.runtimes import copilot_cli, readiness
+from owlbear_delivery_next.runtimes import ahp, copilot_cli, readiness, sdk_spend, vscode_adapter
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import carried, config, profile
-from owlbear_delivery_next.state_store import curation_runs, decision_store, registry, watch_reports
+from owlbear_delivery_next.state_store import (
+    curation_runs,
+    decision_store,
+    pds_run_record,
+    project_home,
+    registry,
+    watch_reports,
+)
 from owlbear_delivery_next.state_store.store import Store, StoreError
 from owlbear_delivery_next.workflow_steps import captures, decision, design, judges, pick, publish, retry, visual
 from owlbear_delivery_next.workflow_steps.engine import Ctx
@@ -251,8 +265,6 @@ def serving(records: list[dict[str, Any]]) -> Callable[[Any], None]:
 def test_changes_of_all_projects_or_one_the_top_row_switches_and_resumes_and_projects_adds_and_removes(  # noqa: PLR0915 - a journey
     tmp_path: Path, monkeypatch, pds
 ) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)  # the scheduler runs; no runner starts
     a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
@@ -334,8 +346,6 @@ def test_owlbears_own_project_shows_as_owlbear_apart_and_first_wherever_projects
     """D-01M5ZGGSMKBZ830H8FQSPHH5BN, D-01M6JZQEEAXBNNH9P05HT7JNH2: the project whose data folder is owlbear/, added
     after a consumer, shows as OwlBear with its tag in its own section above the consumer projects, first in the
     picker, and as OwlBear on Changes, where it is still reached by its id."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
     registry.register(clone(tmp_path / "alpha"))
     own = registry.register(clone(tmp_path / "mine", origin=OWLBEAR_ORIGIN))
@@ -378,8 +388,6 @@ def test_owlbears_own_project_shows_as_owlbear_apart_and_first_wherever_projects
 def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
     tmp_path: Path, monkeypatch, pds
 ) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     a, b = (registry.register(clone(tmp_path / n, "same")) for n in ("alpha", "beta"))
     with browsing(monkeypatch, pds) as (page, base):
         page.set_viewport_size({"width": 1280, "height": 720})
@@ -466,8 +474,6 @@ REVISE = "Revise the brief in a new chat"
 @pytest.mark.browser
 @pytest.mark.timeout(90)  # a real browser's journey through three launches; a loaded runner needs more than 30 s
 def test_the_brief_offers_a_new_shaping_chat_and_says_how_it_went(tmp_path: Path, monkeypatch, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     launched = chats(monkeypatch)
     alpha = registry.register(clone(tmp_path / "alpha", "same"))
     shaping(Path(alpha.path), "Alpha brief")
@@ -523,11 +529,6 @@ def test_a_shaping_chat_that_could_not_open_says_the_host_s_whole_error(
     tmp_path: Path, monkeypatch, pds, whole_error
 ) -> None:
     """#971: a refused upgrade of the published agent host reaches the shaping launch's line whole, its note too."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-    from websockets.exceptions import InvalidHandshake  # noqa: PLC0415 - the library's own error
-
-    from owlbear_delivery_next.runtimes import ahp, readiness, vscode_adapter  # noqa: PLC0415
-
     refused = InvalidHandshake(whole_error)
     refused.add_note("NOTE-MARK")
 
@@ -566,8 +567,6 @@ def test_a_shaping_chat_that_could_not_open_says_the_host_s_whole_error(
 @pytest.mark.timeout(90)  # a real browser and the machine host; a loaded runner needs more than 30 s
 def test_a_failed_shaping_launch_shows_its_warning_whole(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
     """P19 (#971): what Delivery could not undo is said beside a failed launch too, whole."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     launched = chats(monkeypatch)
     reason = "the Copilot chat did not start (unbound: x)"
     launched.ending = {"state": "failed", "reason": reason, "warning": whole_error}
@@ -592,8 +591,6 @@ def test_a_failed_shaping_launch_shows_its_warning_whole(tmp_path: Path, monkeyp
 @pytest.mark.timeout(90)  # a real browser and the machine host; a loaded runner needs more than 30 s
 def test_a_failed_host_pass_is_noted_whole_on_the_changes_page(tmp_path: Path, monkeypatch, pds, whole_error) -> None:
     """P18 (#971): the project's scheduler pass that failed is noted above its Changes with its whole error."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     error = RuntimeError(whole_error)
     error.add_note("a note added on the way up")
 
@@ -618,8 +615,6 @@ def test_a_blocked_or_unreadable_changes_card_shows_its_whole_error(
     tmp_path: Path, monkeypatch, pds, whole_error
 ) -> None:
     """R1 (#971): a card that says why its Change stopped keeps every path and line of the error, unclipped."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     alpha = registry.register(clone(tmp_path / "alpha", "stuck"))
     folder = f"{alpha.path}/.owlbear/changes"
     now = datetime.now(UTC)
@@ -662,8 +657,6 @@ def test_a_blocked_or_unreadable_changes_card_shows_its_whole_error(
 def test_an_erring_changes_card_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, whole_error, kind) -> None:
     """#971: a retry's reason, a failed pull-back and a question asked once retries ran out are errors too: the card
     keeps every path and line, unclipped. An ordinary question stays compact."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     alpha = registry.register(clone(tmp_path / "alpha", kind))
     now, path = datetime.now(UTC), f"{alpha.path}/.owlbear/changes/{kind}/step-pids.json"
     wake = now + timedelta(hours=1)
@@ -708,8 +701,6 @@ def test_an_erring_changes_card_shows_its_whole_error(tmp_path: Path, monkeypatc
 
 @pytest.mark.browser
 def test_a_brief_that_cannot_take_a_revision_shows_no_button(tmp_path: Path, monkeypatch, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     alpha = registry.register(clone(tmp_path / "alpha", "planned"))
     approved = Brief(version=1, approved_version=1, title="Planned brief", outcome="Planned: approved and planned.")
     shaping(Path(alpha.path), "Planned brief", "planned", brief=approved, step=Step(kind=StepKind.PLAN))
@@ -724,8 +715,6 @@ def test_a_brief_that_cannot_take_a_revision_shows_no_button(tmp_path: Path, mon
 
 @pytest.mark.browser
 def test_two_projects_whose_changes_share_a_handle_revise_the_one_clicked(tmp_path: Path, monkeypatch, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     launched = chats(monkeypatch)
     a, b = (registry.register(clone(tmp_path / n, "same")) for n in ("alpha", "beta"))
     for p, title in [(a, "Alpha brief"), (b, "Beta brief")]:
@@ -757,8 +746,6 @@ def test_two_projects_whose_changes_share_a_handle_revise_the_one_clicked(tmp_pa
 
 @pytest.mark.browser
 def test_show_details_holds_for_every_change_of_every_project(tmp_path: Path, monkeypatch, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
     with browsing(monkeypatch, pds) as (page, base):
         broke = errors(page)
@@ -783,8 +770,6 @@ def test_show_details_holds_for_every_change_of_every_project(tmp_path: Path, mo
 @pytest.mark.browser
 def test_a_paused_page_runs_updates_now_shows_the_update_and_says_once_which_version_runs(pds) -> None:
     """TD-288, TD-352, TD-299: Run updates now on the paused bar; the version taken is said once."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with serve() as (machine, _server, base):
         machine.updated = "v0.2"
         asked: list[bool] = []
@@ -818,8 +803,6 @@ def test_a_paused_page_runs_updates_now_shows_the_update_and_says_once_which_ver
 @pytest.mark.browser
 def test_an_announced_update_counts_down_on_every_page_and_postpone_cancels_it(pds) -> None:
     """TD-301: open pages announce it 2 minutes ahead with Postpone; Postpone is use."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with serve() as (machine, _server, base):
         machine.auto.target, machine.auto.deadline = "v0.3", machine.auto.mono() + 105
         with page_at(base, pds) as page:
@@ -840,8 +823,6 @@ PACK = {
 @pytest.mark.browser
 def test_every_page_shows_the_impeccable_banners_and_install_says_refused_running_and_done(pds) -> None:
     """D-01M61GW2EAHFFRFHF014A14K98: Install while this version's pack is missing; Update now for a newer one."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with serve() as (machine, _server, base):
         state = {"install": dict(PACK["install"]), "release": dict(PACK["release"])}
         answers = iter([{"refused": "an update runs; it installs the pack of the version it takes"}, {}])
@@ -887,10 +868,6 @@ def test_updates_impeccable_with_no_project_answers_a_loaded_projects_run_with_i
 ) -> None:
     """D-01M63C5VGFVT3DVCC888B78K2A: the page is the same in every project; on the machine host a run whose project is
     loaded is answered from All projects too, while starting one still needs a project."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    from owlbear_delivery_next.impeccable_runs import pack_job, pack_rounds  # noqa: PLC0415
-
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
     path = clone(tmp_path / "alpha")
@@ -930,8 +907,6 @@ def test_updates_impeccable_says_an_install_failure_it_could_not_keep_whole(
 ) -> None:
     """#951: a failed install's record that could not be written, or an ended one that could not be removed, says why
     whole on Updates and in the host's log."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     path = local_home.root() / pack_files.PACKS / machine_impeccable.FAILED
     broken, write, unlink = [], Path.write_text, Path.unlink
 
@@ -982,8 +957,6 @@ def test_updates_say_a_release_look_that_could_not_read_the_versions_whole(
 ) -> None:
     """#971: the OwlBear check's look whose versions or newer pack could not be read says why whole on Updates ▸
     Impeccable and Updates ▸ OwlBear, and in the host's log."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     error = versions.VersionError(whole_error)
     error.add_note("a note on the failure")
 
@@ -1217,8 +1190,6 @@ def test_updates_owlbear_logs_update_steps_that_could_not_be_kept_whole(monkeypa
     """#971: an update whose steps could not be written logs why whole, once, under its step on Updates ▸ OwlBear and in
     the host's log."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    from owlbear_delivery_next.machine_host import update_steps  # noqa: PLC0415
 
     error = OSError(whole_error)
     error.add_note("a note on the failure")
@@ -1728,10 +1699,7 @@ def test_a_failed_sdk_step_s_whole_error_shows_in_recent_activity(
     tmp_path: Path, monkeypatch, pds, whole_error
 ) -> None:
     """#971 P22: a session that failed says its whole error, JSON-RPC data and notes included, on its step's line."""
-    from copilot._jsonrpc import JsonRpcError  # noqa: PLC0415 - the SDK's own error, as a request raises it
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    from owlbear_delivery_next.runtimes import sdk_spend  # noqa: PLC0415
 
     alpha = registry.register(clone(tmp_path / "alpha", "flip"))
     path = Path(alpha.path)
@@ -2037,9 +2005,6 @@ def test_updates_owlbear_marks_the_menu_refuses_start_while_work_runs_and_the_ma
     read; a check's failure shows once two came in a row; the mark clears once the update is applied."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    from owlbear_delivery_next.machine_host import update_checks, update_steps  # noqa: PLC0415
-    from owlbear_delivery_next.machine_host.update import Updater  # noqa: PLC0415
-
     found = {"updates": [checked("owlbear", "newer", "v0.2", "v0.3"),
                          checked("pds", "failed", "4.10.1", "4.11.0", failures=2, reason="npm did not answer"),
                          checked("impeccable", "current", "4.8.0.1")], "available": 1}  # fmt: skip
@@ -2134,9 +2099,6 @@ def test_updates_owlbear_and_impeccable_show_a_failed_updates_and_installs_whole
     and state each show the whole error, as long as it is, with its type."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    from owlbear_delivery_next.machine_host import impeccable, update_checks  # noqa: PLC0415
-    from owlbear_delivery_next.machine_host.update import Updater  # noqa: PLC0415
-
     line = f"CalledProcessError: Command '[python, selfcheck]' returned non-zero exit status 3.\n{whole_error}"
     detail, reason = f"v0.3 failed its selfcheck: {line}", f"npm was not reached: PermissionError: {whole_error}"
     packed = f"v0.3's Impeccable could not be installed: RuntimeError: {whole_error}"
@@ -2150,7 +2112,9 @@ def test_updates_owlbear_and_impeccable_show_a_failed_updates_and_installs_whole
     monkeypatch.setattr(Updater, "read", lambda _self: state)
     monkeypatch.setattr(Updater, "report", lambda _self: state | {"steps": steps, "log": log, "startable": True,
                                                                   "reason": ""})  # fmt: skip
-    monkeypatch.setattr(impeccable.Impeccable, "read", lambda _self: {"install": failed, "release": {"state": "none"}})
+    monkeypatch.setattr(
+        machine_impeccable.Impeccable, "read", lambda _self: {"install": failed, "release": {"state": "none"}}
+    )
     with browsing(monkeypatch, pds) as (page, base):
         said = errors(page)
         page.goto(f"{base}/updates/owlbear#token=t")
@@ -2179,12 +2143,6 @@ def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_wa
     """#777: a newer PDS release counts until an update takes it; the page and the menu say its run's state; a merged
     one is not counted and waits for OwlBear's release; the installed pin reaching it is up to date."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    from owlbear_delivery_next.impeccable_runs import machine_lock, pack_rounds, pack_state  # noqa: PLC0415
-    from owlbear_delivery_next.local_system import local_home  # noqa: PLC0415
-    from owlbear_delivery_next.machine_host import update_checks  # noqa: PLC0415
-    from owlbear_delivery_next.pds_runs import job as pds_job  # noqa: PLC0415
-    from owlbear_delivery_next.state_store import pds_run_record, project_home  # noqa: PLC0415
 
     found = {"success": {"at": "2026-10-17T04:00:00+00:00", "newer": True, "current": "4.9.0", "latest": "4.10.1",
                          "detail": ""}, "failures": 0, "attempt_at": "2026-10-17T04:00:00+00:00"}  # fmt: skip
@@ -2251,8 +2209,6 @@ def test_a_run_started_in_one_project_is_answered_from_another_and_from_all_proj
     the owner on beta's page, on a replaced project's page and under All projects, and his answer goes to alpha."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    from owlbear_delivery_next.impeccable_runs import pack_job, pack_rounds  # noqa: PLC0415
-
     alpha = registry.register(clone(tmp_path / "alpha"))
     beta = registry.register(clone(tmp_path / "beta"))
     old = replaced(tmp_path / "delta")  # not loaded: its own API answers nothing
@@ -2305,8 +2261,6 @@ def test_a_discard_confirmed_after_its_project_unloaded_never_goes_to_the_shown_
 ) -> None:
     """Discard's destination is fixed before its dialog: alpha unloading while it is open sends the confirmed discard
     to alpha, which answers for itself, never to beta, the project the page shows, whose run it is not."""
-    from owlbear_delivery_next.impeccable_runs import pack_job, pack_rounds  # noqa: PLC0415
-
     alpha = registry.register(clone(tmp_path / "alpha"))
     beta = registry.register(clone(tmp_path / "beta"))
     job = pack_job.Job(Store.open(Path(alpha.path)), pack_job.Live())
@@ -2344,8 +2298,6 @@ def test_old_update_addresses_open_the_updates_pages_and_back_and_reload_keep_th
     """D-01M63C5VGFWJ709X2GA0CE8Q5B: Maintenance's OwlBear section and Settings' Impeccable section moved to Menu ▸
     Updates; their old addresses open the new pages, with the project kept, and replace themselves in the history.
     A page whose checks cannot be read says so and still shows the rest."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     a = registry.register(clone(tmp_path / "alpha"))
     with browsing(monkeypatch, pds) as (page, base):
         page.goto(f"{base}/memory?project={a.id}#token=t")
@@ -2382,8 +2334,6 @@ def test_old_update_addresses_open_the_updates_pages_and_back_and_reload_keep_th
 
 def decided(shared: Path, folder: str, *statements: str, **more) -> None:
     """Write fixture decisions in *folder* of the shared repository (Global's when empty); *more* sets other fields."""
-    from owlbear_decisions import Decision, Origin, Scope, State, new_id, write  # noqa: PLC0415 - the decisions' own
-
     scope = Scope.PROJECT if folder else Scope.GLOBAL
     for said in statements:
         write(Decision(id=new_id(), title=said, statement=said, scope=scope, project=folder, origin=Origin.AUTONOMOUS,
@@ -2403,11 +2353,6 @@ def test_decisions_under_all_projects_sum_up_each_scope_and_open_its_view_even_w
     """D-01M63C6PMT4FX370W6B2VS9HAM, D-01M5ZGHDMEG897N2SD1XNEXYNQ: All projects shows Global, OwlBear and one summary
     per project, each opening its view; a project that cannot be read says why, never left out, the rest still
     showing as each is read."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    from owlbear_decisions import State  # noqa: PLC0415 - the decisions' own
-    from owlbear_delivery_next.local_system import data_place  # noqa: PLC0415
-
     shared = shared_repo[0]
     monkeypatch.setenv(data_place.VIEW, str(shared))
     a, b, gone = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta", "gone"))
@@ -2463,8 +2408,6 @@ def test_the_spotter_lists_owlbears_own_project_first_as_owlbear_with_its_tag(
     tmp_path: Path, monkeypatch, pds, shared_repo
 ) -> None:
     """D-01M6JZQEEAXBNNH9P05HT7JNH2: Improvement's Spotter cards, added after a consumer, list OwlBear first, tagged."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
     alpha = registry.register(clone(tmp_path / "alpha"))
     own = registry.register(clone(tmp_path / "mine", origin=OWLBEAR_ORIGIN))
@@ -2484,8 +2427,6 @@ def test_owlbears_fixed_scope_stays_its_one_row_once_its_own_project_is_register
 ) -> None:
     """D-01M5ZGHDMEG897N2SD1XNEXYNQ, D-01M6JZQEEAXBNNH9P05HT7JNH2: with OwlBear's own clone registered, All projects
     still shows OwlBear once, as the fixed scope tagged as OwlBear's own, never as a project row too."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     shared = shared_repo[0]
     monkeypatch.setenv(data_place.VIEW, str(shared))
     decided(shared, "owlbear", "Lint once.")
@@ -2505,8 +2446,6 @@ def test_owlbears_fixed_scope_stays_its_one_row_once_its_own_project_is_register
 @pytest.mark.browser
 def test_a_view_that_cannot_be_read_says_why_without_widening_a_phone(tmp_path: Path, monkeypatch, pds) -> None:
     """A long path in a notice's reason wraps: the page never scrolls sideways at 390 pixels."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     registry.register(clone(tmp_path / "alpha"))
     reason = (
         "the project owlbear has no folder in /private/var/folders/8w/3kzhj2010nz0gn9k7hz3byp/T/tmp.x/.owlbear/data"
@@ -2522,8 +2461,6 @@ def test_a_view_that_cannot_be_read_says_why_without_widening_a_phone(tmp_path: 
 @pytest.mark.browser
 def test_an_audit_report_s_long_paths_wrap_without_widening_a_phone(tmp_path: Path, monkeypatch, pds) -> None:
     """#777: a finding's and a follow-up's file paths wrap; the report never scrolls sideways at 390 pixels."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     alpha = registry.register(clone(tmp_path / "alpha"))
     path = "serve/delivery-next/src/owlbear_delivery_next/web/pages/updates/pds.mjs"
     report = {"state": "passed", "outcome": "findings", "ended_at": "2026-11-01T13:25:20+00:00", "version": "4.9.0",
@@ -2543,8 +2480,6 @@ def test_an_audit_report_s_long_paths_wrap_without_widening_a_phone(tmp_path: Pa
 def each_scope_opens_its_view_and_leads_back(page, pds, base: str, row: dict, a: registry.Project) -> None:
     """Global's and OwlBear's views hold only theirs and lead back; a project's opens its page; an unlisted project
     opens the overview."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     row["global"].get_by_role("link", name="Global").click()
     expect(page).to_have_url(f"{base}/decisions?view=global")
     expect(page.locator("#shown")).to_have_text("Global · 2 shown")
@@ -2622,8 +2557,6 @@ def test_an_error_no_project_route_caught_shows_whole_on_its_page_and_in_the_hos
 ) -> None:
     """#971: a project's maintenance read, through the machine host's dispatcher, failing with an error nothing catches
     says it whole on that project's Maintenance page, as the host log's traceback does."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     alpha = registry.register(clone(tmp_path / "alpha"))
     read, whole, logged_whole = uncaught(whole_error)
     monkeypatch.setattr(pack_routes, "overview", read)
@@ -2669,8 +2602,6 @@ def owner_history_page(tmp_path: Path, pds, shared_repo, monkeypatch, whole_erro
 def test_owner_history_qualifies_a_failed_curation_in_both_maintenance_views(
     owner_history_page, tmp_path: Path, scope
 ) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     page, base, pid, notice, reason = owner_history_page
     path = f"/maintenance?project={pid}" if scope == "project" else "/maintenance"
     page.goto(f"{base}{path}#token=t")
@@ -2698,8 +2629,6 @@ def test_maintenance_under_all_projects_sums_up_each_project_and_opens_it_even_w
     """D-01M63C6PMT4FX370W6B2VS9HAM: All projects shows one maintenance summary per project, each opening it; a
     project that cannot be read says why and the rest still shows. OwlBear's own, added last, comes first with its tag
     (D-01M6JZQEEAXBNNH9P05HT7JNH2)."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
     a, b = (registry.register(clone(tmp_path / n)) for n in ("alpha", "beta"))
     own = registry.register(clone(tmp_path / "mine", origin=OWLBEAR_ORIGIN))
@@ -2734,8 +2663,6 @@ def telling(last: dict):
 
 def alpha_says_who_ran_memory_curation_last(page, row, a: registry.Project) -> None:
     """N1 (D-01M63CF1XKCCF6TP60734BTMWD): the summary says whether the curator or the owner ran Memory curation."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     at = "2026-01-02T03:04:05+00:00"
     for last, said in [
         ({"by": "curation", "state": "done", "started_at": None, "ended_at": at, "reason": ""},
@@ -2754,8 +2681,6 @@ def alpha_says_who_ran_memory_curation_last(page, row, a: registry.Project) -> N
 
 def alpha_answers_while_curation_runs(page, row, a: registry.Project) -> None:
     """While curation runs the page looks again every five seconds; a project read slower than that still shows."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     running = {"available": True, "folders": [{"folder": "alpha", "state": "running", "entries": [], "unset": []}]}
     page.route("**/api/next/curation", lambda route: route.fulfill(json=running))
     held: list = []
@@ -2814,8 +2739,6 @@ def test_a_long_step_error_shows_whole_on_the_status_line(tmp_path: Path, monkey
 @pytest.mark.browser
 def test_a_long_undo_failure_is_asked_whole(tmp_path: Path, monkeypatch, pds, whole_error: str) -> None:
     """#895 K5: the undo's failure, git's whole output, is asked on the Changes page and logged whole."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     alpha = registry.register(clone(tmp_path / "alpha", "c1"))
     work = clone(tmp_path / "work")
     base = runner.worktree.git(work, "rev-parse", "HEAD").strip()
@@ -2957,8 +2880,6 @@ def test_recent_activity_keeps_the_paths_in_what_was_recorded(tmp_path: Path, mo
 def test_a_failed_pick_shows_its_whole_error(tmp_path: Path, monkeypatch, pds, whole_error: str) -> None:
     """#895 K3, #971: a pick that cannot read the decisions shows why whole, with its notes, in the brief and in
     Recent activity."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     note = "while reading the decisions of project alpha"
 
     def unavailable(*_args, **_kwargs):
@@ -2993,8 +2914,6 @@ def test_a_picked_decision_opens_in_its_project_from_all_projects(
     tmp_path: Path, monkeypatch, pds, shared_repo
 ) -> None:
     """#964: a picked decision followed from a Change opened under All projects opens in that Change's project."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     shared = shared_repo[0]
     monkeypatch.setenv(data_place.VIEW, str(shared))
     alpha, _beta = (registry.register(clone(tmp_path / n, "c1")) for n in ("alpha", "beta"))
@@ -3059,8 +2978,6 @@ def ui_change(tmp_path: Path, install: str) -> tuple[Store, Change, str]:
 
 def shown_texts(page: Page, base: str, of: str, section: str) -> list[str]:
     """The texts of the Changes page's *section*, once it shows."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     opened(page, base, of, "c1")
     found = page.locator("section", has_text=section).last
     expect(found).to_be_visible()
@@ -3182,8 +3099,6 @@ def test_a_failed_shot_and_the_watchers_failures_show_whole_on_the_changes_page(
 ) -> None:
     """#921 C: Playwright's whole error in the log, "Before and after", the repair task and the status line; the
     watcher's."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, c, of = ui_change(tmp_path, "true")
     head, now = _git(Path(c.names.worktree), "rev-parse", "HEAD"), datetime.now(UTC)
     c, result = visual.judged(c, head, "t", failed_shots, verdict=None, now=now)
@@ -3219,11 +3134,6 @@ def test_a_failed_shot_and_the_watchers_failures_show_whole_on_the_changes_page(
 @pytest.mark.browser
 def test_a_failed_calibration_shows_in_recent_activity(tmp_path: Path, monkeypatch, pds, capsys, whole_error) -> None:
     # imported here, so this test only appends to the file
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    from owlbear_delivery_next.impeccable import calibration  # noqa: PLC0415
-    from owlbear_delivery_next.impeccable_runs import visual_settled  # noqa: PLC0415
-
     def unkept(*_args: object) -> str:
         raise RuntimeError(whole_error)
 

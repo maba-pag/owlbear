@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.change_contracts.models import Exit, Outcome
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.visual_records import ShapingCapture
-from owlbear_delivery_next.change_flow import budgets, shaping_capture
+from owlbear_delivery_next.change_flow import brief_starts, budgets, shaping_capture
 from owlbear_delivery_next.state_store import github_writer
 from owlbear_delivery_next.workflow_steps import before, engine, prepare
 
@@ -85,6 +85,13 @@ def at_target(store: Store, lock: Lock, change: Change, repo: Path) -> str:
         finish=lambda _root, notes: _finish(store, lock, change, repo, notes),
     )  # fmt: skip
     change.shaped = ShapingCapture(key=key, result=result)
+    if (
+        (o := change.outcome) is not None
+        and o.cause == brief_starts.REFUSED
+        and o.reason.endswith(shaping_capture.CAPTURING)
+    ):
+        o.cause = ""
+        o.reason = f"approve brief v{change.brief.version}: review its current-page capture"
     if out.is_dir():  # a failed fetch made none
         out.rename(folder(store, change.slug, change.shaped))
     store.write(lock, change)

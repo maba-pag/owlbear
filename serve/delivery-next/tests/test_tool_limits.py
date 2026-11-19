@@ -122,8 +122,6 @@ def test_other_errors_give_the_nested_field_s_own_example():
 
 
 def test_a_visual_reviews_covered_paths_over_the_limit_keep_every_screenshot():
-    from owlbear_delivery_next.change_contracts import tool_schema, tools  # noqa: PLC0415
-
     paths = [f"shots/{n}.png" for n in range(500)]
     _, errors = tool_schema.parse(tools.VisualReviewResult, {"verdict": "pass", "covered_paths": paths})
     told = next(e for e in errors if e.startswith("covered_paths"))

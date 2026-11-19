@@ -20,6 +20,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from markdown_it import MarkdownIt
+from playwright.sync_api import Error, expect, sync_playwright
 
 from owlbear_delivery_next.change_contracts import audit_tools, tool_schema
 from owlbear_delivery_next.change_contracts.audit_tools import AuditResult
@@ -629,8 +630,6 @@ class Host:
 
 @pytest.mark.browser
 def test_a_failed_hand_audit_shows_its_whole_reason(tmp_path, monkeypatch, caplog, pds, whole_error):
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     def failing(_self):
         broke = RuntimeError(whole_error)
         broke.add_note(f"the session's teardown also failed: OSError: {whole_error}")  # as loop_owner.run adds it

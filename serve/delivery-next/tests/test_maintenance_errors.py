@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from playwright.sync_api import expect
 from tests.maintenance_page import opened
 
 OFFER = {
@@ -89,8 +90,6 @@ def refresh(page):
     ],
 )
 def test_post_refusals_survive_the_action_refresh_and_later_reads(maintenance, pds, kind, status, detail):
-    from playwright.sync_api import expect  # noqa: PLC0415 - optional browser runtime
-
     page, base, state = maintenance
     state.update(post=status, detail=detail)
     page.goto(f"{base}/maintenance#token=tok")
@@ -107,8 +106,6 @@ def test_post_refusals_survive_the_action_refresh_and_later_reads(maintenance, p
 
 @pytest.mark.parametrize(("kind", "status"), [("curation", 500), ("curation", 404), ("tests", 500)])
 def test_failed_reads_retain_last_good_data_and_offer_a_working_retry(maintenance, kind, status):
-    from playwright.sync_api import expect  # noqa: PLC0415 - optional browser runtime
-
     page, base, state = maintenance
     page.goto(f"{base}/maintenance#token=tok")
     expect(page.get_by_role("button", name="Review tests", exact=True)).to_be_visible()
@@ -126,8 +123,6 @@ def test_failed_reads_retain_last_good_data_and_offer_a_working_retry(maintenanc
 
 
 def test_a_first_curation_server_failure_is_visible_not_capability_absence(maintenance):
-    from playwright.sync_api import expect  # noqa: PLC0415 - optional browser runtime
-
     page, base, state = maintenance
     state["curation"] = 500
     page.goto(f"{base}/maintenance#token=tok")
@@ -136,8 +131,6 @@ def test_a_first_curation_server_failure_is_visible_not_capability_absence(maint
 
 
 def test_a_clone_without_the_curation_route_does_not_offer_the_capability(maintenance):
-    from playwright.sync_api import expect  # noqa: PLC0415 - optional browser runtime
-
     page, base, state = maintenance
     state["curation"] = 404
     page.goto(f"{base}/maintenance#token=tok")
@@ -148,8 +141,6 @@ def test_a_clone_without_the_curation_route_does_not_offer_the_capability(mainte
 
 @pytest.mark.parametrize("next_kind", ["tests", "curation"])
 def test_an_unrelated_success_does_not_acknowledge_another_folders_refusal(maintenance, pds, next_kind):
-    from playwright.sync_api import expect  # noqa: PLC0415 - optional browser runtime
-
     page, base, state = maintenance
     page.goto(f"{base}/maintenance#token=tok")
     expect(page.locator("#curation")).to_contain_text(start(page, pds, "curation"))
@@ -161,8 +152,6 @@ def test_an_unrelated_success_does_not_acknowledge_another_folders_refusal(maint
 
 @pytest.mark.parametrize("kind", ["curation", "tests"])
 def test_a_relevant_success_acknowledges_its_own_refusal(maintenance, pds, kind):
-    from playwright.sync_api import expect  # noqa: PLC0415 - optional browser runtime
-
     page, base, state = maintenance
     page.goto(f"{base}/maintenance#token=tok")
     expect(page.locator("#curation")).to_contain_text(start(page, pds, kind))
@@ -173,8 +162,6 @@ def test_a_relevant_success_acknowledges_its_own_refusal(maintenance, pds, kind)
 
 
 def test_an_older_failed_refresh_cannot_replace_a_newer_success(maintenance):
-    from playwright.sync_api import expect  # noqa: PLC0415 - optional browser runtime
-
     page, base, state = maintenance
     page.goto(f"{base}/maintenance#token=tok")
     expect(page.get_by_role("button", name="Curate shop now", exact=True)).to_be_visible()

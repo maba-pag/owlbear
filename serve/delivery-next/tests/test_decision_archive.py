@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from owlbear_decisions import Decision as Rule
 from owlbear_decisions import (
@@ -23,6 +24,7 @@ from owlbear_decisions import (
     storage,
     write,
 )
+from owlbear_decisions.validate import Finding
 from owlbear_delivery_next.change_contracts.models import Brief, BriefDecision, Change, Decision, Exit, Step, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import brief_tools
@@ -627,10 +629,6 @@ def test_a_change_record_failure_is_logged_whole(shared_repo, tmp_path, monkeypa
 @pytest.mark.parametrize("site", ["published", "planned", "unreadable-repo", "graph"])
 def test_each_archive_refusal_names_its_whole_error(store, monkeypatch, whole_error, site) -> None:
     """Each reason a decision is refused, from the brief's validation to the repository's graph, as said whole."""
-    from pydantic import ValidationError  # noqa: PLC0415
-
-    from owlbear_decisions.validate import Finding  # noqa: PLC0415
-
     c = finished()
     ui = c.decisions[0].id
     refusal = "the record of notes was not saved; no decision of notes was archived"

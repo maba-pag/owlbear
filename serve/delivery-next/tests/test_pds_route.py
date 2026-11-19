@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 
 import pytest
+from playwright.sync_api import Error
 
 BASE = "http://127.0.0.1:1/"
 FONT = "https://cdn.ui.porsche.com/x.woff2"
@@ -49,8 +50,6 @@ def routed(pds, monkeypatch, tmp_path):
 
 
 def test_cdn_failure_settles_and_never_caches_refused_answer(routed, capsys, pds):
-    from playwright.sync_api import Error  # noqa: PLC0415 - the optional browser runtime
-
     r = Route(FONT, Error("Route.fetch: write EPROTO"), Error("Route.fetch: read ECONNRESET"))
     routed(r)
     assert r.settled == [("abort", ("failed",))]
@@ -69,8 +68,6 @@ def test_cdn_failure_settles_and_never_caches_refused_answer(routed, capsys, pds
 
 
 def test_successful_cdn_bytes_are_reused_in_memory_and_by_next_worker(routed, pds, monkeypatch):
-    from playwright.sync_api import Error  # noqa: PLC0415 - the optional browser runtime
-
     r = Route(FONT, Error("Route.fetch: write EPROTO"), ok(b"font"))
     routed(r)
     ((how, answer),) = r.settled

@@ -9,11 +9,12 @@ ALLOWED_IMPORTS: dict[str, frozenset[str]] = {
     "owlbear_browser": frozenset({"owlbear_web_content"}),
     "owlbear_browser_mcp": frozenset({"owlbear_browser"}),
     "owlbear_decisions": frozenset(),
-    "owlbear_delivery_next": frozenset({"owlbear_decisions", "owlbear_memory"}),
+    "owlbear_delivery_next": frozenset({"owlbear_decisions", "owlbear_memory", "owlbear_quality"}),
     "owlbear_knowledge": frozenset({"owlbear_web_content"}),
     "owlbear_knowledge_mcp": frozenset({"owlbear_knowledge"}),
     "owlbear_memory": frozenset(),
     "owlbear_memory_mcp": frozenset({"owlbear_memory"}),
+    "owlbear_quality": frozenset(),
     "owlbear_tools": frozenset(),
     "owlbear_web_content": frozenset(),
 }

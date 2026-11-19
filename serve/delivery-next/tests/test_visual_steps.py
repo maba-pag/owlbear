@@ -10,6 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from playwright.sync_api import Error
 
 from owlbear_delivery_next.change_contracts.inbox import BriefApproval
 from owlbear_delivery_next.change_contracts.models import Change, Exit, VisualState, VisualStep
@@ -176,8 +177,6 @@ def test_a_step_that_blanks_the_page_after_it_opened_has_left_the_preview(site, 
 
 
 def test_a_stepped_shot_stops_off_origin_sockets_and_a_framed_less_popup():
-    from playwright.sync_api import Error  # noqa: PLC0415 - the optional browser runtime's error
-
     handlers: dict[str, object] = {}
     context = SimpleNamespace(
         route=lambda _p, h: handlers.update(route=h), route_web_socket=lambda _m, h: handlers.update(socket=h)

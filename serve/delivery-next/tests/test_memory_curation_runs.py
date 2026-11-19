@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 import uvicorn
 from owlbear_memory import MemoryCategory, MemoryEngine
+from playwright.sync_api import Error, expect, sync_playwright
 
 from owlbear_delivery_next.change_contracts import memory_curation_tools, tools
 from owlbear_delivery_next.change_contracts.memory_curation_tools import Judged, MemoryCurationResult
@@ -655,8 +656,6 @@ def test_an_unverified_session_end_says_its_problems_whole(repo, whole_error, ca
 def test_a_failed_folder_s_whole_reason_shows_on_maintenance(repo, pds, whole_error, monkeypatch, unpruned) -> None:
     """#951: a folder's failed run, read as the host's route returns it, shows its whole reason in its Maintenance row;
     every failed run's reason (raised, ended unverified, or its worktree left listed) goes through that one line."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     note = f"the session's teardown also failed: OSError: {whole_error}"
     real, failing = curation_tree._git, []  # noqa: SLF001
     locked = curation_tree.DataRepoError(f"git worktree failed: locked\n{whole_error}")

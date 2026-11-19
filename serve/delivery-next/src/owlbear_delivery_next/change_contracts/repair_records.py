@@ -84,6 +84,7 @@ class Repair(BaseModel):
     commit: str = ""  # the fix, committed by Delivery on that baseline; kept under ``KEPT`` until it ends
     applied: str = ""  # its commit on the Change's branch
     applied_at: datetime | None = None
+    approved_configuration: str = ""  # the whole Change digest covered by this repair's owner approval
     witness: Witness | None = None
     replaces: str = ""  # the confirmed check command the owner is asked to replace or remove, as it was then
     held: list[str] = Field(default_factory=list)  # why the owner is asked before it is applied
@@ -95,6 +96,10 @@ class Repair(BaseModel):
     root: str = ""  # the owner-question cause it repairs, so its own question counts with them (#1064)
     preparation: PreparationProposal | None = None
     preparations_before: list[Preparation] | None = None
+    recovered_with: int | None = None  # a shipped Delivery defect fix, consumed once for this repair
+    recovered_at: datetime | None = None
+    recovered_plan: int | None = None
+    refreshed_at: datetime | None = None  # CI evidence refreshed before a recovered builder runs
 
 
 class Repairs(BaseModel):

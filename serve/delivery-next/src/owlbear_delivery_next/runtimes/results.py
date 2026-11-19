@@ -7,8 +7,10 @@ import threading
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts import (
+    approval_tools,
     audit_tools,
     curation_tools,
+    exception_tools,
     pack_tools,
     preparation,
     project_audit_tools,
@@ -44,7 +46,7 @@ class Gate:
         self.done = False
         self.stopped = False  # a stop or error tears the step down: no call settles, and no lock is taken to say so
         self.expired: Callable[[], bool] | None = None
-        self.lint = lint.Lint(log)
+        self.lint = lint.Lint(log, cfg.lint_commands)
         self._refused: set[str] = set()  # the tools whose last call was refused, so their next call is a retry
         self._lock = threading.Lock()
         self._linting = threading.Lock()
@@ -94,7 +96,9 @@ class Gate:
         first = (self.cfg.first_look,) if self.cfg.first_look else ()
         helpers = tuple(spec for spec, _ in self.cfg.helpers)
         ask = (tools.ASK,) if tools.asks(self.cfg.role, judging=self.cfg.judging) else ()
-        return self.cfg.submit, *first, *helpers, *ask, tools.PREMISE, tools.MISSING
+        role = self.cfg.role or ("builder" if self.cfg.kind == "build" else "")
+        approval = (approval_tools.REQUEST,) if approval_tools.offered(role, judging=self.cfg.judging) else ()
+        return self.cfg.submit, *first, *helpers, *ask, *approval, tools.PREMISE, tools.MISSING
 
     def call(self, spec: tools.Spec, arguments: Any) -> tuple[str, bool]:  # noqa: ANN401 - the agent's JSON arguments
         """Validate one call; return the text the agent reads and whether it was accepted."""
@@ -146,9 +150,12 @@ class Gate:
             if self._closed():  # before any check: a late call never touches the accepted head
                 return None
             args, errors, tree, kind = self._check(spec, arguments)
-        if tree is not None and not errors and isinstance(args, tools.BuildResult):
+        if tree is not None and not errors and isinstance(args, tools.BuildResult | curation_tools.TestCurationResult):
             with self._linting:
-                errors = self.lint.check(self.cfg.worktree, tree.changed)
+                if isinstance(args, tools.BuildResult):  # the test curator's result is not linted (TD-87)
+                    errors = self.lint.check(self.cfg.worktree, tree.changed)
+                if not errors and self.cfg.quality is not None:
+                    errors = self.cfg.quality()
         return args, errors, tree, kind
 
     def _check(self, spec: tools.Spec, arguments: Any) -> Checked:  # noqa: ANN401 - the agent's JSON arguments
@@ -233,8 +240,13 @@ class Gate:
         except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
             return [f"changes: the worktree could not be read ({failure(exc)}); try again"], None
         cfg = self.cfg
-        if isinstance(args, design_tools.DesignLook):
-            return design_tools.check(args, tree, cfg.targets), tree
+        if isinstance(args, design_tools.DesignLook | exception_tools.ExceptionVerdicts):
+            errors = (
+                exception_tools.check(args, cfg.policy.root)
+                if isinstance(args, exception_tools.ExceptionVerdicts)
+                else design_tools.check(args, tree, cfg.targets)
+            )
+            return errors, tree
         if isinstance(args, tools.CheckRecipe):  # TD-96, TD-107: a declared, permitted option and setup edits only
             return preparation.check(args, tree, cfg.policy.root, cfg.preparing or preparation.Preparing()), tree
         if isinstance(args, curation_tools.TestCurationResult):  # TD-339: committed, clean, only tests

@@ -62,28 +62,27 @@ _AGGREGATES: dict[str, tuple[str, ...]] = {
 }
 
 
-def _precommit_hook(hook: str, *, staged: bool) -> int:
-    if staged:
-        paths = _git_paths(staged=True)
-        if not paths:
-            return 0
+def _precommit_hook(hook: str, *, staged: bool, files: list[str] | None = None) -> int:
+    paths = files if files is not None else _git_paths(staged=True) if staged else None
+    if paths == []:
+        return 0
     command = ["pre-commit", "run", hook, "--hook-stage", "manual"]  # every hook is manual-only (TD-204)
-    if staged:
+    if paths is not None:
         command.extend(["--files", *paths])
     else:
         command.append("--all-files")
     return _call(command)
 
 
-def _run_precommit_fix_hook(name: str, *, staged: bool, fix_mode: FixMode) -> int:
+def _run_precommit_fix_hook(name: str, *, staged: bool, fix_mode: FixMode, files: list[str] | None = None) -> int:
     safe_hook, check_hook, unsafe_hook = _PRECOMMIT_FIX_HOOKS[name]
     if fix_mode is FixMode.NONE:
         if not check_hook:
-            return _check_text_files(name, staged=staged)
-        return _precommit_hook(check_hook, staged=staged)
+            return _check_text_files(name, staged=staged, files=files)
+        return _precommit_hook(check_hook, staged=staged, files=files)
     if fix_mode is FixMode.UNSAFE and unsafe_hook is not None:
-        return _precommit_hook(unsafe_hook, staged=staged)
-    return _precommit_hook(safe_hook, staged=staged)
+        return _precommit_hook(unsafe_hook, staged=staged, files=files)
+    return _precommit_hook(safe_hook, staged=staged, files=files)
 
 
 def _precommit_config() -> tuple[object, list[dict[str, object]]]:
@@ -135,11 +134,11 @@ def _unclaimed_hooks() -> tuple[str, ...]:
     return tuple(name for name in _precommit_hook_names() if name not in claimed)
 
 
-def _check_text_files(name: str, *, staged: bool) -> int:
+def _check_text_files(name: str, *, staged: bool, files: list[str] | None = None) -> int:
     excludes = _precommit_excludes(_PRECOMMIT_FIX_HOOKS[name][0])
     paths = [
         path
-        for path in _git_paths(staged=staged)
+        for path in (files if files is not None else _git_paths(staged=staged))
         if Path(path).exists() and not any(pattern.search(path) for pattern in excludes)
     ]
     failures = 0
@@ -167,9 +166,15 @@ def _check_text_files(name: str, *, staged: bool) -> int:
     return int(bool(failures))
 
 
-def _run_biome(*, staged: bool, fix_mode: FixMode, format_only: bool = False) -> int:
+def _run_biome(*, staged: bool, fix_mode: FixMode, format_only: bool = False, files: list[str] | None = None) -> int:
     command = ["node", str(BIOME), "format" if format_only else "check"]
-    command.extend(["--staged", "--no-errors-on-unmatched"] if staged else ["."])
+    command.extend(
+        [*files, "--no-errors-on-unmatched"]
+        if files is not None
+        else ["--staged", "--no-errors-on-unmatched"]
+        if staged
+        else ["."]
+    )
     if fix_mode is not FixMode.NONE:
         command.append("--write")
     if fix_mode is FixMode.UNSAFE and not format_only:
@@ -177,38 +182,38 @@ def _run_biome(*, staged: bool, fix_mode: FixMode, format_only: bool = False) ->
     return _call(command)
 
 
-def _run_leaf(name: str, *, staged: bool, fix_mode: FixMode) -> int:
+def _run_leaf(name: str, *, staged: bool, fix_mode: FixMode, files: list[str] | None = None) -> int:
     if name in _PRECOMMIT_FIX_HOOKS:
-        result = _run_precommit_fix_hook(name, staged=staged, fix_mode=fix_mode)
+        result = _run_precommit_fix_hook(name, staged=staged, fix_mode=fix_mode, files=files)
     elif name in _PRECOMMIT_CHECK_HOOKS:
-        result = _precommit_hook(_PRECOMMIT_CHECK_HOOKS[name], staged=staged)
+        result = _precommit_hook(_PRECOMMIT_CHECK_HOOKS[name], staged=staged, files=files)
     elif name in {"lint-biome", "format-biome"}:
-        result = _run_biome(staged=staged, fix_mode=fix_mode, format_only=name == "format-biome")
+        result = _run_biome(staged=staged, fix_mode=fix_mode, format_only=name == "format-biome", files=files)
     elif name == "todo":
         result = run_todo()
     elif name in _unclaimed_hooks():
-        result = _precommit_hook(name, staged=staged)
+        result = _precommit_hook(name, staged=staged, files=files)
     else:
         message = f"unknown quality command: {name}"
         raise ValueError(message)
     return result
 
 
-def _run_named(name: str, *, staged: bool, fix_mode: FixMode) -> int:
+def _run_named(name: str, *, staged: bool, fix_mode: FixMode, files: list[str] | None = None) -> int:
     children = _AGGREGATES.get(name)
     if children is None:
-        return _run_leaf(name, staged=staged, fix_mode=fix_mode)
+        return _run_leaf(name, staged=staged, fix_mode=fix_mode, files=files)
     if name == "lint":
         children = (*children, *_unclaimed_hooks(), "todo")
     failures = 0
     for child in children:
-        failures += int(bool(_run_named(child, staged=staged, fix_mode=fix_mode)))
+        failures += int(bool(_run_named(child, staged=staged, fix_mode=fix_mode, files=files)))
     return int(bool(failures))
 
 
-def _run_named_checked(name: str, *, staged: bool, fix_mode: FixMode) -> int:
+def _run_named_checked(name: str, *, staged: bool, fix_mode: FixMode, files: list[str] | None = None) -> int:
     try:
-        return _run_named(name, staged=staged, fix_mode=fix_mode)
+        return _run_named(name, staged=staged, fix_mode=fix_mode, files=files)
     except (OSError, RuntimeError, TypeError, ValueError, re.error, yaml.YAMLError) as exc:
         sys.stderr.write(f"Error: {exc}\n")
         return 2
@@ -361,6 +366,11 @@ def format_commands() -> None:
 
 def quality() -> None:
     """Run format, lint, and advisory checks."""
-    args = _parse_options("quality", staged=False, fixes=True, allow_unsafe=True)
+    parser = argparse.ArgumentParser(prog="quality")
+    _add_fix_mode(parser, allow_unsafe=True)
+    parser.add_argument("--files", nargs="+", metavar="PATH")
+    args = parser.parse_args()
+    if args.files is not None and args.fix_mode is not FixMode.NONE:
+        parser.error("--files requires --no-fix")
     _require_development("quality")
-    _finish(_run_named_checked("quality", staged=False, fix_mode=args.fix_mode))
+    _finish(_run_named_checked("quality", staged=False, fix_mode=args.fix_mode, files=args.files))

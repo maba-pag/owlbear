@@ -19,6 +19,7 @@ import pytest
 import uvicorn
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from playwright.sync_api import Error, expect, sync_playwright
 
 from owlbear_delivery_next.change_contracts.models import Change, Step, StepKind
 from owlbear_delivery_next.improvement import chatlogs
@@ -320,8 +321,6 @@ def clone(path: Path) -> Path:
 def hosted(tmp_path: Path, monkeypatch, pds, shared: Path) -> Iterator[tuple[Page, str, str, str, list[str]]]:
     """The fixture's sessions and settings on registered clones shop and mill, a machine host serving them and a
     Chromium page reaching only it; the page, the host's address, shop's and mill's ids and the page's errors."""
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     monkeypatch.setenv(data_place.VIEW, str(shared))
     monkeypatch.setattr(spend_reconcile, "due", lambda *_a: False)  # the ledger holds only the fixture's lines
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
@@ -379,8 +378,6 @@ def shown(page: Page) -> list[list[str]]:
 
 def returned(page: Page, pds, left: str) -> None:
     """Back on Metrics at the address *left* with the compaction section focused and every filter as it was."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     expect(page).to_have_url(f"{left}#compaction")
     expect(page.locator("#compaction-title")).to_be_focused()
     query = {"period": "30", "by": "agent"} | dict(parse_qsl(urlsplit(left).query, keep_blank_values=True))
@@ -408,8 +405,6 @@ def setting_link(page: Page, row: str):
 def test_metrics_shows_each_roles_compaction_and_its_setting_leads_back_with_the_filters(
     tmp_path: Path, monkeypatch, pds, shared_repo
 ) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with hosted(tmp_path, monkeypatch, pds, shared_repo[0]) as (page, base, shop, mill, errors):
         page.goto(f"{base}/metrics?period=30&in=")
         expect(page.locator("#compaction-table p-table-row")).to_have_count(6)
@@ -485,8 +480,6 @@ def test_metrics_shows_each_roles_compaction_and_its_setting_leads_back_with_the
 def test_settings_keep_unsaved_edits_and_go_back_only_to_this_hosts_metrics(
     tmp_path: Path, monkeypatch, pds, shared_repo
 ) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with hosted(tmp_path, monkeypatch, pds, shared_repo[0]) as (page, base, shop, _mill, errors):
         fallback = f"/metrics?project={shop}&in=shop&agent=builder#compaction"
         for away in ("https://evil.example/metrics", "/config", "https://["):

@@ -54,7 +54,11 @@ def capture(c: Change, folder: Path) -> dict[str, Any]:
     if not shaping_capture.needed(b):
         return out | {"running": False, "needed": False}
     if shaping_capture.waiting(c) or s is None or s.result is None:
-        return out | {"running": True}
+        return out | (
+            {"running": True}
+            if shaping_capture.owed(c)
+            else {"running": False, "states": [], "findings": [shaping_capture.UNAVAILABLE]}
+        )
     r, states = s.result, []
     width = r.widths[0] if r.widths else 0
     held = {p.name: p for p in folder.iterdir() if p.is_file()} if folder.is_dir() else {}  # the folder's own files

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.change_contracts import approval_tools
 from owlbear_delivery_next.change_contracts.evidence import cover
 from owlbear_delivery_next.change_contracts.models import Exit, Outcome, Step, StepKind
 from owlbear_delivery_next.change_contracts.round_records import FINAL, PLAN
@@ -99,7 +100,8 @@ def ask(c: Change, question: Question, now: datetime) -> Question | None:
     if q is None:
         return None
     c.questions.append(q)
-    c.outcome = Outcome(exit=Exit.ASK, cause=q.cause, reason=q.text, who="you", question=q.id, at=now)
+    said = q.text.partition(approval_tools.DIFF)[0]  # the status names the request; its panel shows the patch once
+    c.outcome = Outcome(exit=Exit.ASK, cause=q.cause, reason=said, who="you", question=q.id, at=now)
     return q
 
 

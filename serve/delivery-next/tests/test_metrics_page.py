@@ -13,12 +13,14 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 import uvicorn
+from copilot._jsonrpc import JsonRpcError
+from playwright.sync_api import Error, expect, sync_playwright
 
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.machine_host import app
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import spend_reconcile
+from owlbear_delivery_next.runtimes import sdk_spend, spend_reconcile
 from owlbear_delivery_next.state_store import spend_ledger
 from owlbear_delivery_next.state_store.store import Store
 
@@ -81,8 +83,6 @@ def serve() -> Iterator[tuple[Machine, uvicorn.Server, str]]:
 
 @pytest.mark.browser
 def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limit_stops(pds) -> None:  # noqa: PLR0915 - a journey
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     seeded()
     with serve() as (_machine, _server, base), sync_playwright() as pw:
         try:
@@ -168,8 +168,6 @@ def test_the_metrics_page_sums_splits_drills_down_and_lists_runs_with_their_limi
 
 @pytest.mark.browser
 def test_metrics_orders_its_sections_folds_its_tables_and_loads_the_vendored_echarts(pds) -> None:
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     seeded()
     with serve() as (_machine, _server, base), sync_playwright() as pw:
         try:
@@ -220,8 +218,6 @@ def test_metrics_orders_its_sections_folds_its_tables_and_loads_the_vendored_ech
 @pytest.mark.browser
 def test_a_ledger_whose_step_events_list_their_models_renders(pds) -> None:
     """The owner's ledger: older step events list their models' names, and Metrics answered 500 on every read."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     at = (datetime.now(UTC) - timedelta(hours=1)).isoformat(timespec="seconds")
     place = {"project": "shop", "name": "shop", "clone": "", "change": "c1", "step": "build", "job": "",
              "agent": "builder", "source": "import:activity"}  # fmt: skip
@@ -268,8 +264,6 @@ def test_a_ledger_whose_step_events_list_their_models_renders(pds) -> None:
 def test_a_fold_counts_changes_by_project_apart_from_runs_outside_one_and_its_rows_name_theirs(pds) -> None:
     """Copilot's counterexamples: two projects' curation runs read as "2 Changes"; one slug in two projects read as
     "2 Changes" while the opened rows left their Change blank; and two projects sharing a name read as one Change."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     now, spent = datetime.now(UTC) - timedelta(hours=1), {"credits": 1.0, "models": {"m1": {"credits": 1.0}}}
     seeds = [("curator", "shop", "shop", ""), ("curator", "docs", "docs", ""), ("builder", "p", "web", "ch"),
              ("builder", "q", "web", "ch"),  # two projects that share a name
@@ -297,10 +291,6 @@ def test_a_fold_counts_changes_by_project_apart_from_runs_outside_one_and_its_ro
 @pytest.mark.browser
 def test_only_a_failed_read_is_said_to_have_failed(pds, whole_error: str) -> None:
     """#780: reads while a turn ran are not failures; #971 P14: actual failures say their whole error."""
-    from copilot._jsonrpc import JsonRpcError  # noqa: PLC0415 - the SDK's own error, as a request raises it
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
-    from owlbear_delivery_next.runtimes import sdk_spend  # noqa: PLC0415
 
     def said(message: str, note: str) -> str:
         exc = JsonRpcError(-32603, message, {"marker": f"DATA-{note}"})
@@ -356,8 +346,6 @@ def test_only_a_failed_read_is_said_to_have_failed(pds, whole_error: str) -> Non
 def test_spend_said_apart_from_the_period_never_reads_unknown_as_zero_or_a_counted_run_as_left_out(pds) -> None:
     """Sol's and Copilot's counterexamples: a run with only its start said "0.00 more"; one carrying known credits too
     said "credits not known"; and a resumed run, counted with its own spend, was called one more run not counted."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     at = (datetime.now(UTC) - timedelta(hours=1)).isoformat(timespec="seconds")
     place = {"clone": "", "step": "", "job": "", "project": "shop", "name": "shop", "change": "c1", "agent": "builder"}
 
@@ -407,8 +395,6 @@ window.fetch = async (...args) => {
 @pytest.mark.browser
 def test_a_show_more_answered_after_the_filters_changed_is_dropped(pds) -> None:
     """Sol's counterexample: a pending "Show more" of the old filters appended to the new list and took its cursor."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     now = datetime.now(UTC) - timedelta(hours=1)
     shop = {"project": "shop", "name": "shop", "change": "c1", "agent": "builder"}
     owlbear = {"project": "owlbear", "name": "owlbear", "change": "c2", "agent": "reviewer"}
@@ -447,8 +433,6 @@ def test_a_show_more_answered_after_the_filters_changed_is_dropped(pds) -> None:
 @pytest.mark.browser
 def test_the_page_reads_again_after_a_pass_whose_worker_started_late(pds, monkeypatch) -> None:
     """Sol's counterexample: the first answer did not say the pass was running, so the page never read again."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     seeded()
     real, go = spend_reconcile.run, threading.Event()
 
@@ -479,8 +463,6 @@ def test_the_page_reads_again_after_a_pass_whose_worker_started_late(pds, monkey
 @pytest.mark.browser
 def test_all_projects_chosen_on_a_clones_page_stays_chosen_after_a_reload(pds) -> None:
     """Copilot's review: choosing All projects dropped ?in=, so a reload preselected the bar's clone's project again."""
-    from playwright.sync_api import Error, expect, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     now = datetime.now(UTC) - timedelta(hours=1)
     spent = {"credits": 1.0, "models": {"m1": {"credits": 1.0, "input": 10, "output": 1}}}
     shop = {"project": "shop", "name": "shop", "clone": "c-shop", "change": "c1", "agent": "builder"}

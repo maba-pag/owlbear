@@ -19,7 +19,7 @@ MODEL = "gpt-6-luna"
 
 def test_a_wrong_model_voids_the_result_and_reruns_before_the_quota_or_an_unknown_model_counts() -> None:
     run = Run("s", ending="result", termination=Termination(confirmed=True), quota=True)
-    gate = Gate(SimpleNamespace(), run, lambda **_: None, lambda: None)
+    gate = Gate(SimpleNamespace(lint_commands=()), run, lambda **_: None, lambda: None)
     gate.wrong_model("a turn ran on gpt-6-sol, the step needs gpt-6-luna")
     run.usage_unread = "the usage at the step's end could not be read (RuntimeError)"
     assert (run.ending, run.payload, run.model_check) == ("error", None, "mismatch")
@@ -66,7 +66,7 @@ def _step(usage: dict, *, ending: str = "result") -> SimpleNamespace:
         cfg=SimpleNamespace(model=MODEL),
         log=lambda **e: events.append(e),
         events=events,
-        gate=Gate(SimpleNamespace(), run, lambda **_: None, lambda: None),
+        gate=Gate(SimpleNamespace(lint_commands=()), run, lambda **_: None, lambda: None),
         watch=subagents.Watch(allowed=False),
     )
 

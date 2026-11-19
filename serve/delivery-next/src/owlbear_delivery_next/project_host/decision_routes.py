@@ -25,6 +25,7 @@ from owlbear_delivery_next.change_contracts import decision_wording
 from owlbear_delivery_next.project_host import (
     decision_history,
     decision_recovery_routes,
+    exception_routes,
     impact_routes,
     lookup_routes,
 )
@@ -354,6 +355,7 @@ def router(shared: Shared, folder: Callable[[], str], places: Places, store: Sto
     _owner_routes(routes, shared, at, mine)
     if store is not None:
         _ignore_route(routes, store, at, mine)
+        routes.include_router(exception_routes.router(store))
     _shared_routes(routes, shared, at, places)
     routes.include_router(lookup_routes.router(shared, folder, store))
     return routes
