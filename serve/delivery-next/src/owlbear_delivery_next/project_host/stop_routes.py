@@ -9,7 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from owlbear_delivery_next.change_contracts.inbox import Recovery
 from owlbear_delivery_next.change_contracts.models import Exit, Record
-from owlbear_delivery_next.change_flow import delivery_target, stuck
+from owlbear_delivery_next.change_flow import delivery_target, repair_recovery, stuck
+from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.project_host import runner_end
 from owlbear_delivery_next.state_store import work_block
 from owlbear_delivery_next.state_store.store import LockHeldError, StoreError
@@ -26,6 +27,7 @@ class RecoveryBody(Record):
 
     action: str
     at: datetime
+    remedy: int | None = None
 
 
 def clearable(c: Change) -> str | None:
@@ -38,7 +40,7 @@ def clearable(c: Change) -> str | None:
         return "This stop ends only when you abandon or pause the Change; answer its question"
     if runner_end.unverified(c):
         return "This stop clears itself once the host sees none of the step's processes"
-    if stuck.exhausted(c):
+    if stuck.exhausted(c) and repair_recovery.offered(c) is None:
         return "The repair ended without resolving this cause; an unchanged rerun cannot resolve it"
     return None
 
@@ -67,7 +69,19 @@ def shown(c: Change, store: Store) -> dict[str, Any] | None:
     if clearable(c):
         return None
     block = work_block.of_store(store)
+    remedy = repair_recovery.offered(c)
+    continuation = repair_recovery.action(c, remedy) if remedy else ""
+    fixed = (
+        f"OwlBear {repair_recovery.version(c)} stopped this step. "
+        f"The running {codebase.release()} contains the fix for Delivery defect #{remedy}."
+        if remedy
+        else ""
+    )
     return c.stop.model_dump(mode="json", include={"reason", "action", "at"}) | {
+        "action": continuation or c.stop.action,
+        "remedy": remedy,
+        "label": continuation,
+        "fixed": fixed,
         "unset": _wait(block),
         "settings": {"count": len(block.keys), "reason": block.reason},
     }
@@ -107,9 +121,11 @@ def router(store: Store, read: Callable[[str], Change], wake: Callable[[], None]
                 c = store.read(slug)
                 if why := clearable(c) or unset(store):
                     raise HTTPException(409, why)
-                if (c.stop.action, c.stop.at) != (body.action, body.at):
+                remedy = repair_recovery.offered(c)
+                action = repair_recovery.action(c, remedy) if remedy else c.stop.action
+                if (action, c.stop.at, remedy) != (body.action, body.at, body.remedy):
                     raise HTTPException(409, "The stop changed since the page showed it; reload")
-                store.put_inbox(slug, Recovery(at=datetime.now(UTC), action=c.stop.action))
+                store.put_inbox(slug, Recovery(at=datetime.now(UTC), action=action, stop_at=c.stop.at, remedy=remedy))
         except (LockHeldError, StoreError) as exc:
             raise HTTPException(409, f"change: {exc}; try again") from exc
         wake()

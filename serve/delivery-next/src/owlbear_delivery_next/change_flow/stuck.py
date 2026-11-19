@@ -203,8 +203,13 @@ def _stop(c: Change, cause: str, reason: str, now: datetime) -> None:
     runtime = codebase.release()
     reason = f"OwlBear {runtime} stopped this step. {reason}"
     c.stop = Stop(
-        kind=ErrorKind(kind_of(cause)), reason=reason, action=RERUN, resume="the step runs again", at=now,
-        runtime=runtime, fixed_defects=list(repair_recovery.FIXED),
+        kind=ErrorKind(kind_of(cause)),
+        reason=reason,
+        action=RERUN,
+        resume="the step runs again",
+        at=now,
+        runtime=runtime,
+        fixed_defects=list(repair_recovery.FIXED),
     )
     c.outcome = Outcome(exit=Exit.STOP, cause=cause, reason=reason, who="you", at=now)
     c.stop.action = action(c)

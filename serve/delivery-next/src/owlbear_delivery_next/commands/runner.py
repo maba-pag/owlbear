@@ -79,6 +79,7 @@ from owlbear_delivery_next.workflow_steps import (
     project_checks,
     publish,
     queue,
+    repair_recovery,
     review,
     session_choice,
     sessions,
@@ -476,6 +477,10 @@ def _run(store: Store, lock: Lock, change: Change, step: Step | None, repo: Path
         elif step.kind == StepKind.TESTS or change.amending is not None:
             (curation.run if step.kind == StepKind.TESTS else amendment.run)(store, lock, change, repo)
         elif step.kind in AGENT:
+            refreshed = repair_recovery.ready(store, lock, change, repo)
+            if refreshed is None:
+                return
+            change = refreshed
             agent = _reused(store, lock, change)
             agent = agent or prepare.refused(store, lock, change) or review.completed(store, lock, change, repo)
             agent = agent or plan_round.continued(store, lock, change, repo)
