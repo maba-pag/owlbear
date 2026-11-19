@@ -11,7 +11,7 @@ from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store import config_save, prefs_import, profile_share
-from owlbear_delivery_next.state_store.pending_intents import pending_file, pending_intents
+from owlbear_delivery_next.state_store.pending_intents import pending_file, pending_intents, shared_pending
 from owlbear_delivery_next.state_store.profile_share import CONFIG_WAITING
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
@@ -127,7 +127,7 @@ def test_an_automatic_config_change_waits_behind_another_clones_pending_owner_in
     refusing[0] = "notice"
     assert a.save(a.config_path, Layer, widths(1600), "owner edit", owner=True)  # refused: pending, not published
     b = clone(remote, tmp_path / "b", "b")  # B's checkout now carries the pending record
-    pending = profile_share._shared_pending(a)  # noqa: SLF001
+    pending = shared_pending(a)
     assert pending
     before = remote_bytes(remote, SHARED_CONFIG)
     assert b"1600" not in before
@@ -142,26 +142,26 @@ def test_an_automatic_config_change_waits_behind_another_clones_pending_owner_in
     assert config_publishes == []
     assert not b.config_path.exists()
     assert remote_bytes(remote, SHARED_CONFIG) == before
-    assert profile_share._shared_pending(b) == pending  # noqa: SLF001
+    assert shared_pending(b) == pending
 
     # An absent-local-config completion retry never publishes the config
     with b.shared.locked():
         assert profile_share.publish_config_unlocked(b) == CONFIG_WAITING
     assert config_publishes == []
     assert remote_bytes(remote, SHARED_CONFIG) == before
-    assert profile_share._shared_pending(b) == pending  # noqa: SLF001
+    assert shared_pending(b) == pending
 
     assert b.save(b.config_path, Layer, widths(1600), "matching", owner=False) == ""
-    assert profile_share._shared_pending(b) == ""  # noqa: SLF001
+    assert shared_pending(b) == ""
     assert b"1600" in remote_bytes(remote, SHARED_CONFIG)
     refusing[0] = "notice"
     assert b.save(b.config_path, Layer, widths(1650), "owner edit", owner=True)
-    assert profile_share._shared_pending(b)  # noqa: SLF001
+    assert shared_pending(b)
     fresh = clone(remote, tmp_path / "fresh", "fresh")
     assert pending_intents(fresh)
     refusing[0] = None
     assert b.save(b.config_path, Layer, widths(1700), "owner new value", owner=True) == ""
-    assert profile_share._shared_pending(b) == ""  # noqa: SLF001
+    assert shared_pending(b) == ""
     assert b"1700" in remote_bytes(remote, SHARED_CONFIG)
     assert fresh.shared.pull() == ""
     assert pending_intents(fresh) == set()
@@ -281,7 +281,7 @@ def test_an_unreadable_shared_pending_record_holds_every_config_write_visibly(  
     b = clone(remote, tmp_path / "b", "b")
     assert b.save(b.config_path, Layer, widths(1300), "setup value", owner=False) == CONFIG_WAITING  # healthy first
     b.config_path.write_text(widths(1300)(Layer()).model_dump_json(indent=1))  # B's own local value 1300
-    pending = profile_share._shared_pending(b)  # noqa: SLF001
+    pending = shared_pending(b)
     assert pending
     local, before = b.config_path.read_bytes(), remote_bytes(remote, SHARED_CONFIG)
 
@@ -293,7 +293,7 @@ def test_an_unreadable_shared_pending_record_holds_every_config_write_visibly(  
     assert config_publishes == []
     assert b.config_path.read_bytes() == local
     assert remote_bytes(remote, SHARED_CONFIG) == before
-    assert profile_share._shared_pending(b) == pending  # noqa: SLF001
+    assert shared_pending(b) == pending
 
     # the completion retry keeps the config unpublished and says so; a removal is held the same way
     with b.shared.locked():
@@ -305,7 +305,7 @@ def test_an_unreadable_shared_pending_record_holds_every_config_write_visibly(  
         assert profile_share.publish_config_unlocked(b) == notice
     assert config_publishes == []
     assert remote_bytes(remote, SHARED_CONFIG) == before
-    assert profile_share._shared_pending(b) == pending  # noqa: SLF001
+    assert shared_pending(b) == pending
 
     # healthy control: once the remote is readable, the same unmatched change is held as CONFIG_WAITING
     broken_fetch[0] = None
@@ -392,7 +392,7 @@ def test_a_failed_shared_lookup_holds_the_automatic_change_without_a_local_copy(
     monkeypatch.setattr(DataRepo, "git", git)
     assert b.save(b.config_path, Layer, widths(1300), "automatic", owner=False)  # refused: lookup is unknown
     assert landed[0]  # A's save was refused: its record is pending on the remote
-    assert profile_share._shared_pending(a)  # noqa: SLF001
+    assert shared_pending(a)
     assert config_publishes == []
     assert not b.config_path.exists()
     before = remote_bytes(remote, SHARED_CONFIG)
