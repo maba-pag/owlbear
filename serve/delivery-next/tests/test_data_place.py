@@ -320,13 +320,7 @@ def test_an_unfinished_move_is_finished_undone_or_refused(tmp_path: Path, url: s
     if left in {"destination", "neither"}:
         source.rename(dest) if left == "destination" else None
         if left == "neither":
-            rm_executable = shutil.which("rm")
-            if rm_executable is None:
-                message = "rm executable is unavailable"
-                raise FileNotFoundError(message)
-            subprocess.run(  # noqa: S603 - Remove only the fixture-owned temporary directory via fixed rm -rf argv; no shell.
-                [rm_executable, "-rf", str(source)], check=True
-            )
+            shutil.rmtree(source)
     if left == "both":
         git(tmp_path, "clone", "-q", url, str(dest))
     if left in {"both", "neither"}:
