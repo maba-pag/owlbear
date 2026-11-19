@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
+from playwright.sync_api import expect
 
 from owlbear_delivery_next.change_contracts.models import Brief, Change, StepKind
 from owlbear_delivery_next.local_system import data_place, local_home
@@ -23,8 +24,6 @@ if TYPE_CHECKING:
 
 @pytest.mark.browser
 def test_the_maintenance_page_lists_each_action_and_says_when_delivery_stops(tmp_path: Path, pds, monkeypatch) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     work = clone(tmp_path / "work")
     entry = registry.register(work)
     store = Store.open(work)
@@ -84,8 +83,6 @@ def test_memory_curation_says_whether_its_last_run_was_the_curator_or_the_owner(
     tmp_path: Path, pds, monkeypatch, shared_repo
 ) -> None:
     """N1 (D-01M63CF1XKCCF6TP60734BTMWD): it said "Never run." after a curation run, and never said who ran it."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
     work = clone(tmp_path / "shop", origin="https://github.com/acme/shop.git")
     entry = registry.register(work)
@@ -115,8 +112,6 @@ def test_unreadable_curation_runs_show_whole_on_memory_curation(
     tmp_path: Path, pds, monkeypatch, whole_error, shared_repo
 ) -> None:
     """#971: why memory curation's runs are not counted shows whole under its last run."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
     work = clone(tmp_path / "shop", origin="https://github.com/acme/shop.git")
     entry = registry.register(work)
@@ -143,8 +138,6 @@ def test_unreadable_curation_runs_show_whole_on_memory_curation(
 @pytest.mark.browser
 def test_the_test_review_starts_from_the_chosen_packages_once_confirmed(tmp_path: Path, pds, monkeypatch) -> None:
     """TD-370, TD-390: every package is chosen, the dialog says what runs, and the Start opens one Change."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     work = tmp_path / "work"
     for name in ("pyproject.toml", "tests/test_a.py", "web/package.json", "web/src/b.test.ts"):
         (work / name).parent.mkdir(parents=True, exist_ok=True)

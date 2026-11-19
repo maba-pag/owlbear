@@ -8,7 +8,10 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from fastapi.testclient import TestClient
+from playwright.sync_api import expect
 
+from owlbear_decisions.validate import Finding
+from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.state_store import decision_actions, decision_batch, decision_recovery, decision_store
 from owlbear_delivery_next.state_store.store import Store
@@ -99,8 +102,6 @@ def test_finish_publishes_only_after_the_owner_confirms_the_generation(picking, 
 
 @pytest.mark.browser
 def test_cancel_keeps_the_batch_and_abandon_is_confirmed_by_its_generation(picking, tmp_path, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     _, generation = _interrupt(picking)
     with decisions_page(_store(picking, tmp_path), pds) as page:
         expect(page.locator(".recovery-generation")).to_have_text(generation)
@@ -120,8 +121,6 @@ def test_cancel_keeps_the_batch_and_abandon_is_confirmed_by_its_generation(picki
 
 @pytest.mark.browser
 def test_a_stale_answer_is_refused_and_leaves_the_newer_batch_interrupted(picking, tmp_path, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     old, old_generation = _interrupt(picking)
     with decisions_page(_store(picking, tmp_path), pds) as page:
         expect(page.locator(".recovery-generation")).to_have_text(old_generation)
@@ -143,8 +142,6 @@ def test_a_stale_answer_is_refused_and_leaves_the_newer_batch_interrupted(pickin
 
 @pytest.mark.browser
 def test_a_corrupt_journal_is_diagnosed_and_offers_no_action(picking, tmp_path, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     _interrupt(picking)
     journal = decision_batch.journal_path(picking.shared)
     journal.write_text("{not json")
@@ -193,8 +190,6 @@ def logged(caplog) -> list[str]:
 @pytest.mark.browser
 def test_a_recovery_notice_shows_whole(picking, tmp_path, pds, monkeypatch, whole_error, failing_git, caplog):  # noqa: PLR0913, PLR0917 - its fixtures
     """A finish whose push fails says so whole, and an unreadable journal's diagnosis shows whole; both logged."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     _, generation = _interrupt(picking)
     failing_git(whole_error, lambda args, _: args[:1] == ("push",))
     with decisions_page(_store(picking, tmp_path), pds) as page:
@@ -228,8 +223,6 @@ def test_a_refused_recovery_answers_whole(  # noqa: PLR0913, PLR0917 - its fixtu
 ):
     """A finish refused by the data repository, by the journal once the batch was read, or by a rebase probe Git
     failed: its 409 and log line."""
-    from owlbear_delivery_next.local_system.data_repo import DataRepoError  # noqa: PLC0415
-
     generation = _interrupted_here(picking)
 
     def failing(*_args, **_kwargs):
@@ -354,8 +347,6 @@ def test_an_older_recovery_read_answered_last_never_hides_a_newer_interruption(p
 @pytest.mark.parametrize("site", ["not-published", "unreadable", "invalid", "abandon"])
 def test_each_recovery_refusal_names_its_whole_error(picking, monkeypatch, whole_error, failing_git, site):
     """What finish or abandon says when the batch cannot be published, read, validated or put back, whole."""
-    from owlbear_decisions.validate import Finding  # noqa: PLC0415
-
     generation = _interrupted_here(picking)
     shared = picking.shared
     if site == "not-published":

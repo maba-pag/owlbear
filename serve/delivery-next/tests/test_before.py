@@ -1,7 +1,9 @@
+import http.server
 import shlex
 import socket
 import subprocess
 import sys
+import threading
 import urllib.request
 from datetime import UTC, datetime
 from pathlib import Path
@@ -219,9 +221,6 @@ def test_a_failing_install_is_a_note_and_nothing_is_launched(ui, tmp_path, monke
 
 
 def test_a_port_already_answering_is_a_note_and_nothing_is_launched(ui, tmp_path):
-    import http.server  # noqa: PLC0415
-    import threading  # noqa: PLC0415
-
     port = check.free_port()  # the port Delivery picks is taken by another server meanwhile
     server = http.server.ThreadingHTTPServer(("127.0.0.1", port), http.server.SimpleHTTPRequestHandler)
     threading.Thread(target=server.serve_forever, daemon=True).start()

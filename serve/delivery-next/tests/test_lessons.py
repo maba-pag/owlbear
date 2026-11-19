@@ -197,8 +197,6 @@ def test_the_owners_points_decide_the_order_and_the_stored_score_ranks_nothing(m
 
 
 def test_an_unset_value_is_told_to_the_agent_and_never_stops_the_step(memory: Path, monkeypatch) -> None:
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-
     monkeypatch.setattr(config, "BASE", None)  # production: no layer under the owner's own
     keep(memory, entry(1))
     owner_holds(memory, outstanding_boost=0.1, unremarkable_penalty=0.01)
