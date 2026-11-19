@@ -13,9 +13,12 @@ from __future__ import annotations
 import json
 import re
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any, overload
 
 from owlbear_delivery_next.improvement.events import clean, clip, kept_text
+
+if TYPE_CHECKING:
+    from pydantic import JsonValue
 
 BOUND = 30000  # characters of the whole card
 KEEP_RECENT, KEEP_OPEN, KEEP_DECISIONS, KEEP_TASK = 5, 12, 1000, 500  # what ``bounded`` cuts down to, at least
@@ -127,7 +130,15 @@ def build(snapshot: dict[str, Any], moment: dict[str, Any], context: dict[str, A
     return bounded(_cleaned(card))
 
 
-def _cleaned(value: Any) -> Any:  # noqa: ANN401 - the card's JSON values
+@overload
+def _cleaned(value: dict[str, JsonValue]) -> dict[str, JsonValue]: ...
+
+
+@overload
+def _cleaned(value: JsonValue) -> JsonValue: ...
+
+
+def _cleaned(value: JsonValue) -> JsonValue:
     """Every string of *value* cleaned, the structure kept."""
     if isinstance(value, str):
         return clean(value)
@@ -180,7 +191,15 @@ def bounded(card: dict[str, Any]) -> dict[str, Any]:
     return card
 
 
-def _capped(value: Any, cap: int) -> Any:  # noqa: ANN401 - the card's JSON values
+@overload
+def _capped(value: dict[str, JsonValue], cap: int) -> dict[str, JsonValue]: ...
+
+
+@overload
+def _capped(value: JsonValue, cap: int) -> JsonValue: ...
+
+
+def _capped(value: JsonValue, cap: int) -> JsonValue:
     if isinstance(value, str):
         return clip(value, cap)
     if isinstance(value, list):
