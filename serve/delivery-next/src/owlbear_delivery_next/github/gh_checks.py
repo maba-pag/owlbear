@@ -19,6 +19,7 @@ _CHECKS = """query Checks($owner: String!, $name: String!, $number: Int!) {
       pageInfo { hasNextPage }
       nodes { __typename
         ... on CheckRun { name status conclusion detailsUrl completedAt databaseId
+                          checkSuite { workflowRun { runNumber event workflow { databaseId } } }
                           isRequired(pullRequestNumber: $number) }
         ... on StatusContext { context state targetUrl isRequired(pullRequestNumber: $number) }
       } } } } } } } }
@@ -28,7 +29,8 @@ _COMMIT_CHECKS = """query CommitChecks($owner: String!, $name: String!, $oid: Gi
     statusCheckRollup { contexts(first: 100) {
       pageInfo { hasNextPage }
       nodes { __typename
-        ... on CheckRun { name status conclusion detailsUrl completedAt databaseId }
+        ... on CheckRun { name status conclusion detailsUrl completedAt databaseId
+                          checkSuite { workflowRun { runNumber event workflow { databaseId } } } }
         ... on StatusContext { context state targetUrl }
       } } } } } }
 }"""
@@ -64,11 +66,30 @@ def _check(node: Json, operation: str) -> Check:
         invalid(operation, "GitHub returned an invalid check", exc)
 
 
+def _checks(nodes: list[Json], operation: str) -> tuple[Check, ...]:
+    """Keep the current execution of each Actions workflow/event before classifying individual checks."""
+    try:
+        runs = [(n, n["checkSuite"]["workflowRun"] if n["__typename"] == "CheckRun" else None) for n in nodes]
+        latest: dict[tuple[int, str], int] = {}
+        for _, run in runs:
+            if run is not None:
+                key = (run["workflow"]["databaseId"], run["event"])
+                latest[key] = max(latest.get(key, 0), run["runNumber"])
+        current = [
+            n
+            for n, run in runs
+            if run is None or run["runNumber"] == latest[(run["workflow"]["databaseId"], run["event"])]
+        ]
+    except (KeyError, TypeError, AttributeError) as exc:
+        invalid(operation, "GitHub returned invalid workflow-run metadata in its check rollup", exc)
+    return tuple(_check(n, operation) for n in current)
+
+
 class Checks(GhClient):
     """Read check rollups, review requests and job logs."""
 
     def observe_commit_checks(self, repository: str, sha: str) -> tuple[Check, ...]:
-        """Observe check runs and commit statuses on one commit; outside a PR no check is marked required."""
+        """Observe current workflow runs and commit statuses; outside a PR no check is marked required."""
         op, (owner, name) = "observe_commit_checks", repository.split("/", 1)
         result = self._graphql(op, _COMMIT_CHECKS, {"owner": owner, "name": name, "oid": sha})
         try:
@@ -79,7 +100,7 @@ class Checks(GhClient):
             return ()
         if rollup["contexts"]["pageInfo"]["hasNextPage"]:
             invalid(op, f"more than {_MAX_CHECKS} checks")
-        return tuple(_check({**n, "isRequired": False}, op) for n in rollup["contexts"]["nodes"])
+        return _checks([{**n, "isRequired": False} for n in rollup["contexts"]["nodes"]], op)
 
     def review_request(self, repository: str, number: int) -> tuple[str | None, tuple[str, ...]]:
         """Read GitHub's review decision and the requested reviewers (users by login, teams by slug)."""
@@ -94,7 +115,7 @@ class Checks(GhClient):
             invalid(op, "GitHub returned an invalid review request", exc)
 
     def observe_checks(self, repository: str, number: int, head: str) -> tuple[Check, ...]:
-        """Observe check runs and commit statuses at one exact head; a moved head is a conflict."""
+        """Observe current workflow runs and statuses at one exact head; a moved head is a conflict."""
         op, (owner, name) = "observe_checks", repository.split("/", 1)
         body = {"query": _CHECKS, "variables": {"owner": owner, "name": name, "number": number}}
         result = self._gh(op, ("api", "--hostname", self.host, "graphql", "--input", "-"), body=body)
@@ -110,7 +131,7 @@ class Checks(GhClient):
             return ()
         if rollup["contexts"]["pageInfo"]["hasNextPage"]:
             invalid(op, f"more than {_MAX_CHECKS} checks")
-        return tuple(_check(n, op) for n in rollup["contexts"]["nodes"])
+        return _checks(rollup["contexts"]["nodes"], op)
 
     def job_log(self, repository: str, job_id: int, lines: int = 40) -> str:
         """Return the tail of one Actions job log without timestamps or escapes; empty when it cannot be read."""
