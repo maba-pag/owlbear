@@ -1155,7 +1155,7 @@ def test_a_profile_that_reads_now_says_the_earlier_error_whole(
     def read(_source):
         raise error
 
-    monkeypatch.setattr(store_module, "_parse", parse)
+    monkeypatch.setattr(profile_share, "_parse", parse)
     monkeypatch.setattr(Path, "stat", stat)
     monkeypatch.setattr(profile_share.os, "open", opened)
     if unreadable == "profile":
