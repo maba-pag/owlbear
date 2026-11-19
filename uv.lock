@@ -606,7 +606,7 @@ wheels = [
 
 [[package]]
 name = "github-copilot-sdk"
-version = "1.0.30"
+version = "1.0.34"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -614,7 +614,7 @@ dependencies = [
     { name = "python-dateutil" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f1/df/5054eb8b21d5040ae2207cd78496545e50b7634faab584ae79cfc8f519e8/github_copilot_sdk-1.0.30-py3-none-any.whl", hash = "sha256:277693fc813dc41c2cdae04362732454d1369c92df5336f2c431a11719748227", size = 1045178, upload-time = "2026-11-09T16:30:03.448Z" },
+    { url = "https://files.pythonhosted.org/packages/6e/3f/9b8405bf4943dfb6ecd5d0ac2179e1fab896a61bd31273c94267faeae5c9/github_copilot_sdk-1.0.34-py3-none-any.whl", hash = "sha256:0d9cffccdb59f5d90512e9b94a70d482859a5fc9e0d2d0926e1bb138a1e593c4", size = 1116400, upload-time = "2026-11-14T00:08:47.124Z" },
 ]
 
 [[package]]
@@ -1405,7 +1405,7 @@ dependencies = [
 requires-dist = [
     { name = "cyclopts", specifier = ">=5.2.0" },
     { name = "fastapi", specifier = ">=0.142.2" },
-    { name = "github-copilot-sdk", specifier = "==1.0.30" },
+    { name = "github-copilot-sdk", specifier = "==1.0.34" },
     { name = "jsonschema", specifier = ">=4.26.0" },
     { name = "mcp", specifier = ">=2,<2.4" },
     { name = "owlbear-decisions", editable = "serve/decisions" },
