@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from enum import StrEnum
@@ -27,7 +28,8 @@ def _call(command: list[str], *, env: dict[str, str] | None = None, cwd: Path | 
     kwargs["env"] = _subprocess_environment(env)
     if cwd is not None:
         kwargs["cwd"] = cwd
-    return subprocess.call(command, **kwargs)  # noqa: S603
+    # Quality helpers intentionally execute their configured linters and consumer tool vectors without a shell.
+    return subprocess.call(command, **kwargs)  # noqa: S603 - intentional configured quality-tool execution
 
 
 def _subprocess_environment(env: dict[str, str] | None) -> dict[str, str]:
@@ -53,7 +55,7 @@ def _git_paths(*, staged: bool) -> list[str]:
         ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR", "-z"] if staged else ["git", "ls-files", "-z"]
     )
     try:
-        output = subprocess.check_output(command)  # noqa: S603
+        output = subprocess.check_output(command)  # noqa: S603 - choice of two fixed read-only Git queries; no shell
     except (OSError, subprocess.CalledProcessError) as exc:
         scope = "staged files" if staged else "workspace files"
         message = f"unable to discover {scope} from Git"
@@ -63,7 +65,12 @@ def _git_paths(*, staged: bool) -> list[str]:
 
 def _git_root() -> Path:
     try:
-        output = subprocess.check_output(["git", "rev-parse", "--show-toplevel"])  # noqa: S607
+        executable = shutil.which("git")
+        if executable is None:
+            message = "Git executable not found on PATH"
+            raise FileNotFoundError(message)
+        # The resolved Git runs one fixed repository-root query without a shell.
+        output = subprocess.check_output([executable, "rev-parse", "--show-toplevel"])  # noqa: S603
     except (OSError, subprocess.CalledProcessError) as exc:
         message = "unable to discover Git repository root"
         raise RuntimeError(message) from exc

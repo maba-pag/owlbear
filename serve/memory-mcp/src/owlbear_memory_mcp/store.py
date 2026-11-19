@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -27,8 +28,12 @@ class StoreError(RuntimeError):
 def _git(cwd: Path, *args: str) -> str:
     quiet = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     try:
-        done = subprocess.run(  # noqa: S603
-            ["git", *args],  # noqa: S607
+        executable = shutil.which("git")
+        if executable is None:
+            message = "Git executable not found on PATH"
+            raise FileNotFoundError(message)
+        done = subprocess.run(  # noqa: S603 - resolved Git; callers supply fixed config/rev-parse queries; no shell
+            [executable, *args],
             cwd=cwd,
             env=quiet,
             stdin=subprocess.DEVNULL,

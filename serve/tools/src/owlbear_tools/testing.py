@@ -314,7 +314,7 @@ def _git_executable() -> str:
 
 
 def _run_git(arguments: list[str]) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(  # noqa: S603
+    return subprocess.run(  # noqa: S603 - resolved Git; internal diff/rev-parse/ls-files query operands; no shell
         [_git_executable(), *arguments],
         cwd=_REPOSITORY_ROOT,
         capture_output=True,
@@ -411,7 +411,8 @@ def _run_commands(commands: list[tuple[list[str], Path]]) -> int:
         location = "." if relative_cwd == Path() else str(relative_cwd)
         print(f"[{location}] {' '.join(command)}")  # noqa: T201
         with _testmon_lock(command) as inherited:
-            failures += int(bool(subprocess.call(command, cwd=cwd, **inherited)))  # noqa: S603
+            # The runner constructs pytest/task argv and intentionally executes the selected tools without a shell.
+            failures += int(bool(subprocess.call(command, cwd=cwd, **inherited)))  # noqa: S603 - test-runner-owned argv
     return int(bool(failures))
 
 

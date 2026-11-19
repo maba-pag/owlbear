@@ -42,7 +42,7 @@ def _run(
 ) -> subprocess.CompletedProcess[str]:
     """Run one package-management command."""
     try:
-        return subprocess.run(  # noqa: S603
+        return subprocess.run(  # noqa: S603 - internal node/uv/npm vectors intentionally run checkout tools; no shell
             command,
             cwd=cwd,
             check=False,

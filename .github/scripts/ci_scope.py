@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -130,8 +131,12 @@ def suites(paths: list[str]) -> list[str]:
 
 def changed(base: str, head: str) -> list[str]:
     """Paths the pull request changes, from the merge base of *base* and *head* to *head*, unquoted by ``-z``."""
-    done = subprocess.run(  # noqa: S603 - fixed git argument vector
-        ["git", "diff", "--name-only", "-z", f"{base}...{head}"],  # noqa: S607 - git from the runner's PATH
+    executable = shutil.which("git")
+    if executable is None:
+        message = "Git executable not found on PATH"
+        raise FileNotFoundError(message)
+    done = subprocess.run(  # noqa: S603 - resolved Git; CI base/head form one diff revision operand; no shell
+        [executable, "diff", "--name-only", "-z", f"{base}...{head}"],
         capture_output=True,
         text=True,
         check=True,

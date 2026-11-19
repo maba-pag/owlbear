@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -29,8 +30,12 @@ def _git(
     env: dict[str, str] | None = None,
     input_text: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # noqa: S603
-        ["git", *args],  # noqa: S607
+    executable = shutil.which("git", path=os.pathsep.join(os.get_exec_path(env)))
+    if executable is None:
+        message = "Git executable not found on PATH"
+        raise FileNotFoundError(message)
+    return subprocess.run(  # noqa: S603 - resolved Git; internal commands separate validated owned paths/messages; no shell
+        [executable, *args],
         cwd=cwd,
         check=check,
         text=True,

@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -54,7 +55,12 @@ class Step:
 
 def git(*args: str) -> str:
     """Run one git command in the checkout and return its output; a failure prints git's own message."""
-    done = subprocess.run(["git", *args], capture_output=True, text=True, check=False)  # noqa: S603, S607
+    executable = shutil.which("git")
+    if executable is None:
+        message = "Git executable not found on PATH"
+        raise FileNotFoundError(message)
+    # Release code constructs the Git subcommands, refs and tag messages as separate operands, without a shell.
+    done = subprocess.run([executable, *args], capture_output=True, text=True, check=False)  # noqa: S603
     if done.returncode:
         sys.stderr.write(done.stderr)
         done.check_returncode()

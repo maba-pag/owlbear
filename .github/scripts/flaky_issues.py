@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -25,8 +26,12 @@ def marked_issues(root: Path) -> list[int]:
 
     A match inside a string only adds an issue to look up; the plugin re-runs only tests whose mark names it.
     """
-    listed = subprocess.run(
-        ["git", "ls-files", "-z", "--", "*.py"],  # noqa: S607
+    executable = shutil.which("git")
+    if executable is None:
+        message = "Git executable not found on PATH"
+        raise FileNotFoundError(message)
+    listed = subprocess.run(  # noqa: S603 - resolved Git with fixed tracked-Python inventory flags; no shell
+        [executable, "ls-files", "-z", "--", "*.py"],
         cwd=root,
         capture_output=True,
         check=True,
@@ -41,8 +46,12 @@ def marked_issues(root: Path) -> list[int]:
 def fetch_issue(repository: str, number: int) -> dict[str, object]:
     """One issue from the GitHub API through the gh CLI, read with the job's token."""
     try:
-        done = subprocess.run(  # noqa: S603
-            ["gh", "api", f"repos/{repository}/issues/{number}"],  # noqa: S607
+        executable = shutil.which("gh")
+        if executable is None:
+            message = "gh executable not found on PATH"
+            raise FileNotFoundError(message)
+        done = subprocess.run(  # noqa: S603 - resolved gh; CI repository and numeric issue form one API path; no shell
+            [executable, "api", f"repos/{repository}/issues/{number}"],
             capture_output=True,
             check=True,
             text=True,
