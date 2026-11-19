@@ -1197,7 +1197,6 @@ def test_the_installed_browser_is_tried_first_and_only_missing_browsers_fall_thr
         visual.capture("http://127.0.0.1:1", [HOME], tmp_path, (1280,))
     assert pw.tried == ["chrome", "msedge", None]
     pw = _Missing({"chrome": "Target page, context or browser has been closed"})
-    monkeypatch.setattr(sync_api, "sync_playwright", lambda: pw)
     with pytest.raises(sync_api.Error):  # another launch failure is not a missing browser
         visual.capture("http://127.0.0.1:1", [HOME], tmp_path, (1280,))
     assert pw.tried == ["chrome"]
