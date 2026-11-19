@@ -1112,6 +1112,7 @@ def test_while_paused_only_a_cleanup_or_the_owners_brief_challenge_starts(store,
     fake = Fake(store, tmp_path)
     paused(fake, [True])
     c = asking(fake).model_copy(update={"outcome": None, "step": step, "shaped": shaped})
+    c.brief.ui = shaped is not None
     save(store, c)
     assert (status(c, fake.host.activity("c1"), NOW).action == "Resume Delivery") is not runs
     fake.host.draining = lambda: True

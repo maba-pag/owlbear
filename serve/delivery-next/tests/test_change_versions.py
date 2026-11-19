@@ -14,7 +14,7 @@ from owlbear_delivery_next.change_contracts.round_records import (
     RoundPolicy,
     Verdict,
 )
-from owlbear_delivery_next.change_flow import brief_rounds, plan_rounds, versions
+from owlbear_delivery_next.change_flow import brief_rounds, plan_rounds, shaping_capture, versions
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 LEGACY_2 = "Challenges 1 to 2 ran before versions were recorded per challenge"
@@ -50,7 +50,11 @@ def test_c1_lists_v2_and_v3_challenged_and_v4_not(c1):
         (3, "findings", ["Challenge 2"], []),
         (4, "unreviewed", [], ["approve", "challenge"]),
     ]
-    assert (d["brief"]["versions"]["legacy"], d["brief"]["unreviewed"], d["brief"]["approve_off"]) == ("", True, "")
+    assert (d["brief"]["versions"]["legacy"], d["brief"]["unreviewed"], d["brief"]["approve_off"]) == (
+        "",
+        True,
+        shaping_capture.CAPTURING,
+    )
     assert [v["word"] for v in d["brief"]["versions"]["versions"]][1:] == ["findings", "findings", "not challenged"]
     assert d["plan_versions"] == {"versions": [], "legacy": ""}
 
