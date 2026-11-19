@@ -287,6 +287,7 @@ export function briefInfo(d) {
   return info(`Brief v${v}${at ? `, approved ${at}` : ""}`, html`<div class="brief">
     ${d.brief.outcome ? text(d.brief.outcome) : nothing}${chatReceipt(d)}
     ${agreement(d, true)}${picked(d, on)}${technical(d)}
+    ${d.brief.capture?.unavailable ? currentPages(d.key, d.brief.capture, d.brief.visual) : nothing}
     ${on ? part("Changes since you approved", added.length ? saidList(added)
       : text("None besides the amendments below.")) : nothing}
     ${on ? amendmentsPart(d) : nothing}${versionList(d.brief.versions, "Versions")}</div>

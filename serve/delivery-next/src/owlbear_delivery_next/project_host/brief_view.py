@@ -70,7 +70,11 @@ def captured(c: Change) -> dict[str, Any] | None:
     if not shaping_capture.needed(c.brief):
         return None
     if s is None or shaping_capture.waiting(c) or (r := s.result) is None:
-        return {"running": True}
+        return (
+            {"running": True}
+            if shaping_capture.owed(c)
+            else {"running": False, "unavailable": shaping_capture.UNAVAILABLE}
+        )
     return {"running": False, "head": r.head, "at": r.at.isoformat(), "widths": r.widths, "files": r.files,
             "findings": r.findings}  # fmt: skip
 

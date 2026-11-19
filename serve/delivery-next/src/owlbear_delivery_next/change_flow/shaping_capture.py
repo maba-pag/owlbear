@@ -20,6 +20,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Brief, Change
 
 CAPTURING = "its current pages are still being captured"
+UNAVAILABLE = "this brief has no completed shaping capture, and no capture is scheduled for it"
 
 
 def key(b: Brief) -> str:
