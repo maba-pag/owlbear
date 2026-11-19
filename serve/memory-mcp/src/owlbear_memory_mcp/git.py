@@ -66,7 +66,7 @@ def _git(repo_dir: Path, *args: str) -> str:
 
 def _git_bytes(repo_dir: Path, *args: str) -> tuple[int, bytes]:
     """Run Git without decoding a staged memory snapshot prematurely."""
-    result = subprocess.run(  # noqa: S603 - resolved Git; internal show/rev-parse/reset argv keep operands separate; no shell
+    result = subprocess.run(  # noqa: S603 - resolved Git; internal show/rev-parse/reset operands; no shell
         [_git_executable(), *args],
         capture_output=True,
         check=False,
@@ -255,7 +255,7 @@ def _git_object_id(repo_dir: Path, revision: str) -> str | None:
 
 
 def _git_blob_id(repo_dir: Path, raw: bytes) -> str:
-    result = subprocess.run(  # noqa: S603 - resolved Git with fixed hash-object flags; snapshot bytes go to stdin; no shell
+    result = subprocess.run(  # noqa: S603 - resolved Git; fixed hash-object flags; snapshot bytes use stdin
         [_git_executable(), "hash-object", "--stdin"],
         capture_output=True,
         check=True,

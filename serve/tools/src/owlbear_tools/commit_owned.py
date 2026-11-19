@@ -34,7 +34,7 @@ def _git(
     if executable is None:
         message = "Git executable not found on PATH"
         raise FileNotFoundError(message)
-    return subprocess.run(  # noqa: S603 - resolved Git; internal commands separate validated owned paths/messages; no shell
+    return subprocess.run(  # noqa: S603 - resolved Git; internal argv separate owned paths/messages; no shell
         [executable, *args],
         cwd=cwd,
         check=check,
