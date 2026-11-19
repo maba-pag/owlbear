@@ -15,7 +15,9 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts.failures import kind_of
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, Outcome, Question, StepKind, Stop
 from owlbear_delivery_next.change_contracts.repair_records import Repair
+from owlbear_delivery_next.change_flow import repair_recovery
 from owlbear_delivery_next.change_flow.moves import ask, go
+from owlbear_delivery_next.local_system import codebase
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -75,6 +77,8 @@ def action(c: Change) -> str:
     """The executable way out of an exhausted repair, including stops written before this route existed."""
     if not exhausted(c):
         return c.stop.action if c.stop else ""
+    if remedy := repair_recovery.offered(c):
+        return repair_recovery.action(c, remedy)
     if (
         not c.tests
         and c.brief.approved_version == c.brief.version
@@ -196,7 +200,12 @@ def stopped(c: Change, why: str, now: datetime) -> None:
 
 
 def _stop(c: Change, cause: str, reason: str, now: datetime) -> None:
-    c.stop = Stop(kind=ErrorKind(kind_of(cause)), reason=reason, action=RERUN, resume="the step runs again", at=now)
+    runtime = codebase.release()
+    reason = f"OwlBear {runtime} stopped this step. {reason}"
+    c.stop = Stop(
+        kind=ErrorKind(kind_of(cause)), reason=reason, action=RERUN, resume="the step runs again", at=now,
+        runtime=runtime, fixed_defects=list(repair_recovery.FIXED),
+    )
     c.outcome = Outcome(exit=Exit.STOP, cause=cause, reason=reason, who="you", at=now)
     c.stop.action = action(c)
     c.stop.resume = "The brief changes, or the Change is paused or abandoned"

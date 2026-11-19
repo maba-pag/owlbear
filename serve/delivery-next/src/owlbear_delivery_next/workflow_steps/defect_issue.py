@@ -100,7 +100,4 @@ def _tracked(path: Path) -> list[str] | str:
 
 
 def _version() -> str:
-    done = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector
-        [worktree.GIT, "describe", "--tags", "--always"], cwd=SOURCE, capture_output=True, text=True, check=False
-    )
-    return done.stdout.strip() or "unknown"
+    return codebase.release()

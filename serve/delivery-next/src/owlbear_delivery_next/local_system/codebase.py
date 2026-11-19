@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import hashlib
+from functools import cache
 from pathlib import Path
+
+from owlbear_delivery_next.local_system.git_files import probe_in
 
 ROOT = Path(__file__).parents[1]  # the package, whose data files sit at its root
 URL = "https://github.com/maba-pag/owlbear.git"  # OwlBear's own repository: its versions and its own decisions
@@ -56,3 +59,14 @@ def identity(root: Path = ROOT) -> str:
 
 
 CURRENT = identity()  # at import, when this process loads its modules
+
+
+@cache
+def release() -> str:
+    """The version containing this loaded package, never the mutable runtime alias."""
+    root = ROOT.resolve().parents[3]
+    code, said = probe_in(root)(["git", "describe", "--tags", "--always"])
+    if code or not said:
+        msg = f"OwlBear version: git describe in {root} failed ({code}): {said}"
+        raise RuntimeError(msg)
+    return said

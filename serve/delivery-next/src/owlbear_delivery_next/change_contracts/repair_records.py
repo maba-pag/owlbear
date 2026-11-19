@@ -96,6 +96,9 @@ class Repair(BaseModel):
     root: str = ""  # the owner-question cause it repairs, so its own question counts with them (#1064)
     preparation: PreparationProposal | None = None
     preparations_before: list[Preparation] | None = None
+    recovered_with: int | None = None  # a shipped Delivery defect fix, consumed once for this repair
+    recovered_at: datetime | None = None
+    refreshed_at: datetime | None = None  # CI evidence refreshed before a recovered builder runs
 
 
 class Repairs(BaseModel):
