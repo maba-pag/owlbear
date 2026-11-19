@@ -6,6 +6,7 @@ the active ``gh`` account is never switched; an SSH push destination stops the w
 
 import contextlib
 import os
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -15,6 +16,7 @@ import pytest
 from owlbear_delivery_next.git import access as access_module
 from owlbear_delivery_next.git import remote_git
 from owlbear_delivery_next.git.access import Access, PushRefused
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.git.remote_git import RemoteGitWriteUnknown
 from owlbear_delivery_next.github import account
 from owlbear_delivery_next.github.account import AccountMissing, Origin, Writer, resolve
@@ -33,7 +35,9 @@ BOTH = {"github.com": {"maba-pag": "success", "boecht": "success"}}
 
 
 def _git(cwd, *args):
-    return subprocess.run(("git", "-C", str(cwd), *args), capture_output=True, text=True, check=True).stdout  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - _git callers build fixture Git add/clone/commit/config argv and repository operands; no shell.
+        (resolve_git_executable(), "-C", str(cwd), *args), capture_output=True, text=True, check=True
+    ).stdout
 
 
 @pytest.fixture
@@ -233,8 +237,12 @@ def test_the_token_is_the_childs_only_github_token_and_the_parent_keeps_its_own(
 
 def _fill(repo, options, environment, host="github.com"):
     asked = f"protocol=https\nhost={host}\npath=boecht/sandbox.git\n"
+    git_executable = shutil.which("git", path=environment.get("PATH", os.defpath))
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
     done = subprocess.run(  # noqa: S603
-        ("git", "-C", str(repo), *options, "credential", "fill"),  # noqa: S607
+        (git_executable, "-C", str(repo), *options, "credential", "fill"),
         input=asked, capture_output=True, text=True, env=environment, check=True,
     )  # fmt: skip
     return dict(line.split("=", 1) for line in done.stdout.splitlines())["password"]

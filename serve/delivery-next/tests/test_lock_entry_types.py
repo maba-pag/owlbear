@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.project_host import host
 from owlbear_delivery_next.state_store import project_home, project_move
 from owlbear_delivery_next.state_store.database import StoreError
@@ -110,9 +111,11 @@ def test_a_held_regular_host_lock_reports_a_host(tmp_path):
 def repo(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     root.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=root, check=True, capture_output=True)  # noqa: S607
-    subprocess.run(
-        ["git", "commit", "-q", "--allow-empty", "-m", "init"],  # noqa: S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with literal operands; no shell.
+        [resolve_git_executable(), "init", "-q"], cwd=root, check=True, capture_output=True
+    )
+    subprocess.run(  # noqa: S603 - Fixture Git commit argv with literal operands; no shell.
+        [resolve_git_executable(), "commit", "-q", "--allow-empty", "-m", "init"],
         cwd=root,
         check=True,
         capture_output=True,

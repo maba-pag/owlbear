@@ -18,6 +18,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile, Profi
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RoundPolicy
 from owlbear_delivery_next.change_flow import amending, loop
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import amendments, sdk_adapter
@@ -81,8 +82,13 @@ class Amending:
         picking.store.write(Lock(picking.slug), c)
         self.builds: list[tools.Args] = []
         self.unconfirmed: set[str] = set()  # the roles whose next session ends with its process left going
-        self.head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=picking.repo, check=True, capture_output=True,  # noqa: S607
-                                   text=True).stdout.strip()  # fmt: skip
+        self.head = subprocess.run(  # noqa: S603 - Fixed rev-parse HEAD argv reads the picking fixture's repository for fake build results; no shell.
+            [resolve_git_executable(), "rev-parse", "HEAD"],
+            cwd=picking.repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
         monkeypatch.setattr(runner.sdk_adapter, "run", self.run)
 
     async def run(self, cfg):

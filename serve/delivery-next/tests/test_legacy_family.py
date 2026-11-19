@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.state_store import legacy_family
 from owlbear_delivery_next.state_store.legacy_family import Binding
 
@@ -15,7 +16,9 @@ RELEASE_V150 = "cf9f9981f4cbb7f2996b3fa17845fa1e5beaa5f9"
 
 
 def _commit(package: Path) -> None:
-    subprocess.run(["git", "-C", str(package), "add", "-A"], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git add argv with package operands; no shell.
+        [resolve_git_executable(), "-C", str(package), "add", "-A"], check=True, capture_output=True
+    )
     commit = ["git", "-C", str(package), *GIT_IDENTITY, "commit", "-q", "-m", "change"]
     subprocess.run(commit, check=True, capture_output=True)  # noqa: S603
 
@@ -206,8 +209,8 @@ def test_a_shipped_release_build_is_a_proven_binding(commit: str, release_bindin
 
 def test_a_release_runner_mixed_into_the_audited_build_is_an_unknown_build(audited_binding: Binding) -> None:
     blob = subprocess.run(  # noqa: S603 - fixed argv reading a committed blob, no shell
-        [  # noqa: S607
-            "git",
+        [
+            resolve_git_executable(),
             "-C",
             str(Path(__file__).parent),
             "show",

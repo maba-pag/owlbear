@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.state_store import fd_tree, project_home, registry
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.registry import RegistryError
@@ -67,7 +68,9 @@ def test_read_only_clone_id_rejects_a_folder_replaced_during_the_read(tmp_path, 
 def seam(tmp_path, monkeypatch):
     work = tmp_path / "work"
     work.mkdir()
-    subprocess.run(["git", "init", "-q", str(work)], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with work operands; no shell.
+        [resolve_git_executable(), "init", "-q", str(work)], check=True
+    )
     state = Seam(project_home.clone_dir(work))
     real_fsync = os.fsync
     real_save = registry.save

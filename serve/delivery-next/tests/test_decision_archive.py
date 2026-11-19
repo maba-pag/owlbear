@@ -28,6 +28,7 @@ from owlbear_decisions.validate import Finding
 from owlbear_delivery_next.change_contracts.models import Brief, BriefDecision, Change, Decision, Exit, Step, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import brief_tools
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.state_store import (
@@ -62,7 +63,9 @@ class Store:
 def git(cwd: Path, *args: str) -> str:
     if (cwd / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
         args = ("--git-dir=.", *args)
-    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - git callers build fixture Git rev-parse/show/status argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 @pytest.fixture
@@ -495,7 +498,9 @@ def test_a_record_publishes_only_the_decision_files_it_journalled(store, shared_
     assert written == [journal - {record}]  # and the files write_plan returns are the journal's, no more
     assert decision_batch.pending(store.shared) is None
     rel = unchanged.relative_to(root).as_posix()
-    shown = subprocess.run(["git", "show", f"HEAD:{rel}"], cwd=root, check=True, capture_output=True)  # noqa: S603, S607
+    shown = subprocess.run(  # noqa: S603 - Fixture Git show argv with rel operands; no shell.
+        [resolve_git_executable(), "show", f"HEAD:{rel}"], cwd=root, check=True, capture_output=True
+    )
     assert shown.stdout == published  # HEAD still holds the published bytes
     assert unchanged.read_bytes() == OWNER_WIP  # the owner's edit stays theirs, unpublished
     assert git(root, "status", "--porcelain").split() == ["M", unchanged.relative_to(root).as_posix()]

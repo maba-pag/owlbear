@@ -12,6 +12,7 @@ import pytest
 
 from owlbear_decisions import Decision, DecisionError, Link, LinkType, Origin, Scope, State, new_id, snapshot, write
 from owlbear_decisions.snapshot import Snapshot
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.state_store import (
     decision_actions,
@@ -39,7 +40,9 @@ PROJECT = "shop-site"
 def git(cwd: Path, *args: str) -> str:
     if (cwd / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
         args = ("--git-dir=.", *args)
-    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - git callers build fixture Git add/clone/commit/config argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 def checkout(path: Path, remote: Path | None = None) -> DataRepo:

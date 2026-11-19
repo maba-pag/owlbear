@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 from datetime import UTC, datetime
@@ -12,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, git_run, local_home, publication_hold
 from owlbear_delivery_next.local_system.storage_io import open_lock
 from owlbear_delivery_next.machine_host import app, project, serve
@@ -22,7 +24,9 @@ from owlbear_delivery_next.state_store import project_home, registry
 
 def git(cwd: Path, *args: str) -> str:
     who = ["-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "protocol.file.allow=always"]
-    return subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - git callers build fixture Git add/clone/commit/config argv and repository operands; no shell.
+        [resolve_git_executable(), *who, *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 def bare(tmp_path: Path, name: str) -> str:
@@ -316,7 +320,13 @@ def test_an_unfinished_move_is_finished_undone_or_refused(tmp_path: Path, url: s
     if left in {"destination", "neither"}:
         source.rename(dest) if left == "destination" else None
         if left == "neither":
-            subprocess.run(["rm", "-rf", str(source)], check=True)  # noqa: S603, S607
+            rm_executable = shutil.which("rm")
+            if rm_executable is None:
+                message = "rm executable is unavailable"
+                raise FileNotFoundError(message)
+            subprocess.run(  # noqa: S603 - Remove only the fixture-owned temporary directory via fixed rm -rf argv; no shell.
+                [rm_executable, "-rf", str(source)], check=True
+            )
     if left == "both":
         git(tmp_path, "clone", "-q", url, str(dest))
     if left in {"both", "neither"}:
@@ -358,7 +368,9 @@ def test_the_host_clones_a_remote_only_pointer_in_the_background_then_loads_the_
             return False
 
         def wait(self, _seconds: float) -> bool:  # the retry pause: the remote appears meanwhile
-            subprocess.run(["git", "clone", "-q", "--bare", url, str(tmp_path / "late.git")], check=True)  # noqa: S603, S607
+            subprocess.run(  # noqa: S603 - Fixture Git clone argv with tmp_path/url operands; no shell.
+                [resolve_git_executable(), "clone", "-q", "--bare", url, str(tmp_path / "late.git")], check=True
+            )
             return False
 
     machine = SimpleNamespace(

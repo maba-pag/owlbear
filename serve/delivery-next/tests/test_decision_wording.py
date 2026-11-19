@@ -21,6 +21,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
 )
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.state_store import decision_archive, decision_store
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.workflow_steps import brief_round, decisions_gate, lookup, pick
@@ -309,13 +310,19 @@ def test_an_approval_refused_for_an_unreadable_rule_says_and_logs_its_whole_faul
 
 
 def head(root) -> str:
-    out = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True)  # noqa: S607
+    out = subprocess.run(  # noqa: S603 - Fixture Git rev-parse argv with literal operands; no shell.
+        [resolve_git_executable(), "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True
+    )
     return out.stdout.strip()
 
 
 def publish(root) -> str:
-    subprocess.run(["git", "add", "-A"], cwd=root, check=True, capture_output=True)  # noqa: S607
-    subprocess.run(["git", "commit", "-qm", "seed"], cwd=root, check=True, capture_output=True)  # noqa: S607
+    subprocess.run(  # noqa: S603 - Fixture Git add argv with literal operands; no shell.
+        [resolve_git_executable(), "add", "-A"], cwd=root, check=True, capture_output=True
+    )
+    subprocess.run(  # noqa: S603 - Fixture Git commit argv with literal operands; no shell.
+        [resolve_git_executable(), "commit", "-qm", "seed"], cwd=root, check=True, capture_output=True
+    )
     return head(root)
 
 

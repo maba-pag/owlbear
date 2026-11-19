@@ -19,6 +19,7 @@ from owlbear_delivery_next.change_contracts.tools import Worktree
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.git import remote_git
 from owlbear_delivery_next.git.access import Access
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes import command_marks, sdk_adapter
 from owlbear_delivery_next.state_store.store import Store
@@ -59,7 +60,9 @@ def _open(work: Path, kind: StepKind, role: str = "") -> list[str]:
 
 
 def _git(cwd: Path, *args: str) -> str:
-    out = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
+    out = subprocess.run(  # noqa: S603 - _git callers build fixture Git add/branch/init/remote argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=cwd, check=True, capture_output=True, text=True
+    )
     return out.stdout.strip()
 
 
