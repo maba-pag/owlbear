@@ -451,7 +451,7 @@ def commit_batch(memory_dir: Path, *, session_type: str) -> BatchCommitResult:
     if not memory_dir.exists():
         return BatchCommitResult(None)
 
-    if session_type not in _SESSION_TO_ACTOR:  # pragma: no cover
+    if session_type not in _SESSION_TO_ACTOR:
         msg = f"Unsupported session_type: {session_type}"
         raise ValueError(msg)
 
