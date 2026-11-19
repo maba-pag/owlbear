@@ -23,6 +23,7 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next.change_contracts import chat_contract, tools
 from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline
+from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryCurationResult
 from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.commands import chat_client, cli, mcp_server, replay_client, setup
@@ -1249,8 +1250,6 @@ HELD_SLOT = "0123456789abcdef"
 
 def _curation_runs(machine, shared_repo, monkeypatch, gate=None) -> list:
     """Machine curation with a synthetic run that records each start; *gate* holds it open until set."""
-    from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryCurationResult  # noqa: PLC0415
-
     (shared_repo[0] / "shop" / "memory").mkdir(parents=True)
     monkeypatch.setenv("OWLBEAR_DATA", str(shared_repo[0]))
     machine.slots.open()

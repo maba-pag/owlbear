@@ -5,11 +5,13 @@ from __future__ import annotations
 import subprocess
 import time
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
 
-from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, snapshot, write
+from owlbear_decisions import Decision, DecisionError, Link, LinkType, Origin, Scope, State, new_id, snapshot, write
+from owlbear_decisions.snapshot import Snapshot
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.state_store import (
     decision_actions,
@@ -614,8 +616,6 @@ def test_each_git_failure_of_a_save_is_said_whole(shared, monkeypatch, whole_err
     if site == "push-unflagged":  # the flags' round could not run: only the save's own notice is left
         monkeypatch.setattr(decision_store, "_reconcile", lambda *_args: None)
     elif site == "push-gone":  # the rebase removed the file just written
-        from owlbear_decisions.snapshot import Snapshot  # noqa: PLC0415
-
         empty = Snapshot(root, PROJECT, (), (), ())
         monkeypatch.setattr(decision_store, "_reconcile", lambda *_args: decision_store.DataView(empty, "c" * 40))
     if site == "head":
@@ -641,9 +641,6 @@ def test_each_git_failure_of_a_save_is_said_whole(shared, monkeypatch, whole_err
 @pytest.mark.parametrize("site", ["interrupted", "stamp", "journal", "held", "refused"])
 def test_each_journal_or_write_refusal_is_said_whole(shared, monkeypatch, whole_error, site) -> None:
     """The journal's error, a batch's ids and a refused file's reason, whole, in what a read or save says."""
-    from types import SimpleNamespace  # noqa: PLC0415
-
-    from owlbear_decisions import DecisionError  # noqa: PLC0415
 
     def broken(*_args: object, **_kwargs: object) -> None:
         raise decision_batch.JournalError(whole_error)

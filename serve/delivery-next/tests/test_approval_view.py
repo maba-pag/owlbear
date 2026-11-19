@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import contextlib
+import json
 import re
 import socket
+import subprocess
 import threading
 import time
 import uuid
@@ -211,8 +213,6 @@ def rule(title: str, scope: Scope, state: State = State.IN_FORCE) -> Decision:
 @pytest.fixture
 def shared_url(tmp_path: Path, shared_repo) -> Iterator[tuple[str, dict[str, Decision]]]:
     """Change ``flip`` picking a Global, two project (one withdrawn since), a Change and an unknown decision."""
-    import subprocess  # noqa: PLC0415
-
     shared = DataRepo(shared_repo[0])
     shared.claim(PROJECT, "github.com/acme/shop-site")
     rules = {
@@ -587,9 +587,6 @@ def test_an_option_the_question_no_longer_offers_is_not_sent(page_url, left, pds
 @pytest.mark.browser
 def test_a_card_names_the_files_its_activity_touches_without_their_paths(page_url, pds) -> None:
     """The card is a summary: a tool's path shows as its file's name; the detail keeps the whole path."""
-    import json  # noqa: PLC0415
-    import re  # noqa: PLC0415
-
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     _, base = page_url

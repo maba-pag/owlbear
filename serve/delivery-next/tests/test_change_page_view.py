@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 from fastapi.testclient import TestClient
+from playwright.sync_api import expect
 
 from owlbear_delivery_next.change_contracts.decision_records import Pick
 from owlbear_delivery_next.change_contracts.round_records import BRIEF
@@ -66,8 +67,6 @@ def revising(c: Change) -> None:
 
 @pytest.mark.browser
 def test_details_off_then_on(c1, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with opened(c1, pds) as page:
         detail = page.locator("#detail")
         expect(detail.locator(".status")).to_contain_text("approve brief v4")
@@ -119,8 +118,6 @@ def test_details_off_then_on(c1, pds) -> None:
 
 @pytest.mark.browser
 def test_the_shaper_revises_line_names_the_findings(c1, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with opened(c1, pds, revising) as page:
         items = page.locator("#detail .actions")
         expect(items).to_contain_text(
@@ -137,8 +134,6 @@ def test_the_shaper_revises_line_names_the_findings(c1, pds) -> None:
 
 @pytest.mark.browser
 def test_a_version_that_waits_for_you_is_red_and_approve_is_off(c1, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     def disputed(c: Change) -> None:
         revising(c)
         for f in c.loops[BRIEF].findings:
@@ -155,7 +150,6 @@ def test_a_version_that_waits_for_you_is_red_and_approve_is_off(c1, pds) -> None
 @pytest.mark.browser
 def test_partial_state_is_said(c1, pds) -> None:
     """Rounds counted before versions were recorded say so, and the pick still owed says Delivery picks."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     def legacy_and_owed(c: Change) -> None:
         c.loops[BRIEF].verdicts = []
@@ -177,8 +171,6 @@ def test_partial_state_is_said(c1, pds) -> None:
 @pytest.mark.browser
 def test_one_more_challenge_confirms_keeps_focus_and_runs(c1, pds) -> None:
     """#966: v4's revision no challenger read gets one more challenge from its line; approval waits for its verdict."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store = c1[0]
     with opened(c1, pds) as page:
         current = page.locator("#detail .version-list > li").nth(3)
@@ -211,8 +203,6 @@ def test_one_more_challenge_confirms_keeps_focus_and_runs(c1, pds) -> None:
 def test_a_version_saved_after_its_loop_ended_says_when_its_challenge_starts_and_approve_starts_it(c1, pds) -> None:
     """#986: c1's loop ended on v4; the shaper saves v5 as a chat does, sending back what it read. The page says when
     Delivery starts v5's challenge, and Approve starts it now, approving v5 once the round raises nothing."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, app = c1
     http = TestClient(app, base_url="http://127.0.0.1", headers={"authorization": "Bearer tok"})
     said = http.get(f"/api/next/chat/brief/{SLUG}").json()
@@ -268,8 +258,6 @@ def failed(c: Change) -> None:
 
 @pytest.mark.browser
 def test_pick_the_decisions_again_retries_without_a_round(c1_shared, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store = c1_shared[0]
     with opened(c1_shared, pds, failed) as page:
         items = page.locator("#detail .actions")
@@ -295,8 +283,6 @@ def test_pick_the_decisions_again_retries_without_a_round(c1_shared, pds) -> Non
 @pytest.mark.browser
 def test_a_refused_pick_again_says_why(c1_shared, pds) -> None:
     """Delivery started picking between the page's render and the click: the host refuses and the page says why."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store = c1_shared[0]
 
     def picking_meanwhile(route: Any) -> None:

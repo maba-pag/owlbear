@@ -1,7 +1,9 @@
 import contextlib
 import json
+import socket
 import subprocess
 import threading
+import time
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -9,8 +11,10 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+import uvicorn
 from fastapi.testclient import TestClient
 from owlbear_memory import MemoryBusyError, MemoryCategory, MemoryEngine, storage
+from playwright.sync_api import Error, expect, sync_playwright
 
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import curation_apply, data_repo, local_home
@@ -18,6 +22,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.machine_host import curation
 from owlbear_delivery_next.project_host import api, memory_routes, pack_routes
 from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import Store
 
@@ -169,8 +174,6 @@ def test_purge_applies_the_owners_age_unless_one_is_sent_and_the_page_is_told_it
 
 
 def test_purge_without_an_age_and_without_the_setting_is_refused_and_the_page_is_told_why(shared, monkeypatch):
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-
     monkeypatch.setattr(config, "BASE", None)  # production: no layer under the owner's own
     root, _, repo = shared
     store = Store.open(repo)
@@ -584,12 +587,6 @@ def attempt(engine: MemoryEngine, entry) -> type[Exception] | None:
 @contextlib.contextmanager
 def memory_page(store: Store, pds: Any, query: str = "") -> Iterator[Any]:
     """The Memory page in a real browser: only the test host and the PDS CDN answer."""
-    import socket  # noqa: PLC0415
-    import time  # noqa: PLC0415
-
-    import uvicorn  # noqa: PLC0415
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
@@ -623,8 +620,6 @@ def refreshed(page: Any) -> None:
 @pytest.mark.browser
 def test_browser_edit_filter_and_settings_navigation_preserve_drafts_and_project(shared, pds):
     """TD-264: the draft lives in page state, so a filter that removes the cards above it keeps what was typed."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     root, _, repo = shared
     store = Store.open(repo)
     folder = root / store.name / "memory"
@@ -664,8 +659,6 @@ def test_browser_edit_filter_and_settings_navigation_preserve_drafts_and_project
 @pytest.mark.browser
 def test_the_deleted_section_removes_entries_deleted_before_the_owners_purge_age(shared, pds):
     """TD-416: the Memory page's purge; only entries deleted as long ago as the owner's age, here 14 days, go."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     root, _, repo = shared
     store = Store.open(repo)
     folder = root / store.name / "memory"
@@ -690,10 +683,6 @@ def test_the_deleted_section_removes_entries_deleted_before_the_owners_purge_age
 
 @pytest.mark.browser
 def test_an_unset_purge_age_disables_the_removal_and_says_why_with_a_link_to_the_setting(shared, pds, monkeypatch):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-
     monkeypatch.setattr(config, "BASE", None)  # production: no layer under the owner's own
     root, _, repo = shared
     store = Store.open(repo)
@@ -713,8 +702,6 @@ def test_an_unset_purge_age_disables_the_removal_and_says_why_with_a_link_to_the
 @pytest.mark.browser
 def test_approving_one_memory_leaves_the_next_ones_button_ready(shared, pds):
     """Sol, TD-264: a finished action's busy state never moves to the card that takes its place."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     root, _, repo = shared
     store = Store.open(repo)
     folder = root / store.name / "memory"

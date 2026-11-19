@@ -18,10 +18,11 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import api, config_routes
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import model_choices
-from owlbear_delivery_next.settings import carried, roles
+from owlbear_delivery_next.settings import carried, config, roles
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT as F
 from owlbear_delivery_next.settings.config import Layer
-from owlbear_delivery_next.state_store import profile_share, project_home, roles_move
+from owlbear_delivery_next.settings.improvement import ALLOWED, CATEGORIES, Spotter
+from owlbear_delivery_next.state_store import machine_settings, profile_share, project_home, roles_move
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
 AUTH = {"authorization": "Bearer t"}
@@ -114,9 +115,6 @@ def test_a_project_save_needs_the_revision_it_was_based_on(store):
 
 
 def test_recommendations_cover_current_required_settings_without_filling_any_layer(store, monkeypatch):
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-    from owlbear_delivery_next.state_store import machine_settings  # noqa: PLC0415
-
     monkeypatch.setattr(config, "BASE", None)
     monkeypatch.setattr(machine_settings, "BASE", None)
     got = client(store, headers=AUTH).get("/api/next/config").json()
@@ -266,9 +264,6 @@ def test_an_invalid_project_layer_is_refused_and_nothing_changes(store, layer):
 
 
 def test_the_spotter_learns_by_global_and_a_project_may_turn_it_off() -> None:
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-    from owlbear_delivery_next.settings.improvement import Spotter  # noqa: PLC0415
-
     on = config.resolve(None, config.Layer())
     off = config.resolve(config.GlobalLayer(), config.Layer(spotter=Spotter(switch="off")))
     spotter = on.agents["spotter"]
@@ -284,8 +279,6 @@ def test_the_spotter_learns_by_global_and_a_project_may_turn_it_off() -> None:
 
 
 def test_the_page_gets_each_categorys_allowed_actions_from_the_matrix(store):
-    from owlbear_delivery_next.settings.improvement import ALLOWED, CATEGORIES  # noqa: PLC0415
-
     got = client(store, headers=AUTH).get("/api/next/config").json()["settings"]["spotter_actions"]
     assert got == {
         "hand_off_fitness": ["record", "show-owner", "steer", "refuse-hand-off"],

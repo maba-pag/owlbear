@@ -14,13 +14,17 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 import pytest
+import uvicorn
+from fastapi.testclient import TestClient
+from playwright.sync_api import Error, expect, sync_playwright
 
 from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, write
+from owlbear_delivery_next.local_system import publication_hold
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import decision_store
+from owlbear_delivery_next.state_store import decision_batch, decision_store, decision_sync
 from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
@@ -62,9 +66,6 @@ def store(tmp_path, shared_repo) -> Store:
 @contextlib.contextmanager
 def decisions_page(store: Store, pds: Any, query: str = "") -> Iterator[Any]:
     """The Decisions page, with *query*, in a real browser: only the test host and the PDS CDN answer."""
-    import uvicorn  # noqa: PLC0415
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         server = uvicorn.Server(uvicorn.Config(api.create_app(store, "tok", Host()), log_level="warning"))
@@ -99,8 +100,6 @@ def in_force(store: Store, project: str = PROJECT) -> dict[str, Decision]:
 def open_entry(pds: Any, card: Any) -> None:
     """Open a listed decision as a person does: by its summary, the accordion's own button; then wait, as he does,
     until its detail has slid into place."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     card.locator("summary").click()
     expect(card.locator("#detail")).to_be_visible()
     pds.settled(card.page)
@@ -108,8 +107,6 @@ def open_entry(pds: Any, card: Any) -> None:
 
 def begin(pds: Any, card: Any, action: str) -> None:
     """Open the form of *action* on an open decision, then wait until the entry has grown into place around it."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     card.get_by_role("button", name=action).click()
     expect(card.locator(".form")).to_be_visible()
     pds.settled(card.page)
@@ -126,8 +123,6 @@ def held_once(page: Any, held: list[Any]) -> Any:
 
 @pytest.mark.browser
 def test_a_missing_linked_decision_is_said(store, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with decisions_page(store, pds, f"?decision={new_id()}") as page:
         missing = re.compile("no such decision in this project's view", re.IGNORECASE)
         expect(page.locator("#error")).to_contain_text(missing)
@@ -138,8 +133,6 @@ def test_a_missing_linked_decision_is_said(store, pds):
 @pytest.mark.browser
 def test_a_linked_decision_opens_once_the_list_can_be_read(store, pds):
     """#996 review: a first list read that fails keeps the linked decision waiting; the next read opens it."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     rule = in_force(store)["Notes live in one SQLite table."]
     with decisions_page(store, pds) as page:
         base = page.url.split("/decisions")[0]
@@ -157,8 +150,6 @@ def test_a_linked_decision_opens_once_the_list_can_be_read(store, pds):
 
 @pytest.mark.browser
 def test_a_late_global_list_cannot_name_or_retarget_the_owlbear_list(store, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     write(make(project="owlbear", title="Lint once", statement="Linted once.", inherited=True),
           store.shared.root / "owlbear")  # fmt: skip
     with decisions_page(store, pds) as page:
@@ -190,8 +181,6 @@ def test_a_late_global_list_cannot_name_or_retarget_the_owlbear_list(store, pds)
 
 @pytest.mark.browser
 def test_a_form_opened_in_one_scope_stays_in_it_when_the_owner_switches_scope(store, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     write(make(project="owlbear", title="Lint once", statement="Linted once.", inherited=True),
           store.shared.root / "owlbear")  # fmt: skip
     with decisions_page(store, pds) as page:
@@ -220,8 +209,6 @@ def test_a_form_opened_in_one_scope_stays_in_it_when_the_owner_switches_scope(st
 
 @pytest.mark.browser
 def test_a_confirmed_write_still_in_flight_keeps_the_scope_it_was_confirmed_in(store, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     write(make(project="owlbear", title="Lint once", statement="Linted once.", inherited=True),
           store.shared.root / "owlbear")  # fmt: skip
     with decisions_page(store, pds) as page:
@@ -246,8 +233,6 @@ def test_a_confirmed_write_still_in_flight_keeps_the_scope_it_was_confirmed_in(s
 
 @pytest.mark.browser
 def test_the_owner_filters_opens_and_replaces_a_decision_and_sees_its_receipt(store, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with decisions_page(store, pds) as page:
         expect(page.locator("#shown")).to_have_text("2 of 2 shown")
         boxes = page.locator("#filters > *").evaluate_all(
@@ -299,8 +284,6 @@ def test_the_owner_filters_opens_and_replaces_a_decision_and_sees_its_receipt(st
 
 @pytest.mark.browser
 def test_a_decided_decision_is_replaced_only_once_the_owner_ticks_that_he_re_decides_it(store, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     rule = make(title="Tags are free text", statement="Any tag.", origin=Origin.DECIDED, read_back="2026-10-20")
     write(rule, store.shared.root / PROJECT)
     with decisions_page(store, pds) as page:
@@ -325,8 +308,6 @@ def test_a_decided_decision_is_replaced_only_once_the_owner_ticks_that_he_re_dec
 
 @pytest.mark.browser
 def test_the_owner_resolves_a_three_way_conflict_by_keeping_one(store, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     old = make(title="Exports", statement="Exports are CSV.", state=State.REPLACED)
     succeeding = (Link(type=LinkType.REPLACES, target=old.id),)
     write(old, store.shared.root / PROJECT)
@@ -351,8 +332,6 @@ def test_the_owner_resolves_a_three_way_conflict_by_keeping_one(store, pds):
 
 @pytest.mark.browser
 def test_an_entry_shows_a_cut_off_statement_once_and_opens_from_the_keyboard(store, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     said = "Builds run nightly at 01:00 on the shared runner."
     write(make(title="Builds run night…", statement=said, read_back="pending", read_back_why="Asked again.",
                read_back_kind="uncertain"), store.shared.root / PROJECT)  # fmt: skip
@@ -378,8 +357,6 @@ def test_an_entry_shows_a_cut_off_statement_once_and_opens_from_the_keyboard(sto
 
 @pytest.mark.browser
 def test_a_draft_leads_with_activate_and_withdrawing_stands_apart_and_asks_first(store, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     draft = make(title="Exports go nightly", statement="Exports run at 02:00.", state=State.DRAFT)
     write(draft, store.shared.root / PROJECT)
     with decisions_page(store, pds) as page:
@@ -407,8 +384,6 @@ def test_a_draft_leads_with_activate_and_withdrawing_stands_apart_and_asks_first
 
 @pytest.mark.browser
 def test_the_owner_reads_back_a_queued_decision_and_shows_owlbears_own_decisions(store, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     rule = make(title="Exports are CSV", statement="Exports are CSV.", read_back="pending",
                 read_back_why="A partner asked for JSON.", read_back_kind="uncertain")  # fmt: skip
     write(rule, store.shared.root / PROJECT)
@@ -439,8 +414,6 @@ def test_the_owner_reads_back_a_queued_decision_and_shows_owlbears_own_decisions
 
 @pytest.mark.browser
 def test_the_owner_marks_a_decided_decision_he_never_made_approved(store, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     rule = make(title="Windows stay paused", statement="Paused.", origin=Origin.DECIDED, read_back="2026-10-21")
     write(rule, store.shared.root / PROJECT)
     with decisions_page(store, pds) as page:
@@ -462,8 +435,6 @@ def test_the_owner_marks_a_decided_decision_he_never_made_approved(store, pds):
 
 @pytest.mark.browser
 def test_the_read_back_queue_asks_with_one_primary_and_withdrawing_is_never_it(store, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     for title in ("Invoices are PDF", "Builds run nightly"):
         write(make(title=title, statement=f"{title}.", read_back="pending", read_back_why="Asked again.",
                    read_back_kind="uncertain"), store.shared.root / PROJECT)  # fmt: skip
@@ -516,8 +487,6 @@ def test_the_read_back_queue_asks_with_one_primary_and_withdrawing_is_never_it(s
 
 @pytest.mark.browser
 def test_the_owner_checks_a_replacements_impact_and_schedules_its_fixes(store, pds, github):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     old = make(title="Exports are CSV", statement="Exports are CSV.", state=State.REPLACED)
     new = make(title="Exports are JSON", statement="Exports are JSON.", links=(Link(type=LinkType.REPLACES,
                target=old.id),), rationale="Effect on existing work: it forbids existing behaviour")  # fmt: skip
@@ -561,8 +530,6 @@ def logged(caplog) -> list[str]:
 @pytest.mark.browser
 def test_a_refused_save_shows_its_whole_notice(store, pds, whole_error, failing_git, caplog):
     """The receipt's notice, as `said()` words it with ids named by title (none in the message), and its log line."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     rule = make(title="Exports are CSV", statement="Exports are CSV.", read_back="pending",
                 read_back_why="Asked again.", read_back_kind="uncertain")  # fmt: skip
     write(rule, store.shared.root / PROJECT)
@@ -585,10 +552,6 @@ def test_a_refused_save_shows_its_whole_notice(store, pds, whole_error, failing_
 def test_an_error_or_a_failed_save_shows_its_ids_and_paths_as_produced(store, pds, monkeypatch, whole_error):
     """An error and a not-saved receipt's notice say what failed exactly as produced, a decision's file and its bare
     id included, though the page knows its title; the receipt still names the decision by title."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
-    from owlbear_delivery_next.state_store import decision_batch, decision_sync  # noqa: PLC0415
-
     rule = make(title="Exports are CSV", statement="Exports are CSV.", read_back="pending",
                 read_back_why="Asked again.", read_back_kind="uncertain")  # fmt: skip
     write(rule, store.shared.root / PROJECT)
@@ -620,8 +583,6 @@ def test_an_error_or_a_failed_save_shows_its_ids_and_paths_as_produced(store, pd
 
 
 def owner(store: Store) -> Any:
-    from fastapi.testclient import TestClient  # noqa: PLC0415
-
     return TestClient(api.create_app(store, "tok", Host()), base_url="http://127.0.0.1",
                       headers={"authorization": "Bearer tok"})  # fmt: skip
 
@@ -644,9 +605,6 @@ def replaced(store: Store) -> Decision:
 )
 def test_a_refused_save_answers_its_whole_notice(store, monkeypatch, whole_error, failing_git, caplog, failure, route):  # noqa: PLR0913, PLR0917 - its fixtures
     """The receipts `said()` words on the page (as above), or the 409 it shows, and the host log's line, each whole."""
-    from owlbear_delivery_next.local_system import publication_hold  # noqa: PLC0415
-    from owlbear_delivery_next.state_store import decision_batch  # noqa: PLC0415
-
     new = replaced(store)
     probe = ("rev-parse", "--git-path", publication_hold.RECORD)
     if failure == "held":  # the held publication's probe fails before the push and again before the rebase
