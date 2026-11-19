@@ -228,7 +228,7 @@ def _shared_notice(machine: Machine) -> str:
 def _routes(machine: Machine) -> APIRouter:
     routes = APIRouter(prefix="/api/next")
 
-    def answer(work: Callable[[], Any]) -> Any:  # noqa: ANN401 - each route's own answer
+    def answer[T](work: Callable[[], T]) -> T:
         try:
             return work()
         except MachineError as exc:

@@ -14,7 +14,7 @@ import shutil
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated
 
 from pydantic import ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 
@@ -59,7 +59,7 @@ class Settings(MachineValues):
 
     @model_validator(mode="before")
     @classmethod
-    def _one_switch(cls, data: Any) -> Any:  # noqa: ANN401 - the raw settings
+    def _one_switch(cls, data: object) -> object:
         """Format 4's one switch for both triggers becomes their two settings: on, or on even while paused."""
         if isinstance(data, dict) and "curate_while_paused" in data:
             data = dict(data)
@@ -74,7 +74,7 @@ BUDGETS_GONE = 8  # the format without them
 _BUDGET: TypeAdapter[int | None] = TypeAdapter(Annotated[int, Field(ge=0)] | None)  # as format 7 read them: lax
 
 
-def _budgets_dropped(settings: Any) -> Any:  # noqa: ANN401 - the raw settings
+def _budgets_dropped(settings: object) -> object:
     """Format 7's daily budgets leave *settings* (D-01M5XCD49YHHR1NQKKY8TQD0C3); one format 7 refused is refused."""
     if not isinstance(settings, dict) or not any(k in settings for k in DAILY):
         return settings
@@ -101,7 +101,7 @@ class Machine(Record):
 
     @model_validator(mode="before")
     @classmethod
-    def _no_daily_budgets(cls, data: Any) -> Any:  # noqa: ANN401 - the raw registry
+    def _no_daily_budgets(cls, data: object) -> object:
         """Before format 8, the daily budgets leave the machine's settings and a move's kept values.
 
         From format 8 on, a budget is an unknown field and refused.

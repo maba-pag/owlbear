@@ -61,7 +61,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Unpack
 
 from owlbear_delivery_next.git.command_failure import failure, rpc_failure
 from owlbear_delivery_next.improvement import acts, card, cases, credit_meter
@@ -81,6 +81,8 @@ from owlbear_delivery_next.state_store import spotter_test
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Mapping
+
+    from owlbear_delivery_next.improvement.spotter_store import RecordFields
 
 PROMPT = cases.PROMPT  # the prompt file; what a look sends is ``Context.prompt``, frozen with its examples
 RUNNING = 2  # looks at once per step
@@ -200,7 +202,7 @@ async def through(task: asyncio.Future[Any]) -> None:
         raise asyncio.CancelledError
 
 
-def offload[T](work: Callable[..., T], *args: Any) -> asyncio.Future[T]:  # noqa: ANN401 - the work's arguments
+def offload[T, *Args](work: Callable[[*Args], T], *args: *Args) -> asyncio.Future[T]:
     """Run *work* on the Spotter's own threads: a step's end never waits for it, and a stopped wait never drops it."""
     return asyncio.shield(asyncio.wrap_future(WORK.submit(work, *args)))
 
@@ -288,7 +290,7 @@ class Spotter:
     def handed_off(
         self,
         call_id: str,
-        arguments: Any,  # noqa: ANN401 - the submit tool's JSON arguments
+        arguments: object,
         *,
         held: bool = False,
     ) -> asyncio.Future[str | None] | None:
@@ -327,7 +329,7 @@ class Spotter:
         return task
 
     def _record(self, look: str, probability: float, moment: dict[str, Any], ctx: Context | None = None,
-                **fields: Any) -> Record:  # noqa: ANN401 # fmt: skip
+                **fields: Unpack[RecordFields]) -> Record:  # fmt: skip
         ctx = ctx or self.ctx
         return Record(id=uuid.uuid4().hex[:12], at=datetime.now(UTC).isoformat(timespec="seconds"),
                       project=ctx.project, change=ctx.change, step=ctx.step, session=self.session(), look=look,

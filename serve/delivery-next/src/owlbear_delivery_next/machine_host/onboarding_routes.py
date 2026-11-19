@@ -28,7 +28,7 @@ def router(machine: Machine) -> APIRouter:
     routes = APIRouter(prefix="/onboarding")
     jobs = machine.onboarding
 
-    def answer(work: Callable[[], Any]) -> Any:  # noqa: ANN401 - each route's own answer
+    def answer[T](work: Callable[[], T]) -> T:
         try:
             return work()
         except OnboardingError as exc:

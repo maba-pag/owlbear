@@ -21,6 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
 
+    from playwright.sync_api import Page
+
     from owlbear_delivery_next.impeccable.pack_files import Installed
 
 QUIET = {"IMPECCABLE_NO_UPDATE_CHECK": "1", "IMPECCABLE_NO_TELEMETRY": "1", "DO_NOT_TRACK": "1"}
@@ -138,7 +140,7 @@ def scan_url(pack: Installed, url: str, width: int, browser: str, cwd: Path) -> 
     return _engine(pack, ["--viewport", f"{width}x800", url], cwd, browser)
 
 
-def scan_page(page: Any, pack: Installed) -> list[Finding]:  # noqa: ANN401 - a Playwright page
+def scan_page(page: Page, pack: Installed) -> list[Finding]:
     """The detector inside a page Delivery rendered: call it after the screenshot, which it leaves unchanged.
 
     A page whose Content-Security-Policy forbids WebAssembly refuses it.
