@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 import uvicorn
+from playwright.sync_api import Error, expect, sync_playwright
 
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_contracts.merge_records import Pullback
@@ -128,8 +129,6 @@ def data(monkeypatch, shared_repo) -> Path:
 
 @pytest.fixture
 def host(tmp_path: Path, monkeypatch, pds, request) -> Iterator[Host2]:
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     if "data" in request.fixturenames:
         request.getfixturevalue("data")
 
@@ -166,8 +165,6 @@ def host(tmp_path: Path, monkeypatch, pds, request) -> Iterator[Host2]:
 
 def held_with(scope: Any, name: str, why: str | re.Pattern[str]) -> None:
     """The button *name* in *scope* is there, its native button disabled, and its PDS button says why."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     button = scope.get_by_role("button", name=name, exact=True)
     expect(button).to_have_count(1)
     expect(button).to_be_disabled(timeout=WAIT)
@@ -178,8 +175,6 @@ def held_with(scope: Any, name: str, why: str | re.Pattern[str]) -> None:
 
 @pytest.mark.browser
 def test_the_changes_page_names_the_blocked_project_and_holds_only_its_starting_buttons(host) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     page, base, a, b = host.page, host.base, host.ids["alpha"], host.ids["beta"]
     page.goto(f"{base}/#token=t")
     banner = page.locator("#blocked")
@@ -216,8 +211,6 @@ def test_the_changes_page_names_the_blocked_project_and_holds_only_its_starting_
 
 @pytest.mark.browser
 def test_new_change_offers_only_projects_whose_work_may_start_and_follows_the_poll(host, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     page, base, b = host.page, host.base, host.ids["beta"]
     page.goto(f"{base}/#token=t")
     expect(page.locator("#blocked")).to_have_attribute("state", "warning", timeout=WAIT)
@@ -242,8 +235,6 @@ def test_new_change_offers_only_projects_whose_work_may_start_and_follows_the_po
 
 @pytest.mark.browser
 def test_an_unreadable_layer_is_named_with_its_reason_and_an_unset_interval_blocks_every_project(host, request) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     page, base = host.page, host.base
     host.stores["alpha"].config_path.write_text("{")
     try:
@@ -267,8 +258,6 @@ def test_an_unreadable_layer_is_named_with_its_reason_and_an_unset_interval_bloc
 @pytest.mark.timeout(180)  # five settings changes, each seen at the machine's next 5 s poll
 @pytest.mark.usefixtures("data")
 def test_maintenance_holds_curation_and_a_test_review_only_where_work_may_not_start(host) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     page, base, a = host.page, host.base, host.ids["alpha"]
     page.goto(f"{base}/#token=t")
     page.goto(f"{base}/maintenance?project={a}")
@@ -308,8 +297,6 @@ def test_maintenance_holds_curation_and_a_test_review_only_where_work_may_not_st
 @pytest.mark.timeout(180)  # five settings changes, each seen at the machine's next 5 s poll
 @pytest.mark.usefixtures("github")
 def test_the_backlog_holds_create_change_where_work_may_not_start_and_follows_the_poll(data, host, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     page, base, b = host.page, host.base, host.ids["beta"]
     for title, kind, projects in (("Alpha only", "improvement", ["alpha"]), ("Every project", "idea", [])):
         backlog = Backlog(DataRepo(data), "alpha")

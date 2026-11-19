@@ -6,6 +6,7 @@ import time
 from datetime import UTC, datetime
 
 import pytest
+from playwright.sync_api import expect
 
 from owlbear_delivery_next.change_contracts.models import Change, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_flow.status import Activity
@@ -44,8 +45,6 @@ def logged(store: Store, lock: Lock, sid: str, role: str, event: str, **more: ob
 
 @pytest.mark.browser
 def test_the_shown_stage_follows_a_builders_and_a_reviewers_events(tmp_path, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store = Store(tmp_path)
     store.write(Lock("c1"), Change(slug="c1", plan=PLAN, step=Step(kind=StepKind.BUILD, task="t1",
                                                                   started_at=datetime.now(UTC))))  # fmt: skip

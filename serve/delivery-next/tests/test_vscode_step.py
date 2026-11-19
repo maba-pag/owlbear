@@ -13,6 +13,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from websockets.datastructures import Headers
+from websockets.exceptions import InvalidStatus
+from websockets.http11 import Response
 
 from owlbear_delivery_next.runtimes import ahp, readiness, vscode_adapter, vscode_step
 from owlbear_delivery_next.runtimes.ahp import HostError
@@ -751,10 +754,6 @@ def test_a_stale_host_s_whole_error_reaches_the_shaping_outcome_and_host_log(
     plain: Path, monkeypatch, caplog, whole_error: str, failing: str
 ) -> None:
     """#971: each way the published host fails says its error whole, notes and close reasons included."""
-    from websockets.datastructures import Headers  # noqa: PLC0415 - only this test raises the library's own
-    from websockets.exceptions import InvalidStatus  # noqa: PLC0415
-    from websockets.http11 import Response  # noqa: PLC0415
-
     servers: list[socket.socket] = []
     if failing == "server closed":
         path, server = _host(_close_with_a_reason)

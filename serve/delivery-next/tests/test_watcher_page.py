@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from fastapi.testclient import TestClient
+from playwright.sync_api import expect
 
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.project_host import api
@@ -101,8 +102,6 @@ def page_url(store) -> Iterator[str]:
 
 @pytest.mark.browser
 def test_the_watcher_list_shows_observed_writes_and_unclassified_calls_apart_and_the_row_counts(page_url, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with opened(page_url, "flip", pds, details=True) as page:
         expect(page.locator("#changes").get_by_text("2 outside writes observed")).to_be_visible()
         section = page.locator("section.info").filter(has=page.get_by_role("heading", name="Watcher"))

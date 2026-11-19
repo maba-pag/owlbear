@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
@@ -19,10 +20,11 @@ from owlbear_delivery_next.local_system import data_place, data_repo, leases, lo
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import versions
 from owlbear_delivery_next.runtimes import model_choices, settings_seen
+from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import CONFIG_FORMAT
 from owlbear_delivery_next.settings.improvement import ALLOWED, CATEGORIES
-from owlbear_delivery_next.state_store import registry, settings_carry
-from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store
+from owlbear_delivery_next.state_store import machine_settings, registry, settings_carry
+from owlbear_delivery_next.state_store.store import MACHINE_SETTINGS, Store, read_layer
 
 from .test_config_api import offered_model, prices
 from .test_machine_pages import _git, browsing, clone, errors, until
@@ -454,8 +456,6 @@ def test_an_address_opens_its_group_and_an_unset_setting_s_link_its_row(local_st
     """Each group has an address, back and forward follow them; an old address of a section or row, or of the former
     Runs group, opens its group there, and the overview's unset list links each setting's row (GW8RT6); a group with
     three or fewer unset names them all (D-01M66B6GS0HKACV9C4R4QKFX7T)."""
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"sessions": None}))
     with settings_page(local_store, pds, before_goto=hold_linked_verifier_control) as page:
         linked_verifier_survives_model_arrival(page)
@@ -568,8 +568,6 @@ def test_the_filter_shows_only_the_unset_set_or_unsaved_rows_and_a_link_to_a_row
 ) -> None:
     """A group's rows can be narrowed to the unset ones, those the layer sets and its unsaved edits; a panel left
     without a row goes too, and a link to a row names it whatever the filter hid."""
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"sessions": None}))
     with settings_page(store, pds) as page:
         rows, none = page.locator("p-table-row[data-setting]:visible"), page.locator("#filter-none")
@@ -880,8 +878,6 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
     store, pds, monkeypatch
 ) -> None:
     """Code ships no defaults (2026-10-23): unset values are errors on the page, never filled from code."""
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-
     monkeypatch.setattr(config, "BASE", None)
     with settings_page(store, pds) as page:
         errors: list[str] = []
@@ -919,9 +915,6 @@ def test_with_no_layer_setting_anything_the_page_names_every_unset_value_and_a_s
 
 def _layered(store: Store, monkeypatch, glob: dict, machine: dict, project: dict) -> None:
     """Only these three layers set anything: no built-in layer under Global."""
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-    from owlbear_delivery_next.state_store import machine_settings  # noqa: PLC0415
-
     monkeypatch.setattr(config, "BASE", None)
     monkeypatch.setattr(machine_settings, "BASE", None)
     for path, model, values in ((store.global_path, config.GlobalLayer, glob),
@@ -1187,8 +1180,6 @@ def _saved_by_keyboard(page, pds, button: str, whose: str) -> None:
 
 @pytest.mark.browser
 def test_guardrail_controls_serialize(local_store, pds, monkeypatch) -> None:
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-
     actions = {
         "hand_off_fitness": "refuse-hand-off",
         "course_and_constraints": "stop-and-ask",
@@ -1233,9 +1224,6 @@ FALLBACK = "maba-pag (gh has no account for the owner acme)"
 @pytest.mark.timeout(90)  # one walk through both layers, a reload and the error state takes about 40 s
 def test_the_github_account_shows_the_account_it_resolves_to_in_each_layer(store, pds, monkeypatch, fake_gh) -> None:
     """TD-402: unset until a layer sets it; repository-owner shows the account TD-402's rule gives on the origin."""
-    from owlbear_delivery_next.settings import config  # noqa: PLC0415
-    from owlbear_delivery_next.state_store.store import read_layer  # noqa: PLC0415
-
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update={"github_account": None}))
     with settings_page(store, pds) as page:
         url, row = page.url.split("#")[0], page.locator("#set-github_account")
@@ -1940,8 +1928,6 @@ def test_read_again_updates_every_surface_and_keeps_drafts(tmp_path: Path, monke
 @pytest.mark.browser
 @pytest.mark.timeout(120)
 def test_an_open_page_follows_reads_and_dismissals_made_elsewhere(tmp_path: Path, monkeypatch, pds, outside) -> None:
-    import re  # noqa: PLC0415
-
     a = registry.register(clone(tmp_path / "alpha"))
     with browsing(monkeypatch, pds) as (page, base):
         said = errors(page)
@@ -2092,8 +2078,6 @@ def test_a_notice_shows_old_to_new_its_overrides_and_its_link_opens_the_row(
 @pytest.mark.timeout(180)
 @pytest.mark.usefixtures("outside")
 def test_dismiss_one_in_settings_and_all_from_changes(tmp_path: Path, monkeypatch, pds) -> None:
-    import re  # noqa: PLC0415
-
     a = registry.register(clone(tmp_path / "alpha"))
     with browsing(monkeypatch, pds) as (page, base):
         said, batches = errors(page), []

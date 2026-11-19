@@ -19,6 +19,7 @@ from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.machine_host import app, command, control, install
 from owlbear_delivery_next.runtimes import settings_read
 from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.state_store.store import Store, StoreError
 
 
 def test_help_and_completion_load_no_command_module() -> None:
@@ -240,8 +241,6 @@ def test_doctor_says_a_tool_that_does_not_run_and_a_project_it_cannot_read_whole
 ) -> None:
     """#971: doctor says a tool whose start failed or that exited non-zero, and a project whose store could not be read,
     whole: type, notes and all the tool printed included."""
-    from owlbear_delivery_next.state_store.store import Store, StoreError  # noqa: PLC0415
-
     error = (StoreError if failing == "store" else OSError)(whole_error)
     error.add_note("a note on the failure")
     whole = f"{type(error).__name__}: {whole_error}\na note on the failure"

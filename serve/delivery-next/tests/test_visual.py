@@ -9,8 +9,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
+import playwright.sync_api
 import pytest
 from fastapi.testclient import TestClient
+from playwright.sync_api import Error
 from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts import tools
@@ -1177,8 +1179,6 @@ class _Missing:
         self.chromium = SimpleNamespace(launch=self.launch)
 
     def launch(self, *, headless, channel):
-        from playwright.sync_api import Error  # noqa: PLC0415 - the optional runtime's error type
-
         assert headless
         self.tried.append(channel)
         raise Error(self.errors[channel])
@@ -1191,8 +1191,6 @@ class _Missing:
 
 
 def test_the_installed_browser_is_tried_first_and_only_missing_browsers_fall_through(tmp_path, monkeypatch):
-    import playwright.sync_api  # noqa: PLC0415 - patched where capture imports it
-
     gone = {"chrome": "Chromium distribution 'chrome' is not found at /x", "msedge": "… is not found at /y"}
     pw = _Missing(gone | {None: "Executable doesn't exist at /z; run playwright install"})
     monkeypatch.setattr(playwright.sync_api, "sync_playwright", lambda: pw)
