@@ -34,9 +34,9 @@ def _refresh(ctx: engine.Ctx, c: Change) -> tuple[Change, loop.StepResult | None
         return c, gate
     state = follow.ci(ctx, pr, names)
     c = follow.episode(ctx, c, pr.head_sha, state)
-    if state.missing:
+    if state.missing and not (state.failed or state.running):
         return follow.missing(ctx, c, pr, state)
-    if state.running:
+    if state.running and not state.failed:
         return c, follow.waiting(state, ctx)
     task = next(t for t in c.plan.tasks if t.id == r.task) if c.plan else None
     if task is None:
