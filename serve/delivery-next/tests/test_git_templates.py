@@ -12,7 +12,7 @@ def test_a_copied_template_repository_starts_no_background_maintenance(change_re
     clone, remote = shared_repo
     for repo in (change_repo / ".git", clone / ".git", remote):
         found = [
-            subprocess.run(  # noqa: S603
+            subprocess.run(  # noqa: S603 - Resolved Git reads fixed maintenance keys from fixture config files.
                 [resolve_git_executable(), "config", "--file", str(repo / "config"), "--get", key],
                 capture_output=True,
                 text=True,

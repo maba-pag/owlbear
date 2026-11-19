@@ -241,7 +241,8 @@ def _fill(repo, options, environment, host="github.com"):
     if git_executable is None:
         message = "git executable is unavailable"
         raise FileNotFoundError(message)
-    done = subprocess.run(  # noqa: S603
+    # fake_gh owns the credential-helper options and child environment; Git receives separate argv, never a shell.
+    done = subprocess.run(  # noqa: S603 - Resolved Git and fixture-owned credential-fill options/environment.
         (git_executable, "-C", str(repo), *options, "credential", "fill"),
         input=asked, capture_output=True, text=True, env=environment, check=True,
     )  # fmt: skip

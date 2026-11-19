@@ -723,7 +723,7 @@ def test_this_machine_s_layer_sits_between_global_and_project_and_stays_local(st
         assert reloaded["inherited"]["project"][key] == machine[key]
         assert reloaded["inherited"]["machine"][key] == glob[key]
     assert reloaded["settings"]["prefs"] == project["prefs"]
-    shown = subprocess.run(  # noqa: S603
+    shown = subprocess.run(  # noqa: S603 - Resolved Git reads the fixture's bare remote with fixed log argv; no shell.
         [resolve_git_executable(), "--git-dir", str(remote), "log", "--format=%s", "main"],
         check=True, capture_output=True, text=True,
     ).stdout  # fmt: skip
