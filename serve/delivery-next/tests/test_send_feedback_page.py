@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
+from playwright.sync_api import expect
 
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.project_host import api
@@ -101,7 +102,6 @@ def answer_button(form: Any) -> Any:
 @pytest.mark.browser
 def test_a_refused_lost_or_unanswered_answer_unlocks_its_form_and_says_so(page_url, pds) -> None:
     """AC-1, AC-2, AC-4..AC-7, AC-9: one request per click, only the sent form locks, each outcome on the button."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     _store, base = page_url
     with opened(base, pds) as page:
@@ -158,7 +158,6 @@ def test_a_refused_lost_or_unanswered_answer_unlocks_its_form_and_says_so(page_u
 @pytest.mark.browser
 def test_an_accepted_answer_shows_its_checkmark_for_a_second_before_the_form_changes(page_url, pds) -> None:
     """AC-1, AC-3, AC-8, AC-9: the checkmark holds the form; one that stays comes back reset, motion reduced or not."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
     with opened(base, pds) as page:
@@ -204,7 +203,6 @@ def test_new_change_through_the_chooser_loads_until_the_chat_opens_then_shows_it
     tmp_path: Path, monkeypatch, pds
 ) -> None:
     """AC-10: the chooser's Continue goes at once; New Change shows the launch, which a chat that opened ends sent."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     launched = chats(monkeypatch)
     for name in ("alpha", "beta"):
@@ -235,7 +233,6 @@ def test_a_follow_up_with_no_answer_in_30_s_is_not_confirmed_and_locks_its_row_a
     tmp_path: Path, monkeypatch, pds
 ) -> None:
     """AC-5, AC-7, AC-10: a Change's follow-up keeps its 30 s timeout; another follow-up row stays usable."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     with machine_page(tmp_path, monkeypatch, pds) as w:
         page, held = w.page, []
