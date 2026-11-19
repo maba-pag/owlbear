@@ -242,7 +242,7 @@ def _race(warmth, shared: DataRepo, message: str) -> None:
 
     def raced(where, project):
         seen = real(where, project)
-        head = decision_store._head(shared)  # noqa: SLF001
+        head = decision_store.head(shared)
         generation = decision_batch.begin(shared, project, head, message, *_one_file(project))
         decision_batch.complete(shared, generation)
         return seen
@@ -336,7 +336,7 @@ def test_a_batch_already_pending_at_the_first_stamp_is_refused(picking, monkeypa
 
     def begun_before_first_stamp(shared):
         if not begun:
-            head = decision_store._head(shared)  # noqa: SLF001
+            head = decision_store.head(shared)
             begun.append(decision_batch.begin(shared, PROJECT, head, "decisions: raced", *_one_file(PROJECT)))
         return real_stamp(shared)
 
@@ -408,7 +408,7 @@ def test_a_stamp_capture_is_not_torn_by_a_batch_that_begins_and_completes(pickin
         if not writers and path.name == decision_batch.JOURNAL:
 
             def begin_and_complete():
-                head = decision_store._head(picking.shared)  # noqa: SLF001
+                head = decision_store.head(picking.shared)
                 generation = decision_batch.begin(picking.shared, PROJECT, head, "decisions: torn", *_one_file(PROJECT))
                 decision_batch.complete(picking.shared, generation)
 

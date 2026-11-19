@@ -7,6 +7,7 @@ import math
 
 import pytest
 
+from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.settings import carried, migrations
 from owlbear_delivery_next.settings.config import GlobalLayer, Layer, MachineLayer, MachineValues
 from owlbear_delivery_next.settings.improvement import Spotter
@@ -127,7 +128,7 @@ def test_a_credit_limit_is_a_finite_amount_above_zero(tmp_path, value, ok):
 
 
 def _machine_json(data: dict) -> None:
-    path = registry._home() / registry.MACHINE  # noqa: SLF001
+    path = local_home.root() / registry.MACHINE
     path.write_text(json.dumps(data))
 
 
@@ -141,7 +142,7 @@ def test_a_format_7_machine_drops_its_budgets_from_its_settings_and_a_move_s_kep
                                                            registry.Settings(channel="major"))  # fmt: skip
     with registry.locked():
         registry.save(machine)
-    assert json.loads((registry._home() / registry.MACHINE).read_text())["format"] == 9  # noqa: SLF001
+    assert json.loads((local_home.root() / registry.MACHINE).read_text())["format"] == 9
 
 
 @pytest.mark.parametrize("bad", [-1, 1.5, "x"])

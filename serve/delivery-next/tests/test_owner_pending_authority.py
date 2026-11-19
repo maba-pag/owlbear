@@ -16,6 +16,7 @@ from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.state_store import profile_share
+from owlbear_delivery_next.state_store.pending_intents import shared_pending
 from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -94,18 +95,18 @@ def test_a_refused_automatic_start_cannot_replace_an_owners_pending_edit_or_publ
         json={"rev": original["project_rev"], "layer": original["project"] | {"widths": [1600]}},
     )
     assert edited.status_code == (200 if mode == "notice" else 409), edited.text
-    owner_pending = profile_share._shared_pending(a)  # noqa: SLF001
+    owner_pending = shared_pending(a)
     assert owner_pending  # the owner's refused edit is pending
 
     b = clone(remote, tmp_path / "b", "b")
     checks = readiness.ready(b, tmp_path / "b", carry=True)  # B's normal start: an automatic config write, refused
     assert [check for check in checks if not check.ok]  # the refusal is reported, not hidden
-    assert profile_share._shared_pending(b) == owner_pending  # noqa: SLF001 - the owner's intent is kept
+    assert shared_pending(b) == owner_pending  # the owner's intent is kept
     assert not any(s.endswith("import done") for s in remote_subjects(remote))
 
     refusing[0] = None
     readiness.ready(b, tmp_path / "b", carry=True)  # B's retry publishes its config, but not over the owner's intent
-    assert profile_share._shared_pending(b) == owner_pending  # noqa: SLF001
+    assert shared_pending(b) == owner_pending
     assert not any(s.endswith("import done") for s in remote_subjects(remote))
 
 
@@ -121,7 +122,7 @@ def test_a_refused_owner_clear_supersedes_the_earlier_pending_edit(shared_repo, 
     refusing[0] = "notice"
     edit = {"rev": original["project_rev"], "layer": original["project"] | {"widths": [1600]}}
     assert c.put("/api/next/config/project", json=edit).status_code == 200
-    stale_intent = profile_share._shared_pending(a)  # noqa: SLF001
+    stale_intent = shared_pending(a)
     assert stale_intent
 
     current = c.get("/api/next/config").json()
@@ -132,5 +133,5 @@ def test_a_refused_owner_clear_supersedes_the_earlier_pending_edit(shared_repo, 
     )
     assert cleared.status_code == (200 if mode == "notice" else 409), cleared.text
     cleared_digest = profile_share.config_digest(a.config_path)
-    assert profile_share._shared_pending(a) == cleared_digest  # noqa: SLF001 - the owner's clear, not the old edit
-    assert profile_share._shared_pending(a) != stale_intent  # noqa: SLF001
+    assert shared_pending(a) == cleared_digest  # the owner's clear, not the old edit
+    assert shared_pending(a) != stale_intent
