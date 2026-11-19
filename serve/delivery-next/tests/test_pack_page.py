@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 import uvicorn
+from playwright.sync_api import Error, expect, sync_playwright
 
 from owlbear_delivery_next.change_contracts.round_records import PACK, RoundFinding, RoundLoop, RoundPolicy
 from owlbear_delivery_next.impeccable_runs import (
@@ -131,8 +132,6 @@ def answers(page: Any) -> list[str]:
 @contextlib.contextmanager
 def opened(base: str, pds: Any, *, clock: bool = False) -> Iterator[Any]:
     """Updates ▸ Impeccable in a real browser: only the test host and the PDS CDN answer; a page clock on request."""
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     with sync_playwright() as pw:
         try:
             browser = pw.chromium.launch()
@@ -150,8 +149,6 @@ def opened(base: str, pds: Any, *, clock: bool = False) -> Iterator[Any]:
 
 @pytest.mark.browser
 def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_impeccable_page(served, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     job, base = served()
     with opened(base, pds) as page:
         ask = page.locator("#pack-ask")
@@ -203,8 +200,6 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_impeccable_p
 
 @pytest.mark.browser
 def test_the_activation_dialog_lists_the_unreviewed_repair_and_what_was_not_changed_for(served, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     job, base = served(ENDED)
     before = job.path.read_bytes()
     with opened(base, pds) as page:
@@ -242,8 +237,6 @@ PUBLISHED = {"commit": "c" * 40, "branch": "pack/r1", "url": "https://github.com
 
 def discard_waiting(page, pds, job, discard) -> None:
     """The two native discard dispatches share the same modal and accessibility contract."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     before = (job.store.root / pack_job.FILE).read_bytes()
     sent = []
     endpoint = (
@@ -307,8 +300,6 @@ def history() -> list[dict[str, Any]]:
 
 @pytest.mark.browser
 def test_progress_and_ended_run_polling_show_current_evidence(served, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     job, base = served()
     job.state["invocations"] = history()
     job._save()  # noqa: SLF001
@@ -368,8 +359,6 @@ REPLAY_NONE = "0 decided rounds, 0 left out; the design judge agreed with the ow
 
 @pytest.mark.browser
 def test_a_ci_failed_publish_stop_fits_a_phone_and_says_no_calibration_evidence_instead_of_0(served, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     job, base = served()
     inv = history()
     replay = pack_progress.opened(inv, "replay", "replay", round_=2, identity="b")
@@ -403,8 +392,6 @@ def test_a_ci_failed_publish_stop_fits_a_phone_and_says_no_calibration_evidence_
 def test_failed_stage_reaches_record_page_and_log_whole(served, pds, tmp_path, monkeypatch, whole_error) -> None:
     """A refused push holds the publication: git's whole words, both streams, are its reason, its stage's and its log's
     (#895, #971)."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     real, pushed, out = subprocess.run, [], "what git printed"
 
     def refusing(args, *rest, **kw):
@@ -460,8 +447,6 @@ def test_an_unreadable_registry_shows_whole_in_the_runs_and_in_a_refused_start(
     served, pds, monkeypatch, whole_error
 ) -> None:
     """#971: the machine's registry error reaches the runs list and the start's refusal whole."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     job, base = served()
     job.state |= {"state": "passed", "questions": [], "ended_at": NOW.isoformat()}
     job._save()  # noqa: SLF001
@@ -502,8 +487,6 @@ def test_an_unreadable_registry_shows_whole_in_the_runs_and_in_a_refused_start(
 @pytest.mark.browser
 def test_a_sole_unreadable_run_record_shows_whole_in_the_runs(served, pds, tmp_path, monkeypatch, whole_error) -> None:
     """#971: a readable registry and one project whose run record cannot be read still list that project's error."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     _job, base = served()
     error = OSError(whole_error)
     error.add_note("a note added on the way up")
@@ -529,8 +512,6 @@ def test_a_sole_unreadable_run_record_shows_whole_in_the_runs(served, pds, tmp_p
 
 @pytest.mark.browser
 def test_an_unreadable_section_says_what_could_not_be_read(served, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     _job, base = served()
     with opened(base, pds) as page:
         expect(page.locator("#pack-ask")).to_be_visible()
@@ -546,8 +527,6 @@ def test_an_unreadable_section_says_what_could_not_be_read(served, pds) -> None:
 @pytest.mark.browser
 def test_a_start_admitted_after_its_timeout_shows_its_run_without_a_reload_or_a_second_post(served, pds) -> None:
     """I1-3: admission may look up GitHub for longer than the start waits; the section keeps looking, never resends."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     job, base = served()
     job.state |= {"state": "passed", "questions": [], "ended_at": NOW.isoformat()}
     job._save()  # noqa: SLF001

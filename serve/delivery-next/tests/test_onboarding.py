@@ -19,6 +19,7 @@ from typing import Any
 
 import pytest
 import uvicorn
+from playwright.sync_api import Error, expect, sync_playwright
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.commands import setup, setup_profile
@@ -418,8 +419,6 @@ def test_a_refused_registration_fails_its_stage_with_the_refusal_whole(hub, jobs
 @contextmanager
 def served(monkeypatch: pytest.MonkeyPatch, pds: Any) -> Iterator[tuple[Any, str, machine_module.Machine]]:
     """A browser page on a machine host served in this process, so the fake GitHub's patches reach its jobs."""
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     monkeypatch.setattr(project.readiness, "ready", lambda *_a, **_k: [])
     monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
     with socket.socket() as sock:
@@ -490,8 +489,6 @@ def registered_setup_page(hub, tmp_path, monkeypatch, pds) -> Iterator[tuple[Any
 def test_the_dialog_takes_a_new_project_from_zero_to_new_change(hub, tmp_path, monkeypatch, pds):
     """A failed stage shows whole with Retry; the profile is confirmed in the dialog and saved; the ending's three
     facts hold and New Change opens the shaping chat for this project; closing gives focus back to its opener."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     real, failed = onboarding_git.push_first, []
 
     def first_push_fails(path: Path, access: Access) -> None:
@@ -555,8 +552,6 @@ def test_finish_setup_on_a_registered_clone_changes_its_ruleset_and_says_what_is
     """A registered row's Finish setup opens the dialog on its folder; the rules list shows the conflict and the
     advice, ticked changes reach the ruleset; with the chat server declined the ending says it isn't ready and offers
     no New Change; Tab stays inside the dialog."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     page, row, folder = registered_setup_page
     expect(row.get_by_role("button", name="Finish setup")).to_be_visible()
     expect(row.get_by_role("list", name="Failed readiness checks")).to_be_visible()
@@ -974,8 +969,6 @@ def test_a_folder_with_its_own_commits_and_no_origin_is_no_clone_of_a_repository
 @pytest.mark.browser
 @pytest.mark.usefixtures("hub")
 def test_choices_changed_during_the_check_are_checked_again(tmp_path, monkeypatch, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     with served(monkeypatch, pds) as (page, base, _machine):
         _opener, modal, _found = new_project_choices(page, base, pds, tmp_path / "demo")
         held: list[Any] = []
@@ -1005,8 +998,6 @@ def test_a_label_the_repository_has_in_another_case_is_not_created_again(monkeyp
 
 @pytest.mark.browser
 def test_a_failed_status_read_is_tried_again_while_the_dialog_is_open(tmp_path, monkeypatch, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     held, gone, real = threading.Event(), threading.Event(), onboarding_stages.STAGES["git"]
     monkeypatch.setitem(onboarding_stages.STAGES, "git", lambda job: held.set() or (gone.wait(30) and real(job)))
     with served(monkeypatch, pds) as (page, base, machine):
@@ -1086,8 +1077,6 @@ def test_a_file_two_consents_write_is_said_once(tmp_path, monkeypatch):
 
 @pytest.mark.browser
 def test_a_run_that_leaves_the_list_takes_no_focus_to_another(tmp_path, monkeypatch, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     author = {"name": "Ada", "email": "ada@example.com"}
     with served(monkeypatch, pds) as (page, base, machine):
         ids = []
@@ -1109,8 +1098,6 @@ def test_a_run_that_leaves_the_list_takes_no_focus_to_another(tmp_path, monkeypa
 @pytest.mark.browser
 def test_a_folder_with_files_is_published_only_after_the_secrets_tick(hub, tmp_path, monkeypatch, pds):
     """E3 through the dialog: the warning shows, Check and continue waits for its tick, and the files are published."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     folder = tmp_path / "keep"
     folder.mkdir()
     (folder / "app.py").write_text("print(1)\n")
@@ -1154,8 +1141,6 @@ def test_only_a_new_private_protected_repository_is_checked_against_the_plan(job
 @pytest.mark.browser
 @pytest.mark.usefixtures("hub")
 def test_a_new_private_repository_its_plan_cant_protect_is_confirmed_without_a_ruleset(tmp_path, monkeypatch, pds):
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     why = "GitHub's free plan of ada allows no branch rules on a private repository: make it public, or upgrade"
     monkeypatch.setattr(repo_target, "private_rules_limit", lambda _c, _owner: why)
     with served(monkeypatch, pds) as (page, base, _machine):

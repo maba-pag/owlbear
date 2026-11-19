@@ -11,18 +11,32 @@ import stat
 import subprocess
 import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+from owlbear_decisions import Decision, Origin, Scope, State, new_id
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
-from owlbear_delivery_next.local_system import data_repo, publication_hold
+from owlbear_delivery_next.local_system import batch_journal, data_repo, decision_authority, publication_hold
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import Layer
-from owlbear_delivery_next.state_store import config_save, decision_sync, prefs_import, profile_share
+from owlbear_delivery_next.settings.prefs_import import plan
+from owlbear_delivery_next.state_store import (
+    config_save,
+    decision_batch,
+    decision_store,
+    decision_sync,
+    decision_target,
+    prefs_import,
+    profile_share,
+    roles_move,
+)
+from owlbear_delivery_next.state_store.decision_target import Continuation
 from owlbear_delivery_next.state_store.pending_intents import pending_file
+from owlbear_delivery_next.state_store.profile_share import ABSENT
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
 PROJECT = "shop-site"
@@ -690,8 +704,6 @@ def test_a_hold_that_never_wrote_lapses_with_the_next_healthy_publication(three)
 
 
 def mutate(record: dict, case: str) -> bytes:
-    import json  # noqa: PLC0415
-
     if case == "not json":
         return b"{ not json"
     changed = dict(record)
@@ -823,8 +835,6 @@ def test_an_unpushed_revert_of_the_fill_stays_held_because_a_replay_could_delete
 
 def forked_publication(three, tmp_path) -> tuple[Store, Path, Path, Profile]:
     """The importer checks its claim on origin but Git sends its pushes to a fork where the import was settled."""
-    from owlbear_delivery_next.state_store.profile_share import ABSENT  # noqa: PLC0415
-
     _, settler, remote = three
     settler.mark_prefs_import("", "pending", ABSENT, "first")
     settler.mark_prefs_import("pending", "done")
@@ -850,9 +860,6 @@ def forked_publication(three, tmp_path) -> tuple[Store, Path, Path, Profile]:
 
 
 def test_a_held_fill_is_never_pushed_to_another_remote_than_the_one_its_claim_was_checked_on(three, tmp_path):
-    from owlbear_delivery_next.settings.prefs_import import plan  # noqa: PLC0415
-    from owlbear_delivery_next.state_store.profile_share import ABSENT  # noqa: PLC0415
-
     importer, remote, publication, claim = forked_publication(three, tmp_path)
     fork_before, origin_before = remote_head(publication), remote_head(remote)
     fields = {"prefs_import": "pending", "prefs_claim": "fresh", "prefs_basis": ABSENT}
@@ -894,9 +901,6 @@ def test_a_full_import_through_a_non_default_remote_that_pushes_where_it_fetches
 
 def spaced_forks(three, tmp_path) -> tuple[Store, Path, Path, config_save.Prepared]:
     """A pending source fork and a settled destination fork whose paths differ only in their inner spaces."""
-    from owlbear_delivery_next.settings.prefs_import import plan  # noqa: PLC0415
-    from owlbear_delivery_next.state_store.profile_share import ABSENT  # noqa: PLC0415
-
     _, settler, remote = three
     settler.mark_prefs_import("", "pending", ABSENT, "first")
     settler.mark_prefs_import("pending", "done")
@@ -1012,8 +1016,6 @@ def remote_config(remote: Path) -> Layer:
 
 def move_then_clear(b: Store) -> None:
     """The other checkout moves its own, different old roles, then the owner clears them; both are published."""
-    from owlbear_delivery_next.state_store import roles_move  # noqa: PLC0415
-
     assert b.shared.pull() == ""
     old_roles(b, {"reviewer": {"model": "r-9", "effort": "max"}})
     roles_move.move_roles(b)
@@ -1027,8 +1029,6 @@ def move_then_clear(b: Store) -> None:
 def test_a_role_move_never_restores_overrides_another_checkout_moved_and_cleared_first(
     two_movers, monkeypatch, remote_moves
 ):
-    from owlbear_delivery_next.state_store import roles_move  # noqa: PLC0415
-
     a, b, remote = two_movers
     if remote_moves:
         fired = at_git(monkeypatch, a, nth_push(1), lambda: move_then_clear(b))
@@ -1064,8 +1064,6 @@ def absent_movers(shared_repo, tmp_path) -> tuple[Store, Store, Path]:
 
 def move_then_delete(b: Store) -> None:
     """The other checkout moves its own, different old roles; the owner then deletes the config: absent again."""
-    from owlbear_delivery_next.state_store import roles_move  # noqa: PLC0415
-
     assert b.shared.pull() == ""
     old_roles(b, {"reviewer": {"model": "r-9", "effort": "max"}})
     roles_move.move_roles(b)
@@ -1075,8 +1073,6 @@ def move_then_delete(b: Store) -> None:
 
 
 def test_a_role_move_is_held_when_the_config_came_and_went_on_the_remote_meanwhile(absent_movers, monkeypatch):
-    from owlbear_delivery_next.state_store import roles_move  # noqa: PLC0415
-
     a, b, remote = absent_movers
     fired = at_git(monkeypatch, a, nth_push(1), lambda: move_then_delete(b))
 
@@ -1131,9 +1127,6 @@ def test_the_automatic_publications_after_a_retired_hold_never_force_over_anothe
 
 def interrupt_a_batch(store: Store, how: str) -> None:
     """Leave a decision batch interrupted in *store*'s checkout: a readable journal in flight, or a corrupt one."""
-    from owlbear_decisions import new_id  # noqa: PLC0415
-    from owlbear_delivery_next.state_store import decision_batch  # noqa: PLC0415
-
     if how == "corrupt":
         decision_batch.journal_path(store.shared).write_text("{not json")
         return
@@ -1315,8 +1308,6 @@ def test_an_owned_decision_push_never_goes_to_a_remote_repointed_after_its_targe
 
 
 def test_a_continuation_never_proves_its_commit_on_a_remote_repointed_to_another_repository(three, tmp_path):
-    from owlbear_delivery_next.state_store.decision_target import Continuation  # noqa: PLC0415
-
     winner, remote, fork, made, goal = repointed(three, tmp_path)
     git(winner.shared.root, "push", "-q", str(fork), f"{made}:refs/heads/main")  # B already has it, A does not
     refs = (remote_refs(remote), remote_refs(fork))
@@ -1328,8 +1319,6 @@ def test_a_continuation_never_proves_its_commit_on_a_remote_repointed_to_another
 
 
 def test_a_repoint_during_the_proof_fetch_never_proves_another_repositorys_commit(three, tmp_path, monkeypatch):
-    from owlbear_delivery_next.state_store.decision_target import Continuation  # noqa: PLC0415
-
     winner, remote, fork, made, goal = repointed(three, tmp_path)
     root = winner.shared.root
     git(root, "push", "-q", str(fork), f"{made}:refs/heads/main")  # B holds it; the captured repository A does not
@@ -1354,8 +1343,6 @@ def test_a_repoint_during_the_proof_fetch_never_proves_another_repositorys_commi
 
 
 def test_a_proof_with_unreadable_repository_addresses_is_not_known_or_fetched(three, monkeypatch):
-    from owlbear_delivery_next.state_store import decision_target  # noqa: PLC0415
-
     winner, _, remote = three
     root = winner.shared.root
     head = git(root, "rev-parse", "HEAD")
@@ -1382,10 +1369,6 @@ def claimed(shared_repo) -> DataRepo:
 
 
 def an_owned_decision() -> object:
-    from datetime import UTC, datetime  # noqa: PLC0415
-
-    from owlbear_decisions import Decision, Origin, Scope, State, new_id  # noqa: PLC0415
-
     return Decision(
         id=new_id(), title="Notes live in SQLite", statement="Notes live in one SQLite table.", scope=Scope.PROJECT,
         project=PROJECT, origin=Origin.AUTONOMOUS, actor="shaper", state=State.IN_FORCE,
@@ -1400,8 +1383,6 @@ def test_a_repoint_during_the_shared_checkouts_own_push_probes_sends_nothing_to_
     """The owned push checked its captured remote's addresses, then the shared checkout's own probes run (the held
     publication record's lookup first); origin is pointed at repository B during that lookup. The push still goes
     nowhere: its captured addresses are checked again at the push itself, after those probes."""
-    from owlbear_delivery_next.state_store import decision_store  # noqa: PLC0415
-
     shared, remote = claimed, shared_repo[1]
     root = shared.root
     fork = tmp_path / "fork-b.git"
@@ -1465,8 +1446,6 @@ def test_a_held_decision_or_rebase_that_cannot_be_checked_says_the_whole_error(
     tmp_path, monkeypatch, whole_error, site
 ):
     """A held decision's pending journal or active authority, or a rebase probe, that fails: its whole error."""
-    from owlbear_delivery_next.local_system import batch_journal, decision_authority  # noqa: PLC0415
-
     error = {"journal": batch_journal.JournalError, "authority": OSError, "rebasing": DataRepoError}[site]
 
     def refused(*_args: object, **_kwargs: object) -> None:
@@ -1498,7 +1477,6 @@ def test_a_held_record_lock_folder_or_rebase_state_that_cannot_be_read_says_the_
     tmp_path, monkeypatch, whole_error, site
 ):
     """A held record, the batch lock's Git folder or a failed rebase's state that cannot be read: the whole error."""
-    from owlbear_delivery_next.local_system import batch_journal  # noqa: PLC0415
 
     def unknown(*_args: object) -> None:
         raise DataRepoError(whole_error)
@@ -1533,9 +1511,6 @@ def test_a_held_record_lock_folder_or_rebase_state_that_cannot_be_read_says_the_
 
 def test_a_spent_decision_whose_hold_git_fails_is_refused_with_git_s_whole_words(claimed, failing_git, whole_error):
     """P21: spending an active project decision holds it first; a hold Git fails refuses the save, Git's words whole."""
-    from owlbear_decisions import State  # noqa: PLC0415
-    from owlbear_delivery_next.state_store import decision_store  # noqa: PLC0415
-
     shared, rule = claimed, an_owned_decision()
     (saved,) = decision_store.save_all(shared, [(rule, None)], message="decisions: one")
     assert saved.saved

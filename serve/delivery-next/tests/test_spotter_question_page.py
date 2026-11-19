@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 import uvicorn
+from playwright.sync_api import Error, expect, sync_playwright
 
 from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_contracts.round_records import FINAL, RoundFinding, RoundLoop, RoundPolicy
@@ -79,8 +80,6 @@ def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
 def opened(base: str, pds: Any, *, details: bool = False) -> Iterator[Any]:
     """The Changes page on the stopped Change in a real browser, its details shown or not: only the test host and the
     PDS CDN answer."""
-    from playwright.sync_api import Error, sync_playwright  # noqa: PLC0415 - the optional browser runtime
-
     with sync_playwright() as pw:
         try:
             browser = pw.chromium.launch()
@@ -107,8 +106,6 @@ def answer(page: Any, form: Any) -> Any:
 @pytest.mark.browser
 def test_allowing_what_the_spotter_stopped_starts_an_amendment_instead_of_asking_again(page_url, pds) -> None:
     """The answer reaches the amendment path (design §8 item 7): listed from his Allow it, no question comes back."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     with opened(base, pds, details=True) as page:  # its amendment shows with the details
         first = page.locator("section.act", has_text="Question q1")
@@ -126,8 +123,6 @@ def test_allowing_what_the_spotter_stopped_starts_an_amendment_instead_of_asking
 @pytest.mark.browser
 def test_an_answer_without_an_option_is_refused_beside_the_question_at_once(page_url, pds) -> None:
     """Answer clicked on the question asked again, its options cleared: refused at once, never queued for the fold."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     with opened(base, pds) as page:
         form = page.locator("section.act", has_text="Question q1")
@@ -140,8 +135,6 @@ def test_an_answer_without_an_option_is_refused_beside_the_question_at_once(page
 @pytest.mark.browser
 def test_an_answer_the_fold_did_not_apply_is_shown_with_its_reason_on_the_question(page_url, pds) -> None:
     """#791's activity line, beside the question it was meant for while that question stays open."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     why = "question q1 is settled only by one of its options, a reconsideration by a note"
     store.log(Lock(SLUG), SLUG, {"event": "answer-not-applied", "at": NOW.isoformat(), "question": "q1", "reason": why})
@@ -153,8 +146,6 @@ def test_an_answer_the_fold_did_not_apply_is_shown_with_its_reason_on_the_questi
 @pytest.mark.browser
 def test_an_answer_the_fold_did_not_apply_is_shown_on_the_final_reviews_question_too(page_url, pds) -> None:
     """The final review's last-round question has its own form; a stale Rebuild the fold refused shows on it too."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     t1 = m.Task(id="t1", title="one", scope=["x.txt"])
     finding = RoundFinding(id="F1", text="x.txt:1: p - fix: f", raised=1, tasks=["t1"])

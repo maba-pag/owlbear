@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from playwright import sync_api
 
 from owlbear_delivery_next.change_contracts import dispute_tools, pack_tools, tools
 from owlbear_delivery_next.change_contracts.models import Brief, Change
@@ -1742,7 +1743,6 @@ def test_a_candidate_or_golden_stage_that_fails_keeps_its_whole_error(  # noqa: 
 
         fakes.download = unreachable
     else:  # the golden pages' browser does not start
-        from playwright import sync_api  # noqa: PLC0415 - the optional browser runtime
 
         def unstarted() -> None:
             raise noted(sync_api.Error(whole_error))

@@ -4,9 +4,10 @@ Launch recipe for the visual check: directory ``serve/delivery-next``, command
 ``uv run python tests/metrics_preview.py {port}``, ready URL ``http://127.0.0.1:{port}/``; the state paths (e.g.
 ``/metrics?period=all&by=agent``) open without ``#token=`` because SEED supplies the token.
 
-It never reads the owner's data: ``main`` replaces HOME with a fresh temporary folder before it imports OwlBear,
-drops ``OWLBEAR_DATA`` and ``COPILOT_HOME``, and keeps Git from reaching GitHub (D-01M68Z8Q740BSN13D1R06JX6DW);
-importing this file changes nothing. The page is ``http://127.0.0.1:<port>/metrics#token=preview``; every HTML page it
+It never reads the owner's data: ``main`` replaces HOME with a fresh temporary folder before loading HOME-sensitive
+application state, drops ``OWLBEAR_DATA`` and ``COPILOT_HOME``, and keeps Git from reaching GitHub
+(D-01M68Z8Q740BSN13D1R06JX6DW); importing this file changes nothing.
+The page is ``http://127.0.0.1:<port>/metrics#token=preview``; every HTML page it
 serves also seeds that token itself (``SEED``), so a capture that opens a state path without the fragment still renders
 the fixture, never the page's missing-token notice. The fixture holds 8 agents in 2 projects, 4 models, 5 steps and
 "No step", 14 days of 2 runs each, 7 tools covering every outcome, and session logs: compactions with timing shares
@@ -22,6 +23,13 @@ import sys
 import tempfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+import uvicorn
+
+from owlbear_delivery_next.improvement import chatlogs
+from owlbear_delivery_next.local_system import codebase
+from owlbear_delivery_next.project_host import pages
+from owlbear_delivery_next.state_store import spend_ledger
 
 TOKEN = "preview"  # noqa: S105 - a fixture host on 127.0.0.1 only
 SEED = f'<script>sessionStorage.setItem("token", "{TOKEN}")</script>'
@@ -70,8 +78,6 @@ def _log(session: str, calls: int, before: int | None) -> None:
             _event("session.compaction_start", compactionAttemptId="a", trigger="threshold"),
             _event("session.compaction_complete", compactionAttemptId="a", success=True, outcome="applied"),
         ]
-    from owlbear_delivery_next.improvement import chatlogs  # noqa: PLC0415 - only once HOME is replaced
-
     path = chatlogs.state() / session / "events.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(lines))
@@ -79,8 +85,6 @@ def _log(session: str, calls: int, before: int | None) -> None:
 
 def seed() -> None:
     """The ledger's runs and their sessions' logs, all written into the temporary HOME."""
-    from owlbear_delivery_next.state_store import spend_ledger  # noqa: PLC0415 - only once HOME is replaced
-
     now = datetime.now(UTC).replace(microsecond=0) - timedelta(hours=2)
     lines: list[dict] = []
     unshared: list[str] = []
@@ -125,12 +129,8 @@ def seed_pages(pages) -> None:
 def main() -> None:
     port = int(sys.argv[1])
     home = _isolate()
-    import uvicorn  # noqa: PLC0415 - OwlBear and its server only once HOME is replaced
-
-    from owlbear_delivery_next.local_system import codebase  # noqa: PLC0415
     from owlbear_delivery_next.machine_host import app  # noqa: PLC0415
     from owlbear_delivery_next.machine_host.machine import Machine  # noqa: PLC0415
-    from owlbear_delivery_next.project_host import pages  # noqa: PLC0415
     from owlbear_delivery_next.project_host.host import HostRecord  # noqa: PLC0415
 
     def gone() -> None:

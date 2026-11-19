@@ -5,6 +5,7 @@ model, context and effort edits."""
 from __future__ import annotations
 
 import pytest
+from playwright.sync_api import expect
 
 from owlbear_delivery_next.runtimes import model_choices
 from owlbear_delivery_next.settings import config
@@ -49,8 +50,6 @@ def caption(effort: str) -> str:
 
 
 def shows(page, role: str, line: str, said: str) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     model = cells(page, role).nth(1)  # the rates and their caption sit under the model
     expect(model.locator("p-text", has_text="AI credits per 1M tokens")).to_have_text(
         f"AI credits per 1M tokens: {line}"
@@ -64,8 +63,6 @@ def switch(page, role: str):
 
 @pytest.mark.browser
 def test_a_one_size_model_shows_its_size_and_rates_with_no_switch_or_select(store, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     errors, held = [], []
 
     def observe(page):
@@ -107,8 +104,6 @@ def test_a_one_size_model_shows_its_size_and_rates_with_no_switch_or_select(stor
 def test_a_two_size_model_switches_between_exactly_its_sizes_and_the_rates_follow_before_save(
     store, pds, monkeypatch
 ) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     builder = {"builder": Agent(effort="high")}
     store.save(store.config_path, Layer, lambda c: c.model_copy(update={"agents": builder}), "owner", owner=True)
     assert store.read_config().agents["builder"].effort == "high"
