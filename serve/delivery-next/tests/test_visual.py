@@ -9,10 +9,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 
-import playwright.sync_api
 import pytest
 from fastapi.testclient import TestClient
-from playwright.sync_api import Error
+from playwright import sync_api
 from pydantic import ValidationError
 
 from owlbear_delivery_next.change_contracts import tools
@@ -1181,7 +1180,7 @@ class _Missing:
     def launch(self, *, headless, channel):
         assert headless
         self.tried.append(channel)
-        raise Error(self.errors[channel])
+        raise sync_api.Error(self.errors[channel])
 
     def __enter__(self):
         return self
@@ -1193,13 +1192,13 @@ class _Missing:
 def test_the_installed_browser_is_tried_first_and_only_missing_browsers_fall_through(tmp_path, monkeypatch):
     gone = {"chrome": "Chromium distribution 'chrome' is not found at /x", "msedge": "… is not found at /y"}
     pw = _Missing(gone | {None: "Executable doesn't exist at /z; run playwright install"})
-    monkeypatch.setattr(playwright.sync_api, "sync_playwright", lambda: pw)
+    monkeypatch.setattr(sync_api, "sync_playwright", lambda: pw)
     with pytest.raises(visual.BrowserMissingError):
         visual.capture("http://127.0.0.1:1", [HOME], tmp_path, (1280,))
     assert pw.tried == ["chrome", "msedge", None]
     pw = _Missing({"chrome": "Target page, context or browser has been closed"})
-    monkeypatch.setattr(playwright.sync_api, "sync_playwright", lambda: pw)
-    with pytest.raises(playwright.sync_api.Error):  # another launch failure is not a missing browser
+    monkeypatch.setattr(sync_api, "sync_playwright", lambda: pw)
+    with pytest.raises(sync_api.Error):  # another launch failure is not a missing browser
         visual.capture("http://127.0.0.1:1", [HOME], tmp_path, (1280,))
     assert pw.tried == ["chrome"]
 
