@@ -28,7 +28,8 @@ class StoreError(RuntimeError):
 def _git(cwd: Path, *args: str) -> str:
     quiet = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     try:
-        executable = shutil.which("git")
+        search = os.pathsep.join(str(cwd.absolute() / entry) for entry in os.get_exec_path(quiet))
+        executable = shutil.which("git", path=search)
         if executable is None:
             message = "Git executable not found on PATH"
             raise FileNotFoundError(message)

@@ -30,7 +30,8 @@ def _git(
     env: dict[str, str] | None = None,
     input_text: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    executable = shutil.which("git", path=os.pathsep.join(os.get_exec_path(env)))
+    search = os.pathsep.join(str(cwd.absolute() / entry) for entry in os.get_exec_path(env))
+    executable = shutil.which("git", path=search)
     if executable is None:
         message = "Git executable not found on PATH"
         raise FileNotFoundError(message)

@@ -43,8 +43,9 @@ class BatchCommitResult:
     deferred_deletions: tuple[str, ...] = ()
 
 
-def _git_executable() -> str:
-    executable = shutil.which("git")
+def _git_executable(cwd: Path) -> str:
+    search = os.pathsep.join(str(cwd.absolute() / entry) for entry in os.get_exec_path())
+    executable = shutil.which("git", path=search)
     if executable is None:
         message = "Git executable not found on PATH"
         raise FileNotFoundError(message)
@@ -54,7 +55,7 @@ def _git_executable() -> str:
 def _git(repo_dir: Path, *args: str) -> str:
     """Run a git command and return stripped stdout."""
     result = subprocess.run(  # noqa: S603 - resolved Git; internal commands separate messages and owned paths; no shell
-        [_git_executable(), *args],
+        [_git_executable(repo_dir), *args],
         capture_output=True,
         check=True,
         cwd=repo_dir,
@@ -67,7 +68,7 @@ def _git(repo_dir: Path, *args: str) -> str:
 def _git_bytes(repo_dir: Path, *args: str) -> tuple[int, bytes]:
     """Run Git without decoding a staged memory snapshot prematurely."""
     result = subprocess.run(  # noqa: S603 - resolved Git; internal show/rev-parse/reset operands; no shell
-        [_git_executable(), *args],
+        [_git_executable(repo_dir), *args],
         capture_output=True,
         check=False,
         cwd=repo_dir,
@@ -256,7 +257,7 @@ def _git_object_id(repo_dir: Path, revision: str) -> str | None:
 
 def _git_blob_id(repo_dir: Path, raw: bytes) -> str:
     result = subprocess.run(  # noqa: S603 - resolved Git; fixed hash-object flags; snapshot bytes use stdin
-        [_git_executable(), "hash-object", "--stdin"],
+        [_git_executable(repo_dir), "hash-object", "--stdin"],
         capture_output=True,
         check=True,
         cwd=repo_dir,
