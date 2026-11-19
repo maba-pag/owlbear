@@ -15,6 +15,7 @@ import os
 import shutil
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from owlbear_memory import MemoryBusyError, MemoryState, storage, writer_lock
@@ -27,7 +28,6 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
-    from pathlib import Path
 
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
@@ -42,8 +42,11 @@ def _git(cwd: Path, *args: str, index: Path | None = None) -> str:
     """One git command's standard output; a failure raises, naming the command and what Git said."""
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"} | ({"GIT_INDEX_FILE": str(index)} if index else {})
     try:
+        if (git := shutil.which("git")) is None:
+            raise FileNotFoundError(2, "No such file or directory", "git")
+        command = ["git", *args]
         done = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector
-            ["git", *args],  # noqa: S607
+            command, executable=str(Path(git).absolute()),
             cwd=cwd, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60,
             check=False,
         )  # fmt: skip

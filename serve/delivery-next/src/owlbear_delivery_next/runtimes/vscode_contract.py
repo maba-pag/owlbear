@@ -81,7 +81,10 @@ class Outcome:
 
 def launch_code_chat(args: list[str], cwd: Path) -> None:
     """Start ``code chat``; it returns once the window has the prompt."""
-    subprocess.Popen(args, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)  # noqa: S603
+    # vscode_step builds code chat argv with StepSpec picker/bootstrap as separate operands.
+    subprocess.Popen(  # noqa: S603 - caller-owned VS Code chat executable/argv, no shell
+        args, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
 
 
 @dataclass(frozen=True)

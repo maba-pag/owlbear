@@ -178,8 +178,11 @@ def said(n: dict[str, Any]) -> str:
 
 
 def _git(clone: Path, *args: str) -> str:
+    # pinned_commit/rules/diff/skill_diff own these Git vectors; revisions and paths remain operands, never shell text.
     command = ["git", *args]
-    done = subprocess.run(command, cwd=clone, capture_output=True, text=True, check=True, timeout=60)  # noqa: S603
+    done = subprocess.run(  # noqa: S603 - internal pack Git queries, no shell
+        command, cwd=clone, capture_output=True, text=True, check=True, timeout=60
+    )
     return done.stdout
 
 

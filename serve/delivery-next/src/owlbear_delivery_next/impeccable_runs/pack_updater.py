@@ -9,8 +9,10 @@ stage, for the owner.
 from __future__ import annotations
 
 import hashlib
+import shutil
 import subprocess
 import uuid
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from pydantic import Field
@@ -26,7 +28,6 @@ from owlbear_delivery_next.workflow_steps import sessions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from owlbear_delivery_next.runtimes.session_result import Run
     from owlbear_delivery_next.state_store.store import Store
@@ -80,7 +81,12 @@ def _files(at: Path) -> dict[str, str]:
 
 def lay_out(at: Path, c: pack_candidate.Candidate, clone: Path, package: Path) -> dict[str, str]:
     """The updater's repository: the candidate's skills, golden pages and glue to edit, upstream's skills to read."""
-    subprocess.run(["git", "init", "-q", str(at)], check=True, capture_output=True)  # noqa: S603, S607 - fixed argv
+    if (git := shutil.which("git")) is None:
+        raise FileNotFoundError(2, "No such file or directory", "git")
+    command = ["git", "init", "-q", str(at)]
+    subprocess.run(  # noqa: S603 - resolved Git init with updater-owned directory operand, no shell
+        command, executable=str(Path(git).absolute()), check=True, capture_output=True
+    )
     for name in c.pins["skills"]:
         (at / "skills" / name).mkdir(parents=True, exist_ok=True)
         (at / "skills" / name / "SKILL.md").write_bytes(skill(c, name).read_bytes())

@@ -9,8 +9,10 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
+import shutil
 import subprocess
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -77,8 +79,12 @@ def owner_last(store: Store) -> dict[str, Any] | None:
         return None
     marker = f"memory {store.name}: "  # the subject memory_routes commits each action with
     args = ["log", "-1", "--format=%cI%x00%s", "--fixed-strings", f"--grep={marker}", "--"]
-    done = subprocess.run(  # noqa: S603
-        ["git", *args, str(store.shared.memory_path(store.name))],  # noqa: S607
+    if (git := shutil.which("git")) is None:
+        raise FileNotFoundError(2, "No such file or directory", "git")
+    command = ["git", *args, str(store.shared.memory_path(store.name))]
+    # The memory marker is one --grep value and the memory path follows --.
+    done = subprocess.run(  # noqa: S603 - resolved Git and code-owned log query, no shell
+        command, executable=str(Path(git).absolute()),
         cwd=store.shared.root, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}, stdin=subprocess.DEVNULL,
         capture_output=True, text=True, timeout=10, check=False,
     )  # fmt: skip

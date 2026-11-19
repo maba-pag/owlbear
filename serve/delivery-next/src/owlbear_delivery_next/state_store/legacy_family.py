@@ -76,7 +76,7 @@ IMPORTS = (
     ("state_store/project_home.py", "c79464a6139fe571efd600903aa848dc67c9673f016d12c093d7d6b94b74a681"),
     ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
 )
-CURRENT_FAMILY_AGGREGATE = "79bd9011af062228a79a6d04b33391bcc345fd52bca93deaab2e26743f91233c"
+CURRENT_FAMILY_AGGREGATE = "0c1706eb988bb7ae00c9651375fc7511c798153e55ee0a241ecfc20fb57811b2"
 CURRENT_FUNCTIONS = (
     ("commands/chat_client.py:Chat.call", "a3dae79af4df3874c83c2466621b379fc3e9fc3e670045c20a8e8fca44113250"),
     ("commands/chat_client.py:workspace", "72a7a921743b6103fb5f5d78e5d52d238def17b341910e8348a1d702e449fb60"),
@@ -89,7 +89,7 @@ CURRENT_FUNCTIONS = (
     ("machine_host/app.py:Dispatcher.__call__", "75b1fe7604dac66a5c9d336abed0293ddcfaf379a65ed64bc8f48941cb024299"),
     ("machine_host/command.py:forward", "5b6327596aa3036314e5e279f4b7a444152e7555a29059797bf2b6f0e82cca69"),
     ("machine_host/command.py:main", "027daaf564131a2bd0d995a35156f8bcf884ac1ce32d7fc6ab5a2dca81af9546"),
-    ("machine_host/install.py:doctor", "bb1f0d3af99639b306a2d536259f1a5acb2ac55d40ae526c967928a4e9ba4d19"),
+    ("machine_host/install.py:doctor", "a5160d676463bc8ba51166e074eb3d8176a51e8abe7cc6fd46d1c007e00d5c57"),
     ("machine_host/machine.py:Machine._load", "a43b1e7300a34467b098adc86f6d08e9e9de61940136229bec199ed40473a2b4"),
     ("machine_host/machine.py:Machine.load_all", "70b96c5b7e2866db55db01ff96af21ca735ebaaab3f701aac367fda92aaa1370"),
     ("machine_host/machine.py:Machine.retry", "89035a3934b6da831ef697ec64561953d7e56d9bb9577ea6ce69c0155097a051"),
@@ -279,8 +279,12 @@ def _split(binding: Binding) -> str | None:
 
 def _dirty(package: Path) -> str | None:
     try:
+        if (git := shutil.which("git")) is None:
+            raise FileNotFoundError(2, "No such file or directory", "git")
+        command = ["git", "-C", str(package), "status", "--porcelain", "--", "."]
         done = subprocess.run(  # noqa: S603 - fixed argv, read-only status, no shell
-            ["git", "-C", str(package), "status", "--porcelain", "--", "."],  # noqa: S607
+            command,
+            executable=str(Path(git).absolute()),
             capture_output=True,
             text=True,
             timeout=30,
