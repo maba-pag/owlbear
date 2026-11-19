@@ -24,7 +24,7 @@ import asyncio
 import sys
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from owlbear_delivery_next.change_contracts import watch_policy
 from owlbear_delivery_next.change_contracts.permissions import view
@@ -38,6 +38,9 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
     from pathlib import Path
 
+    from copilot.generated.session_events import PermissionRequestedData, SessionEvent
+    from copilot.session import PermissionRequest
+
     from owlbear_delivery_next.runtimes.subagents import Watch
 
 NOW_LIMIT = 80  # characters of the now line's summary, and of a report's command
@@ -45,7 +48,7 @@ START, ASKED, LAUNCHED = "tool.execution_start", "permission.requested", "subage
 DONE = "tool.execution_complete"
 
 
-def summary(tool: str, arguments: Any) -> str:  # noqa: ANN401 - the SDK's JSON tool arguments
+def summary(tool: str, arguments: object) -> str:
     """One short, redacted line for a tool call: ``ran <command>`` or ``<tool> <target>``."""
     args = arguments if isinstance(arguments, dict) else {}
     target = next((args[k] for k in ("path", "file_path", "pattern", "query", "url") if args.get(k)), "")
@@ -103,7 +106,7 @@ class Feed:
         event = _failure(self.watching, self.session(), "spotter", exc, starting=starting)
         self.writer.put(watch_reports.activity(self.watching.slug, event))
 
-    def seen(self, kind: str, ev: Any) -> None:  # noqa: ANN401 - an SDK session event
+    def seen(self, kind: str, ev: SessionEvent) -> None:
         """Observe one event; a start or a permission request updates its call's report; the Spotter takes it in."""
         if self.spotter is not None and self.open:
             try:
@@ -124,7 +127,7 @@ class Feed:
         except Exception as exc:  # noqa: BLE001 - an observation never ends the step
             self.writer.lost(failure(exc))
 
-    def _spotted(self, spot: spotter.Spotter, kind: str, ev: Any) -> None:  # noqa: ANN401 - an SDK session event
+    def _spotted(self, spot: spotter.Spotter, kind: str, ev: SessionEvent) -> None:
         """*spot* takes *ev* in; a completed call with an effect outside is a state change, never a sample."""
         moment = self._changed(ev) if kind == DONE and "state-change" in spot.ctx.looks else None
         if moment is None:
@@ -132,7 +135,7 @@ class Feed:
         elif spot.take(ev):
             spot.look("state-change", 1.0, moment)
 
-    def _changed(self, ev: Any) -> dict[str, Any] | None:  # noqa: ANN401 - an SDK session event
+    def _changed(self, ev: SessionEvent) -> dict[str, Any] | None:
         """The state-change moment of a completed call this feed saw start, or None when its effect stays inside."""
         cid = getattr(ev.data, "tool_call_id", "") or ""
         seen = self.calls.get((self.session(), cid))
@@ -152,7 +155,7 @@ class Feed:
         step = self.watching.step
         self.writer.close(lambda said: watch_reports.summary_row(self.session(), step, said))
 
-    def _observed(self, kind: str, ev: Any) -> tuple[tuple[str, str], _Seen]:  # noqa: ANN401 - an SDK event
+    def _observed(self, kind: str, ev: SessionEvent) -> tuple[tuple[str, str], _Seen]:
         at = getattr(ev, "timestamp", None) or datetime.now(UTC)
         stamp = at.astimezone(UTC).isoformat(timespec="milliseconds")
         data = ev.data
@@ -166,7 +169,7 @@ class Feed:
             seen.at, seen.started, seen.command = stamp, True, summary(tool, args)
             seen.parent = getattr(data, "parent_tool_call_id", None) or ""
         else:
-            request = data.permission_request  # one without a call id is a call of its own
+            request = cast("PermissionRequestedData", data).permission_request  # one without a call id is its own
             cid = getattr(request, "tool_call_id", None) or f"request {getattr(data, 'request_id', '')}"
             seen = self.calls.setdefault((self.session(), cid), _Seen(stamp))
             seen.call = replace(seen.call, asked=(*seen.call.asked, asked(request)))
@@ -175,7 +178,7 @@ class Feed:
         seen.agent_id = seen.agent_id or getattr(ev, "agent_id", None) or ""
         return (self.session(), cid), seen
 
-    def _launched(self, ev: Any) -> None:  # noqa: ANN401 - an SDK session event
+    def _launched(self, ev: SessionEvent) -> None:
         """Name a subagent's launcher, and report again the calls already reported under it as "unknown"."""
         launcher, name = getattr(ev.data, "tool_call_id", "") or "", getattr(ev.data, "agent_name", "") or ""
         if not (launcher and name) or not self.open:
@@ -225,7 +228,7 @@ class Feed:
         return (found.agent if found else "") or self.launched.get(launcher, "")
 
 
-def asked(request: Any) -> watch_policy.Asked:  # noqa: ANN401 - one of the SDK's permission request classes
+def asked(request: PermissionRequest) -> watch_policy.Asked:
     """One SDK permission request as the policy reads it: the guard's view plus the runtime's read-only evidence."""
     req = view(request)
     commands = getattr(request, "commands", None) or ()
@@ -234,7 +237,7 @@ def asked(request: Any) -> watch_policy.Asked:  # noqa: ANN401 - one of the SDK'
     return watch_policy.Asked(req.kind, req.paths if req.kind == "write" else (), read_only, redirect)
 
 
-def _command(request: Any) -> str:  # noqa: ANN401 - one of the SDK's permission request classes
+def _command(request: PermissionRequest) -> str:
     req = view(request)
     if whole := getattr(request, "full_command_text", None):  # the command as given, not its programs' names
         return summary("bash", {"command": whole})

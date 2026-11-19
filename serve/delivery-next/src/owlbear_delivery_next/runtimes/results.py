@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import subprocess
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import (
     approval_tools,
@@ -100,7 +100,7 @@ class Gate:
         approval = (approval_tools.REQUEST,) if approval_tools.offered(role, judging=self.cfg.judging) else ()
         return self.cfg.submit, *first, *helpers, *ask, *approval, tools.PREMISE, tools.MISSING
 
-    def call(self, spec: tools.Spec, arguments: Any) -> tuple[str, bool]:  # noqa: ANN401 - the agent's JSON arguments
+    def call(self, spec: tools.Spec, arguments: object) -> tuple[str, bool]:
         """Validate one call; return the text the agent reads and whether it was accepted."""
         with self._lock:
             closed = self._closed()
@@ -119,7 +119,7 @@ class Gate:
         self,
         spec: tools.Spec,
         helper: Callable[[tools.Args], str],
-        arguments: Any,  # noqa: ANN401 - the agent's JSON arguments
+        arguments: object,
     ) -> tuple[str, bool]:
         """A helper answers and the step goes on; its rejected calls never count toward ending the step."""
         if self.done:
@@ -144,7 +144,7 @@ class Gate:
             return "Rejected. Fix each field, then call again:\n" + "\n".join(f"- {e}" for e in errors), False
         return helper(args), True
 
-    def _checked(self, spec: tools.Spec, arguments: Any) -> Checked | None:  # noqa: ANN401 - the agent's JSON
+    def _checked(self, spec: tools.Spec, arguments: object) -> Checked | None:
         """Validate under the lock, then lint outside it, so no ending or revocation waits on a linter (TD-87)."""
         with self._lock:
             if self._closed():  # before any check: a late call never touches the accepted head
@@ -158,7 +158,7 @@ class Gate:
                     errors = self.cfg.quality()
         return args, errors, tree, kind
 
-    def _check(self, spec: tools.Spec, arguments: Any) -> Checked:  # noqa: ANN401 - the agent's JSON arguments
+    def _check(self, spec: tools.Spec, arguments: object) -> Checked:
         args, errors = tool_schema.parse(spec.model, arguments)
         if args is None:
             if spec is audit_tools.SUBMIT:

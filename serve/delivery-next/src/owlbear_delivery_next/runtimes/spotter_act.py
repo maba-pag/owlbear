@@ -41,6 +41,7 @@ from owlbear_delivery_next.runtimes.sdk_teardown import CALL, call
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Coroutine
 
+    from copilot.generated.session_events import SessionEvent
     from copilot.session import CopilotSession
 
     from owlbear_delivery_next.runtimes.sdk_adapter import _Step
@@ -126,7 +127,7 @@ class StepActor:
         await self._abort(record)
         await self._update(record, delivery="delivered")
 
-    def seen(self, kind: str, ev: Any) -> None:  # noqa: ANN401 - an SDK session event, on the step's loop
+    def seen(self, kind: str, ev: SessionEvent) -> None:
         """A message the runtime logged, or a call it completed: the note it carries is delivered."""
         if kind == "user.message":
             key = getattr(ev.data, "message_id", None)

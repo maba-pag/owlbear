@@ -82,6 +82,7 @@ from owlbear_delivery_next.state_store import spotter_test
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Mapping
 
+    from owlbear_delivery_next.improvement.events import Event
     from owlbear_delivery_next.improvement.spotter_store import RecordFields
 
 PROMPT = cases.PROMPT  # the prompt file; what a look sends is ``Context.prompt``, frozen with its examples
@@ -211,10 +212,7 @@ type Judge = Callable[[dict[str, Any], Context, credit_meter.Meter], Awaitable[s
 
 
 class Spotter:
-    """One step session's Spotter: its intake and its looks; nothing it does blocks the step's loop.
-
-    *judge* runs one look (``runtimes.spotter_look``); a test gives its own.
-    """
+    """One step's nonblocking intake and looks; *judge* runs a look, or a test supplies its own."""
 
     def __init__(  # noqa: PLR0913 - a step's seams, and the chats follower's admission
         self,
@@ -249,7 +247,7 @@ class Spotter:
         self.hand_offs: dict[str, asyncio.Future[str | None]] = {}  # a waiting submit's call id: the look's note
         self.planned = False  # the step's plan was seen live: ``seen`` looks at it once
 
-    def seen(self, ev: Any) -> None:  # noqa: ANN401 - an SDK event, on the step's loop
+    def seen(self, ev: Event) -> None:
         """Take one event in: its own agent's completed action may be sampled, its first reply is its plan."""
         d = as_dict(ev)
         unanswered = self.kept.first_reply is None
@@ -262,7 +260,7 @@ class Spotter:
                           "call": str(d.get("id") or "")}  # fmt: skip
                 self._look("plan", 1.0, moment)
 
-    def take(self, ev: Any) -> bool:  # noqa: ANN401 - an SDK event or a logged one
+    def take(self, ev: Event) -> bool:
         """Take one event in without a look; whether it completed a call of the session's own agent."""
         return self.kept.add(ev)
 
@@ -282,7 +280,7 @@ class Spotter:
         skipped = self._record(look, probability, moment, skipped=why)
         self._track(offload(store, self.folder, skipped, None))
 
-    def history(self, events: Iterable[Any]) -> None:
+    def history(self, events: Iterable[Event]) -> None:
         """A resumed session's transcript, taken in without looks: the task, plan and evidence the agent has."""
         for ev in events:
             self.kept.add(ev)
