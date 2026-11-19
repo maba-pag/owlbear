@@ -91,13 +91,16 @@ def action(c: Change, remedy: int) -> str:
 
 def pending_ci(c: Change) -> Repair | None:
     """A consumed CI remedy whose current task still needs a fresh check observation."""
-    if c.step.kind != StepKind.BUILD:
+    if c.step.kind != StepKind.BUILD or c.plan is None:
         return None
     return next(
         (
             r
             for r in reversed(c.repairs.done)
-            if r.recovered_with == CI_LOG and r.refreshed_at is None and r.task == c.step.task
+            if r.recovered_with == CI_LOG
+            and r.refreshed_at is None
+            and r.recovered_plan == c.plan.version
+            and r.task == c.step.task
         ),
         None,
     )
@@ -115,6 +118,7 @@ def consume(c: Change, item: Recovery, *, unchanged: bool) -> None:
     if remedy is None or r is None or item.remedy != remedy or item.action != action(c, remedy):
         return
     r.recovered_with, r.recovered_at = remedy, item.at
+    r.recovered_plan = c.plan.version if c.plan else None
     c.budgets.causes.pop(r.cause, None)
     go(c, c.step.kind, c.step.task, c.step.mode)
     c.stop = c.outcome = None

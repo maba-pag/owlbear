@@ -98,6 +98,7 @@ class Repair(BaseModel):
     preparations_before: list[Preparation] | None = None
     recovered_with: int | None = None  # a shipped Delivery defect fix, consumed once for this repair
     recovered_at: datetime | None = None
+    recovered_plan: int | None = None
     refreshed_at: datetime | None = None  # CI evidence refreshed before a recovered builder runs
 
 
