@@ -30,6 +30,8 @@ from owlbear_delivery_next.runtimes.model_choices import takes_effort
 from owlbear_delivery_next.state_store import spend_ledger
 
 if TYPE_CHECKING:
+    from copilot.session import CopilotSession
+
     from owlbear_delivery_next.change_contracts.profile_record import RoleModel
     from owlbear_delivery_next.improvement.credit_meter import Meter
 
@@ -96,7 +98,7 @@ async def asked(
 
 
 async def _end(  # noqa: PLR0913 - the session's runtime, session, meter, run and measurement
-    client: Any, session: Any, limit: Limit, spent: spotter_look.Spent,  # noqa: ANN401
+    client: CopilotClient, session: CopilotSession | None, limit: Limit, spent: spotter_look.Spent,
     measure: context_start.Start, *, confirmed: bool,
 ) -> None:  # fmt: skip
     """Reconcile the session's share with its reported total, record its run, then tear it down; each bounded."""

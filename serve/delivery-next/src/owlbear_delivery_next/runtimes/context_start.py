@@ -24,6 +24,8 @@ if TYPE_CHECKING:
     from collections.abc import Collection
 
     from copilot.generated.rpc import Entry, SessionContextAttribution
+    from copilot.generated.session_events import SessionEvent
+    from copilot.session import CopilotSession
 
 PARTS = ("system_prompt", "custom_instructions", "skills", "subagents", "built_in_tools", "mcp_tools", "messages")
 CATEGORIES = {"system_prompt": "system_prompt", "custom_instructions": "custom_instructions",
@@ -66,21 +68,22 @@ class Start:
         self.run, self.agent, self.model, self.place, self.tasks = run, agent, model, place, tasks
         self.skills = skills
         self.tier = "long" if context == "long" else "default"
-        self.session: Any = None
+        self.session: CopilotSession | None = None
         self.sid = ""
         self.task: asyncio.Task[None] | None = None
 
-    def opened(self, session: Any, sid: str) -> None:  # noqa: ANN401 - the SDK session
+    def opened(self, session: CopilotSession, sid: str) -> None:
         """The session to read, once it exists."""
         self.session, self.sid = session, sid
 
-    def seen(self, kind: str, ev: Any) -> None:  # noqa: ANN401 - an SDK session event, on the session's loop
+    def seen(self, kind: str, ev: SessionEvent) -> None:
         """Start the read at the session's first main-agent model call; a subagent's call is not its own."""
-        if kind != "assistant.usage" or self.task is not None or self.session is None:
+        session = self.session
+        if kind != "assistant.usage" or self.task is not None or session is None:
             return
         if getattr(getattr(ev, "data", None), "parent_tool_call_id", None):
             return
-        self.task = asyncio.get_running_loop().create_task(self._read())
+        self.task = asyncio.get_running_loop().create_task(self._read(session))
         if self.tasks is not None:
             self.tasks.add(self.task)
             self.task.add_done_callback(self.tasks.discard)
@@ -91,10 +94,10 @@ class Start:
             await asyncio.wait({self.task}, timeout=BOUND)
             self.task.cancel()
 
-    async def _read(self) -> None:
+    async def _read(self, session: CopilotSession) -> None:
         try:
             async with asyncio.timeout(BOUND):
-                answer = await self.session.rpc.metadata.get_context_attribution()
+                answer = await session.rpc.metadata.get_context_attribution()
             found = mapped(answer.context_attribution, self.skills)
         except asyncio.CancelledError:
             self._write(Context(measured=False, error="the session ended before its context attribution answered"))
@@ -139,15 +142,16 @@ def _mapped(attribution: SessionContextAttribution, preloaded: Collection[str]) 
             names = ", ".join(sorted(preloaded))
             kept.append(f"{part}: the preloaded {names} stay in their category, which the attribution does not itemize")
         found = [(_bucket(e, entries), int(e.tokens)) for e in tops]
-        need = {b: sum(t for x, t in found if x == b) for b, _ in found}
         held = sum(t for _, t in found)
-        if None in need:
+        named = [(b, t) for b, t in found if b is not None]
+        need = {b: sum(t for x, t in named if x == b) for b, _ in named}
+        if len(named) < len(found):
             kept.append(f"{part}: {held} tokens stay in their category, which nesting does not name")
-        elif any(parts[b] < t for b, t in need.items()):  # type: ignore[index]
+        elif any(parts[b] < t for b, t in need.items()):
             kept.append(f"{part}: {held} tokens stay in their category, which holds fewer")
         else:
             for b, t in need.items():
-                parts[b] -= t  # type: ignore[index]
+                parts[b] -= t
             taken[part] = sum(need.values())
     return Context(measured=True, window=int(attribution.limit), total=total,
                    parts={p: parts.get(p, taken.get(p, 0)) for p in PARTS}, kept="; ".join(kept))  # fmt: skip

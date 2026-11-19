@@ -27,7 +27,7 @@ import tempfile
 import uuid
 from contextvars import ContextVar
 from functools import partial
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from copilot import CopilotClient, RuntimeConnection
 from copilot.rpc import PermissionDecisionReject
@@ -40,6 +40,9 @@ from owlbear_delivery_next.runtimes.copilot_cli import cli_path
 from owlbear_delivery_next.runtimes.credit_limit import Limit
 from owlbear_delivery_next.runtimes.model_choices import takes_effort
 from owlbear_delivery_next.state_store import spend_ledger
+
+if TYPE_CHECKING:
+    from copilot.session import CopilotSession
 
 UNENDED: ContextVar[list[str] | None] = ContextVar("spotter_look_unended", default=None)
 """Where a caller owning the runtimes' lifetime (the cases job) collects each session whose runtime's end is unknown."""
@@ -162,7 +165,7 @@ class Spent:
 
 
 async def _end(  # noqa: PLR0913 - the look's runtime, session, meter, run and measurement
-    client: Any, session: Any,  # noqa: ANN401
+    client: CopilotClient, session: CopilotSession | None,
     limit: Limit, spent: Spent, measure: context_start.Start, *, confirmed: bool,
 ) -> None:  # fmt: skip
     """Reconcile the look's share with the session's reported total, then tear the session down; each bounded."""
