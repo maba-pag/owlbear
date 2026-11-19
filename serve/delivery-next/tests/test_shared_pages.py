@@ -862,7 +862,7 @@ def every_name_is_what_its_row_shows(page, pds) -> None:
     """The unset list's names are the page's own: each key's name is its row's visible name, behind its section's
     heading where the row means little alone, and its column's head in the agents and rounds tables (never built from
     the name table itself); the row sits in the group the list links to; a key with no row is named as written."""
-    grouped_unset_overview(page, pds, page.url.split("/config")[0], expect)
+    grouped_unset_overview(page, pds, page.url.split("/config")[0])
     retired = {"id": "n1", "key": "machine.spotter_budget", "old": "5", "new": None, "at": "2026-11-04T09:00:00Z"}
     expect(page.locator("#reads-status")).to_contain_text("Last read", timeout=30_000)  # none lands over the notice
     page.evaluate(RETIRED_NOTICE, [retired])  # it is shown as its key and can be dismissed, never a failure to draw
@@ -889,7 +889,7 @@ def every_name_is_what_its_row_shows(page, pds) -> None:
     assert "agents.planner.bogus" in nothing["unknown"]
 
 
-def grouped_unset_overview(page, pds, base: str, expect) -> None:
+def grouped_unset_overview(page, pds, base: str) -> None:
     expect(page.locator("#unset-groups > li")).to_have_count(5)
     expect(page.locator("#unset-project, #unset-overview")).to_have_count(0)
     expect(page.locator("#unset-agents")).to_have_text(
