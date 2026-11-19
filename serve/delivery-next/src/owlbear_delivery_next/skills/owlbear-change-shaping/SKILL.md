@@ -44,7 +44,9 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    A state can need clicks or typing first (open a menu, search for a name): each step clicks a
    control or types into a field, named exactly as the page shows it. Steps run only on a
    test copy the project's declared preparation options prepare. If the project has no preview to render, offer three choices: add
-   one in this Change, declare a person-only visual check, or change the scope.
+   one in this Change, declare a person-only visual check, or change the scope. A person check proves the
+   eventual interaction, not the shaping baseline: every UI brief still needs current-page states and a render
+   recipe so Delivery can capture the target, or report why it cannot.
    Establish the render recipe from the repository's own scripts and docs: the `command` that starts its
    preview, passing `{port}` to the server (Delivery picks the port), the `directory` it runs in, and the
    `ready_url` with `{port}` that answers once it is up. Name the `preparation` when the project declares
@@ -71,7 +73,10 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    Look at the pictures with the owner (his link to the Changes page shows them too) and write each
    expectation against what they show, then save the states again: changed expectations capture nothing
    again. A capture that ended with reasons leads to the three choices above; saving again after fixing the
-   cause captures again. Approval waits until the capture has ended.
+   cause captures again. Missing recipe or states also end with explicit reasons, never "no capture needed".
+   Resolve missing setup where possible and show the actual reasons when it cannot render before inviting
+   approval. Keep the person check for transient behaviour that screenshots cannot prove.
+   Approval waits until the capture has ended, with pictures or reasons.
 8. Once the draft is ready, call `challenge_brief` with the handle and the saved version. A challenger
    judges that version; the tool waits about 70 s for its verdict and returns the findings by ID. A challenge
    takes minutes: while a reply says `running`, call `await_challenge` with the handle and the version at once,

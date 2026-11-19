@@ -344,6 +344,8 @@ export function beforeSection(slug, b, r = null) {
 export function currentPages(slug, c, states) {
   if (!c) return nothing;
   if (c.running) return text("Capturing the current pages\u2026 Approval waits until they are captured.");
+  if (c.unavailable) return html`<section>${hd(4, "The current pages", "sm")}
+    ${text(`Not captured: ${c.unavailable}`)}</section>`;
   const gallery = [], commit = (c.head || "").slice(0, 7), mine = (s, f) => f.startsWith(`${s.name} at `)
     || f.startsWith(`${s.name}:`);
   const figures = states.map((s) => {

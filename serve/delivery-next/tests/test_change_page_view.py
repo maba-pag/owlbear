@@ -12,6 +12,8 @@ from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.decision_records import Pick
 from owlbear_delivery_next.change_contracts.round_records import BRIEF
+from owlbear_delivery_next.change_contracts.visual_records import ShapingCapture, VisualResult
+from owlbear_delivery_next.change_flow import shaping_capture
 from owlbear_delivery_next.project_host import brief_timer
 from owlbear_delivery_next.state_store.store import Lock
 
@@ -28,14 +30,22 @@ SLUG = "c1-fixture"
 UNREVIEWED = "v4 changed after its last challenge and no challenger read it: approve it as it is, or challenge it"
 
 
+def capture_ended(c: Change) -> None:
+    c.shaped = ShapingCapture(
+        key=shaping_capture.key(c.brief),
+        result=VisualResult(head="", tree="", findings=["the fixture has no preview"], at=datetime.now(UTC)),
+    )
+
+
 @contextlib.contextmanager
 def opened(c1: tuple[Store, Any], pds: Any, edit: Callable[[Change], None] | None = None) -> Iterator[Any]:
     """The Changes page on c1, changed by *edit* first, in a real browser: only the test host and the PDS CDN answer."""
     store, app = c1
+    c = store.read(SLUG)
     if edit:
-        c = store.read(SLUG)
         edit(c)
-        store.write(Lock(SLUG), c)
+    capture_ended(c)
+    store.write(Lock(SLUG), c)
     with served(app) as base, page_at(base, pds, (1280, 900)) as page:
         errors: list[str] = []
         page.on("pageerror", lambda e: errors.append(str(e)))
@@ -213,7 +223,9 @@ def test_a_version_saved_after_its_loop_ended_says_when_its_challenge_starts_and
     body = {k: said[k] for k in fields} | {"change": "c1", "person_checks": checks}
     assert http.post("/api/next/briefs", json=body).json()["version"] == 5
     with store.lock(SLUG) as lock:  # the host's next pass, which the save woke
-        store.write(lock, brief_timer.passed(store, lock, store.read(SLUG), datetime.now(UTC), paused=False))
+        c = store.read(SLUG)
+        capture_ended(c)
+        store.write(lock, brief_timer.passed(store, lock, c, datetime.now(UTC), paused=False))
     at = f"{store.read(SLUG).outcome.wake_at.astimezone():%H:%M}"
     with opened(c1, pds) as page:
         row = page.locator(f"#changes .card:has(a[data-key='{SLUG}'])")
