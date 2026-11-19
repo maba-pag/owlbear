@@ -29,8 +29,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.machine_host import project
-from owlbear_delivery_next.project_host import api
-from owlbear_delivery_next.project_host.host import Host as ProjectHost
+from owlbear_delivery_next.project_host import api, host
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config
@@ -988,7 +987,7 @@ def test_maintenance_curates_a_memory_folder_now_and_shows_its_report(
     shop = registry.register(clone(tmp_path / "shop", origin="https://github.com/acme/shop-site.git"))
     curated(root / "shop-site" / "memory", "Run ruff first")
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
-    monkeypatch.setattr(ProjectHost, "_launch", lambda _self, _slug: False)
+    monkeypatch.setattr(host.Host, "_launch", lambda _self, _slug: False)
     with serve() as (native, _server, base):
         report = MemoryCurationResult(summary="1 promoted, nothing left for you", entries=[])
         native.curation.run = lambda cfg: Run(
