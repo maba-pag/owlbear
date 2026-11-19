@@ -268,13 +268,23 @@ def biome_workspace(tmp_path: Path) -> Path:
     (tmp_path / ".pre-commit-config.yaml").write_text(
         yaml.safe_dump({"repos": [{"repo": "local", "hooks": [hook]}]}), encoding="utf-8"
     )
-    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)  # noqa: S603, S607
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with tmp_path operands; no shell.
+        [git_executable, "init", "-q", str(tmp_path)], check=True
+    )
     return tmp_path
 
 
 def _biome_probe(root: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # noqa: S603
-        ["node", str(root / quality.BIOME), *arguments],  # noqa: S607
+    node_executable = shutil.which("node")
+    if node_executable is None:
+        message = "node executable is unavailable"
+        raise FileNotFoundError(message)
+    return subprocess.run(  # noqa: S603 - Repository Biome script through the fixture node_modules link with test-built arguments; no shell.
+        [node_executable, str(root / quality.BIOME), *arguments],
         cwd=root,
         capture_output=True,
         text=True,
@@ -305,11 +315,19 @@ def test_biome_staged_checks_handle_empty_ignored_and_invalid_files(biome_worksp
     assert _biome_probe(biome_workspace, *arguments).returncode == 0
     lockfile = biome_workspace / "package-lock.json"
     lockfile.write_text("{}\n", encoding="utf-8")
-    subprocess.run(["git", "add", str(lockfile)], cwd=biome_workspace, check=True)  # noqa: S603, S607
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
+    subprocess.run(  # noqa: S603 - Fixture Git add argv with lockfile operands; no shell.
+        [git_executable, "add", str(lockfile)], cwd=biome_workspace, check=True
+    )
     assert _biome_probe(biome_workspace, *arguments).returncode == 0
     source = biome_workspace / "settings.json"
     source.write_text("{broken", encoding="utf-8")
-    subprocess.run(["git", "add", str(source)], cwd=biome_workspace, check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git add argv with source operands; no shell.
+        [git_executable, "add", str(source)], cwd=biome_workspace, check=True
+    )
     assert _biome_probe(biome_workspace, *arguments).returncode == 1
     assert source.read_text(encoding="utf-8") == "{broken"
 
@@ -320,16 +338,24 @@ def test_biome_precommit_fixes_only_selected_files(biome_workspace: Path) -> Non
     other = "other.json"
     for relative in (selected, other):
         (biome_workspace / relative).write_text('{"value":1}\n', encoding="utf-8")
-    subprocess.run(["git", "add", selected, other], cwd=biome_workspace, check=True)  # noqa: S603, S607
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
+    subprocess.run(  # noqa: S603 - Fixture Git add argv with other/selected operands; no shell.
+        [git_executable, "add", selected, other], cwd=biome_workspace, check=True
+    )
     command = [sys.executable, "-m", "pre_commit", "run", "biome-check"]
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(  # noqa: S603 - sys.executable -m pre_commit runs biome-check with --files and the literal selected fixture filename; no shell.
         [*command, "--files", selected], cwd=biome_workspace, capture_output=True, text=True, check=False
     )
     assert result.returncode == 1, result.stdout + result.stderr
     assert (biome_workspace / selected).read_text(encoding="utf-8") == '{ "value": 1 }\n'
     assert (biome_workspace / other).read_text(encoding="utf-8") == '{"value":1}\n'
-    subprocess.run([*command, "--all-files"], cwd=biome_workspace, capture_output=True, check=False)  # noqa: S603
-    result = subprocess.run(  # noqa: S603
+    subprocess.run(  # noqa: S603 - sys.executable -m pre_commit runs biome-check --all-files to format the fixture repository; no shell.
+        [*command, "--all-files"], cwd=biome_workspace, capture_output=True, check=False
+    )
+    result = subprocess.run(  # noqa: S603 - sys.executable -m pre_commit reruns biome-check --all-files to verify the fixture repository; no shell.
         [*command, "--all-files"], cwd=biome_workspace, capture_output=True, text=True, check=False
     )
     assert result.returncode == 0, result.stdout + result.stderr

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -50,8 +51,20 @@ def test_ci_env_lists_the_open_issues_named_by_tracked_flaky_marks(
         "@pytest.mark.flaky(issue=795)\n@pytest.mark.flaky(  # known timeout\n    issue=1_742,  # see the issue\n)\n"
     )
     (tmp_path / "test_b.py").write_text("@pytest.mark.flaky(issue=805)\n")  # untracked
-    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)  # noqa: S607
-    subprocess.run(["git", "add", "test_a.py"], cwd=tmp_path, check=True)  # noqa: S607
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with literal operands; no shell.
+        [git_executable, "init", "-q"], cwd=tmp_path, check=True
+    )
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
+    subprocess.run(  # noqa: S603 - Fixture Git add argv with literal operands; no shell.
+        [git_executable, "add", "test_a.py"], cwd=tmp_path, check=True
+    )
     env, summary = tmp_path / "env", tmp_path / "summary"
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")

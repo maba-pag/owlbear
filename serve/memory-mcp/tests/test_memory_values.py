@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from collections.abc import Callable
 from pathlib import Path
@@ -34,7 +35,13 @@ def root(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def git_repository(root: Path) -> None:
-    subprocess.run(["git", "init", "-q"], cwd=root, check=True, capture_output=True)  # noqa: S607
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with literal operands; no shell.
+        [git_executable, "init", "-q"], cwd=root, check=True, capture_output=True
+    )
 
 
 @pytest.fixture
