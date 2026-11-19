@@ -18,6 +18,7 @@ from owlbear_delivery_next.local_system.publication_hold import Requires
 from owlbear_delivery_next.settings.prefs_import import plan
 from owlbear_delivery_next.state_store import profile_share
 from owlbear_delivery_next.state_store.config_save import REBASING, Prepared
+from owlbear_delivery_next.state_store.database import StoreError
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.profile_record import Profile
@@ -49,8 +50,6 @@ def _fill(store: Store, prof: Profile, basis: str, *, resumed: bool) -> bool:
     clear that waits for it cannot land between the check and the write. Returns False when the claim is no longer
     held: nothing is written, so nothing is recreated.
     """
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports its helpers
-
     claim = prof.prefs_claim
     held_through_write = contextlib.ExitStack()
 
@@ -93,8 +92,6 @@ def _publish_config(store: Store) -> str:
 
 def republish(store: Store) -> None:
     """Publish a completion that a refused publication left local: the current config first, then the marker."""
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports its helpers
-
     if not profile_share.unpublished(store):
         return
     notice = _publish_config(store) or store.retry_prefs_import()
@@ -108,8 +105,6 @@ def _claimed(store: Store, prof: Profile) -> tuple[Profile, bool] | None:
 
     The fresh read is the one the fill checks its claim against, so a claim replaced after this read is refused there.
     """
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports its helpers
-
     if prof.prefs_import == "":
         _, notice, won = store.mark_prefs_import(
             "", "pending", profile_share.config_digest(store.config_path), uuid4().hex
@@ -136,8 +131,6 @@ def run(store: Store) -> None:
     whose publication was refused is published again here. A rebase in progress in the shared checkout, which Git left
     for the owner when it stopped on a conflict, is refused before anything is read from its half-merged files.
     """
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports its helpers
-
     try:
         rebasing = bool(store.shared) and store.shared.rebasing()
     except DataRepoError as exc:

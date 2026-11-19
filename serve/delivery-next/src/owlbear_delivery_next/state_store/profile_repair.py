@@ -22,6 +22,8 @@ from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import migrations
 from owlbear_delivery_next.state_store import profile_share, roles_move
+from owlbear_delivery_next.state_store.database import StoreError
+from owlbear_delivery_next.state_store.layers import _parse
 from owlbear_delivery_next.state_store.profile_errors import (
     Basis,
     OldProfileUnreadableError,
@@ -42,8 +44,6 @@ RECEIPT = "profile-repair.json"
 
 def unreadable_guard(source: Path) -> Profile | None:
     """The legacy import guard of a saved profile that cannot be read: kept when valid, malformed evidence raises."""
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
-
     if not _present(source):
         return None
     try:
@@ -99,8 +99,6 @@ RECEIPT_LIMIT = 1 << 20  # a replacement profile is a few kilobytes; more is not
 
 def _read_regular(fd: int, receipt: Path) -> bytes:
     """The receipt's bytes from an open descriptor; a FIFO, directory or unreadable file is refused, not waited on."""
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
-
     try:
         if not stat.S_ISREG(os.fstat(fd).st_mode):
             msg = f"the pending profile repair is not a regular file: {receipt}; remove it, then run setup again"
@@ -121,8 +119,6 @@ def _read_regular(fd: int, receipt: Path) -> bytes:
 
 def _read(store: Store) -> Receipt | None:
     """The pending receipt, validated: malformed, future or unconfirmed evidence is refused, never replayed."""
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
-
     receipt = store.root / RECEIPT
     try:
         fd = os.open(receipt, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | os.O_NONBLOCK)
@@ -143,8 +139,6 @@ def _read(store: Store) -> Receipt | None:
 
 def _receipt(raw: bytes, receipt: Path) -> Receipt:
     """The receipt as written: its profile migrates forward like a saved profile, then the receipt is checked."""
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
-
     try:
         data = json.loads(raw)
         if isinstance(data, dict) and isinstance(data.get("profile"), dict):
@@ -160,8 +154,6 @@ def _receipt(raw: bytes, receipt: Path) -> Receipt:
 
 def _embedded(raw: dict[str, Any]) -> Profile:
     """The profile a receipt embeds, read as a saved profile is: migrated forward; newer or malformed is refused."""
-    from owlbear_delivery_next.state_store.store import _parse  # noqa: PLC0415 - circular at import time
-
     return _parse(json.dumps(raw), "the embedded profile", Profile, PROFILE_FORMAT, migrations.PROFILE)
 
 
@@ -189,8 +181,6 @@ def _receipt_lock(store: Store) -> Iterator[None]:
 
 def _assert_held(store: Store, held: _Held) -> None:
     """The pending receipt is still exactly the one held, for this logical repository; anything else is refused."""
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
-
     current = _read(store)
     if current != held.receipt:
         msg = (
@@ -208,8 +198,6 @@ def _assert_held(store: Store, held: _Held) -> None:
 
 def pending(store: Store) -> Receipt | None:
     """The confirmed replacement still awaiting publication; one staged for another shared repository is refused."""
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
-
     receipt = _read(store)
     if receipt is not None and receipt.scope != scope(store):
         msg = (
@@ -222,8 +210,6 @@ def pending(store: Store) -> Receipt | None:
 
 def stage(store: Store, prof: Profile, source: str, target: str) -> Receipt:
     """Stage the owner's confirmed replacement under a new id before it is published."""
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
-
     with _receipt_lock(store):
         if _read(store) is not None:
             msg = f"a profile repair is already pending: {store.root / RECEIPT}; run setup again to publish it"

@@ -21,6 +21,7 @@ from owlbear_delivery_next.local_system import data_place, data_repo, local_home
 from owlbear_delivery_next.machine_host import control, serve
 from owlbear_delivery_next.runtimes import copilot_cli, readiness
 from owlbear_delivery_next.state_store import registry
+from owlbear_delivery_next.state_store.store import Store, StoreError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -176,9 +177,6 @@ def _data(say: Say) -> int:
 
 def doctor(say: Say, dropped: list[str]) -> int:
     """What the host's environment cannot do: its tools, gh's login, the login item and each project's readiness."""
-    from owlbear_delivery_next.runtimes import readiness  # noqa: PLC0415 - only doctor needs it
-    from owlbear_delivery_next.state_store.store import Store, StoreError  # noqa: PLC0415
-
     for name in dropped:
         say(f"ignored from this shell: {name} (the host never sees it; a project's own Git settings decide)")
     failed = _tools(say)

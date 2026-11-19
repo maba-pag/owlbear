@@ -456,7 +456,7 @@ def test_a_storage_failure_on_save_is_a_readable_error(store, monkeypatch, whole
     def full(*_a: object, **_k: object) -> None:
         raise denied
 
-    monkeypatch.setattr("owlbear_delivery_next.state_store.store.update_layer", full)
+    monkeypatch.setattr("owlbear_delivery_next.state_store.config_save.update_layer", full)
     c = client(store, headers=AUTH)
     rev = c.get("/api/next/config").json()["project_rev"]
     r = c.put("/api/next/config/project", json={"rev": rev, "layer": {"format": F}})
@@ -481,7 +481,7 @@ def test_settings_storage_refusals_keep_their_type_and_notes(store, monkeypatch,
     if site in ("read", "combined"):
         monkeypatch.setattr(config_routes, "read_layer_bytes", failing)
     elif site == "save":
-        monkeypatch.setattr("owlbear_delivery_next.state_store.store.update_layer", failing)
+        monkeypatch.setattr("owlbear_delivery_next.state_store.config_save.update_layer", failing)
     else:
         monkeypatch.setattr(config_routes.prefs_import, "republish", failing)
     got = (

@@ -19,7 +19,7 @@ from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import loop_owner, ref_writes, sdk_adapter, session_result
 from owlbear_delivery_next.settings import roles
-from owlbear_delivery_next.workflow_steps import disposable, ro_installs, watched
+from owlbear_delivery_next.workflow_steps import disposable, lookup, ro_installs, watched
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -223,8 +223,6 @@ def judges(  # noqa: PLR0913, PLR0917 - the round's settings snapshot
     checks a state change through the round's own lookup, settled with the runs before their cleanup, its picker
     counted on the Change (#925).
     """
-    from owlbear_delivery_next.workflow_steps import lookup  # noqa: PLC0415 - lookup imports this module
-
     settings = settings or store.settings()
     look_limit = watched.needed(
         settings

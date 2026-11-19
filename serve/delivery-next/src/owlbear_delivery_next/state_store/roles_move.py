@@ -8,9 +8,12 @@ import os
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.profile_record import PROFILE_FORMAT, Profile
+from owlbear_delivery_next.local_system.publication_hold import Requires
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import migrations
 from owlbear_delivery_next.settings.config import Layer
+from owlbear_delivery_next.state_store.config_save import Prepared
+from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.layers import read_layer
 from owlbear_delivery_next.state_store.profile_share import ABSENT, PROFILE, ROLES_MOVED, config_digest
 
@@ -30,8 +33,6 @@ def move_roles(store: Store) -> None:
     old profile this build cannot inspect raises ``StoreError`` and stays unmoved; a damaged settings file is left
     to ``read_config`` to report. A refused settings write raises too, so the store never opens as if it had moved.
     """
-    from owlbear_delivery_next.state_store.store import StoreError  # noqa: PLC0415 - the store imports this module
-
     old, marker = store.root / PROFILE, store.root / ROLES_MOVED
     if marker.exists() or not old.exists():
         return
@@ -55,8 +56,6 @@ def move_roles(store: Store) -> None:
         if not found:
             atomic_write(marker, text)
             return
-        from owlbear_delivery_next.local_system.publication_hold import Requires  # noqa: PLC0415 - with Prepared
-        from owlbear_delivery_next.state_store.config_save import Prepared  # noqa: PLC0415 (import cycle)
 
         def change(cur: Layer) -> Layer:
             if cur.roles_moved:  # another clone's move or clear landed after this read: never refill it

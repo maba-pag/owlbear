@@ -76,7 +76,7 @@ IMPORTS = (
     ("state_store/project_home.py", "c79464a6139fe571efd600903aa848dc67c9673f016d12c093d7d6b94b74a681"),
     ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
 )
-CURRENT_FAMILY_AGGREGATE = "22d387d33e4bf21c58db77a3c6bedfd0d1cbb95c6de0b349741d8aaf8cec06e4"
+CURRENT_FAMILY_AGGREGATE = "79bd9011af062228a79a6d04b33391bcc345fd52bca93deaab2e26743f91233c"
 CURRENT_FUNCTIONS = (
     ("commands/chat_client.py:Chat.call", "a3dae79af4df3874c83c2466621b379fc3e9fc3e670045c20a8e8fca44113250"),
     ("commands/chat_client.py:workspace", "72a7a921743b6103fb5f5d78e5d52d238def17b341910e8348a1d702e449fb60"),
@@ -89,7 +89,7 @@ CURRENT_FUNCTIONS = (
     ("machine_host/app.py:Dispatcher.__call__", "75b1fe7604dac66a5c9d336abed0293ddcfaf379a65ed64bc8f48941cb024299"),
     ("machine_host/command.py:forward", "5b6327596aa3036314e5e279f4b7a444152e7555a29059797bf2b6f0e82cca69"),
     ("machine_host/command.py:main", "027daaf564131a2bd0d995a35156f8bcf884ac1ce32d7fc6ab5a2dca81af9546"),
-    ("machine_host/install.py:doctor", "7e4a3b3568474ed78445870de0ca6a9a02a4ab830acc5b1ef817d8277d4d010d"),
+    ("machine_host/install.py:doctor", "bb1f0d3af99639b306a2d536259f1a5acb2ac55d40ae526c967928a4e9ba4d19"),
     ("machine_host/machine.py:Machine._load", "a43b1e7300a34467b098adc86f6d08e9e9de61940136229bec199ed40473a2b4"),
     ("machine_host/machine.py:Machine.load_all", "70b96c5b7e2866db55db01ff96af21ca735ebaaab3f701aac367fda92aaa1370"),
     ("machine_host/machine.py:Machine.retry", "89035a3934b6da831ef697ec64561953d7e56d9bb9577ea6ce69c0155097a051"),
@@ -131,8 +131,8 @@ CURRENT_IMPORTS = (
     ("commands/setup.py", "0ab35425da1b72b8fc98bb51a003e023a324ede750c5bc6d19bf288ed6cdd231"),
     ("machine_host/app.py", "35c286944230060af35803e560d0fd1aaa3ba3a0560a10b8304b4ec157c0908b"),
     ("machine_host/command.py", "577ce56b1140fdf075a0e005468cb52ae5ccbab25c6519efa162e2bff05cb714"),
-    ("machine_host/install.py", "695fdcecbfe23f41269f93fea417569b33ef2e1630ee418647e805220b8c1f96"),
-    ("machine_host/machine.py", "d79a9bedc3e449980d49ed674866c14caf0060e7aa3d7c60a4e5a5d0a8e77372"),
+    ("machine_host/install.py", "3b7444f683775dce115b5dc6001570c54833c2d2f17866f6abbd56ae3d3a0e5f"),
+    ("machine_host/machine.py", "2f896c5409f7e6d03a64117a5a16d1e979f036e6d80acf2c397d81b500380f64"),
     ("machine_host/project.py", "5fdd0f25d0208ffc3c8ccba290795d42f163a89ee04914c2ef02eb38a442ef87"),
     ("state_store/registry.py", "b40c2445c80b23271a509ae75e9cb4b0c6c2cb47c881d11e0743647bb625c133"),
     ("machine_host/selfcheck.py", "680784ee7506bf8f9a557b223be4ccfd20b96946d134577bff27206d17b6818d"),
