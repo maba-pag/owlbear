@@ -27,17 +27,23 @@ Use history only to settle a concrete current claim. Do not equate an unfinished
 
 ### Context helper before lens workers
 
-Start one read-only helper before the workers. Give it this brief:
+Before inspecting source for findings, use `task` with a built-in `agent_type` to start one read-only context helper.
+The helper and one distinct worker per requested lens part are required even for a small repository or when you
+expect no findings. Direct inspection by you supports their work; it never substitutes for the helper or workers.
+Give the helper this brief:
 
 > Read the whole supplied plan, decisions and limits for this pinned scope and owner's note. Identify planned or
 > decided obligations that an audit might wrongly remove, relevant authority for each lens part, already tracked
 > observations, and gaps including unexamined discussions. Return references, relevant decisions and limits without
 > changing anything or judging source findings. Do not reinterpret a failed lookup as no applicable rules.
 
-Read its result. Start one worker per requested part below, supplying the note, pinned scope, plan, helper's
+Wait for and read its result before starting any lens worker. Use `task` with a built-in `agent_type` for each
+requested part below, supplying the note, pinned scope, plan, helper's
 relevant decisions, references and all material limits. Each worker inherits the same read-only and no-question
 boundary. Workers report inspected paths, exact evidence, plausible triggers and consequences, recommendations
-and limits. Do not claim a missing helper or worker ran; record the part as not run and explain under `not_covered`.
+and limits. If delegation is unavailable or a worker fails, do not claim it ran or replace it with direct inspection:
+record the affected part as not run and explain the actual failure under `not_covered`. A published incomplete
+report is not completed delegated coverage.
 The verifier receives every decision, not just the helper's selection.
 
 ### Lens parts

@@ -267,6 +267,13 @@ class _Step(StepTools):
         role["skills"] = list(self._required())  # with the project's PDS skill, if any
         if self.watch.allowed:
             role["tools"].append(subagents.LAUNCHER)
+            role["prompt"] += (
+                "\n\nDelegation: task may start only these built-in agent_type values: "
+                f"{', '.join(subagents.BUILTINS)}. "
+                f"You are {role['name']}, the current session's custom role, not a subagent type. "
+                "Never pass your own role name or another custom role to task. "
+                "Give each built-in worker a bounded brief with the evidence it needs and your permission boundaries."
+            )
         return {
             "on_permission_request": self.permission,
             "hooks": {"on_pre_tool_use": self.pre_tool},  # the shell guard's warnings (D-01M6DX04FRP680Z4GGHK5B9VRC)
