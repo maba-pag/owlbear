@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.state_store import profile_share
+from owlbear_delivery_next.state_store.layers import update_layer
 from owlbear_delivery_next.state_store.pending_intents import pending_intents
 from owlbear_delivery_next.state_store.profile_share import CONFIG_WAITING
 
@@ -39,8 +40,6 @@ def locked_save[T: Layer](  # noqa: PLR0913, PLR0917
     on_written: Callable[[], None] | None = None,
 ) -> str:
     """Change and publish one settings layer under the shared lock; a held automatic config change writes nothing."""
-    from owlbear_delivery_next.state_store.store import update_layer  # noqa: PLC0415 - the store imports this module
-
     automatic = path == store.config_path and not owner
     requires = change.requires if automatic and isinstance(change, Prepared) else None
     if automatic:
@@ -80,8 +79,6 @@ def unshared_save[T: Layer](  # noqa: PLR0913 - the store, the layer, its change
     on_written: Callable[[], None] | None = None,
 ) -> str:
     """Change one settings layer of an unshared clone, with the same automatic guard and no publication."""
-    from owlbear_delivery_next.state_store.store import update_layer  # noqa: PLC0415 - the store imports this module
-
     if path == store.config_path and not owner:
         change = _automatic(store, change)
     try:
