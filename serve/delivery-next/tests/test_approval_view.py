@@ -21,7 +21,8 @@ from owlbear_delivery_next.change_contracts.decision_records import Pick, Picked
 from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.round_records import RoundFinding, RoundLoop, RoundPolicy, Verdict
 from owlbear_delivery_next.change_contracts.tool_use import ToolUse
-from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion
+from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion, ShapingCapture, VisualResult
+from owlbear_delivery_next.change_flow import shaping_capture
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -72,7 +73,11 @@ def change() -> m.Change:
         ]),
     )  # fmt: skip
     checks = [m.PersonCheck(id="feel", steps=["Flip five times"], expect="No stutter")]
-    return m.Change(slug="flip", brief=brief, checks=checks, step=m.Step(kind=m.StepKind.SHAPE))
+    shaped = ShapingCapture(
+        key=shaping_capture.key(brief),
+        result=VisualResult(head="", tree="", findings=["the fixture has no preview"], at=NOW),
+    )
+    return m.Change(slug="flip", brief=brief, checks=checks, shaped=shaped, step=m.Step(kind=m.StepKind.SHAPE))
 
 
 @contextlib.contextmanager

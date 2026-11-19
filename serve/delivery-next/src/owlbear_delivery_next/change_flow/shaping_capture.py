@@ -1,6 +1,7 @@
 """The capture of a shaping draft's current pages (D-01M61V2GR0C6JV2R6KJ0WR4PNB, D-01M6Q56RXK85C5T4AG7R051X6N).
 
-A saved UI draft with states and a render recipe asks for one capture of the target's pages. It renders on a declared
+A saved UI draft asks for one capture of the target's pages, including when its proof is a person check. It renders
+with its states and recipe on a declared
 test preparation, and the shaper and the owner write the expectations against its pictures; approval waits until it
 has ended, with pictures or with reasons. Its key holds only what the pictures show: an expectation edit, or a moving
 target, captures nothing again. A capture that left a state without pictures is asked for again by the next save.
@@ -32,8 +33,8 @@ def key(b: Brief) -> str:
 
 
 def needed(b: Brief) -> bool:
-    """Whether a draft's pages are captured in shaping: it changes a page, has states and a recipe."""
-    return b.ui and bool(b.visual) and b.recipe is not None
+    """Every UI draft owes pictures or a reason they could not be taken, independently of its eventual proof."""
+    return b.ui
 
 
 def requested(c: Change) -> ShapingCapture | None:
@@ -62,8 +63,13 @@ def starting(c: Change, check: str) -> list[str]:
 
 
 def owed(c: Change) -> bool:
-    """Whether a runner captures the draft's pages now: requested while the Change is shaped."""
-    return c.step.kind == StepKind.SHAPE and not c.finished_at and c.shaped is not None and c.shaped.result is None
+    """Whether shaping owes a capture, including an older draft saved without a request."""
+    return (
+        c.step.kind == StepKind.SHAPE
+        and not c.finished_at
+        and c.brief.approved_version != c.brief.version
+        and bool(waiting(c))
+    )
 
 
 def waiting(c: Change) -> str:
