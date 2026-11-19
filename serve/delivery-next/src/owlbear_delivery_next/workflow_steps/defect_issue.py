@@ -60,7 +60,7 @@ def _ours(said: str) -> bool:
 def _body(defect: Defect, paths: list[str]) -> str:
     listed = "\n".join(f"- `{p}`" for p in paths)
     return (
-        f"{defect.text}\n\n**Where:**\n{listed}\n\n**OwlBear version:** {_version()}\n\n"
+        f"{defect.text}\n\n**Where:**\n{listed}\n\n**OwlBear version:** {codebase.release()}\n\n"
         "_Filed by Delivery when a repair of a stuck step found this defect in OwlBear's own code (#1066)._"
     )
 
@@ -97,7 +97,3 @@ def _tracked(path: Path) -> list[str] | str:
     if done.returncode:
         return f"its file list (git ls-files in {path} failed: {done.stderr.strip() or done.returncode})"
     return [p for p in done.stdout.split("\0") if p]
-
-
-def _version() -> str:
-    return codebase.release()
