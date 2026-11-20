@@ -63,7 +63,7 @@ repos:
 
   # ── Python ──────────────────────────────────────────────
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.5
+    rev: v0.17.6
     hooks:
       - id: ruff
         alias: ruff-fix
@@ -106,7 +106,7 @@ repos:
 
   # ── Markdown ────────────────────────────────────────────
   - repo: https://github.com/DavidAnson/markdownlint-cli2
-    rev: v0.24.1
+    rev: v0.24.2
     hooks:
       - id: markdownlint-cli2
         alias: markdownlint-fix
