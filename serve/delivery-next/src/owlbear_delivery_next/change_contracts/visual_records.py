@@ -61,7 +61,7 @@ class JudgeVerdict(_Strict):
     verdict: Verdict | None = None
     findings: list[JudgeFinding] = Field(default_factory=list)
     conflicts: list[JudgeConflict] = Field(default_factory=list)  # the design judge's; the owner decides them
-    reason: str = ""  # why unsure, or why no verified result
+    reason: str = ""  # why Delivery derived the verdict, why unsure, or why no verified result
     model: str = ""
     effort: str = ""
     context: str = "default"  # the context tier the judge ran with
@@ -70,6 +70,7 @@ class JudgeVerdict(_Strict):
     false_positives: list[str] = Field(default_factory=list)  # detector findings the judge set aside, by rule
     agreed: list[str] = Field(default_factory=list)  # detector rules the judge's findings share
     preferences: dict[str, Literal["before", "after", "equal"]] = Field(default_factory=dict)  # per state-width
+    preference_reasons: dict[str, str] = Field(default_factory=dict)  # the judge's why, using the round's blind labels
     at: datetime | None = None
 
 

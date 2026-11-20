@@ -377,18 +377,26 @@ def design(runs: Sequence[Run], images: Sequence[Image], role: RoleModel, now: d
     }
     derived = [_derived(p, named) for p in finals]
     said = sorted({p.verdict for p in finals} - set(derived))
-    reasons = [*(p.doubt for p in finals if p.doubt), *(f"the judge said {v}" for v in said), _unknown(runs)]
+    worse = [
+        f"Delivery derived fail: {p.pair} prefers before ({p.better}; "
+        f"{'B' if p.better == 'A' else 'A'} is after): {p.why}"
+        for r in finals
+        for p in r.preferences
+        if better[p.pair] == "before"
+    ]
+    reasons = [*worse, *(p.doubt for p in finals if p.doubt), *(f"the judge submitted {v}" for v in said), _unknown(runs)]
     return JudgeVerdict(
         lens="design",
         verdict=_worst(derived),
         unanchored=_worst(_derived(p, named) for p in firsts),
         findings=found,
         conflicts=conflicts,
-        reason="; ".join(filter(None, reasons))[:800],
+        reason="; ".join(filter(None, reasons)),
         usage_verified=all(verified(r) for r in runs),
         agreed=sorted({r for p in finals for r in p.agreed}),
         false_positives=sorted({r for p in finals for r in p.false_positives}),
         preferences=better,
+        preference_reasons={p.pair: p.why for r in finals for p in r.preferences},
         **who,
     )
 

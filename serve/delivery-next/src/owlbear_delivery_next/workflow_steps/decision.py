@@ -126,7 +126,7 @@ def ask(head: str, kept: VisualRound) -> StepResult:
 
     A conflict with a state or a brief criterion can also be taken: that answer changes the brief (TD-185).
     """
-    said = [f"{v.lens} {v.verdict}" + (f" ({v.reason[:300]})" if v.reason else "") for v in kept.verdicts]
+    said = [f"{v.lens} {v.verdict}" + (f" ({v.reason})" if v.reason else "") for v in kept.verdicts]
     every = [k for v in kept.verdicts for k in v.conflicts]
     taken = [k for k in every if k.departs not in kept.owner]  # an owner's criterion is withdrawn instead
     said += [f"{len(every)} conflicts with the brief"] if every else []
@@ -145,7 +145,7 @@ def ask(head: str, kept: VisualRound) -> StepResult:
 
 def unknown(head: str, kept: VisualRound) -> StepResult:
     """A judge's model is unknown: the owner accepts the whole round without the model check, or runs it again."""
-    said = [f"{v.lens} {v.verdict}" + (f" ({v.reason[:200]})" if v.reason else "") for v in kept.verdicts]
+    said = [f"{v.lens} {v.verdict}" + (f" ({v.reason})" if v.reason else "") for v in kept.verdicts]
     text = (
         "Delivery could not verify which AI models reviewed these pages "
         f"(round {kept.number}, at {head[:7]}: {'; '.join(said)}). Use this review anyway? "
