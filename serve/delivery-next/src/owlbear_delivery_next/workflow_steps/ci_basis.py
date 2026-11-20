@@ -90,6 +90,12 @@ def covers(c: Change, q: Question | None, basis: CiBasis, prof: Profile) -> bool
     )
 
 
+def retain(c: Change, q: Question | None, basis: CiBasis, prof: Profile) -> None:
+    """Keep verified legacy evidence before declaration confirmation advances the profile timestamp."""
+    if q is not None and q.ci_basis is None and covers(c, q, basis, prof):
+        q.ci_basis = basis
+
+
 def delta(c: Change, q: Question | None, basis: CiBasis, prof: Profile, cause: str) -> str:
     """Name what needs new consent, independently of a workflow digest."""
     if q is None:

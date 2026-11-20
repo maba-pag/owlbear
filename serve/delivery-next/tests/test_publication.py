@@ -569,16 +569,16 @@ def test_c2s_q4_yes_covers_q5s_workflow_churn_without_reducing_merge_checks(tmp_
     gh = FakeGh(pr(head=head))
     gh.read_rules = lambda _r, _b: rules
     cx = ctx(tmp_path, gh, prof(**(entries | profile.rule_entries(rules))))
-    cx.profile = profile.confirm(cx.profile, profile.REQUIRED, "CI", NOW)
+    cx.profile = profile.confirm(cx.profile, profile.REQUIRED, "CI", NOW - timedelta(seconds=1))
     c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
     c.brief.approved_version = 1
     _, result = follow.run(cx, c)
     c = loop.apply(c, result, NOW)
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
     c.questions[-1].id = "q4"
-    saved_basis = c.questions[-1].ci_basis
     c.questions[-1].ci_basis = None  # q4 predates structured inventory snapshots.
-    cx.store.write_profile(cx.profile)
+    cx.now = NOW + timedelta(seconds=1)
+    assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == ((), None)
     cx.store.write(cx.lock, c)
 
     head, _ = ci_head(clone, "${{ inputs.n }} updated")
@@ -600,7 +600,6 @@ def test_c2s_q4_yes_covers_q5s_workflow_churn_without_reducing_merge_checks(tmp_
     c, held = merge.run(cx, c)
     assert (held.exit, gh.merges) == (Exit.BACK, [])
 
-    c.questions[-1].ci_basis = saved_basis
     refreshed = cx.profile.model_copy(
         update={"entries": cx.profile.entries | {profile.REQUIRED: ProfileEntry(state="known", value="CI, scan")}}
     )
