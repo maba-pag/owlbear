@@ -243,6 +243,7 @@ class Question(Record):
     subject: Literal["product", "reserved", "internal"] | None = None  # after approval: #1062 (change_flow.asking)
     follows: str = ""  # the question whose cause a worker's re-ask or a repair's proposal asks about again (#1064)
     ci_basis: CiBasis | None = None
+    ci_observation: CiBasis | None = None  # first current basis of a legacy policy, not historical shown names
 
     @property
     def awaiting_answer(self) -> bool:

@@ -126,7 +126,7 @@ export function detailView(d) {
     ${refusedTop}
     ${d.settings_fault ? notice("error", "Settings could not be read", d.settings_fault,
       "Delivery assumes nothing from them; Pause and the other controls still work.") : nothing}
-    ${label === "Stopped" || d.recovery ? stopNotice(d) : nothing}
+    ${label === "Stopped" || d.stop_evidence || d.recovery ? stopNotice(d) : nothing}
     ${behind ? pullbackNote(d.pullback, d) : nothing}
     ${question}
     ${d.merge ? mergeForm(d.merge, d) : nothing}

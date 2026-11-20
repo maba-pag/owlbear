@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from owlbear_delivery_next.change_contracts.inbox import Recovery
 from owlbear_delivery_next.change_contracts.models import Exit, Record
-from owlbear_delivery_next.change_flow import delivery_target, repair_recovery, stuck
+from owlbear_delivery_next.change_flow import asking, delivery_target, repair_recovery, stuck
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.project_host import runner_end
 from owlbear_delivery_next.state_store import work_block
@@ -40,8 +40,12 @@ def clearable(c: Change) -> str | None:
         return "This stop ends only when you abandon or pause the Change; answer its question"
     if runner_end.unverified(c):
         return "This stop clears itself once the host sees none of the step's processes"
-    if stuck.exhausted(c) and repair_recovery.offered(c) is None:
-        return "The repair ended without resolving this cause; an unchanged rerun cannot resolve it"
+    if (asking.inventory_stop(c) or stuck.exhausted(c)) and repair_recovery.offered(c) is None:
+        return (
+            "No repair ran for this step; an unchanged rerun cannot resolve it. Pause or abandon the Change"
+            if asking.inventory_stop(c)
+            else "The repair ended without resolving this cause; an unchanged rerun cannot resolve it"
+        )
     return None
 
 
@@ -72,8 +76,12 @@ def shown(c: Change, store: Store) -> dict[str, Any] | None:
     remedy = repair_recovery.offered(c)
     continuation = repair_recovery.action(c, remedy) if remedy else ""
     fixed = (
-        f"OwlBear {repair_recovery.version(c)} stopped this step. "
-        f"The running {codebase.release()} contains the fix for Delivery defect #{remedy}."
+        (
+            f"OwlBear {repair_recovery.version(c)} stopped this step. "
+            if repair_recovery.version(c)
+            else "An earlier OwlBear stopped this step. "
+        )
+        + f"The running {codebase.release()} contains the fix for Delivery defect #{remedy}."
         if remedy
         else ""
     )
@@ -84,6 +92,13 @@ def shown(c: Change, store: Store) -> dict[str, Any] | None:
     if remedy:
         recovery |= {"action": continuation, "remedy": remedy, "label": continuation, "fixed": fixed}
     return recovery
+
+
+def evidence(c: Change) -> dict[str, str] | None:
+    """The recorded stop, independent of pauses, settings and whether a continuation is safe."""
+    if not (c.stop and c.outcome and c.outcome.exit == Exit.STOP):
+        return None
+    return {"reason": c.stop.reason, "action": stuck.action(c)}
 
 
 def retained(c: Change) -> dict[str, str] | None:

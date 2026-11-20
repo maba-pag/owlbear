@@ -561,6 +561,11 @@ A newer version alone does not permit the same attempt again. Once the running r
 applicable fix, Changes offers its recovery action. Confirm it to continue with the repair history intact;
 existing pauses still hold. An amendment in progress continues where it stopped, rather than starting over.
 A recovered CI task refreshes its check evidence before a fresh builder runs.
+An older exhausted merge-check inventory stop with no repair run offers **Recheck merge checks and continue**
+only when the running source contains its applicable fix. This keeps both earlier answers and their allowance.
+Delivery rereads GitHub and enforces every merge gate, then follows the merge setting; existing pauses still hold.
+Pause cannot undo a merge; reversal needs a revert. Without an applicable fix, an unchanged retry is unavailable.
+The recorded stop remains visible even while paused or when no recovery can run.
 
 When your answer on Changes leaves brief work for the shaper, Delivery posts one continuation
 to the chat that saved that brief version. The brief panel says whether it posted, waits for
