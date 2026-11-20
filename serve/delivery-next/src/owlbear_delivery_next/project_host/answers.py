@@ -100,7 +100,7 @@ def answer_item(store: Store, c: Change, body: AnswerBody) -> AnswerItem | tuple
 
     The Changes page and the console both answer through it, so neither queues what the other would refuse (#676).
     """
-    q = next((q for q in c.questions if q.id == body.question and q.answer is None), None)
+    q = next((q for q in c.questions if q.id == body.question and q.awaiting_answer), None)
     if q is None:
         return 409, f"question {body.question} is not open"
     if why := _checked(store, c, q, body) or refused(c, q, body):

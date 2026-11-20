@@ -39,6 +39,7 @@ from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store import github_writer
 from owlbear_delivery_next.state_store.store import LockHeldError, Store, StoreError
 from owlbear_delivery_next.workflow_steps import before, check, disposable, engine, merge, prepare, pullback, queue
+from owlbear_delivery_next.workflow_steps.ci_basis import settle as settle_ci_basis
 from owlbear_delivery_next.workflow_steps.project_checks import settle as settle_checks
 
 if TYPE_CHECKING:
@@ -306,6 +307,7 @@ class Host:
                 self.passing.add(slug)  # its launch passes the pause in this same pass
             if c.step.kind == StepKind.MERGE:
                 merge.settle_method(c, self.store.settings().prefs.merge_method)
+            settle_ci_basis(self.store, lock, c, now)
             act = self.env_action(c)
             if c.env and act in {"dispose", "settle"}:
                 if left := self.clear(c, c.env):

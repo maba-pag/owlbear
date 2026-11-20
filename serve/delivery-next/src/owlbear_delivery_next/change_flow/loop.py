@@ -144,7 +144,7 @@ def consent_moved(c: Change, offered: str | None, head: str, opened: Iterable[st
 def open_question(c: Change) -> Question | None:
     """The unanswered question the Change waits on, if any; a paused decision's hold is not a new question."""
     o = c.outcome
-    return next((q for q in c.questions if o and o.exit == Exit.ASK and q.id == o.question and q.answer is None), None)
+    return next((q for q in c.questions if o and o.exit == Exit.ASK and q.id == o.question and q.awaiting_answer), None)
 
 
 def ordinary(q: Question) -> bool:
@@ -296,7 +296,7 @@ def _target(q: Question, option: str | None) -> str | None:
 
 def _answer(c: Change, item: AnswerItem, now: datetime) -> str:
     """Record the answer; why it settles nothing, naming its question, or "" once recorded."""
-    q = next((q for q in c.questions if q.id == item.question and q.answer is None), None)
+    q = next((q for q in c.questions if q.id == item.question and q.awaiting_answer), None)
     if q is None or (late := answer_kinds.superseded(c, q)):
         return late if q else f"question {item.question} is no longer open"
     gate = bool(c.outcome and c.outcome.question == q.id)

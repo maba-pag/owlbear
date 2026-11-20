@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from owlbear_delivery_next.change_contracts import failures
 from owlbear_delivery_next.change_contracts.models import (
@@ -27,7 +27,7 @@ from owlbear_delivery_next.github.provider import ProviderError, classify_checks
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import pref
 from owlbear_delivery_next.state_store.store import StoreError
-from owlbear_delivery_next.workflow_steps import check, engine
+from owlbear_delivery_next.workflow_steps import check, ci_basis, engine
 from owlbear_delivery_next.workflow_steps import conversation as conv
 
 if TYPE_CHECKING:
@@ -61,25 +61,34 @@ def _flows_at(c: Change, pr: PullRequest, writer: Writer) -> dict[str, str] | No
 
 
 def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tuple[str, ...], StepResult | None]:
-    """The checks that must pass at the PR head, with answers valid only for their workflow digest.
+    """The checks that must pass at the PR head; an unchanged empty inventory retains its approved basis.
 
     The profile's entry holds while its workflow evidence matches the head; else they are detected from the head.
-    The question gate counts every unresolved inventory as one cause, even when that evidence changes.
+    Known detection cannot bypass renewed approval of a changed basis. All inventory questions share one allowance.
     """
     entry = ctx.profile.entries.get(profile.DECLARED)
     texts = _flows_at(c, pr, ctx.writer)
     if texts is None:  # never trust the profile for a head whose workflows were not read
         return (), engine.pending(Waiting.NETWORK, f"reading the workflow files at {pr.head_sha[:7]}", ctx.poll())
     bound, digest = profile.digest_of(entry), profile.flows_digest(texts)
+    observed = profile.ci_entries({n: profile.workflow(t) for n, t in texts.items()}, digest)[profile.DECLARED]
+    basis, previous = ci_basis.current(ctx.profile, observed), ci_basis.latest(c)
     if digest != bound:
-        entry = profile.ci_entries({n: profile.workflow(t) for n, t in texts.items()}, digest)[profile.DECLARED]
-    if entry and entry.state == "known":
-        return profile.listed(entry), None
+        entry = observed
     cause = failures.cause_key(ErrorKind.GATE, F, f"declared-{digest}")  # the same inventory gates Follow and Merge
-    answers = [q.answer for q in c.questions if q.cause == cause and q.answer]
-    names = ", ".join(n.strip() for n in answers[-1].text.split(",") if n.strip()) if answers else ""
+    ci_basis.retain(c, previous, basis, ctx.profile)
+    delta = ci_basis.delta(c, previous, basis, ctx.profile, cause)
+    if previous and previous.cause != cause and ci_basis.covers(c, previous, basis, ctx.profile):
+        return profile.listed(entry), None
+    answer = previous.answer if previous else None
+    declined = answer is not None and (answer.option == "pause" or answer.superseded_at is not None)
+    if entry and entry.state == "known" and not delta and not declined:
+        return profile.listed(entry), None
+    if not previous or previous.cause != cause or delta or (answer and answer.superseded_at is not None):
+        answer = None
+    names = ", ".join(n.strip() for n in answer.text.split(",") if n.strip()) if answer else ""
     read = entry.value if entry and entry.value else "none"  # what the workflow files name, as far as they say
-    said = answers[-1].option if answers else None
+    said = answer.option if answer else None
     value = "none" if said == "none" else read if said == "yes" else names
     if value and digest == bound:
         ctx.profile = profile.confirm(ctx.profile, profile.DECLARED, value, ctx.now)
@@ -93,12 +102,20 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
         return () if value == "none" else tuple(n.strip() for n in value.split(",")), None
     options = [Option(id="yes", label="Yes: merge once those pass", next=step), engine.PAUSE]
     changed = " (the CI check-detection evidence changed)" if digest != bound else ""
+    detection = (
+        "Delivery read the names of the checks this project's CI runs before a merge"
+        if observed.state == "known"
+        else "Delivery could not read the names of every check this project's CI runs before a merge"
+    )
     text = (
-        f"Delivery could not read the names of every check this project's CI runs before a merge{changed}. "
+        f"{delta + ' ' if delta else ''}"
+        f"{detection}{changed}. "
         "It waits for the checks GitHub requires, for every check that starts on the pull request, and for those it "
         f"could read: {read if read != 'none' else 'none it could read'}. Merge on that basis?"
     )
-    return (), engine.ask(step, text, cause, options, subject="reserved")
+    result = engine.ask(step, text, cause, options, subject="reserved")
+    cast("Question", result.question).ci_basis = basis
+    return (), result
 
 
 def ci_task(gh: Provider, repository: str, failed: Check) -> tuple[str, str]:
@@ -343,6 +360,9 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:  # noqa: PLR0911 - on
         return c, StepResult(exit=Exit.STOP, reason=reason, stop=stop)
     pr = ctx.gh.read_pull_request(ctx.repository, c.names.pr)
     c, pr, held = reopen(ctx, c, pr)
+    if held is not None:
+        return c, held
+    held, _ = engine.rules_changed(ctx, c)
     if held is not None:
         return c, held
     names, held = declared(ctx, c, pr, F)

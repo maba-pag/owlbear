@@ -62,6 +62,7 @@ DIAGNOSTIC_EVENTS = frozenset(
         "check-command-failed",
         "check-observation-failed",
         "decisions-refresh-failed",
+        "ci-inventory-unread",
     }
 )
 _local_devices: set[int] = set()
