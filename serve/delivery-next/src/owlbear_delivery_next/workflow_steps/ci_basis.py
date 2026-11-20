@@ -161,4 +161,5 @@ def settle(store: Store, lock: Lock, c: Change, now: datetime) -> None:
     previous = latest(c)
     pending = q.ci_basis or CiBasis(declared=detected(q), required=basis.required)
     if pending == basis and covers(c, previous, basis, prof):
+        retain(c, previous, basis, prof)
         q.effect_observed_at, c.outcome = now, None

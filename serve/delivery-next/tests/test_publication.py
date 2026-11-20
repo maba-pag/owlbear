@@ -668,17 +668,23 @@ def test_empty_inventory_consent_keeps_the_current_profiles_confirmed_named_chec
 
 def test_a_persisted_duplicate_inventory_hold_settles_before_normal_host_scheduling(tmp_path, clone, capsys):
     head, entries = ci_head(clone, "${{ inputs.n }}")
-    cx = ctx(tmp_path, FakeGh(pr(head=head)), prof(**entries))
+    cx = ctx(
+        tmp_path,
+        FakeGh(pr(head=head)),
+        prof(**(entries | profile.rule_entries(Rules(state="known", evidence="rules", required_checks=("CI",))))),
+    )
     c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
     c.brief.approved_version = 1
     _, first = follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW)
     c = loop.apply(c, first, NOW)
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
+    c.questions[0].ci_basis = None
     head, _ = ci_head(clone, "${{ inputs.n }} updated")
     cx.gh.pr = pr(head=head)
     duplicate = first.model_copy(deep=True)
-    duplicate.cause = f"{asking.DECLARED}{profile.flows_digest(profile.workflow_texts_at(clone, head))}"
-    duplicate.question.cause = duplicate.cause
+    duplicate.cause = duplicate.question.cause = (
+        f"{asking.DECLARED}{profile.flows_digest(profile.workflow_texts_at(clone, head))}"
+    )
     c = loop.apply(c, duplicate, NOW)
     pending = loop.open_question(c).id
     cx.store.write_profile(cx.profile)
@@ -707,6 +713,15 @@ def test_a_persisted_duplicate_inventory_hold_settles_before_normal_host_schedul
     assert old.answer is None
     assert old.effect_observed_at == NOW
     assert len(settled.questions) == 2  # spent allowance and unanswered history survive.
+    cx.store.write_profile(
+        cx.profile.model_copy(
+            update={"entries": cx.profile.entries | {profile.REQUIRED: ProfileEntry(state="known", value="CI, scan")}}
+        )
+    )
+    cx.profile = cx.store.read_profile()
+    _, changed = follow.declared(cx, settled, cx.gh.pr, StepKind.FOLLOW)
+    assert changed.exit == Exit.ASK
+    assert "Required checks were CI; now CI, scan." in changed.question.text
     settled.step = Step(kind=StepKind.BUILD, task="t1")
     refused = answers.answer_item(cx.store, settled, answers.AnswerBody(question=pending, option="yes"))
     assert refused == (409, f"question {pending} is not open")
