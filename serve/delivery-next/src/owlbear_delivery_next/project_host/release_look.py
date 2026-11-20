@@ -68,21 +68,25 @@ def shown(store: Store, c: Change) -> dict[str, str | bool] | None:
         or not owner_look.approved(c)
     ):
         return None
-    prof = store.read_profile()
-    if prof is None or profile.value(prof, profile.REPO).lower() != owner_look.REPOSITORY:
-        return None
-    if look.version != c.brief.version:
-        return {"ready": False, "error": True, "text": "The release look's receipt does not match this brief version."}
-    root = codebase.ROOT.resolve().parents[3]
-    if root.parent != (local_home.root() / local_home.VERSIONS).resolve() or not re.fullmatch(
-        r"v\d+(?:\.\d+)?", root.name
-    ):
-        return {"ready": False, "text": WAITING}
     try:
+        prof = store.read_profile()
+        if prof is None or profile.value(prof, profile.REPO).lower() != owner_look.REPOSITORY:
+            return None
+        if look.version != c.brief.version:
+            return {
+                "ready": False,
+                "error": True,
+                "text": "The release look's receipt does not match this brief version.",
+            }
+        root = codebase.ROOT.resolve().parents[3]
+        if root.parent != (local_home.root() / local_home.VERSIONS).resolve() or not re.fullmatch(
+            r"v\d+(?:\.\d+)?", root.name
+        ):
+            return {"ready": False, "text": WAITING}
         ready = _contains(root, root.name, look.commit)
-    except RuntimeError as exc:
+    except (RuntimeError, StoreError) as exc:
         LOG.exception("The release look for %s could not check its installation", c.slug)
-        return {"ready": False, "error": True, "text": failure(exc)}
+        return {"ready": False, "error": True, "text": f"The release look could not be checked: {failure(exc)}"}
     return {"ready": ready, "text": f"{root.name} is installed. Take your look at this Change." if ready else WAITING}
 
 
