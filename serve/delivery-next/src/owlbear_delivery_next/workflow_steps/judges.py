@@ -376,7 +376,7 @@ def design(runs: Sequence[Run], images: Sequence[Image], role: RoleModel, now: d
         for p in r.preferences
     }
     derived = [_derived(p, named) for p in finals]
-    said = sorted({p.verdict for p in finals} - set(derived))
+    said = sorted({p.verdict for p, verdict in zip(finals, derived, strict=True) if p.verdict != verdict})
     worse = [
         f"Delivery derived fail: {p.pair} prefers before ({p.better}; "
         f"{'B' if p.better == 'A' else 'A'} is after): {p.why}"
