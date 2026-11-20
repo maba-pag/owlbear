@@ -19,7 +19,7 @@ from owlbear_delivery_next.change_contracts.decision_records import (
 )
 from owlbear_delivery_next.change_contracts.env_records import Environment, Recipe
 from owlbear_delivery_next.change_contracts.held_records import HeldRecord, PendingChild
-from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim, ReleaseLook
+from owlbear_delivery_next.change_contracts.merge_records import CiBasis, Episode, Pullback, QueueClaim, ReleaseLook
 from owlbear_delivery_next.change_contracts.option_records import Inputs, OptionAction, OptionProof, PendingQuestion
 from owlbear_delivery_next.change_contracts.repair_records import Repairs
 from owlbear_delivery_next.change_contracts.round_records import Dispute, LeftOpen, RoundLoop
@@ -242,6 +242,7 @@ class Question(Record):
     recommended: str | None = None
     subject: Literal["product", "reserved", "internal"] | None = None  # after approval: #1062 (change_flow.asking)
     follows: str = ""  # the question whose cause a worker's re-ask or a repair's proposal asks about again (#1064)
+    ci_basis: CiBasis | None = None
 
 
 class ItemRef(Record):

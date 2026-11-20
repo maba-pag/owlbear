@@ -98,7 +98,7 @@ def offered(c: Change, q: Question, now: datetime) -> Question | None:
         if (q.cause or "").startswith(DECLARED) and q.cause != previous.cause:
             changed = (
                 f" The workflow evidence changed from {(previous.cause or '').removeprefix(DECLARED)} "
-                f"to {q.cause.removeprefix(DECLARED)}; the earlier answer covered different workflows."
+                f"to {q.cause.removeprefix(DECLARED)}; the merge-check basis needs approval again."
             )
         return q.model_copy(update={"text": f"{_led(previous)}{changed}\n\n{q.text}"})
     return q
