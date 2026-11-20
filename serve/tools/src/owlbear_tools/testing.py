@@ -411,7 +411,6 @@ def _run_commands(commands: list[tuple[list[str], Path]]) -> int:
         location = "." if relative_cwd == Path() else str(relative_cwd)
         print(f"[{location}] {' '.join(command)}")  # noqa: T201
         with _testmon_lock(command) as inherited:
-            # The runner constructs pytest/task argv and intentionally executes the selected tools without a shell.
             failures += int(bool(subprocess.call(command, cwd=cwd, **inherited)))  # noqa: S603 - test-runner-owned argv
     return int(bool(failures))
 

@@ -28,7 +28,6 @@ def _call(command: list[str], *, env: dict[str, str] | None = None, cwd: Path | 
     kwargs["env"] = _subprocess_environment(env)
     if cwd is not None:
         kwargs["cwd"] = cwd
-    # Quality helpers intentionally execute their configured linters and consumer tool vectors without a shell.
     return subprocess.call(command, **kwargs)  # noqa: S603 - intentional configured quality-tool execution
 
 

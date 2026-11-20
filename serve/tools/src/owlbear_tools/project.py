@@ -9,7 +9,6 @@ from owlbear_tools.commands import command_footer
 
 
 def _run(command: list[str]) -> int:
-    # Only hooks_install supplies the two fixed pre-commit argv lists; neither uses a shell.
     return subprocess.run(command, check=False).returncode  # noqa: S603 - fixed pre-commit setup commands
 
 
