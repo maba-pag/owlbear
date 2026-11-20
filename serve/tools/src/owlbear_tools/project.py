@@ -9,7 +9,7 @@ from owlbear_tools.commands import command_footer
 
 
 def _run(command: list[str]) -> int:
-    return subprocess.run(command, check=False).returncode  # noqa: S603
+    return subprocess.run(command, check=False).returncode  # noqa: S603 - fixed pre-commit setup commands
 
 
 def _finish(exit_code: int) -> None:

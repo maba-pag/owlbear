@@ -44,8 +44,9 @@ class BatchCommitResult:
 
 def _git(repo_dir: Path, *args: str) -> str:
     """Run a git command and return stripped stdout."""
-    result = subprocess.run(  # noqa: S603
-        ["git", *args],  # noqa: S607
+    # Native lookup preserves child-relative PATH and execution-time continuation past stale wrappers.
+    result = subprocess.run(  # noqa: S603 - internal Git verbs separate messages and owned paths; no shell
+        ["git", *args],  # noqa: S607 - preserve native child PATH and execution-time search
         capture_output=True,
         check=True,
         cwd=repo_dir,
@@ -57,8 +58,9 @@ def _git(repo_dir: Path, *args: str) -> str:
 
 def _git_bytes(repo_dir: Path, *args: str) -> tuple[int, bytes]:
     """Run Git without decoding a staged memory snapshot prematurely."""
-    result = subprocess.run(  # noqa: S603
-        ["git", *args],  # noqa: S607
+    # Native lookup preserves child-relative PATH and execution-time continuation past stale wrappers.
+    result = subprocess.run(  # noqa: S603 - internal show/rev-parse/reset operands; no shell
+        ["git", *args],  # noqa: S607 - preserve native child PATH and execution-time search
         capture_output=True,
         check=False,
         cwd=repo_dir,
@@ -247,7 +249,7 @@ def _git_object_id(repo_dir: Path, revision: str) -> str | None:
 
 def _git_blob_id(repo_dir: Path, raw: bytes) -> str:
     result = subprocess.run(
-        ["git", "hash-object", "--stdin"],  # noqa: S607
+        ["git", "hash-object", "--stdin"],  # noqa: S607 - fixed Git flags; retain native child PATH search
         capture_output=True,
         check=True,
         cwd=repo_dir,

@@ -55,7 +55,7 @@ def _git_executable() -> str:
 def _read_revision_files(root: Path, revision: str, paths: Iterable[str]) -> dict[str, str | None]:
     """Read selected files from one validated Git revision."""
     git = _git_executable()
-    verified = subprocess.run(  # noqa: S603
+    verified = subprocess.run(  # noqa: S603 - resolved Git; CLI revision is one rev-parse commit operand; no shell
         [git, "rev-parse", "--verify", f"{revision}^{{commit}}"],
         cwd=root,
         capture_output=True,
@@ -68,7 +68,7 @@ def _read_revision_files(root: Path, revision: str, paths: Iterable[str]) -> dic
 
     contents: dict[str, str | None] = {}
     for path in sorted(paths):
-        exists = subprocess.run(  # noqa: S603
+        exists = subprocess.run(  # noqa: S603 - resolved Git; CLI revision and selected snapshot path form one operand
             [git, "cat-file", "-e", f"{revision}:{path}"],
             cwd=root,
             capture_output=True,
@@ -78,7 +78,7 @@ def _read_revision_files(root: Path, revision: str, paths: Iterable[str]) -> dic
         if exists.returncode:
             contents[path] = None
             continue
-        shown = subprocess.run(  # noqa: S603
+        shown = subprocess.run(  # noqa: S603 - resolved Git show reads the probed revision:path snapshot; no shell
             [git, "show", f"{revision}:{path}"],
             cwd=root,
             capture_output=True,
