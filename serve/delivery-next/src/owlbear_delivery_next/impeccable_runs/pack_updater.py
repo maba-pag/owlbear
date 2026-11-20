@@ -9,6 +9,7 @@ stage, for the owner.
 from __future__ import annotations
 
 import hashlib
+import os
 import shutil
 import subprocess
 import uuid
@@ -81,7 +82,7 @@ def _files(at: Path) -> dict[str, str]:
 
 def lay_out(at: Path, c: pack_candidate.Candidate, clone: Path, package: Path) -> dict[str, str]:
     """The updater's repository: the candidate's skills, golden pages and glue to edit, upstream's skills to read."""
-    if (git := shutil.which("git")) is None:
+    if (git := shutil.which("git", path=os.environ.get("PATH", os.defpath) or os.curdir)) is None:
         raise FileNotFoundError(2, "No such file or directory", "git")
     command = ["git", "init", "-q", str(at)]
     subprocess.run(  # noqa: S603 - resolved Git init with updater-owned directory operand, no shell

@@ -172,7 +172,7 @@ class Hand:
 
 
 def _commit(package: Path) -> str:
-    if (git := shutil.which("git")) is None:
+    if (git := shutil.which("git", path=os.environ.get("PATH", os.defpath) or os.curdir)) is None:
         raise FileNotFoundError(2, "No such file or directory", "git")
     command = ["git", "-C", str(package), "rev-parse", "HEAD"]
     found = subprocess.run(  # noqa: S603 - a fixed argument list

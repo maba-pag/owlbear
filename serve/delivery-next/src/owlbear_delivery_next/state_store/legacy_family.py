@@ -279,7 +279,7 @@ def _split(binding: Binding) -> str | None:
 
 def _dirty(package: Path) -> str | None:
     try:
-        if (git := shutil.which("git")) is None:
+        if (git := shutil.which("git", path=os.environ.get("PATH", os.defpath) or os.curdir)) is None:
             raise FileNotFoundError(2, "No such file or directory", "git")
         command = ["git", "-C", str(package), "status", "--porcelain", "--", "."]
         done = subprocess.run(  # noqa: S603 - fixed argv, read-only status, no shell
