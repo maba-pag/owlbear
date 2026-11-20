@@ -48,6 +48,12 @@
       "rangeStrategy": "update-lockfile"
     },
     {
+      "description": "Ignore torch's CPU build of the locked public version; newer torch releases still update",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["torch"],
+      "allowedVersions": "!/^{{major}}\\.{{minor}}\\.{{patch}}\\+cpu$/"
+    },
+    {
       "description": "Keep Node runtime declarations aligned",
       "matchDatasources": ["node-version"],
       "matchPackageNames": ["node"],
