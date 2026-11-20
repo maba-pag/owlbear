@@ -3674,11 +3674,13 @@ def test_required_basis_approval_covers_only_the_delta_the_rules_question_showed
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
     later = rules.model_copy(update={"required_checks": ("ci", "lint")})
     gh.read_rules = lambda _r, _b: later
-    proposal, _ = engine.rules_changed(cx, c)
+    c.step = Step(kind=StepKind.PUBLISH)  # a repair returns through Publish before Follow.
+    _, proposal = publish.run(cx, c)
     assert proposal.question.ci_basis == CiBasis(required=("ci", "lint"))
     c = loop.apply(c, proposal, NOW)
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
     assert engine.rules_changed(cx, c)[0] is None
+    c.step = Step(kind=StepKind.FOLLOW)
     assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == ((), None)  # one approval, not two.
 
     refreshed = Rules(state="known", evidence="rules", required_checks=("ci", "lint", "scan"))
