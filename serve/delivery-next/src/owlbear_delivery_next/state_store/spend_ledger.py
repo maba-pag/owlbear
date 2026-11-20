@@ -138,6 +138,18 @@ def ended(  # noqa: PLR0913 - the run, its session and how it ended
          **_placed(place)} | {"job": ""} | ({"look": look} if look else {}) | measured | history)  # fmt: skip
 
 
+def context(  # noqa: PLR0913 - the run, its session and what filled its context
+    run: str, session: str, *, agent: str, model: str, tier: str, measurement: dict[str, Any],
+            place: Where | None = None) -> None:  # fmt: skip
+    """What filled a run's context after its first model call: never a run of its own (``spend_shares``).
+
+    *measurement* is ``measured: true`` with the ``window``, ``total``, ``parts`` and ``kept`` note, or
+    ``measured: false`` with the ``error``.
+    """
+    put({"id": f"context:{run}", "type": "context", "run": run, "at": _now(), "session": session, "agent": agent,
+         "model": model, "tier": tier, **_placed(place)} | measurement)  # fmt: skip
+
+
 class _Writer:
     """One daemon thread appending lines in order; the process waits at most ``GRACE`` for it at exit."""
 

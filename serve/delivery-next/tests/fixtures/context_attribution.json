@@ -1,0 +1,57 @@
+{
+  "contextAttribution": {
+    "totalTokens": 11029,
+    "modelId": "gpt-6-luna",
+    "modelSource": "selected",
+    "promptTokenLimit": 272000,
+    "limit": 272000,
+    "bufferTokens": 13600,
+    "compactionThreshold": 217600,
+    "categories": {
+      "systemPrompt": 4210,
+      "customInstructions": 6137,
+      "systemTools": 581,
+      "mcpTools": 0,
+      "messages": 101,
+      "freeSpace": 247371,
+      "buffer": 13600
+    },
+    "entries": [
+      {
+        "kind": "system",
+        "id": "systemPrompt",
+        "label": "System prompt",
+        "tokens": 4210
+      },
+      {
+        "kind": "system",
+        "id": "customInstructions",
+        "label": "Custom Instructions",
+        "tokens": 6137
+      },
+      {
+        "kind": "system",
+        "id": "toolDefinitions",
+        "label": "Tool definitions",
+        "tokens": 581
+      },
+      {
+        "kind": "toolDefinition",
+        "id": "toolDefinition:skill",
+        "label": "skill",
+        "tokens": 423,
+        "parentId": "toolDefinitions"
+      },
+      {
+        "kind": "toolDefinition",
+        "id": "toolDefinition:sql",
+        "label": "sql",
+        "tokens": 158,
+        "parentId": "toolDefinitions"
+      }
+    ],
+    "compactions": {
+      "count": 0
+    }
+  }
+}

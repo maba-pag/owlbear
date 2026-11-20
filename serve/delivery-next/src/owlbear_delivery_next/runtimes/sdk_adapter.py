@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from copilot.generated.session_events import SessionEvent
     from copilot.session import CopilotSession, PermissionRequest, PreToolUseHookInput, PreToolUseHookOutput
 
+    from owlbear_delivery_next.runtimes import context_start
     from owlbear_delivery_next.runtimes.session_result import Ending
 
 Journal = session_config.Journal
@@ -85,6 +86,7 @@ def role_of(cfg: Session) -> str:
 class _Step(StepTools):
     actor: spotter_act.StepActor | None = None  # its Spotter's actuator, once the session is open
     aborted = False  # the Spotter aborted the turn: its idle is no wrong choice (``step_budget.idled``)
+    start: context_start.Start | None = None  # its context measurement, once a session it created is metered
 
     def __init__(self, cfg: Session, loop: asyncio.AbstractEventLoop) -> None:
         self.cfg, self.loop, self.run, self.proc = cfg, loop, Run(cfg.session_id, checks=cfg.checks), None
@@ -126,10 +128,8 @@ class _Step(StepTools):
 
     def on_event(self, ev: SessionEvent) -> None:  # noqa: C901 - one branch per family
         kind = getattr(ev.type, "value", str(ev.type))
-        if self.feed is not None:
-            self.feed.seen(kind, ev)
-        if self.actor is not None:
-            self.actor.seen(kind, ev)  # a Spotter note the runtime took
+        for seer in filter(None, (self.feed, self.actor, self.start)):  # its watcher, a Spotter note, its context
+            seer.seen(kind, ev)
         if kind == "assistant.turn_start":
             self.turn = True
             self.preload_checked()

@@ -51,6 +51,7 @@ LIVE = ("start", "end")
 LOG = "import:runtime-log"  # a line the runtime's log gave
 CHECKPOINTS = ("event", "mark", "residual")  # imported line types that repeat a session's totals: never a run
 VOID = "void"  # a Spotter record's ``look`` line imported although no look ran (``spend_reconcile``): no run at all
+CONTEXT = "context"  # what filled a run's context (``spend_ledger.context``): no spend, never a run
 OWNER = "owner"  # a recovered Spotter look session's owner, known after it was recovered (``spend_logs``)
 PLACE = ("project", "name", "clone", "change", "step", "job")
 RECOVERED = ("id", "type", "at", "session", "usage", "source")  # what a recovered line adds to a run its own lines name
@@ -149,6 +150,8 @@ def runs(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     owned: dict[str, dict[str, Any]] = {}
     for line in lines:
         kind = line.get("type")
+        if kind == CONTEXT:
+            continue
         if kind in {VOID, OWNER}:
             _aside(line, void, owned)
             continue

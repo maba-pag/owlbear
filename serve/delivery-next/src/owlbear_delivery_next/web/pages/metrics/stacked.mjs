@@ -17,14 +17,19 @@ export const keysHint = html`<p class="chart-keys">Arrow keys move between bars 
  * The spec of a stacked chart: `labels` (one per bar, in order), `parts` (`{ id, name, values }`, a raw value per
  * bar, bottom of the stack first), `totals` (per bar), `colours(theme)` (one per part), `format` (a raw value as
  * text), `horizontal`, `relative`, `average` (an average line of the totals, raw lengths only) and `tick` (an axis
- * label from a bar's label, optional).
+ * label from a bar's label, optional). Optional hooks: `said(r)` (bar r's total as its label and tooltip give it,
+ * by default `format` of its total), `about(r)` and `note(r)` (tooltip lines as HTML, escaped by the caller, under the
+ * bar's label and under its total).
  */
-export function stacked({ labels, parts, totals, colours, format, horizontal, relative, average, tick }) {
+export function stacked({ labels, parts, totals, colours, format, horizontal, relative, average, tick, said, about,
+  note }) {
+  const total = said ?? ((r) => format(totals[r]));
   const tip = (colour) => (ps) => {
     const r = ps[0].dataIndex;
     const lines = parts.map((p, j) => `<span style="color:${colour[j]}">■</span> ${esc(p.name)}: ${
       format(p.values[r])}<br>`).join("");
-    return `<strong>${esc(labels[r])}</strong><br>${lines}Total: ${format(totals[r])}`;
+    const head = about ? `${about(r)}<br>` : "", foot = note ? `<br>${note(r)}` : "";
+    return `<strong>${esc(labels[r])}</strong><br>${head}${lines}Total: ${total(r)}${foot}`;
   };
   function build(t, mark) {
     const marked = { borderColor: t.text, borderWidth: 3 };  // the clicked bar, outlined until the filters change
@@ -49,7 +54,7 @@ export function stacked({ labels, parts, totals, colours, format, horizontal, re
       data: totals.map((v) => (relative ? (v ? 100 : 0) : v)),
       itemStyle: { color: "transparent" }, emphasis: { disabled: true },
       label: { show: true, position: horizontal ? "right" : "top", color: t.text,
-        formatter: (p) => format(totals[p.dataIndex]) },
+        formatter: (p) => total(p.dataIndex) },
       markLine: average && !relative ? { silent: true, symbol: "none", data: [{ yAxis: mean }],
         lineStyle: { color: t.text, type: "dashed" },
         label: { color: t.text, position: "insideEndTop", formatter: `Average ${format(mean)}` } } : { data: [] },
