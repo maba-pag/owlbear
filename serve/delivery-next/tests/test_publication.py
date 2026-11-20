@@ -591,19 +591,28 @@ def test_c2s_q4_yes_covers_q5s_workflow_churn_without_reducing_merge_checks(tmp_
     assert len(c.questions) == 1
     c.step = Step(kind=StepKind.MERGE)
     c.reviews = [Review(commit=head, inputs=Inputs(), verdict="pass")]
-    gh.checks = (Check(name="started suite", status="completed", conclusion="success"),)
-    c, held = merge.run(cx, c)
-    assert (held.exit, gh.merges) == (Exit.PENDING, [])  # CI is required but missing.
-    gh.checks += (Check(name="CI", status="completed", conclusion="success"),)
-    gh.checks += (Check(name="another suite", status="in_progress"),)
-    c, held = merge.run(cx, c)
-    assert (held.exit, gh.merges) == (Exit.PENDING, [])  # every started suite still gates.
-    gh.checks = (*gh.checks[:-1], Check(name="another suite", status="completed", conclusion="failure"))
-    c, held = merge.run(cx, c)
-    assert (held.exit, gh.merges) == (Exit.BACK, [])
+    for checks, expected in (
+        ((Check(name="started suite", status="completed", conclusion="success"),), Exit.PENDING),
+        (
+            (
+                Check(name="CI", status="completed", conclusion="success"),
+                Check(name="another suite", status="in_progress"),
+            ),
+            Exit.PENDING,
+        ),
+        (
+            (
+                Check(name="CI", status="completed", conclusion="success"),
+                Check(name="another suite", status="completed", conclusion="failure"),
+            ),
+            Exit.BACK,
+        ),
+    ):
+        gh.checks = checks
+        c, held = merge.run(cx, c)
+        assert (held.exit, gh.merges) == (expected, [])
     gh.checks = (*gh.checks[:-1], Check(name="another suite", status="completed", conclusion="success"))
-    gh.result = MergeResult(status=MergeStatus.MERGED, sha=B)
-    gh.after = pr(head=head, state="closed", merged=True, merge_commit_sha=B)
+    merged(gh)
     c, held = merge.run(cx, c)
     assert held.exit == Exit.DONE
     assert [request.expected_head_sha for request in gh.merges] == [head]
