@@ -350,9 +350,9 @@ export function pullbackNote(p, d) {
 // A stop the owner may clear once he did what it asks (#754), so Delivery reruns its step; *d.recovery* has the stop,
 // as a paused Change's line describes its pause. Unset settings withhold the action (D-01M61SBWK4VE4MNTD35TR0VPS8).
 export function stopNotice(d) {
-  const r = d.recovery, kept = d.retained_repair;
-  const reason = kept ? kept.reason : r ? r.reason : d.line.replace(/^.*?stopped: /, "");
-  const action = r ? r.action : d.action;
+  const r = d.recovery, kept = d.retained_repair, evidence = d.stop_evidence;
+  const reason = kept ? kept.reason : evidence ? evidence.reason : r ? r.reason : d.line.replace(/^.*?stopped: /, "");
+  const action = r ? r.action : evidence ? evidence.action : d.action;
   // what keeps the rerun from starting: the unreadable settings in full, else how many are unset (never their keys)
   const wait = !r?.unset ? "" : r.settings.reason ? r.unset : `${settingsWait(r.settings.count)} to run the step again`;
   const held = !r || wait;  // no stop he may clear, or its rerun waits on the settings: no action
@@ -361,16 +361,21 @@ export function stopNotice(d) {
     .join(reason.includes("\n\n") ? "\n\n" : " ");
   const clear = async () => {
     const again = "If the cause is still there, it stops again with the same message.";
+    const inventory = r.remedy === 1342;
     const sure = await ask({
       title: r.label ? `${r.label}?` : "Run the stopped step again?",
       yes: r.label || "Run it again", no: "Keep it stopped",
       now: r.fixed || `You did what the stop asked (${action}), so the stop clears.`,
-      then: r.label ? `Delivery clears this stop and continues: ${r.label}. Existing pauses stay in force. ${again}`
+      then: inventory ? "Delivery rereads GitHub's required checks and waits for all required, confirmed named and "
+        + `started checks, plus every other merge gate. ${mergeSetting(d) === "auto" ? finale(d) : `${merging(d)}.`} `
+        + "Existing pauses stay in force; resume is still separate."
+        : r.label ? `Delivery clears this stop and continues: ${r.label}. Existing pauses stay in force. ${again}`
         : d.step === "cleanup" ? `Delivery runs the cleanup again on its next pass, even while paused. ${again}`
         : `Delivery runs the ${d.step} step again on its next pass${d.paused ? ", once you resume this Change" : ""}. `
         + "While Delivery is paused only cleanups and brief challenges you asked for run; other steps wait for "
         + `Resume. ${again}`,
-      after: "A step that runs an agent, a brief challenge or decision pick included, uses AI credits. You can pause "
+      after: inventory ? "Pause cannot undo a merge. Reversing a merge needs a revert."
+        : "A step that runs an agent, a brief challenge or decision pick included, uses AI credits. You can pause "
         + "afterwards: that takes effect once the running step ends and doesn't undo what it did, such as a pushed "
         + "branch or an opened PR.",
       instead: "The Change stays stopped; Pause and your other controls still work.",

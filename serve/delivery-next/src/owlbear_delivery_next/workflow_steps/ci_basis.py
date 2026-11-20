@@ -53,7 +53,8 @@ def current(prof: Profile, entry: ProfileEntry) -> CiBasis:
 
 def required_approved(c: Change, q: Question, basis: CiBasis, prof: Profile) -> bool:
     """A matching inventory, or a later yes to the current requirements actually shown."""
-    if q.ci_basis is not None and q.ci_basis.required == basis.required:
+    recorded = q.ci_basis or q.ci_observation
+    if recorded is not None and recorded.required == basis.required:
         return True
     later = c.questions[c.questions.index(q) + 1 :]
     if any(
@@ -67,15 +68,25 @@ def required_approved(c: Change, q: Question, basis: CiBasis, prof: Profile) -> 
         for other in later
     ):
         return True
+    if recorded is not None:
+        return False
+    if asking.legacy_inventory(q) and basis.required is not None:
+        earlier = c.questions[: c.questions.index(q)]
+        previous = next(
+            (
+                saved
+                for other in reversed(earlier)
+                if (saved := other.ci_basis or other.ci_observation) is not None
+                and saved.required is not None
+                and other.answer is not None
+                and other.answer.option == "yes"
+                and other.answer.superseded_at is None
+            ),
+            None,
+        )
+        return previous is None or previous.required == basis.required
     required = prof.entries.get(profile.REQUIRED)
-    return bool(
-        q.ci_basis is None
-        and required
-        and required.observed
-        and q.answer
-        and prof.confirmed_at
-        and prof.confirmed_at <= q.answer.at
-    )
+    return bool(required and required.observed and q.answer and prof.confirmed_at and prof.confirmed_at <= q.answer.at)
 
 
 def covers(c: Change, q: Question | None, basis: CiBasis, prof: Profile) -> bool:
@@ -91,9 +102,9 @@ def covers(c: Change, q: Question | None, basis: CiBasis, prof: Profile) -> bool
 
 
 def retain(c: Change, q: Question | None, basis: CiBasis, prof: Profile) -> None:
-    """Keep verified legacy evidence before declaration confirmation advances the profile timestamp."""
-    if q is not None and q.ci_basis is None and covers(c, q, basis, prof):
-        q.ci_basis = basis
+    """Keep a current observation separately from the legacy proposal's historical evidence."""
+    if q is not None and q.ci_basis is None and q.ci_observation is None and covers(c, q, basis, prof):
+        q.ci_observation = basis
 
 
 def delta(c: Change, q: Question | None, basis: CiBasis, prof: Profile, cause: str) -> str:
@@ -108,10 +119,11 @@ def delta(c: Change, q: Question | None, basis: CiBasis, prof: Profile, cause: s
         was, now = ", ".join(before) or "none", ", ".join(basis.declared or ()) or "none"
         changes.append(f"Detected checks changed from {was} to {now}.")
     if not required_approved(c, q, basis, prof):
-        if q.ci_basis is None:
+        recorded = q.ci_basis or q.ci_observation
+        if recorded is None:
             old = "not recorded with the earlier answer"
         else:
-            old = ", ".join(q.ci_basis.required) or "none" if q.ci_basis.required is not None else "not readable"
+            old = ", ".join(recorded.required) or "none" if recorded.required is not None else "not readable"
         now = ", ".join(basis.required) or "none" if basis.required is not None else "not readable"
         changes.append(f"Required checks were {old}; now {now}.")
     return " ".join(changes)
@@ -149,4 +161,5 @@ def settle(store: Store, lock: Lock, c: Change, now: datetime) -> None:
     previous = latest(c)
     pending = q.ci_basis or CiBasis(declared=detected(q), required=basis.required)
     if pending == basis and covers(c, previous, basis, prof):
+        retain(c, previous, basis, prof)
         q.effect_observed_at, c.outcome = now, None

@@ -67,6 +67,7 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
     Known detection cannot bypass renewed approval of a changed basis. All inventory questions share one allowance.
     """
     entry = ctx.profile.entries.get(profile.DECLARED)
+    confirmed = profile.listed(entry) if entry and profile.is_confirmed(entry) else ()
     texts = _flows_at(c, pr, ctx.writer)
     if texts is None:  # never trust the profile for a head whose workflows were not read
         return (), engine.pending(Waiting.NETWORK, f"reading the workflow files at {pr.head_sha[:7]}", ctx.poll())
@@ -78,8 +79,12 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
     cause = failures.cause_key(ErrorKind.GATE, F, f"declared-{digest}")  # the same inventory gates Follow and Merge
     ci_basis.retain(c, previous, basis, ctx.profile)
     delta = ci_basis.delta(c, previous, basis, ctx.profile, cause)
-    if previous and previous.cause != cause and ci_basis.covers(c, previous, basis, ctx.profile):
-        return profile.listed(entry), None
+    if (
+        previous
+        and (previous.cause != cause or (previous.ci_basis is None and confirmed))
+        and ci_basis.covers(c, previous, basis, ctx.profile)
+    ):
+        return confirmed if previous.ci_basis is None and confirmed else profile.listed(entry), None
     answer = previous.answer if previous else None
     declined = answer is not None and (answer.option == "pause" or answer.superseded_at is not None)
     if entry and entry.state == "known" and not delta and not declined:

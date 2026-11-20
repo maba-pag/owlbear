@@ -15,8 +15,7 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts.failures import kind_of
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Option, Outcome, Question, StepKind, Stop
 from owlbear_delivery_next.change_contracts.repair_records import Repair
-from owlbear_delivery_next.change_flow import repair_recovery
-from owlbear_delivery_next.change_flow.moves import ask, go
+from owlbear_delivery_next.change_flow import asking, moves, repair_recovery
 from owlbear_delivery_next.local_system import codebase
 
 if TYPE_CHECKING:
@@ -75,10 +74,12 @@ def exhausted(c: Change) -> bool:
 
 def action(c: Change) -> str:
     """The executable way out of an exhausted repair, including stops written before this route existed."""
-    if not exhausted(c):
-        return c.stop.action if c.stop else ""
     if remedy := repair_recovery.offered(c):
         return repair_recovery.action(c, remedy)
+    if asking.inventory_stop(c):
+        return "Pause or abandon the Change"
+    if not exhausted(c):
+        return c.stop.action if c.stop else ""
     if (
         not c.tests
         and c.brief.approved_version == c.brief.version
@@ -109,7 +110,7 @@ def asked(c: Change, text: str, now: datetime) -> None:
         Option(id="no", label="Don't apply it; stop with what was tried", next=DECLINE),
     ]
     q = Question(step=c.step.kind, text=text, options=options, cause=r.cause, subject="reserved", follows=r.root)
-    if (asked := ask(c, q, now)) is not None:  # the gate stops a cause's third question (#1064)
+    if (asked := moves.ask(c, q, now)) is not None:  # the gate stops a cause's third question (#1064)
         r.phase, r.question = "asked", asked.id
         if r.fix == "preparation" and c.outcome is not None:
             c.outcome.reason = "Approve the proposed test preparation"
@@ -142,7 +143,7 @@ def applied(c: Change, commit: str, now: datetime) -> None:
     c.repairs.done.append(r)
     c.repairs.current = None
     c.budgets.causes.pop(r.cause, None)
-    go(c, StepKind(r.step), r.task, r.mode)
+    moves.go(c, StepKind(r.step), r.task, r.mode)
     c.outcome = None
 
 
@@ -171,7 +172,7 @@ def unchanged(c: Change, reason: str, now: datetime) -> None:
     r.phase = "unchanged"
     c.repairs.done.append(r)
     c.repairs.current = None
-    go(c, StepKind(r.step), r.task, r.mode)
+    moves.go(c, StepKind(r.step), r.task, r.mode)
     c.outcome = Outcome(exit=Exit.RETRY, cause=r.cause, reason=reason, at=now)
 
 

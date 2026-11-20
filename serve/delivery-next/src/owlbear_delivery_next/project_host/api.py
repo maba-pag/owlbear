@@ -396,6 +396,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
                 "amendments": amendment_routes.shown(c),  # TD-185
                 "restartable": not round_flow.restartable(c),
                 "recovery": stop_routes.shown(c, store),  # #754: the stop the owner may clear, or None
+                "stop_evidence": stop_routes.evidence(c),
                 "activity": events[-20:],
                 "diagnostics": [e for e in events if e.get("event") in DIAGNOSTIC_EVENTS],
                 "watcher": watcher(store, slug),

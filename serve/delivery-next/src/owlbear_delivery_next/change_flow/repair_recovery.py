@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.failures import kind_of
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind
-from owlbear_delivery_next.change_flow.moves import go
+from owlbear_delivery_next.change_flow import asking, moves
 from owlbear_delivery_next.local_system import codebase
 
 if TYPE_CHECKING:
@@ -15,8 +15,8 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.change_contracts.repair_records import Repair
 
-CI_LOG, AMENDMENT_EXIT = 1310, 1312
-FIXED = (CI_LOG, AMENDMENT_EXIT)  # travels with the actual fixes, never inferred from version order
+CI_LOG, AMENDMENT_EXIT, MERGE_BASIS = 1310, 1312, 1342
+FIXED = (CI_LOG, AMENDMENT_EXIT, MERGE_BASIS)  # travels with actual fixes, never inferred from version order
 LEGACY = {
     "91b09919eb68085ecbcbabaf3ff9604cd27d898f6697ca168296f1f4ea269c22": (1310, "v1.279"),
     "94031b7acb33968ff62c895b8d03bc83786b9eb087e0a254ec928a7ef8834d74": (1312, "v1.284"),
@@ -51,8 +51,48 @@ def version(c: Change) -> str:
     return old[1] if old else ""
 
 
+def inventory(c: Change) -> bool:
+    """The pre-fix no-repair inventory stop, not another gate or a newly exhausted allowance."""
+    q = next((q for q in reversed(c.questions) if (q.cause or "").startswith(asking.DECLARED) and q.answer), None)
+    if not asking.inventory_stop(c) or q is None or c.stop is None or c.outcome is None:
+        return False
+    expected = ", ".join(q.id for q in c.questions if asking.root(q) == asking.DECLARED.rstrip("-"))
+    return bool(
+        asking.legacy_inventory(q)
+        and q.ci_basis is None
+        and q.cause == c.outcome.cause
+        and c.stop.action == asking.RERUN
+        and c.stop.resume == "the step runs again"
+        and c.stop.reason.startswith("Delivery could not resolve this by itself.\n\nDetails: ")
+        and c.stop.reason.endswith(f"It reached you twice already ({expected}): Delivery handles it now.")
+        and not any(r.step in {StepKind.FOLLOW, StepKind.MERGE} for r in c.repairs.done)
+    )
+
+
 def offered(c: Change) -> int | None:
     """One applicable fix absent from the stopped runtime; unknown legacy provenance admits nothing."""
+    if (
+        MERGE_BASIS in FIXED
+        and inventory(c)
+        and c.stop
+        and MERGE_BASIS not in (c.stop.fixed_defects or [])
+        and not (
+            c.finished_at
+            or c.intent.abandoned_at
+            or c.pending_child
+            or c.pending_question
+            or c.blocked
+            or c.amending
+            or c.queue
+        )
+        and not any(q.answer is None for q in c.questions)
+    ):
+        return MERGE_BASIS
+    return _repair(c)
+
+
+def _repair(c: Change) -> int | None:
+    """An applicable fix for a recorded repair."""
     r, stop = stopped(c), c.stop
     if r is None or stop is None or r.recovered_with or c.finished_at or c.intent.abandoned_at or c.pending_child:
         return None
@@ -84,6 +124,8 @@ def offered(c: Change) -> int | None:
 
 def action(c: Change, remedy: int) -> str:
     """The continuation the page can execute, not a generic parent-step rerun."""
+    if remedy == MERGE_BASIS:
+        return "Recheck merge checks and continue"
     if remedy == AMENDMENT_EXIT and c.amending:
         return f"Continue amendment {c.amending.id}"
     return "Refresh CI evidence and run the build again"
@@ -111,14 +153,21 @@ def consume(c: Change, item: Recovery, *, unchanged: bool) -> None:
     if c.stop is None or (item.stop_at is not None and item.stop_at != c.stop.at):
         return
     if item.remedy is None:
-        if unchanged and item.action == c.stop.action:
+        if unchanged and item.action == c.stop.action and not asking.inventory_stop(c):
             c.stop = c.outcome = None
         return
     remedy, r = offered(c), stopped(c)
-    if remedy is None or r is None or item.remedy != remedy or item.action != action(c, remedy):
+    if remedy is None or item.remedy != remedy or item.action != action(c, remedy):
+        return
+    if remedy == MERGE_BASIS:
+        if item.stop_at != c.stop.at:
+            return
+        c.stop = c.outcome = None
+        return
+    if r is None:
         return
     r.recovered_with, r.recovered_at = remedy, item.at
     r.recovered_plan = c.plan.version if c.plan else None
     c.budgets.causes.pop(r.cause, None)
-    go(c, c.step.kind, c.step.task, c.step.mode)
+    moves.go(c, c.step.kind, c.step.task, c.step.mode)
     c.stop = c.outcome = None

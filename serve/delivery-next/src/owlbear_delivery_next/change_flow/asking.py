@@ -14,7 +14,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.failures import cause_key, kind_of
-from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Outcome, Stop
+from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Outcome, StepKind, Stop
+from owlbear_delivery_next.change_flow import repair_recovery, stuck
+from owlbear_delivery_next.local_system import codebase
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -28,6 +30,41 @@ RERUN = "Run the step again"
 TERMINAL = frozenset({"pause", "abandon"})
 DECLARED = "gate:follow:declared-"
 TOOLS = "missing-tool:"
+LEGACY_INVENTORIES = frozenset(
+    f"{opening}{changed}. It waits for the checks GitHub requires, for every check that starts on the pull request, "
+    "and for those it could read: none it could read. Merge on that basis?"
+    for opening in (
+        "Delivery read the names of the checks this project's CI runs before a merge",
+        "Delivery could not read the names of every check this project's CI runs before a merge",
+    )
+    for changed in ("", " (the CI check-detection evidence changed)")
+)
+
+
+def legacy_inventory(q: Question) -> bool:
+    """The complete old engine proposal and its still-effective explicit yes, not an arbitrary suffix."""
+    return bool(
+        (q.cause or "").startswith(DECLARED)
+        and q.answer
+        and q.answer.option == "yes"
+        and q.answer.superseded_at is None
+        and q.text.rsplit("\n\n", 1)[-1] in LEGACY_INVENTORIES
+    )
+
+
+def inventory_stop(c: Change) -> bool:
+    """An exhausted inventory allowance on a nonrepairable merge step; unchanged retry cannot help."""
+    return bool(
+        c.stop
+        and c.outcome
+        and c.outcome.exit == Exit.STOP
+        and c.step.kind in {StepKind.FOLLOW, StepKind.MERGE}
+        and (c.outcome.cause or "").startswith(DECLARED)
+        and c.stop.kind == ErrorKind.GATE
+        and c.repairs.current is None
+        and len(_counted(c, DECLARED.rstrip("-"))) >= LIMIT
+        and "It reached you twice already (" in c.stop.reason
+    )
 
 
 def root(q: Question) -> str:
@@ -87,7 +124,14 @@ def offered(c: Change, q: Question, now: datetime) -> Question | None:
     earlier = _counted(c, key)
     if len(earlier) >= LIMIT:
         twice = ", ".join(x.id for x in earlier)
-        said = f"{q.text}\n\nIt reached you twice already ({twice}): Delivery handles it now."
+        handling = (
+            "Delivery handles it now."
+            if stuck.repaired(c)
+            else "The repair stops with its evidence."
+            if c.repairs.current is not None
+            else "No repair ran for this step. An unchanged rerun cannot resolve it; pause or abandon the Change."
+        )
+        said = f"{q.text}\n\nIt reached you twice already ({twice}): {handling}"
         if any(_legacy_tool(x.cause or "") for x in earlier):
             said += " Earlier tooling questions did not save their check/task identity; their allowance is kept."
         routed(c, q.cause or cause_key(ErrorKind.PROJECT_ENV, c.step.kind, f"question-{key}"), said, now, key)
@@ -131,8 +175,6 @@ def _led(prev: Question) -> str:
 
 def routed(c: Change, cause: str, evidence: str, now: datetime, key: str = "") -> None:
     """Repair the step when a repair can run, else stop it with the whole evidence; never a question."""
-    from owlbear_delivery_next.change_flow import stuck  # noqa: PLC0415 - stuck asks through moves, which asks here
-
     if (r := c.repairs.current) is not None and r.cause == cause:  # the repair's own proposal, a third time
         stuck.stopped(c, f"its fix would put the same problem to you a third time. {evidence}", now)
         return
@@ -147,5 +189,16 @@ def stop(c: Change, cause: str, reason: str, detail: str, now: datetime) -> None
     kind = kind_of(cause)
     said = f"{reason}.\n\nDetails: {detail}"
     error = ErrorKind(kind) if kind in {e.value for e in ErrorKind} else ErrorKind.STATE
-    c.stop = Stop(kind=error, reason=said, action=RERUN, resume="the step runs again", at=now)
+    c.stop = Stop(
+        kind=error,
+        reason=said,
+        action=RERUN,
+        resume="the step runs again",
+        at=now,
+        runtime=codebase.release(),
+        fixed_defects=list(repair_recovery.FIXED),
+    )
     c.outcome = Outcome(exit=Exit.STOP, cause=cause, reason=said, who="you", at=now)
+    if inventory_stop(c):
+        c.stop.action = "Pause or abandon the Change"
+        c.stop.resume = "An applicable Delivery fix is installed, or the Change is paused or abandoned"
