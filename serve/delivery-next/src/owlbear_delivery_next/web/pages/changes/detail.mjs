@@ -71,6 +71,7 @@ const PAUSED = /· paused by you/;
 
 export function badge(c) {
   if (c.stopped) return ["error", "Stopped"];
+  if (c.release_look?.ready || c.release_look?.error) return ["warning", "Your turn"];
   if (PAUSED.test(c.line)) return ["secondary", "Paused"];
   if (c.actor === "you") return ["warning", "Your turn"];
   if (c.actor === "admin") return ["warning", "Admin"];

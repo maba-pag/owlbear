@@ -4,8 +4,8 @@ import { statusLine } from "/assets/page/config/unset.mjs";
 import {
   OWN_TAG, blockedOf, displayName, here, HostDown, isOwn, loaded, project, Restarted, Slow, shown,
 } from "/assets/ui.mjs";
-import { KEY, state, page, show, call, keyOf, parts, several, failed } from "./state.mjs";
-import { hd, text } from "./widgets.mjs";
+import { KEY, state, page, show, call, keyOf, parts, several, failed, send } from "./state.mjs";
+import { button, hd, text } from "./widgets.mjs";
 import { spentText } from "./progress.mjs";
 import { short, split } from "./activity.mjs";
 import { badge, detailView } from "./detail.mjs";
@@ -40,6 +40,15 @@ function card([c, label, variant]) {
   if (c.quiet) bits.push("quiet");
   if (c.watcher?.outside) bits.push(`${c.watcher.outside} outside write${c.watcher.outside === 1 ? "" : "s"} observed`);
   const own = c.own ? html` <p-tag compact="true">${OWN_TAG}</p-tag>` : nothing;
+  const looked = async (e) => {
+    const control = e.currentTarget;
+    control.disabled = true;
+    try {
+      await send("/release-look", {}, state.detail?.key === c.key ? state.detail : c);
+    } finally {
+      if (control.isConnected) control.disabled = false;
+    }
+  };
   return html`<li class=${current ? "card current" : "card"}>
     <div class="top"><a href=${here({ change: c.key })} class="open" data-key=${c.key}
       aria-current=${current ? "true" : nothing} @click=${open}>${c.title || c.slug}</a>
@@ -50,6 +59,8 @@ function card([c, label, variant]) {
     <p class=${whole ? "says whole" : "says"}>${stage && !step && stage !== label
       ? html`<span class="stage">${stage}</span> \u00b7 ` : nothing}${rest}</p>
     ${c.action && groupOf(label) !== "working" ? html`<p class="next">Next: ${c.action}</p>` : nothing}
+    ${c.release_look ? html`<p class="next">${c.release_look.text} ${c.release_look.ready
+      ? button("Mark done", looked) : nothing}</p>` : nothing}
     ${bits.length ? html`<p class="meta">${bits.join(" \u00b7 ")}</p>` : nothing}
     ${(c.overlaps || []).map((o) => html`<p class="meta">${o}</p>`)}
     ${(c.decisions || []).map((d) => html`<p class="meta">${d}</p>`)}

@@ -19,7 +19,7 @@ from owlbear_delivery_next.change_contracts.decision_records import (
 )
 from owlbear_delivery_next.change_contracts.env_records import Environment, Recipe
 from owlbear_delivery_next.change_contracts.held_records import HeldRecord, PendingChild
-from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim
+from owlbear_delivery_next.change_contracts.merge_records import Episode, Pullback, QueueClaim, ReleaseLook
 from owlbear_delivery_next.change_contracts.option_records import Inputs, OptionAction, OptionProof, PendingQuestion
 from owlbear_delivery_next.change_contracts.repair_records import Repairs
 from owlbear_delivery_next.change_contracts.round_records import Dispute, LeftOpen, RoundLoop
@@ -478,6 +478,7 @@ class Change(Record):
     spend: Spend = Field(default_factory=Spend)
     tool_use: ToolUse = Field(default_factory=ToolUse)  # C-28 T8: how agents' Delivery tool calls went
     finished_at: datetime | None = None
+    release_look: ReleaseLook | None = None
     pullback: Pullback | None = None
     pull_requested: datetime | None = None  # the owner asked to pull the target again
     inbox_acked: list[str] = Field(default_factory=list)

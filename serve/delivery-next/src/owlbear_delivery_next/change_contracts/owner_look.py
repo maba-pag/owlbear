@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import hashlib
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
+
+from owlbear_delivery_next.change_contracts.merge_records import ReleaseLook
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
+    from owlbear_delivery_next.change_contracts.decision_records import Origin
     from owlbear_delivery_next.change_contracts.models import Change
 
 REPOSITORY = "maba-pag/owlbear"
@@ -28,17 +31,10 @@ INSTRUCTIONS = (
 class Choice(Protocol):
     """The decision fields shared by a draft and a retained brief."""
 
-    @property
-    def question(self) -> str: ...
-
-    @property
-    def answer(self) -> str: ...
-
-    @property
-    def origin(self) -> str: ...
-
-    @property
-    def scope(self) -> str: ...
+    question: str
+    answer: str
+    origin: Origin
+    scope: Literal["change", "project"]
 
 
 def chosen(decisions: Iterable[Choice]) -> bool:
@@ -46,10 +42,7 @@ def chosen(decisions: Iterable[Choice]) -> bool:
     return any(
         d.scope == "change"
         and d.origin in {"decided", "approved"}
-        and (
-            (d.question == QUESTION and d.answer == ANSWER)
-            or hashlib.sha256(d.answer.encode()).hexdigest() == LEGACY
-        )
+        and ((d.question == QUESTION and d.answer == ANSWER) or hashlib.sha256(d.answer.encode()).hexdigest() == LEGACY)
         for d in decisions
     )
 
@@ -63,3 +56,12 @@ def approved(c: Change) -> bool:
         old.version == b.version and old.ui == b.ui and old.decisions == b.decisions and old.visual == b.visual
         for old in b.approved
     )
+
+
+def delivered(c: Change, commit: str, repository: str) -> None:
+    """Keep the intended delivery's receipt, preserving a matching acknowledgement on cleanup retries."""
+    if not commit or repository.lower() != REPOSITORY or not approved(c):
+        return
+    look = c.release_look
+    if look is None or (look.version, look.commit) != (c.brief.version, commit):
+        c.release_look = ReleaseLook(version=c.brief.version, commit=commit)

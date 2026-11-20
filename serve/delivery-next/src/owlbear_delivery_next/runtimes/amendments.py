@@ -113,7 +113,7 @@ def _shaped(
 HOSTED = (
     "Delivery hosts this session, not the owner's chat: nobody reads your messages. You only read (view, glob, grep); "
     "you save no brief, start no challenge and ask nobody. Your only output is `submit_result`."
-) + " " + owner_look.INSTRUCTIONS
+)
 CANDIDATE_RULES = (
     "Write the exact candidate against the current version: per item the field, its key as the brief names it (empty "
     "to add one), the whole new wording, and why; a new visual state's path and a new or changed one's clicks and "
@@ -122,7 +122,8 @@ CANDIDATE_RULES = (
     "the owner's intent and every item you do not need. A change against a project decision the Change follows is a "
     "new Change-scoped decision (field decision, empty key, its question and answer) recording the exception; the "
     "project decision stays. A change that needs the outcome or the non-goals is not an amendment: set `refuse` with "
-    "why, and no items."
+    "why, and no items. "
+    f"{owner_look.INSTRUCTIONS}"
 )
 
 
