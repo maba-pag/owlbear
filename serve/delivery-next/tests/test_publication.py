@@ -569,7 +569,7 @@ def test_c2s_q4_yes_covers_q5s_workflow_churn_without_reducing_merge_checks(tmp_
     gh = FakeGh(pr(head=head))
     gh.read_rules = lambda _r, _b: rules
     cx = ctx(tmp_path, gh, prof(**(entries | profile.rule_entries(rules))))
-    cx.profile = profile.confirm(cx.profile, profile.REQUIRED, "CI", NOW - timedelta(seconds=1))
+    assert not cx.profile.entries[profile.REQUIRED].observed
     c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
     c.brief.approved_version = 1
     _, result = follow.run(cx, c)
@@ -579,6 +579,8 @@ def test_c2s_q4_yes_covers_q5s_workflow_churn_without_reducing_merge_checks(tmp_
     c.questions[-1].ci_basis = None  # q4 predates structured inventory snapshots.
     cx.now = NOW + timedelta(seconds=1)
     assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == ((), None)
+    assert c.questions[-1].ci_basis is None
+    assert c.questions[-1].ci_observation == CiBasis(declared=(), required=("CI",))
     cx.store.write(cx.lock, c)
 
     head, _ = ci_head(clone, "${{ inputs.n }} updated")
@@ -599,6 +601,13 @@ def test_c2s_q4_yes_covers_q5s_workflow_churn_without_reducing_merge_checks(tmp_
     gh.checks = (*gh.checks[:-1], Check(name="another suite", status="completed", conclusion="failure"))
     c, held = merge.run(cx, c)
     assert (held.exit, gh.merges) == (Exit.BACK, [])
+    gh.checks = (*gh.checks[:-1], Check(name="another suite", status="completed", conclusion="success"))
+    gh.result = MergeResult(status=MergeStatus.MERGED, sha=B)
+    gh.after = pr(head=head, state="closed", merged=True, merge_commit_sha=B)
+    c, held = merge.run(cx, c)
+    assert held.exit == Exit.DONE
+    assert [request.expected_head_sha for request in gh.merges] == [head]
+    gh.pr = pr(head=head)
 
     refreshed = cx.profile.model_copy(
         update={"entries": cx.profile.entries | {profile.REQUIRED: ProfileEntry(state="known", value="CI, scan")}}
@@ -610,7 +619,7 @@ def test_c2s_q4_yes_covers_q5s_workflow_churn_without_reducing_merge_checks(tmp_
     cx.profile = profile.confirm(refreshed, profile.REQUIRED, "CI, scan", NOW + timedelta(seconds=1))
     c.questions[-1].ci_basis = None
     _, legacy = follow.declared(cx, c, gh.pr, StepKind.MERGE)
-    assert "not recorded with the earlier answer; now CI, scan." in legacy.question.text
+    assert "Required checks were CI; now CI, scan." in legacy.question.text
     cx.profile = cx.store.read_profile()
     head, _ = ci_head(clone, "lint")
     gh.pr = pr(head=head)
