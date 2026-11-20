@@ -12,7 +12,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -28,15 +27,9 @@ class StoreError(RuntimeError):
 def _git(cwd: Path, *args: str) -> str:
     quiet = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     try:
-        for entry in os.get_exec_path(quiet):
-            executable = shutil.which(str(cwd.absolute() / entry / "git"))
-            if executable is not None:
-                break
-        else:
-            message = "Git executable not found on PATH"
-            raise FileNotFoundError(message)
-        done = subprocess.run(  # noqa: S603 - resolved Git; callers supply fixed config/rev-parse queries; no shell
-            [executable, *args],
+        # Native lookup keeps the child cwd/environment and execution-time PATH continuation.
+        done = subprocess.run(  # noqa: S603 - callers supply fixed config/rev-parse queries; no shell
+            ["git", *args],  # noqa: S607 - preserve native child PATH and execution-time search
             cwd=cwd,
             env=quiet,
             stdin=subprocess.DEVNULL,

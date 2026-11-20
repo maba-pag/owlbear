@@ -8,7 +8,6 @@ import json
 import os
 import re
 import shlex
-import shutil
 import stat
 import subprocess
 import sys
@@ -43,21 +42,11 @@ class BatchCommitResult:
     deferred_deletions: tuple[str, ...] = ()
 
 
-def _git_executable(cwd: Path) -> str:
-    for entry in os.get_exec_path():
-        executable = shutil.which(str(cwd.absolute() / entry / "git"))
-        if executable is not None:
-            return executable
-    message = "Git executable not found on PATH"
-    raise FileNotFoundError(message)
-
-
 def _git(repo_dir: Path, *args: str) -> str:
     """Run a git command and return stripped stdout."""
-    command = ["git", *args]
-    result = subprocess.run(  # noqa: S603 - resolved Git; internal commands separate messages and owned paths; no shell
-        command,
-        executable=_git_executable(repo_dir),
+    # Native lookup preserves child-relative PATH and execution-time continuation past stale wrappers.
+    result = subprocess.run(  # noqa: S603 - internal Git verbs separate messages and owned paths; no shell
+        ["git", *args],  # noqa: S607 - preserve native child PATH and execution-time search
         capture_output=True,
         check=True,
         cwd=repo_dir,
@@ -69,10 +58,9 @@ def _git(repo_dir: Path, *args: str) -> str:
 
 def _git_bytes(repo_dir: Path, *args: str) -> tuple[int, bytes]:
     """Run Git without decoding a staged memory snapshot prematurely."""
-    command = ["git", *args]
-    result = subprocess.run(  # noqa: S603 - resolved Git; internal show/rev-parse/reset operands; no shell
-        command,
-        executable=_git_executable(repo_dir),
+    # Native lookup preserves child-relative PATH and execution-time continuation past stale wrappers.
+    result = subprocess.run(  # noqa: S603 - internal show/rev-parse/reset operands; no shell
+        ["git", *args],  # noqa: S607 - preserve native child PATH and execution-time search
         capture_output=True,
         check=False,
         cwd=repo_dir,
@@ -260,10 +248,8 @@ def _git_object_id(repo_dir: Path, revision: str) -> str | None:
 
 
 def _git_blob_id(repo_dir: Path, raw: bytes) -> str:
-    command = ["git", "hash-object", "--stdin"]
-    result = subprocess.run(  # noqa: S603 - resolved Git; fixed hash-object flags; snapshot bytes use stdin
-        command,
-        executable=_git_executable(repo_dir),
+    result = subprocess.run(
+        ["git", "hash-object", "--stdin"],  # noqa: S607 - fixed Git flags; retain native child PATH search
         capture_output=True,
         check=True,
         cwd=repo_dir,

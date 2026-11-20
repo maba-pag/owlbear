@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -26,15 +25,9 @@ def marked_issues(root: Path) -> list[int]:
 
     A match inside a string only adds an issue to look up; the plugin re-runs only tests whose mark names it.
     """
-    for entry in os.get_exec_path():
-        executable = shutil.which(str(root.absolute() / entry / "git"))
-        if executable is not None:
-            break
-    else:
-        message = "Git executable not found on PATH"
-        raise FileNotFoundError(message)
-    listed = subprocess.run(  # noqa: S603 - resolved Git with fixed tracked-Python inventory flags; no shell
-        [executable, "ls-files", "-z", "--", "*.py"],
+    # Native lookup uses root's relative PATH and can continue past a stale wrapper at execution time.
+    listed = subprocess.run(
+        ["git", "ls-files", "-z", "--", "*.py"],  # noqa: S607 - fixed inventory argv; native child PATH
         cwd=root,
         capture_output=True,
         check=True,
@@ -49,12 +42,9 @@ def marked_issues(root: Path) -> list[int]:
 def fetch_issue(repository: str, number: int) -> dict[str, object]:
     """One issue from the GitHub API through the gh CLI, read with the job's token."""
     try:
-        executable = shutil.which("gh", path=os.environ.get("PATH", os.defpath) or os.curdir)
-        if executable is None:
-            message = "gh executable not found on PATH"
-            raise FileNotFoundError(message)
-        done = subprocess.run(  # noqa: S603 - resolved gh; CI repository and numeric issue form one API path; no shell
-            [executable, "api", f"repos/{repository}/issues/{number}"],
+        # Keep native empty/relative PATH and execution-time continuation for the installed gh tool.
+        done = subprocess.run(  # noqa: S603 - CI repository and numeric issue form one API operand; no shell
+            ["gh", "api", f"repos/{repository}/issues/{number}"],  # noqa: S607 - native installed gh lookup
             capture_output=True,
             check=True,
             text=True,

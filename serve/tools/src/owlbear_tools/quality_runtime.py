@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import shutil
 import subprocess
 import sys
 from enum import StrEnum
@@ -64,12 +63,10 @@ def _git_paths(*, staged: bool) -> list[str]:
 
 def _git_root() -> Path:
     try:
-        executable = shutil.which("git", path=os.environ.get("PATH", os.defpath) or os.curdir)
-        if executable is None:
-            message = "Git executable not found on PATH"
-            raise FileNotFoundError(message)
-        # The resolved Git runs one fixed repository-root query without a shell.
-        output = subprocess.check_output([executable, "rev-parse", "--show-toplevel"])  # noqa: S603
+        # Keep native empty/relative PATH and execution-time continuation for the fixed installed tool.
+        output = subprocess.check_output(
+            ["git", "rev-parse", "--show-toplevel"]  # noqa: S607 - fixed query; preserve native Git PATH search
+        )
     except (OSError, subprocess.CalledProcessError) as exc:
         message = "unable to discover Git repository root"
         raise RuntimeError(message) from exc
