@@ -29,7 +29,8 @@ def probe_in(cwd: Path) -> Probe:
 
     def run(argv: list[str], env: Mapping[str, str] | None = None, /) -> tuple[int, str]:
         try:
-            done = subprocess.run(  # noqa: S603
+            # Readiness/onboarding own Git/gh/signing/Copilot probes; local file/pack callers own Git vectors.
+            done = subprocess.run(  # noqa: S603 - probe callers choose executable and argv; no shell
                 argv, cwd=cwd, env=env, capture_output=True, text=True, timeout=30, check=False
             )
         except (OSError, subprocess.TimeoutExpired) as exc:

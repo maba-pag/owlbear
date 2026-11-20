@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass
 from importlib.resources import files
@@ -77,8 +78,12 @@ def _installed(worktree: Path) -> Choice | None:
 
 
 def _loaded(worktree: Path, root: Path) -> Choice | None:
+    if (git := shutil.which("git")) is None:
+        raise FileNotFoundError(2, "No such file or directory", "git")
+    command = ["git", "-C", str(worktree), "grep", "-I", "-h", "-o", "-E", MARKS]
     found = subprocess.run(  # noqa: S603 - a fixed argument list, the pattern ours
-        ["git", "-C", str(worktree), "grep", "-I", "-h", "-o", "-E", MARKS],  # noqa: S607 - git from PATH, as elsewhere
+        command,
+        executable=str(Path(git).absolute()),
         capture_output=True,
         text=True,
         check=False,

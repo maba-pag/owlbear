@@ -9,15 +9,13 @@ from __future__ import annotations
 import os
 import subprocess
 import time
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 from owlbear_delivery_next.git.access import Access
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.git.git_executable import git_executable_in
 from owlbear_delivery_next.git.remote_git import RemoteGitError
 from owlbear_delivery_next.github.account import AccountMissing, Origin, Writer
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 EXPIRED = "the deadline passed before git could run"
 REMOTE = frozenset({"push", "fetch", "pull", "ls-remote", "clone"})
@@ -58,7 +56,8 @@ def run(
         return subprocess.CompletedProcess(["git", *args], 128, "", said)
     command = ["git", *access.options(), *args]
     try:
-        done = subprocess.run(  # noqa: S603
+        # Shared-data and pack callers own Git verbs/argv; access adds account options, operands stay separate.
+        done = subprocess.run(  # noqa: S603 - code-owned Git vectors with per-launch account environment, no shell
             command,
             cwd=cwd,
             env=access.environment({**os.environ, "GIT_TERMINAL_PROMPT": "0"}),
@@ -106,8 +105,11 @@ def _default(cwd: Path, kind: str, deadline: float) -> str:
 
 
 def _read(cwd: Path, args: tuple[str, ...], deadline: float) -> str:
-    done = subprocess.run(  # noqa: S603
-        ["git", *args],  # noqa: S607
+    git = git_executable_in(cwd)
+    # _default alone builds symbolic-ref/for-each-ref queries; the returned branch is one operand.
+    command = ["git", *args]
+    done = subprocess.run(  # noqa: S603 - resolved Git and internal metadata-query argv, no shell
+        command, executable=str(Path(git).absolute()),
         cwd=cwd, capture_output=True, text=True, timeout=_left(deadline), check=False, stdin=subprocess.DEVNULL,
     )  # fmt: skip
     return done.stdout.strip() if done.returncode == 0 else ""

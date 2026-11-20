@@ -85,7 +85,10 @@ def sync(clone: Path, repository: str) -> None:
 
 
 def _run(command: list[str]) -> bytes:
-    return subprocess.run(command, capture_output=True, check=True, timeout=600).stdout  # noqa: S603
+    # sync/_show/prepare/upstream_skill own Git vectors: no-checkout clone, revision/path operands, no shell.
+    return subprocess.run(  # noqa: S603 - caller-built pack Git vectors only, no shell
+        command, capture_output=True, check=True, timeout=600
+    ).stdout
 
 
 def _show(clone: Path, tag: str, path: str) -> bytes:
