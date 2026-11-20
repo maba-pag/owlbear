@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.amendment_records import Amending
 from owlbear_delivery_next.change_contracts.evidence import check_inputs, next_check
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem, CheckResult, IntentItem
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, CheckResult, IntentItem, Recovery
 from owlbear_delivery_next.change_contracts.merge_records import Pullback
 from owlbear_delivery_next.change_contracts.models import (
     VISUAL,
@@ -39,7 +39,15 @@ from owlbear_delivery_next.change_contracts.preparation import BASE, Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_contracts.visual_records import ShapingCapture, VisualResult
-from owlbear_delivery_next.change_flow import brief_rounds, brief_starts, delivery_target, loop, worktree
+from owlbear_delivery_next.change_flow import asking as question_gate
+from owlbear_delivery_next.change_flow import (
+    brief_rounds,
+    brief_starts,
+    delivery_target,
+    loop,
+    repair_recovery,
+    worktree,
+)
 from owlbear_delivery_next.change_flow.brief_tools import BriefDraft
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity, status
@@ -1258,6 +1266,101 @@ def stopped(fake, kind=StepKind.BUILD, stop=None):
 
 
 SHOWN = {"action": "Resolve it in GitHub", "at": "2026-10-10T12:00:00Z"}  # the stop of stopped(), as the page shows it
+
+
+def inventory_stopped(c):
+    """The returned #1342 incident shape, without private project data or an invented repair."""
+    proposal = (
+        "Delivery could not read the names of every check this project's CI runs before a merge "
+        "(the CI check-detection evidence changed). It waits for the checks GitHub requires, for every check "
+        "that starts on the pull request, and for those it could read: none it could read. Merge on that basis?"
+    )
+    c.step = Step(kind=StepKind.FOLLOW)
+    c.brief.approved_version = c.brief.version
+    c.questions = [
+        Question(
+            id=f"q{i}",
+            step=StepKind.FOLLOW,
+            text=proposal,
+            cause=f"gate:follow:declared-{i}",
+            answer=Answer(option="yes", at=NOW),
+        )
+        for i in (4, 5)
+    ]
+    reason = (
+        f"Delivery could not resolve this by itself.\n\nDetails: {proposal}\n\n"
+        "It reached you twice already (q4, q5): Delivery handles it now."
+    )
+    c.stop = Stop(kind=ErrorKind.GATE, reason=reason, action=question_gate.RERUN, resume="the step runs again", at=NOW)
+    c.outcome = Outcome(exit=Exit.STOP, cause=c.questions[-1].cause, reason=reason, at=NOW)
+    return c
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "fixed",
+        "absent",
+        "stale",
+        "generic",
+        "chat",
+        "queued",
+        "new",
+        "refused",
+        "queued-absent",
+        "queued-stale",
+    ],
+)
+def test_inventory_stop_recovery_requires_its_fix_and_keeps_answers_and_pause(store, tmp_path, monkeypatch, case):
+    fake = Fake(store, tmp_path)
+    c = inventory_stopped(asking(fake))
+    c.intent.paused_at = NOW
+    c.pending_question = None
+    if case in {"absent", "queued-absent"}:
+        monkeypatch.setattr(repair_recovery, "FIXED", (1310, 1312))
+    if case == "refused":
+        c.questions[-1].answer.option = "no"
+    if case == "new":
+        c.outcome = None
+        c.stop = None
+        q = c.questions[-1].model_copy(update={"answer": None})
+        assert question_gate.offered(c, q, NOW) is None
+        assert "No repair ran for this step" in c.stop.reason
+        assert "Delivery handles it now" not in c.stop.reason
+        assert 1342 in c.stop.fixed_defects
+    save(store, c)
+    page = client(store, fake, **({"x-owlbear-use": "chat"} if case == "chat" else {}))
+    detail = page.get("/api/next/changes/c1").json()
+    assert detail["stop_evidence"]["reason"] == c.stop.reason
+    if case in {"absent", "new", "refused", "queued-absent"}:
+        assert detail["recovery"] is None
+    else:
+        assert detail["recovery"]["action"] == "Recheck merge checks and continue"
+    body = {"action": "Recheck merge checks and continue", "at": NOW.isoformat(), "remedy": 1342}
+    if case == "stale":
+        body["at"] = (NOW - timedelta(seconds=1)).isoformat()
+    if case in {"generic", "queued"}:
+        body = {"action": question_gate.RERUN, "at": NOW.isoformat()}
+    if case.startswith("queued"):
+        store.put_inbox(
+            "c1",
+            Recovery(
+                at=NOW,
+                action=body["action"],
+                remedy=body.get("remedy"),
+                stop_at=NOW - timedelta(seconds=1) if case == "queued-stale" else NOW,
+            ),
+        )
+    else:
+        response = page.post("/api/next/changes/c1/recovery", json=body)
+        assert response.status_code == (200 if case == "fixed" else 403 if case == "chat" else 409)
+    with store.lock("c1") as lock:
+        after = store.fold(lock, "c1", NOW)[0]
+    assert (after.stop is None) is (case == "fixed")
+    assert after.intent.paused_at == NOW
+    assert after.questions == c.questions
+    assert after.budgets == c.budgets
+    assert after.repairs == c.repairs
 
 
 def test_resume_leaves_a_stop_and_the_owners_recovery_reruns_its_step(store, tmp_path):

@@ -24,7 +24,7 @@ from owlbear_delivery_next.change_contracts.inbox import AnswerItem
 from owlbear_delivery_next.change_contracts.round_records import RoundFinding, RoundLoop, RoundPolicy, Verdict
 from owlbear_delivery_next.change_contracts.tool_use import ToolUse
 from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion, ShapingCapture, VisualResult
-from owlbear_delivery_next.change_flow import shaping_capture
+from owlbear_delivery_next.change_flow import repair_recovery, shaping_capture
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
@@ -37,6 +37,7 @@ from owlbear_delivery_next.state_store import decision_store, machine_settings, 
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import decision_publication
 
+from .test_host import inventory_stopped
 from .test_machine_pages import page_at
 
 if TYPE_CHECKING:
@@ -764,13 +765,29 @@ def launched(base: str, pds: Any) -> Iterator[Any]:
 
 
 @pytest.mark.browser
-@pytest.mark.parametrize("case", ["stopped", "paused", "cleanup-paused", "liveness", "unset"])
+@pytest.mark.parametrize(
+    "case",
+    [
+        "stopped",
+        "paused",
+        "cleanup-paused",
+        "liveness",
+        "unset",
+        "inventory-auto",
+        "inventory-ask",
+        "inventory-unavailable",
+        "inventory-unset",
+    ],
+)
 def test_the_owner_reruns_a_stopped_step_after_confirming_what_follows(page_url, pds, case, monkeypatch) -> None:
     """#754: the Stopped notice offers "Done: run the step again" unless a liveness check holds the stop or a setting
     is unset (D-01M61SBWK4VE4MNTD35TR0VPS8)."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     store, base = page_url
+    if case.startswith("inventory-"):
+        inventory_recovery_browser(page_url, pds, case, monkeypatch, expect)
+        return
     if case == "unset":
         monkeypatch.setattr(machine_settings, "BASE", None)
         monkeypatch.setattr(config, "BASE", None)
@@ -814,6 +831,77 @@ def test_the_owner_reruns_a_stopped_step_after_confirming_what_follows(page_url,
         assert (reply.value.status, posts) == (200, [c.stop.model_dump(mode="json", include={"action", "at"})])
         assert '"kind":"recovery"' in sent(store, "flip").replace(" ", "")
         expect(page.get_by_text(AFTER)).to_be_visible()
+
+
+def inventory_recovery_browser(page_url, pds, case, monkeypatch, expect):
+    """#1342: the old stop stays visible with details off and pauses held; recovery discloses merge consequences."""
+    store, base = page_url
+    if case == "inventory-unset":
+        monkeypatch.setattr(machine_settings, "BASE", None)
+    if case == "inventory-unavailable":
+        monkeypatch.setattr(repair_recovery, "FIXED", (1310, 1312))
+    if case == "inventory-ask":
+        monkeypatch.setattr(
+            config,
+            "BASE",
+            config.BASE.model_copy(
+                update={
+                    "prefs": config.BASE.prefs.model_copy(update={"ask_before_merge": True}),
+                }
+            ),
+        )
+    c = inventory_stopped(stopped("paused"))
+    c.names.target = "main"
+    c.names.pr = 42
+    store.write(Lock("flip"), c)
+    with launched(base, pds) as page:
+        note = page.locator("p-inline-notification[heading='Stopped']")
+        expect(note).to_contain_text(c.stop.reason)
+        again = page.get_by_role("button", name="Recheck merge checks and continue", exact=True)
+        if case in {"inventory-unavailable", "inventory-unset"}:
+            expect(again).to_have_count(0)
+            expect(note).to_contain_text(
+                "Pause or abandon" if case == "inventory-unavailable" else "settings are unset"
+            )
+            return
+        expect(again).to_be_visible()
+        box = again.bounding_box()
+        assert box["width"] >= 24
+        assert box["height"] >= 24
+        again.click()
+        dialog = page.locator("p-modal.ask")
+        for said in (
+            "rereads GitHub's required checks",
+            "confirmed named and started checks",
+            "every other merge gate",
+            "Existing pauses stay in force",
+            "Pause cannot undo a merge",
+            "Reversing a merge needs a revert",
+            "The Change stays stopped",
+        ):
+            expect(dialog).to_contain_text(said)
+        expect(dialog).to_contain_text(
+            "Delivery asks you before merging" if case == "inventory-ask" else "removes the worktree"
+        )
+        pds.settled(page)
+        for button in dialog.get_by_role("button").all():
+            box = button.bounding_box()
+            assert box["width"] >= 24
+            assert box["height"] >= 24
+        for _ in range(6):
+            page.keyboard.press("Tab")
+            assert page.evaluate(pds.INSIDE)
+        dialog.get_by_role("button", name="Keep it stopped").click()
+        expect(dialog).to_have_count(0)
+        expect(again).to_be_focused()
+        assert store.read("flip").stop == c.stop
+        again.click()
+        with replied(page, "/recovery") as reply:
+            page.locator("p-modal.ask").get_by_role(
+                "button", name="Recheck merge checks and continue", exact=True
+            ).click()
+        assert reply.value.status == 200
+        assert '"remedy":1342' in sent(store, "flip").replace(" ", "")
 
 
 @pytest.mark.browser
