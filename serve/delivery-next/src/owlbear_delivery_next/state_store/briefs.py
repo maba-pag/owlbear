@@ -178,7 +178,10 @@ def save_brief(
     errors = brief_tools.check_brief(draft, recipe=chat_contract.captures(contract)) if draft else errors
     if draft is None or errors:
         return 422, {"errors": errors}
-    draft, errors = _prepared(store, draft)
+    try:
+        draft, errors = _prepared(store, draft)
+    except StoreError as exc:
+        return 409, {"errors": [f"change: {failure(exc)}; try again"]}
     if errors:
         return 422, {"errors": errors}
     return _revise(store, draft, binding) if draft.change else _create(store, draft, binding)
