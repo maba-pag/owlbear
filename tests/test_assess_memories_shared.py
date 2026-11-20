@@ -7,6 +7,7 @@ The memory server is bound to a real clone of a shared repository as Delivery bi
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -29,7 +30,13 @@ _SUBJECT = f"chore: memory assessments ({_TASK}, memory-mcp)"
 
 
 def git(root: Path, *args: str) -> str:
-    return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
+    return subprocess.run(  # noqa: S603 - git callers build fixture Git add/clone/commit/config argv and repository operands; no shell.
+        [git_executable, *args], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 def entry(entry_id: str, state: MemoryState, title: str = "Pin the runtime") -> MemoryEntry:

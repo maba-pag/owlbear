@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import multiprocessing
+import shutil
 import subprocess
 import sys
 import time
@@ -13,8 +14,12 @@ from owlbear_memory_mcp.git import commit_batch, format_git_failure
 
 
 def _git(repository: Path, *args: str) -> str:
-    result = subprocess.run(  # noqa: S603
-        ["git", *args],  # noqa: S607
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
+    result = subprocess.run(  # noqa: S603 - _git callers build fixture Git add/commit/config/diff argv and repository operands; no shell.
+        [git_executable, *args],
         cwd=repository,
         check=True,
         capture_output=True,
@@ -24,8 +29,12 @@ def _git(repository: Path, *args: str) -> str:
 
 
 def _git_bytes(repository: Path, *args: str) -> bytes:
-    result = subprocess.run(  # noqa: S603
-        ["git", *args],  # noqa: S607
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
+    result = subprocess.run(  # noqa: S603 - _git_bytes callers build fixture Git show argv and repository operands; no shell.
+        [git_executable, *args],
         cwd=repository,
         check=True,
         capture_output=True,
@@ -34,8 +43,12 @@ def _git_bytes(repository: Path, *args: str) -> bytes:
 
 
 def _blob_id(repository: Path, raw: bytes) -> str:
-    result = subprocess.run(
-        ["git", "hash-object", "--stdin"],  # noqa: S607
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
+    result = subprocess.run(  # noqa: S603 - Fixture Git hash-object argv with literal operands; no shell.
+        [git_executable, "hash-object", "--stdin"],
         cwd=repository,
         check=True,
         capture_output=True,
