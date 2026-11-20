@@ -33,19 +33,47 @@ function said(m) {
 const ran = (m) => (m.at ? new Date(m.at).toLocaleString() : "an unknown time");
 const measured = (c) => (c?.roles ?? []).filter((r) => r.latest);
 
-// The sessions without a measurement, and why: each failed read with its error; the others ran before measuring.
-function unmeasured(c) {
-  if (!c.unmeasured) return nothing;
+// A recorded “kept” note in the page's words: which skill or subagent tokens are still counted in another part.
+const KIND = { skills: ["skill", "Skills"], subagents: ["subagent", "Subagents"] };
+const kind = (part) => KIND[part] ?? [part, part];
+const KEPT = [
+  [/^(\w+): (\d+) tokens stay in their category, which nesting does not name$/, (part, n) =>
+    `${tokens(+n)} ${kind(part)[0]} tokens are counted in one of the other parts, not in ${kind(part)[1]}: the
+    attribution does not say which part holds them`],
+  [/^(\w+): (\d+) tokens stay in their category, which holds fewer$/, (part, n) =>
+    `${tokens(+n)} ${kind(part)[0]} tokens stay counted in the part that holds them, not in ${kind(part)[1]}: that part
+    reports fewer tokens than they need`],
+  [/^(\w+): the preloaded (.+) stay in their category, which the attribution does not itemize$/, (part, names) =>
+    `the preloaded ${names} are counted in one of the other parts, not in ${kind(part)[1]}: the attribution does not list
+    them`],
+];
+const keptSaid = (text) => text.split("; ").map((one) => {
+  for (const [shape, say] of KEPT) {
+    const m = one.match(shape);
+    if (m) return say(...m.slice(1));
+  }
+  return one;
+}).join("; ");
+
+// The notes under the chart, as one list: kinds still counted in another part, and the sessions without a
+// measurement with why (each failed read with its error; the others ran before measuring).
+function notes(c, kept) {
   const errors = c.roles.flatMap((r) => r.errors.map((e) => ({ ...e, role: r.role })));
   const failed = new Set(errors.map((e) => e.session)).size, before = c.unmeasured - failed;
   const sessions = (n) => `${count(n)} session${n === 1 ? "" : "s"}`;
   const why = [before ? `${count(before)} ran before this release` : "",
     failed ? `${count(failed)} failed to read` : ""].filter(Boolean);
-  return html`<p-text id="context-unmeasured" size="sm">${sessions(c.unmeasured)} unmeasured: ${why.join(", ")}.
-    </p-text>
-    ${errors.length ? html`<ul id="context-errors" class="notes">${errors.map((e) => html`<li class="error">Could not
-      read the context of ${e.role}'s session ${e.session}${e.at ? ` at ${new Date(e.at).toLocaleString()}` : ""}:
-      <span class="why">${e.error}</span></li>`)}</ul>` : nothing}`;
+  if (!kept.length && !c.unmeasured) return nothing;
+  return html`<p-heading size="md"><h3 id="context-notes-title">About these numbers</h3></p-heading>
+    <ul id="context-notes" class="notes" aria-labelledby="context-notes-title">
+    ${kept.map((r) => html`<li class="kept">${r.role}: ${keptSaid(r.latest.kept)}.</li>`)}
+    ${c.unmeasured ? html`<li id="context-unmeasured">${sessions(c.unmeasured)} in these filters
+      ${c.unmeasured === 1 ? "has" : "have"} no measurement:
+      ${why.join(", ")}.${errors.length ? html`<ul id="context-errors" class="notes">${errors.map((e) =>
+        html`<li class="error">Could not read the context of ${e.role}'s session ${e.session}${e.at
+          ? ` at ${new Date(e.at).toLocaleString()}` : ""}:<span class="why">${e.error}</span></li>`)}</ul>`
+        : nothing}</li>` : nothing}
+    </ul>`;
 }
 
 function row(r) {
@@ -57,7 +85,7 @@ function row(r) {
     <p-table-cell>${m.model || "–"}</p-table-cell><p-table-cell>${ran(m)}</p-table-cell></p-table-row>`;
 }
 
-/** The section: the chart's switch and keys, its folded table, or a notice; the sessions without a measurement. */
+/** The section: the chart's switch and keys, its folded table, or a notice; notes on its numbers. */
 export function contextAtStart(c) {
   if (!c) return nothing;
   const rows = measured(c), kept = rows.filter((r) => r.latest.kept);
@@ -75,9 +103,7 @@ export function contextAtStart(c) {
         html`<p-table-head-cell class=${i && i < 10 ? "num" : nothing}>${h}</p-table-head-cell>`)}</p-table-head-row>
       </p-table-head><p-table-body>${rows.map(row)}</p-table-body></p-table>`)}`
       : html`<p-text id="context-none" size="sm">No session in these filters has a context measurement.</p-text>`}
-    ${kept.length ? html`<ul id="context-kept" class="notes">${kept.map((r) => html`<li>${r.role}: ${r.latest.kept}.
-      </li>`)}</ul>` : nothing}
-    ${unmeasured(c)}
+    ${notes(c, kept)}
   </section>`;
 }
 
