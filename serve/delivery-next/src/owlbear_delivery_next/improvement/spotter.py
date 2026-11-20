@@ -61,7 +61,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Unpack
 
 from owlbear_delivery_next.git.command_failure import failure, rpc_failure
 from owlbear_delivery_next.improvement import acts, card, cases, credit_meter
@@ -81,6 +81,9 @@ from owlbear_delivery_next.state_store import spotter_test
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Mapping
+
+    from owlbear_delivery_next.improvement.events import Event
+    from owlbear_delivery_next.improvement.spotter_store import RecordFields
 
 PROMPT = cases.PROMPT  # the prompt file; what a look sends is ``Context.prompt``, frozen with its examples
 RUNNING = 2  # looks at once per step
@@ -200,7 +203,7 @@ async def through(task: asyncio.Future[Any]) -> None:
         raise asyncio.CancelledError
 
 
-def offload[T](work: Callable[..., T], *args: Any) -> asyncio.Future[T]:  # noqa: ANN401 - the work's arguments
+def offload[T, *Args](work: Callable[[*Args], T], *args: *Args) -> asyncio.Future[T]:
     """Run *work* on the Spotter's own threads: a step's end never waits for it, and a stopped wait never drops it."""
     return asyncio.shield(asyncio.wrap_future(WORK.submit(work, *args)))
 
@@ -209,10 +212,7 @@ type Judge = Callable[[dict[str, Any], Context, credit_meter.Meter], Awaitable[s
 
 
 class Spotter:
-    """One step session's Spotter: its intake and its looks; nothing it does blocks the step's loop.
-
-    *judge* runs one look (``runtimes.spotter_look``); a test gives its own.
-    """
+    """One step's nonblocking intake and looks; *judge* runs a look, or a test supplies its own."""
 
     def __init__(  # noqa: PLR0913 - a step's seams, and the chats follower's admission
         self,
@@ -247,7 +247,7 @@ class Spotter:
         self.hand_offs: dict[str, asyncio.Future[str | None]] = {}  # a waiting submit's call id: the look's note
         self.planned = False  # the step's plan was seen live: ``seen`` looks at it once
 
-    def seen(self, ev: Any) -> None:  # noqa: ANN401 - an SDK event, on the step's loop
+    def seen(self, ev: Event) -> None:
         """Take one event in: its own agent's completed action may be sampled, its first reply is its plan."""
         d = as_dict(ev)
         unanswered = self.kept.first_reply is None
@@ -260,7 +260,7 @@ class Spotter:
                           "call": str(d.get("id") or "")}  # fmt: skip
                 self._look("plan", 1.0, moment)
 
-    def take(self, ev: Any) -> bool:  # noqa: ANN401 - an SDK event or a logged one
+    def take(self, ev: Event) -> bool:
         """Take one event in without a look; whether it completed a call of the session's own agent."""
         return self.kept.add(ev)
 
@@ -280,7 +280,7 @@ class Spotter:
         skipped = self._record(look, probability, moment, skipped=why)
         self._track(offload(store, self.folder, skipped, None))
 
-    def history(self, events: Iterable[Any]) -> None:
+    def history(self, events: Iterable[Event]) -> None:
         """A resumed session's transcript, taken in without looks: the task, plan and evidence the agent has."""
         for ev in events:
             self.kept.add(ev)
@@ -288,7 +288,7 @@ class Spotter:
     def handed_off(
         self,
         call_id: str,
-        arguments: Any,  # noqa: ANN401 - the submit tool's JSON arguments
+        arguments: object,
         *,
         held: bool = False,
     ) -> asyncio.Future[str | None] | None:
@@ -327,7 +327,7 @@ class Spotter:
         return task
 
     def _record(self, look: str, probability: float, moment: dict[str, Any], ctx: Context | None = None,
-                **fields: Any) -> Record:  # noqa: ANN401 # fmt: skip
+                **fields: Unpack[RecordFields]) -> Record:  # fmt: skip
         ctx = ctx or self.ctx
         return Record(id=uuid.uuid4().hex[:12], at=datetime.now(UTC).isoformat(timespec="seconds"),
                       project=ctx.project, change=ctx.change, step=ctx.step, session=self.session(), look=look,

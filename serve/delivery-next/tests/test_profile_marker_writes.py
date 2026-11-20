@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.state_store import prefs_import, profile_share
@@ -15,7 +16,9 @@ from owlbear_delivery_next.state_store.store import Store, StoreError
 
 def clone_profile(remote: Path, tmp_path: Path) -> tuple[Store, Profile]:
     second = tmp_path / "fresh"
-    subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git clone argv with remote/second operands; no shell.
+        [resolve_git_executable(), "clone", "-q", str(remote), str(second)], check=True, capture_output=True
+    )
     fresh = Store(tmp_path / "fresh-store", DataRepo(second), "shop-site")
     return fresh, fresh.read_profile()
 

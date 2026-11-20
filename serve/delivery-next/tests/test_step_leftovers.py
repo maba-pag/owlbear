@@ -2,6 +2,7 @@
 
 import contextlib
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -84,7 +85,13 @@ def end(pid: int) -> None:
 
 def test_an_unrelated_process_in_the_worktree_never_blocks(store, tmp_path) -> None:
     work = runnable(store, tmp_path)
-    ended = subprocess.Popen(["true"])  # noqa: S607 - the last step's runner, gone
+    true_executable = shutil.which("true")
+    if true_executable is None:
+        message = "true executable is unavailable"
+        raise FileNotFoundError(message)
+    ended = subprocess.Popen(  # noqa: S603 - Fixed true argv creates the exited runner fixture; no shell.
+        [true_executable]
+    )
     created = psutil.Process(ended.pid).create_time()
     ended.wait()
     rec = RunnerRecord(pid=ended.pid, created=created, started_at=datetime.now(UTC) - timedelta(seconds=10))
@@ -129,7 +136,13 @@ def test_a_runner_run_by_hand_keeps_the_last_steps_records(store, tmp_path) -> N
 
 
 def test_marks_of_another_change_or_before_the_step_do_not_count(store, tmp_path) -> None:
-    live = subprocess.Popen(["sleep", "300"], start_new_session=True)  # noqa: S607 - a group marked as it started
+    sleep_executable = shutil.which("sleep")
+    if sleep_executable is None:
+        message = "sleep executable is unavailable"
+        raise FileNotFoundError(message)
+    live = subprocess.Popen(  # noqa: S603 - Fixed sleep 300 argv creates the marked process-group fixture; no shell.
+        [sleep_executable, "300"], start_new_session=True
+    )
     try:
         mark = f"{live.pid} {time.strftime(command_marks.LSTART, time.gmtime())}\n"
         runnable(store, tmp_path, "c2")

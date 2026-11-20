@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.models import Change, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.state_store.store import Store
@@ -35,7 +36,9 @@ def store(tmp_path, monkeypatch):
         ["init", "-q"],
         ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"],
     ):
-        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git init/commit loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), *args], cwd=tmp_path, check=True, capture_output=True
+        )
     opened = Store.open(tmp_path)
     c = Change(
         slug="c1",

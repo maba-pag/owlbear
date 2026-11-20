@@ -171,8 +171,9 @@ class Hand:
 
 
 def _commit(package: Path) -> str:
+    # Native lookup preserves empty/relative PATH and execution-time continuation for the fixed Git tool.
     found = subprocess.run(  # noqa: S603 - a fixed argument list
-        ["git", "-C", str(package), "rev-parse", "HEAD"],  # noqa: S607 - git from PATH, as elsewhere
+        ["git", "-C", str(package), "rev-parse", "HEAD"],  # noqa: S607 - native Git PATH; fixed revision query
         capture_output=True,
         text=True,
         check=False,

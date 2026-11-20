@@ -13,7 +13,7 @@ class HeldRun(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _runtime_dropped(cls, data: Any) -> Any:  # noqa: ANN401 - the stored JSON as it was read
+    def _runtime_dropped(cls, data: object) -> object:
         """A hold written before the window runtime was retired names its runtime; that name is dropped (D-01M5WG8)."""
         return {k: v for k, v in data.items() if k != "runtime"} if isinstance(data, dict) else data
 

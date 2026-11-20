@@ -214,7 +214,7 @@ def published(options: list[str], *, opened: bool) -> list[dict[str, str]]:
     return [{"id": o, "label": DISCARD_OPEN if o == DISCARD and opened else LABELS[o]} for o in options]
 
 
-def question(qid: str, kind: str, text: str, options: list[str], **more: Any) -> dict[str, Any]:  # noqa: ANN401
+def question(qid: str, kind: str, text: str, options: list[str], **more: object) -> dict[str, object]:
     """One question for the owner on the Settings page, with what answering it binds to."""
     shown = [{"id": o, "label": LABELS[o]} for o in options]
     return {"id": qid, "kind": kind, "text": text, "options": shown} | more

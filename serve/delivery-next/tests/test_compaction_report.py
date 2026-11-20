@@ -22,6 +22,7 @@ from fastapi.testclient import TestClient
 from playwright.sync_api import Error, expect, sync_playwright
 
 from owlbear_delivery_next.change_contracts.models import Change, Step, StepKind
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.improvement import chatlogs
 from owlbear_delivery_next.local_system import codebase, data_place
 from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -310,7 +311,9 @@ def test_a_row_of_a_project_this_machine_does_not_serve_says_so(get) -> None:
 
 def clone(path: Path) -> Path:
     for args in (["init", "-q", str(path)], ["-C", str(path), "commit", "-q", "--allow-empty", "-m", "i"]):
-        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git init/commit loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True
+        )
     store = Store.open(path)
     with store.lock(f"{path.name}-1") as lock:
         store.write(lock, Change(slug=f"{path.name}-1", step=Step(kind=StepKind.BUILD)))

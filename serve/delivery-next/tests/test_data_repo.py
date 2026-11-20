@@ -14,6 +14,7 @@ from owlbear_memory import MemoryCategory, MemoryEngine
 from owlbear_delivery_next.change_contracts.models import Brief, BriefDecision, Change, Decision, VisualState
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.commands import cli, setup
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.provider import FailureCode, ProviderError, PullRequest
 from owlbear_delivery_next.local_system import curation_apply, data_place, data_repo, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -51,7 +52,9 @@ def git(cwd: Path, *args: str) -> str:
     if (cwd / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
         args = ("--git-dir=.", *args)
     who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
-    done = subprocess.run(["git", *who, *args], cwd=cwd, capture_output=True, text=True, check=False)  # noqa: S603, S607
+    done = subprocess.run(  # noqa: S603 - git callers build fixture Git add/branch/clone/commit argv and repository operands; no shell.
+        [resolve_git_executable(), *who, *args], cwd=cwd, capture_output=True, text=True, check=False
+    )
     if done.returncode:
         msg = f"git {' '.join(args)} failed: {done.stderr.strip()}"
         raise AssertionError(msg)

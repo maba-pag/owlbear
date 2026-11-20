@@ -9,7 +9,7 @@ import argparse
 import json
 import urllib.parse
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from mcp.server import MCPServer
 from mcp.types import ImageContent, TextContent, ToolAnnotations
@@ -26,11 +26,14 @@ from owlbear_delivery_next.commands.mcp_launch import serve_stdio
 from owlbear_delivery_next.project_host import answers
 from owlbear_delivery_next.workflow_steps import lookup
 
+if TYPE_CHECKING:
+    from pydantic.fields import FieldInfo
+
 _STATE: dict[str, Chat | Closed] = {}
 ASKED = Field(min_length=1, max_length=1000, description="What you need to decide; a reply with failed is no answer")
 
 
-def _d(name: str, model: type[BaseModel] = brief_tools.BriefDraft) -> Any:  # noqa: ANN401 - a pydantic FieldInfo
+def _d(name: str, model: type[BaseModel] = brief_tools.BriefDraft) -> FieldInfo:
     field = model.model_fields[name]
     return Field(description=field.description, examples=field.examples)
 

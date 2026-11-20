@@ -1,6 +1,7 @@
 """Native Prepare/Finish inputs shared by publication and marker admission tests."""
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -16,7 +17,13 @@ PAYLOAD_FILE = Path("changes/c1/notes.txt")
 
 def repo(tmp_path: Path, *, payload: bool = True) -> Path:
     path = tmp_path / "shop"
-    subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True, capture_output=True)  # noqa: S603, S607
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with path operands; no shell.
+        [git_executable, "init", "-q", "-b", "main", str(path)], check=True, capture_output=True
+    )
     folder = project_home.clone_dir(path)
     folder.mkdir(parents=True)
     (folder / MARKER).write_text("7")

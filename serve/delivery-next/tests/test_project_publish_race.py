@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.machine_host import project
 from owlbear_delivery_next.machine_host.machine import Machine
@@ -60,7 +61,9 @@ def machine(monkeypatch):
 def repo(tmp_path: Path) -> Path:
     path = (tmp_path / "shop").resolve()
     for args in (["init", "-q", str(path)], ["-C", str(path), "commit", "-q", "--allow-empty", "-m", "i"]):
-        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git init/commit loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True
+        )
     return path
 
 

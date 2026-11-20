@@ -45,6 +45,7 @@ from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity, status
 from owlbear_delivery_next.commands import cli, runner
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import codebase, processes
 from owlbear_delivery_next.local_system.storage_io import open_lock
 from owlbear_delivery_next.project_host import api, brief_routes, host
@@ -70,7 +71,9 @@ def store(tmp_path):
         ["init", "-q"],
         ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"],
     ):
-        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git init/commit loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), *args], cwd=tmp_path, check=True, capture_output=True
+        )
     return Store.open(tmp_path)
 
 
@@ -581,7 +584,9 @@ def _launch_file(_store, tmp_path, name="package.json"):
     (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
     (tmp_path / name).write_text(f'{{"scripts": {{"preview": "vite preview {len(name)}"}}}}')
     for args in (["add", "-A"], ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "s"]):
-        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git add/commit loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), *args], cwd=tmp_path, check=True, capture_output=True
+        )
 
 
 def test_a_symlinked_launch_directory_is_read_at_its_target(store, tmp_path):
@@ -783,8 +788,8 @@ def test_the_code_identity_covers_shipped_files_and_ignores_incidental_ones(tmp_
 
 
 def test_every_file_the_package_tracks_is_in_its_code_identity():
-    tracked = subprocess.run(
-        ["git", "ls-files", "-z", "."],  # noqa: S607
+    tracked = subprocess.run(  # noqa: S603 - Fixture Git ls-files argv with literal operands; no shell.
+        [resolve_git_executable(), "ls-files", "-z", "."],
         cwd=codebase.ROOT,
         capture_output=True,
         check=True,

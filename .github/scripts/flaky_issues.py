@@ -25,8 +25,9 @@ def marked_issues(root: Path) -> list[int]:
 
     A match inside a string only adds an issue to look up; the plugin re-runs only tests whose mark names it.
     """
+    # Native lookup uses root's relative PATH and can continue past a stale wrapper at execution time.
     listed = subprocess.run(
-        ["git", "ls-files", "-z", "--", "*.py"],  # noqa: S607
+        ["git", "ls-files", "-z", "--", "*.py"],  # noqa: S607 - fixed inventory argv; native child PATH
         cwd=root,
         capture_output=True,
         check=True,
@@ -41,8 +42,9 @@ def marked_issues(root: Path) -> list[int]:
 def fetch_issue(repository: str, number: int) -> dict[str, object]:
     """One issue from the GitHub API through the gh CLI, read with the job's token."""
     try:
-        done = subprocess.run(  # noqa: S603
-            ["gh", "api", f"repos/{repository}/issues/{number}"],  # noqa: S607
+        # Keep native empty/relative PATH and execution-time continuation for the installed gh tool.
+        done = subprocess.run(  # noqa: S603 - CI repository and numeric issue form one API operand; no shell
+            ["gh", "api", f"repos/{repository}/issues/{number}"],  # noqa: S607 - native installed gh lookup
             capture_output=True,
             check=True,
             text=True,

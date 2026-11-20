@@ -18,6 +18,7 @@ from owlbear_decisions import Decision as Rule
 from owlbear_decisions import Link, LinkType, Origin, Scope, State, new_id
 from owlbear_delivery_next.change_contracts.models import Brief, BriefDecision, Change
 from owlbear_delivery_next.change_contracts.models import Decision as ChangeDecision
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.state_store import (
@@ -54,15 +55,24 @@ class Store:
 def git(cwd: Path, *args: str) -> str:
     if (cwd / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
         args = ("--git-dir=.", *args)
-    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - git callers build fixture Git add/checkout/clone/commit argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 def head_blob(cwd: Path, rel_path: str) -> bytes:
-    return subprocess.run(["git", "show", f"HEAD:{rel_path}"], cwd=cwd, check=True, capture_output=True).stdout  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - Fixture Git show argv with rel_path operands; no shell.
+        [resolve_git_executable(), "show", f"HEAD:{rel_path}"], cwd=cwd, check=True, capture_output=True
+    ).stdout
 
 
 def is_ancestor(root: Path, older: str, newer: str) -> bool:
-    return subprocess.run(["git", "merge-base", "--is-ancestor", older, newer], cwd=root, check=False).returncode == 0  # noqa: S603, S607
+    return (
+        subprocess.run(  # noqa: S603 - Fixture Git merge-base argv with newer/older operands; no shell.
+            [resolve_git_executable(), "merge-base", "--is-ancestor", older, newer], cwd=root, check=False
+        ).returncode
+        == 0
+    )
 
 
 def checkout(path: Path, remote: Path) -> DataRepo:
@@ -515,7 +525,9 @@ def test_rebase_admission_distinguishes_detached_head_from_active_operation(shar
         assert not (root / ".git" / "rebase-merge").exists()
         assert DataRepo(root).rebasing() is False
         return
-    paused = subprocess.run(["git", "rebase", "--exec", "false", "HEAD~1"], cwd=root, check=False, capture_output=True)  # noqa: S607
+    paused = subprocess.run(  # noqa: S603 - Fixed rebase --exec false HEAD~1 argv deliberately pauses the fixture rebase; no shell=True.
+        [resolve_git_executable(), "rebase", "--exec", "false", "HEAD~1"], cwd=root, check=False, capture_output=True
+    )
     assert paused.returncode != 0
     assert (root / ".git" / "rebase-merge").is_dir()
     assert DataRepo(root).rebasing() is True

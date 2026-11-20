@@ -8,7 +8,7 @@ import re
 import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn, TypedDict, Unpack
 from urllib.parse import quote
 
 from owlbear_delivery_next.git import command_failure
@@ -31,6 +31,15 @@ type Runner = Callable[
     [tuple[str, ...], bytes | None, float, Path | None, Mapping[str, str] | None], subprocess.CompletedProcess[bytes]
 ]
 type Json = Any
+
+
+class Options(TypedDict, total=False):
+    """Transport options shared by the fixed ``gh`` and API forwarding calls."""
+
+    body: object
+    write: bool
+    absent: Collection[int]
+    raw: bool
 
 
 @dataclass(frozen=True)
@@ -180,7 +189,7 @@ class GhClient:
             error.add_note(f"{command_failure.failure(exc)}\nstdout:\n{done.stdout.decode(errors='replace').strip()}")
             raise error from exc
 
-    def _api(self, operation: str, method: str, endpoint: str, **kw: Any) -> Json:  # noqa: ANN401 - JSON
+    def _api(self, operation: str, method: str, endpoint: str, **kw: Unpack[Options]) -> Json:
         args = ("api", "--method", method, "--hostname", self.host, "-H", "Accept: application/vnd.github+json")
         args += ("-H", f"X-GitHub-Api-Version: {API_VERSION}", endpoint)
         return self._gh(operation, (*args, "--input", "-") if kw.get("body") is not None else args, **kw)

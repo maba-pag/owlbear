@@ -46,7 +46,7 @@ def _job(workflow: dict[str, object], name: str) -> dict[str, object]:
 
 
 def _run_script(script: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # noqa: S603
+    return subprocess.run(  # noqa: S603 - sys.executable runs checked-in dependency-checker scripts with fixture arguments; no shell.
         [sys.executable, str(script), *arguments],
         cwd=ROOT,
         capture_output=True,

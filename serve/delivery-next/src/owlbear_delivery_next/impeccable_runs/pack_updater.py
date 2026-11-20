@@ -80,7 +80,12 @@ def _files(at: Path) -> dict[str, str]:
 
 def lay_out(at: Path, c: pack_candidate.Candidate, clone: Path, package: Path) -> dict[str, str]:
     """The updater's repository: the candidate's skills, golden pages and glue to edit, upstream's skills to read."""
-    subprocess.run(["git", "init", "-q", str(at)], check=True, capture_output=True)  # noqa: S603, S607 - fixed argv
+    # Native lookup preserves empty/relative PATH and execution-time continuation for the fixed Git tool.
+    subprocess.run(  # noqa: S603 - fixed init flags and updater-owned directory operand; no shell
+        ["git", "init", "-q", str(at)],  # noqa: S607 - native Git PATH search
+        check=True,
+        capture_output=True,
+    )
     for name in c.pins["skills"]:
         (at / "skills" / name).mkdir(parents=True, exist_ok=True)
         (at / "skills" / name / "SKILL.md").write_bytes(skill(c, name).read_bytes())

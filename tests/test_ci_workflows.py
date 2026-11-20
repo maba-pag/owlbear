@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -74,8 +75,12 @@ def _rendered(env: dict[str, str], github: dict[str, object]) -> dict[str, str]:
 
 
 def _git(root: Path, *args: str) -> str:
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
     done = subprocess.run(  # noqa: S603 - fixed git argument vector
-        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],  # noqa: S607
+        [git_executable, "-c", "user.name=t", "-c", "user.email=t@t", *args],
         cwd=root, capture_output=True, text=True, check=True,
     )  # fmt: skip
     return done.stdout.strip()
@@ -195,8 +200,12 @@ def test_the_scope_reads_changed_paths_unquoted(tmp_path: Path) -> None:
     _git(tmp_path, "add", ".")
     _git(tmp_path, "commit", "-q", "-m", "head")
 
-    paths = subprocess.run(  # noqa: S603
-        ["python3", str(ROOT / ".github/scripts/ci_scope.py"), base, "HEAD"],  # noqa: S607
+    python_executable = shutil.which("python3")
+    if python_executable is None:
+        message = "python3 executable is unavailable"
+        raise FileNotFoundError(message)
+    paths = subprocess.run(  # noqa: S603 - Checked-in ci_scope.py with a fixture-generated base SHA and literal HEAD; no shell.
+        [python_executable, str(ROOT / ".github/scripts/ci_scope.py"), base, "HEAD"],
         cwd=tmp_path,
         env={k: v for k, v in os.environ.items() if k not in {"EVENT", "SOURCE_REPOSITORY"}}
         | {"GITHUB_REPOSITORY_ID": ci_scope.HOME},
@@ -280,7 +289,13 @@ def test_a_push_is_scoped_by_the_merge_against_its_first_parent(tmp_path: Path) 
     out = tmp_path / "output"
     env = {"PATH": os.environ["PATH"], "EVENT": "push", "BASE_SHA": "", "HEAD_SHA": str(group["sha"]),
            "GITHUB_OUTPUT": str(out)}  # fmt: skip
-    subprocess.run(["bash", "-c", run], cwd=tmp_path, env=env, check=True)  # noqa: S603, S607
+    bash_executable = shutil.which("bash")
+    if bash_executable is None:
+        message = "bash executable is unavailable"
+        raise FileNotFoundError(message)
+    subprocess.run(  # noqa: S603 - Execute checked-in CI workflow step text against fixture refs/environment; intentional bash -c, no shell=True.
+        [bash_executable, "-c", run], cwd=tmp_path, env=env, check=True
+    )
     assert out.read_text() == 'suites=["static", "agent-ecosystem"]\n'  # the merge's own change, not every suite
 
 
@@ -291,7 +306,13 @@ def test_a_merge_group_is_scoped_by_the_change_it_adds_to_main(tmp_path: Path) -
     out = tmp_path / "output"
     env = _rendered(step["env"], group) | {"PATH": os.environ["PATH"], "GITHUB_OUTPUT": str(out),
                                            "GITHUB_REPOSITORY_ID": OWN}  # fmt: skip
-    subprocess.run(["bash", "-c", step["run"]], cwd=tmp_path, env=env, check=True)  # noqa: S603, S607
+    bash_executable = shutil.which("bash")
+    if bash_executable is None:
+        message = "bash executable is unavailable"
+        raise FileNotFoundError(message)
+    subprocess.run(  # noqa: S603 - Execute checked-in CI workflow step text against fixture refs/environment; intentional bash -c, no shell=True.
+        [bash_executable, "-c", step["run"]], cwd=tmp_path, env=env, check=True
+    )
     assert out.read_text() == 'suites=["static", "agent-ecosystem"]\n'
 
 
@@ -303,7 +324,13 @@ def test_tooling_scopes_a_merge_group_by_the_change_it_adds_to_main(tmp_path: Pa
     env = _rendered(step["env"], group) | {"PATH": os.environ["PATH"], "GITHUB_OUTPUT": str(out),
                                            "GITHUB_STEP_SUMMARY": str(summary), "GITHUB_WORKSPACE": str(tmp_path),
                                            "RUNNER_TEMP": str(tmp_path)}  # fmt: skip
-    subprocess.run(["bash", "-c", step["run"]], cwd=tmp_path, env=env, check=True)  # noqa: S603, S607
+    bash_executable = shutil.which("bash")
+    if bash_executable is None:
+        message = "bash executable is unavailable"
+        raise FileNotFoundError(message)
+    subprocess.run(  # noqa: S603 - Execute checked-in CI workflow step text against fixture refs/environment; intentional bash -c, no shell=True.
+        [bash_executable, "-c", step["run"]], cwd=tmp_path, env=env, check=True
+    )
     assert (tmp_path / "tooling-paths").read_bytes() == b"renovate.json\0"
     assert "renovate=true" in out.read_text().splitlines()
 

@@ -64,6 +64,7 @@ from owlbear_delivery_next.change_flow import budgets, loop, moves, round_flow
 from owlbear_delivery_next.change_flow.budgets import DEFECT_LIMIT, RETRY_LIMIT
 from owlbear_delivery_next.commands import cli, runner
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.impeccable import calibration, pack_files
@@ -109,9 +110,13 @@ if TYPE_CHECKING:
 def clone(path: Path, slug: str = "", origin: str = "") -> Path:
     """A clone with one Change in Build; *origin*, when given, is its remote, so its store claims that folder."""
     for args in (["init", "-q", str(path)], ["-C", str(path), "commit", "-q", "--allow-empty", "-m", "i"]):
-        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git init/commit loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True
+        )
     if origin:
-        subprocess.run(["git", "-C", str(path), "remote", "add", "origin", origin], check=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Fixture Git remote argv with origin/path operands; no shell.
+            [resolve_git_executable(), "-C", str(path), "remote", "add", "origin", origin], check=True
+        )
     store = Store.open(path)
     slug = slug or f"{path.name}-1"
     with store.lock(slug) as lock:
@@ -1329,7 +1334,9 @@ def test_projects_refresh_after_the_data_command_repairs_the_pointer_without_res
     monkeypatch.setattr(Host, "_launch", lambda *_args: False)
     entry = registry.register(clone(tmp_path / "shop"))
     source, dest = clone(tmp_path / "old-data"), data_place.default()
-    subprocess.run(["git", "clone", "-q", str(source), str(dest)], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git clone argv with dest/source operands; no shell.
+        [resolve_git_executable(), "clone", "-q", str(source), str(dest)], check=True
+    )
     data_place.pointer().write_text(json.dumps({"moving_from": str(source), "moving_to": str(dest)}))
     with serve() as (machine, _server, base):
         host_start._provisioned(machine)  # noqa: SLF001 - the real startup failure, not a supplied UI notice
@@ -1525,7 +1532,9 @@ def test_projects_says_why_a_move_of_the_shared_repository_stopped_whole(
     for args in (["init", "-q", "--bare", str(remote)], ["clone", "-q", str(remote), str(source)],
                  ["-C", str(source), "commit", "-q", "--allow-empty", "-m", "i"],
                  ["-C", str(source), "worktree", "add", "-q", str(tmp_path / "linked")]):  # fmt: skip
-        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git init/clone/commit/worktree/add loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True
+        )
     local_home.root().mkdir(parents=True, exist_ok=True)
     data_place.pointer().write_text(json.dumps({"moving_from": str(source), "moving_to": str(dest)}))
     source.rename(dest)
@@ -2343,7 +2352,9 @@ def decided(shared: Path, folder: str, *statements: str, **more) -> None:
 
 def publish_decisions(shared: Path) -> None:
     for args in (("add", "-A"), ("commit", "-qm", "seed"), ("push", "-q", "origin", "HEAD")):
-        subprocess.run(["git", *args], cwd=shared, check=True, capture_output=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git add/commit/push loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), *args], cwd=shared, check=True, capture_output=True
+        )
 
 
 @pytest.mark.browser
@@ -2744,7 +2755,9 @@ def test_a_long_undo_failure_is_asked_whole(tmp_path: Path, monkeypatch, pds, wh
     base = runner.worktree.git(work, "rev-parse", "HEAD").strip()
     (work / "a.txt").write_text("b\n")
     for args in (["add", "a.txt"], ["commit", "-qm", "build b"]):
-        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", "-C", str(work), *args], check=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git add/commit loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), "-c", "user.name=t", "-c", "user.email=t@t", "-C", str(work), *args], check=True
+        )
     head = runner.worktree.git(work, "rev-parse", "HEAD").strip()
     real = runner.worktree.git
 
@@ -2945,7 +2958,9 @@ def test_a_picked_decision_opens_in_its_project_from_all_projects(
 
 def _git(cwd: Path, *args: str) -> str:
     who = ["-c", "user.name=t", "-c", "user.email=t@t"]
-    done = subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
+    done = subprocess.run(  # noqa: S603 - _git callers build fixture Git add/branch/clone/commit argv and repository operands; no shell.
+        [resolve_git_executable(), *who, *args], cwd=cwd, check=True, capture_output=True, text=True
+    )
     return done.stdout.strip()
 
 

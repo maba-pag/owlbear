@@ -42,8 +42,9 @@ def _git(cwd: Path, *args: str, index: Path | None = None) -> str:
     """One git command's standard output; a failure raises, naming the command and what Git said."""
     env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"} | ({"GIT_INDEX_FILE": str(index)} if index else {})
     try:
-        done = subprocess.run(  # noqa: S603 - fixed Git executable and argument vector
-            ["git", *args],  # noqa: S607
+        # Native lookup preserves child PATH and execution-time continuation for the fixed Git tool.
+        done = subprocess.run(  # noqa: S603 - curation constructs Git verbs and separate path/message operands
+            ["git", *args],  # noqa: S607 - preserve native child PATH and execution-time search
             cwd=cwd, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60,
             check=False,
         )  # fmt: skip

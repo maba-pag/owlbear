@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 from owlbear_decisions import Decision, DecisionError, Link, LinkType, Origin, Scope, State, new_id, storage, write
 from owlbear_decisions.storage import serialize
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import batch_journal, data_repo, publication_hold, storage_io
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import decision_recovery_routes
@@ -2508,7 +2509,7 @@ THIRD = b"the owner's own third image\n"
 
 def _remote_main(remote: Path) -> str:
     said = subprocess.run(  # noqa: S603 - a fixed git command on the test's own bare repository
-        ["git", "--git-dir", str(remote), "rev-parse", "main"],  # noqa: S607
+        [resolve_git_executable(), "--git-dir", str(remote), "rev-parse", "main"],
         check=True,
         capture_output=True,
         text=True,
@@ -2703,7 +2704,9 @@ def test_an_owner_commit_made_as_git_pushes_a_rebased_batch_is_never_sent(pickin
     shared, remote = picking.shared, shared_repo[1]
     items, first, _ = _update_and_successor(picking)
     other = shared.root.parent / "other"
-    subprocess.run(["git", "clone", "-q", str(remote), str(other)], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git clone argv with other/remote operands; no shell.
+        [resolve_git_executable(), "clone", "-q", str(remote), str(other)], check=True
+    )
     pushes: list = []
 
     def another_clone_publishes_first() -> None:  # so the first push is refused and the batch is rebased
@@ -2713,7 +2716,9 @@ def test_an_owner_commit_made_as_git_pushes_a_rebased_batch_is_never_sent(pickin
             ["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "o"],
             ["push", "-q"],
         ):
-            subprocess.run(["git", *step], cwd=other, check=True)  # noqa: S603, S607
+            subprocess.run(  # noqa: S603 - Inline fixture Git add/commit/push loop owns argv and temporary repository paths; no shell.
+                [resolve_git_executable(), *step], cwd=other, check=True
+            )
 
     with monkeypatch.context() as m:
         _owner_commits_as_git_pushes(m, first, 2, pushes, another_clone_publishes_first)
@@ -2801,7 +2806,9 @@ def test_a_rebased_head_that_is_not_this_saves_own_commit_is_never_pushed(pickin
     shared, remote = picking.shared, shared_repo[1]
     items, _, _ = _update_and_successor(picking)
     other = shared.root.parent / "other"
-    subprocess.run(["git", "clone", "-q", str(remote), str(other)], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git clone argv with other/remote operands; no shell.
+        [resolve_git_executable(), "clone", "-q", str(remote), str(other)], check=True
+    )
     pushes, made = [], []
     real_git, real_rebase = DataRepo.git, DataRepo.rebase
 
@@ -2814,7 +2821,9 @@ def test_a_rebased_head_that_is_not_this_saves_own_commit_is_never_pushed(pickin
                 ["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "o"],
                 ["push", "-q"],
             ):
-                subprocess.run(["git", *step], cwd=other, check=True)  # noqa: S603, S607
+                subprocess.run(  # noqa: S603 - Inline fixture Git add/commit/push loop owns argv and temporary repository paths; no shell.
+                    [resolve_git_executable(), *step], cwd=other, check=True
+                )
         return real_git(self, *args, **kwargs)
 
     def rebase_then_owner_commits(self, until=None, *guard):
@@ -2827,7 +2836,9 @@ def test_a_rebased_head_that_is_not_this_saves_own_commit_is_never_pushed(pickin
         m.setattr(DataRepo, "git", first_push_refused)
         m.setattr(DataRepo, "rebase", rebase_then_owner_commits)
         receipts = decision_store.save_all(shared, items, message="decisions: two")
-    other_head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=other, check=True, capture_output=True, text=True)  # noqa: S607
+    other_head = subprocess.run(  # noqa: S603 - Fixture Git rev-parse argv with literal operands; no shell.
+        [resolve_git_executable(), "rev-parse", "HEAD"], cwd=other, check=True, capture_output=True, text=True
+    )
 
     if not owner:
         assert all(r.published for r in receipts)
@@ -2912,7 +2923,9 @@ def test_an_owner_commit_made_while_the_push_is_refused_is_never_rebased(picking
     shared, remote = picking.shared, shared_repo[1]
     items, _, _ = _update_and_successor(picking)
     other = shared.root.parent / "other"
-    subprocess.run(["git", "clone", "-q", str(remote), str(other)], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git clone argv with other/remote operands; no shell.
+        [resolve_git_executable(), "clone", "-q", str(remote), str(other)], check=True
+    )
     owner, rebased, pushes = [], [], []
     real_git, real_rebase = DataRepo.git, DataRepo.rebase
 
@@ -2925,7 +2938,9 @@ def test_an_owner_commit_made_while_the_push_is_refused_is_never_rebased(picking
                 ["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-qm", "o"],
                 ["push", "-q"],
             ):
-                subprocess.run(["git", *step], cwd=other, check=True)  # noqa: S603, S607
+                subprocess.run(  # noqa: S603 - Inline fixture Git add/commit/push loop owns argv and temporary repository paths; no shell.
+                    [resolve_git_executable(), *step], cwd=other, check=True
+                )
             owner.append((real_git(self, "rev-parse", "HEAD").stdout.strip(), _owner_unrelated_commit(self)))
         return real_git(self, *args, **kwargs)
 
@@ -2939,7 +2954,9 @@ def test_an_owner_commit_made_while_the_push_is_refused_is_never_rebased(picking
         receipts = decision_store.save_all(shared, items, message="decisions: two")
 
     ((batch_commit, owner_commit),) = owner
-    other_head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=other, check=True, capture_output=True, text=True)  # noqa: S607
+    other_head = subprocess.run(  # noqa: S603 - Fixture Git rev-parse argv with literal operands; no shell.
+        [resolve_git_executable(), "rev-parse", "HEAD"], cwd=other, check=True, capture_output=True, text=True
+    )
     assert pushes[0][-1] == f"{batch_commit}:refs/heads/main"  # B's exact push was the one refused
     assert rebased == []  # nothing was replayed
     assert not any(r.saved for r in receipts)
@@ -3036,7 +3053,9 @@ def test_a_dangling_link_at_the_journal_or_its_completed_list_holds_every_writer
 
 
 def _git_in(where: Path, *args: str) -> str:
-    said = subprocess.run(["git", *args], cwd=where, check=True, capture_output=True, text=True)  # noqa: S603, S607
+    said = subprocess.run(  # noqa: S603 - _git_in callers build fixture Git add/branch/checkout/clone argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=where, check=True, capture_output=True, text=True
+    )
     return said.stdout.strip()
 
 

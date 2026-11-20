@@ -12,7 +12,7 @@ from __future__ import annotations
 import contextlib
 import threading
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import psutil
 
@@ -24,6 +24,8 @@ from owlbear_delivery_next.workflow_steps import sessions
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from playwright.sync_api import Page
 
     from owlbear_delivery_next.change_contracts.models import VisualState
     from owlbear_delivery_next.change_contracts.visual_records import Freshness, VisualResult
@@ -89,7 +91,7 @@ def _kept(findings: Sequence[detector.Finding], root: Path | None = None) -> lis
 
 
 def rendered(  # noqa: PLR0913 - one rendered state and where else to reach it
-    page: Any,  # noqa: ANN401 - a Playwright page
+    page: Page,
     pack: Installed | None,
     state: VisualState,
     *,
@@ -125,7 +127,7 @@ def _refused(scan: DetectorScan) -> DetectorScan:
     return scan
 
 
-def _in_page(page: Any, pack: Installed) -> list[detector.Finding]:  # noqa: ANN401 - a Playwright page
+def _in_page(page: Page, pack: Installed) -> list[detector.Finding]:
     """The in-page scan under a deadline the page cannot hold up: past it, the page's renderer is ended.
 
     The watchdog is joined before returning, so it never reaches into the next shot.

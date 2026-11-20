@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from copilot.rpc import InstructionLocation, SessionUpdateOptionsParams
 
@@ -22,6 +22,9 @@ from owlbear_delivery_next.runtimes.sdk_teardown import call as _call
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+    from copilot.rpc import InstructionSource
+    from copilot.session import CopilotSession
 
     from owlbear_delivery_next.change_contracts.user_config import UserConfig
 
@@ -35,7 +38,7 @@ class Scope:
 
 
 async def own(
-    session: Any,  # noqa: ANN401 - the SDK session
+    session: CopilotSession,
     worktree: Path,
     *,
     user_instructions: bool = False,
@@ -61,7 +64,7 @@ async def own(
     return Scope(off=off, user=user)
 
 
-async def applied(session: Any, worktree: Path, user: UserConfig, log: Callable[..., None]) -> None:  # noqa: ANN401
+async def applied(session: CopilotSession, worktree: Path, user: UserConfig, log: Callable[..., None]) -> None:
     """``own`` with the owner's Copilot home, logging what it switched off and which of his files it kept on."""
     scope = await own(session, worktree, user_instructions=user.instructions, home=preload.copilot_home())
     if scope.off:
@@ -70,7 +73,7 @@ async def applied(session: Any, worktree: Path, user: UserConfig, log: Callable[
         log(event="instructions-user", sources=scope.user)
 
 
-def outside(sources: list[Any], worktree: Path) -> list[str]:
+def outside(sources: list[InstructionSource], worktree: Path) -> list[str]:
     """The IDs of *sources* whose file, relative to *worktree* unless absolute, lies outside it; no file is outside."""
     root = worktree.resolve()
     return [s.id for s in sources if not s.source_path or not _resolved(s.source_path, root).is_relative_to(root)]
@@ -89,7 +92,7 @@ def user_files(home: Path) -> set[Path]:
     return {p.resolve() for p in (*entries, root) if p.exists()}
 
 
-def admitted(source: Any, allowed: set[Path]) -> bool:  # noqa: ANN401 - the SDK's instruction source
+def admitted(source: InstructionSource, allowed: set[Path]) -> bool:
     """Whether *source* is one of the user's files: placed as the user's by the runtime, and its file in *allowed*."""
     if getattr(source, "location", None) != InstructionLocation.USER or not source.source_path:
         return False

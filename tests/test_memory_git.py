@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import stat
 import subprocess
 from pathlib import Path
@@ -18,8 +19,12 @@ from owlbear_memory_mcp.git import commit_batch, main
 
 
 def _git(repository: Path, *args: str) -> str:
-    result = subprocess.run(  # noqa: S603
-        ["git", *args],  # noqa: S607
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
+    result = subprocess.run(  # noqa: S603 - _git callers build fixture Git add/commit/config/diff argv and repository operands; no shell.
+        [git_executable, *args],
         cwd=repository,
         check=True,
         capture_output=True,

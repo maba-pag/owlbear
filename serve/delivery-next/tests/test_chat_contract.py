@@ -26,6 +26,7 @@ from owlbear_delivery_next.change_contracts import models as m
 from owlbear_delivery_next.change_flow import brief_tools, worktree
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import chat_client, mcp_server
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import Machine
@@ -321,7 +322,9 @@ def test_a_host_that_does_not_answer_its_contract_yet_is_asked_again_and_a_chall
 
 def clone(path: Path) -> Path:
     for args in (["init", "-q", str(path)], ["-C", str(path), "commit", "-q", "--allow-empty", "-m", "i"]):
-        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git init/commit loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True
+        )
     return path.resolve()
 
 
@@ -424,7 +427,8 @@ def test_a_host_refuses_a_contract_it_does_not_serve_before_any_route_runs(tmp_p
     (shared_repo[0] / "owlbear").mkdir()
     r = http.post("/api/next/projects", json={"path": str(clone(tmp_path / "shop"))})
     assert r.status_code == 200, r.text
-    p, head = r.json()["id"], subprocess.run(["git", "-C", str(shared_repo[0]), "rev-parse", "HEAD"],  # noqa: S603, S607
+    p, head = r.json()["id"], subprocess.run(  # noqa: S603 - Fixture Git rev-parse argv with shared_repo operands; no shell.
+                                  [resolve_git_executable(), "-C", str(shared_repo[0]), "rev-parse", "HEAD"],
                                               capture_output=True, text=True, check=True).stdout  # fmt: skip
     told = {chat_contract.HEADER: sent.encode("latin-1")}  # as a header's bytes arrive
     decision = {"title": "x", "statement": "x", "confirmed": True}
@@ -436,7 +440,8 @@ def test_a_host_refuses_a_contract_it_does_not_serve_before_any_route_runs(tmp_p
             "OwlBear does not serve this chat's owlbear-delivery server (chat contract"
         )
     assert http.get(f"/p/{p}/api/next/changes").json() == []  # a page names no contract
-    after = subprocess.run(["git", "-C", str(shared_repo[0]), "rev-parse", "HEAD"],  # noqa: S603, S607
+    after = subprocess.run(  # noqa: S603 - Fixture Git rev-parse argv with shared_repo operands; no shell.
+                [resolve_git_executable(), "-C", str(shared_repo[0]), "rev-parse", "HEAD"],
                            capture_output=True, text=True, check=True).stdout  # fmt: skip
     assert after == head
     served = http.get("/api/next/chat/contract", headers={chat_contract.HEADER: "1"}).json()

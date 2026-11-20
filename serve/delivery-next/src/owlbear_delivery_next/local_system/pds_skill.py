@@ -77,8 +77,9 @@ def _installed(worktree: Path) -> Choice | None:
 
 
 def _loaded(worktree: Path, root: Path) -> Choice | None:
+    # Native lookup preserves empty/relative PATH and execution-time continuation for the fixed Git tool.
     found = subprocess.run(  # noqa: S603 - a fixed argument list, the pattern ours
-        ["git", "-C", str(worktree), "grep", "-I", "-h", "-o", "-E", MARKS],  # noqa: S607 - git from PATH, as elsewhere
+        ["git", "-C", str(worktree), "grep", "-I", "-h", "-o", "-E", MARKS],  # noqa: S607 - native Git PATH
         capture_output=True,
         text=True,
         check=False,

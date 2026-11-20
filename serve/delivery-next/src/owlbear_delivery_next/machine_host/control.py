@@ -192,7 +192,9 @@ def autostarts() -> str:
 def autostart(say: Say, *, on: bool) -> int:
     """Write and load the login item, or unload and remove it."""
     path, domain = plist_path(), f"gui/{os.getuid()}"
-    subprocess.run(["/bin/launchctl", "bootout", f"{domain}/{LABEL}"], capture_output=True, check=False)  # noqa: S603
+    subprocess.run(  # noqa: S603 - absolute launchctl bootout, current UID and constant label, no shell
+        ["/bin/launchctl", "bootout", f"{domain}/{LABEL}"], capture_output=True, check=False
+    )
     if not on:
         path.unlink(missing_ok=True)
         say("OwlBear no longer starts at login")
@@ -213,7 +215,9 @@ def autostart(say: Say, *, on: bool) -> int:
     }
     path.write_bytes(plistlib.dumps(item))
     command = ["/bin/launchctl", "bootstrap", domain, str(path)]
-    done = subprocess.run(command, capture_output=True, check=False)  # noqa: S603
+    done = subprocess.run(  # noqa: S603 - absolute launchctl bootstrap, current UID and own plist path, no shell
+        command, capture_output=True, check=False
+    )
     if done.returncode:
         said = done.stderr.decode(errors="replace").strip()
         say(f"login item written to {path}, but macOS refused to load it ({said}); `owlbear start` still works")

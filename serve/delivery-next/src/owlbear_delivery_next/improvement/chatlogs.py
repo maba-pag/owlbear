@@ -39,6 +39,7 @@ from owlbear_delivery_next.local_system.storage_io import atomic_write
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterable, Iterator
 
+    from owlbear_delivery_next.improvement.chatlog_contracts import StepConfig
     from owlbear_delivery_next.local_system.processes import Termination
 
 SAVED = re.compile(r"Saved to: (\S+copilot-tool-output-[\w.-]+)")
@@ -382,7 +383,7 @@ class Finished(Protocol):
 
 
 async def around[R: Finished](
-    cfg: Any,  # noqa: ANN401
+    cfg: StepConfig,
     step: Awaitable[R],
     current: Callable[[], str] | None = None,
 ) -> R:

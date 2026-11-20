@@ -29,8 +29,9 @@ def _git(
     env: dict[str, str] | None = None,
     input_text: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # noqa: S603
-        ["git", *args],  # noqa: S607
+    # Native lookup preserves child cwd/env, including recovery PATH and stale-wrapper continuation.
+    return subprocess.run(  # noqa: S603 - internal argv separate validated owned paths/messages; no shell
+        ["git", *args],  # noqa: S607 - preserve native child PATH and execution-time search
         cwd=cwd,
         check=check,
         text=True,

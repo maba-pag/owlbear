@@ -16,6 +16,7 @@ from owlbear_delivery_next.audit_runs import workspace as audit_workspace
 from owlbear_delivery_next.change_contracts.models import Change, Exit, Names, Step, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.commands import cli, runner, setup
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github import gh_client
 from owlbear_delivery_next.github.owlbear_issues import OwlbearIssues
 from owlbear_delivery_next.github.provider import ProviderError
@@ -35,7 +36,9 @@ ACCOUNTS = {"github.com": {"maba-pag": "success", "boecht": "success", "octo-wri
 
 
 def _git(cwd, *args) -> str:
-    return subprocess.run(("git", "-C", str(cwd), *args), capture_output=True, text=True, check=True).stdout  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - _git callers build fixture Git add/commit/config/init argv and repository operands; no shell.
+        (resolve_git_executable(), "-C", str(cwd), *args), capture_output=True, text=True, check=True
+    ).stdout
 
 
 def _clone(path: Path, origin: str) -> Path:

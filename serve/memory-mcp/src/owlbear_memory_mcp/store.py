@@ -27,8 +27,9 @@ class StoreError(RuntimeError):
 def _git(cwd: Path, *args: str) -> str:
     quiet = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     try:
-        done = subprocess.run(  # noqa: S603
-            ["git", *args],  # noqa: S607
+        # Native lookup keeps the child cwd/environment and execution-time PATH continuation.
+        done = subprocess.run(  # noqa: S603 - callers supply fixed config/rev-parse queries; no shell
+            ["git", *args],  # noqa: S607 - preserve native child PATH and execution-time search
             cwd=cwd,
             env=quiet,
             stdin=subprocess.DEVNULL,

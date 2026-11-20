@@ -17,13 +17,15 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
+    from copilot.generated.session_events import SessionEvent
+
     from owlbear_delivery_next.improvement.credit_meter import Meter
 
 
-async def bounded(work: Callable[[], Awaitable[Any]], seconds: float) -> tuple[bool, Any]:
+async def bounded[T](work: Callable[[], Awaitable[T]], seconds: float) -> tuple[bool, T | None]:
     """Run *work* at most *seconds*; whether it ended well, and its result. One left over is cancelled, not awaited."""
 
-    async def run() -> Any:  # noqa: ANN401 - the work's result; it may fail before it awaits anything
+    async def run() -> T:
         return await work()
 
     task = asyncio.ensure_future(run())
@@ -45,7 +47,7 @@ class Limit:
         self.idle = False  # the runtime said the session is idle: its turn has ended
         self.loop = asyncio.get_running_loop()
 
-    def heard(self, ev: Any) -> None:  # noqa: ANN401 - an SDK event
+    def heard(self, ev: SessionEvent) -> None:
         """Charge one billed call; the turn is stopped once the meter closes. An idle session is noted as ended."""
         kind = getattr(getattr(ev, "type", None), "value", getattr(ev, "type", None))
         if kind == "session.idle":

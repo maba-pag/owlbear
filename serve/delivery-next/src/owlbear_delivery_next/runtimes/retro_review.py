@@ -15,7 +15,7 @@ import asyncio
 import tempfile
 import uuid
 from functools import partial
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from copilot import CopilotClient, RuntimeConnection
 from copilot.rpc import PermissionDecisionReject
@@ -29,6 +29,9 @@ from owlbear_delivery_next.runtimes.model_choices import takes_effort
 from owlbear_delivery_next.state_store import spend_ledger
 
 if TYPE_CHECKING:
+    from copilot.generated.session_events import SessionEvent
+    from copilot.session import CopilotSession
+
     from owlbear_delivery_next.change_contracts.profile_record import RoleModel
     from owlbear_delivery_next.improvement.credit_meter import Meter
 
@@ -52,7 +55,7 @@ async def asked(
     said: list[str] = []
     limit = Limit(meter)
 
-    def heard(ev: Any) -> None:  # noqa: ANN401 - an SDK event
+    def heard(ev: SessionEvent) -> None:
         d = as_dict(ev)
         if d.get("type") == "assistant.message" and (text := (d.get("data") or {}).get("content")):
             said.append(text)
@@ -92,7 +95,7 @@ async def asked(
 
 
 async def _end(
-    client: Any, session: Any, limit: Limit, spent: spotter_look.Spent, *, confirmed: bool,  # noqa: ANN401
+    client: CopilotClient, session: CopilotSession | None, limit: Limit, spent: spotter_look.Spent, *, confirmed: bool,
 ) -> None:  # fmt: skip
     """Reconcile the session's share with its reported total, record its run, then tear it down; each bounded."""
     if session is None:
@@ -103,5 +106,5 @@ async def _end(
     await spotter_look.teardown(client, session, spent.sid)
 
 
-async def _abort(session: Any) -> None:  # noqa: ANN401 - the SDK session
+async def _abort(session: CopilotSession) -> None:
     await session.abort()

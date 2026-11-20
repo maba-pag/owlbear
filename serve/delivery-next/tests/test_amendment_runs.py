@@ -10,7 +10,14 @@ from datetime import UTC, datetime
 import pytest
 
 from owlbear_decisions import Decision, Origin, Scope, State, new_id
-from owlbear_delivery_next.change_contracts import amend_tools, dispute_tools, pick_tools, tool_schema, tools
+from owlbear_delivery_next.change_contracts import (
+    amend_tools,
+    dispute_tools,
+    owner_look,
+    pick_tools,
+    tool_schema,
+    tools,
+)
 from owlbear_delivery_next.change_contracts.amendment_records import Amendment
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Criterion, Exit, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.permissions import Policy
@@ -18,6 +25,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile, Profi
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RoundPolicy
 from owlbear_delivery_next.change_flow import amending, loop
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import amendments, sdk_adapter
@@ -81,8 +89,13 @@ class Amending:
         picking.store.write(Lock(picking.slug), c)
         self.builds: list[tools.Args] = []
         self.unconfirmed: set[str] = set()  # the roles whose next session ends with its process left going
-        self.head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=picking.repo, check=True, capture_output=True,  # noqa: S607
-                                   text=True).stdout.strip()  # fmt: skip
+        self.head = subprocess.run(  # noqa: S603 - Fixed rev-parse HEAD argv reads the picking fixture's repository for fake build results; no shell.
+            [resolve_git_executable(), "rev-parse", "HEAD"],
+            cwd=picking.repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
         monkeypatch.setattr(runner.sdk_adapter, "run", self.run)
 
     async def run(self, cfg):
@@ -384,6 +397,38 @@ def test_a_premise_may_name_any_amendable_item_the_owners_own_included(tmp_path,
     text, ok = Gate(cfg, Run("s1"), lambda **_e: None, lambda: None).call(tools.PREMISE, args)
 
     assert (ok, text) == (True, ACCEPTED) if not error else (not ok and error in text)
+
+
+def test_a_keyed_decision_question_cannot_hide_a_deferred_look_from_admission(tmp_path):
+    cfg = sdk_adapter.Session(
+        K.REVIEW,
+        tmp_path,
+        "keyed",
+        "amend",
+        resume=False,
+        policy=Policy(tmp_path, write=False),
+        observe=lambda: tools.Worktree("h", "h"),
+        checks=(),
+        submit=amend_tools.CANDIDATE,
+        amendable=("decision:D-timing",),
+        repository="other/project",
+    )
+    args = amend_tools.CandidateResult(
+        items=[
+            amend_tools.CandidateItem(
+                field="decision",
+                key="D-timing",
+                question="An ignored replacement question",
+                text=owner_look.ANSWER,
+                why="The requested look timing.",
+            )
+        ]
+    )
+
+    text, ok = Gate(cfg, Run("keyed"), lambda **_e: None, lambda: None).call(amend_tools.CANDIDATE, args.model_dump())
+
+    assert not ok
+    assert "question is only for a new decision" in text
 
 
 def test_a_premise_from_a_session_left_going_starts_no_amendment(picking, monkeypatch):

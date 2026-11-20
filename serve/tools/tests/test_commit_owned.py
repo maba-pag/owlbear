@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -11,8 +12,12 @@ from owlbear_tools.commit_owned import CommitOwnedError, commit_owned_paths
 
 
 def _git(repo: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(  # noqa: S603
-        ["git", *args],  # noqa: S607
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
+    return subprocess.run(  # noqa: S603 - _git callers build fixture Git add/commit/config/diff argv and repository operands; no shell.
+        [git_executable, *args],
         cwd=repo,
         check=check,
         text=True,

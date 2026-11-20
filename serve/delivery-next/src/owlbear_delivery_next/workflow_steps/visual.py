@@ -207,7 +207,10 @@ def ui_paths(c: Change, head: str) -> list[str]:
     """UI paths the Change's diff touches, both ends of a rename; an unreadable diff counts as UI (fail-closed)."""
     try:
         diff = [worktree.GIT, "diff", "--name-status", "-z", "-M", f"origin/{c.names.target}...{head}"]
-        done = subprocess.run(diff, cwd=c.names.worktree, capture_output=True, check=True, timeout=60)  # noqa: S603
+        # The Change target and head form one revision-range operand, not shell text.
+        done = subprocess.run(  # noqa: S603 - fixed Git diff vector with application-derived revisions, no shell
+            diff, cwd=c.names.worktree, capture_output=True, check=True, timeout=60
+        )
         fields = done.stdout.decode("utf-8").split("\0")  # bytes: no newline in a name is translated
     except subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, UnicodeDecodeError:
         return ["(the diff could not be read)"]

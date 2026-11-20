@@ -14,7 +14,12 @@ from __future__ import annotations
 import json
 import re
 from collections import deque
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from copilot.generated.session_events import SessionEvent
+
+type Event = SessionEvent | dict[str, Any]
 
 ACTIONS, CALLS = 120, 200  # actions kept; calls awaiting their completion
 TEXT, SAID, ARGS, RESULT = 6000, 1500, 1500, 4000  # characters kept of a request, a message, arguments, a result
@@ -61,7 +66,7 @@ def requester(d: dict[str, Any]) -> bool:
     )
 
 
-def as_dict(ev: Any) -> dict[str, Any]:  # noqa: ANN401 - an SDK event object or a logged event
+def as_dict(ev: Event) -> dict[str, Any]:
     """The event as its log line holds it."""
     data = ev.to_dict() if hasattr(ev, "to_dict") else ev
     return data if isinstance(data, dict) else {}
@@ -101,7 +106,7 @@ def kept_text(value: object, n: int) -> str:
     return clip(EMAIL.sub("<email>", clip(no_browser(_text(value)), RAW)), n)
 
 
-def result_text(data: dict[str, Any]) -> Any:  # noqa: ANN401 - a text, or a structured error as given
+def result_text(data: dict[str, Any]) -> object:
     """A completed call's result as the agent saw it, else its error (a structured one as it is)."""
     result = data.get("result")
     if isinstance(result, dict):
@@ -126,7 +131,7 @@ class Kept:
         self.dropped = {"actions": 0, "requests": 0, "messages": 0, "answers": 0}  # what the rings no longer hold
         self.n = 0  # events seen
 
-    def add(self, ev: Any) -> bool:  # noqa: ANN401 - an SDK event object or a logged event
+    def add(self, ev: Event) -> bool:
         """Count a callback and keep main-agent content; whether it completed a main-agent call."""
         d = as_dict(ev)
         self.n += 1

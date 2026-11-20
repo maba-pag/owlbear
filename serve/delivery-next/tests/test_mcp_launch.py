@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 
 from owlbear_delivery_next.commands import mcp_launch
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import leases, local_home
 from owlbear_delivery_next.machine_host import versions
 
@@ -168,7 +169,9 @@ def answered(name: str, asked: list[dict[str, Any]], workspace: Path, held: Path
     It holds a lease on the version folder *held* while it runs.
     """
     (workspace / ".owlbear").mkdir(exist_ok=True)  # the servers read their folder from the client's working folder
-    subprocess.run(["git", "init", "-q"], cwd=workspace, check=True)  # noqa: S607 - the chat server's repository
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with literal operands; no shell.
+        [resolve_git_executable(), "init", "-q"], cwd=workspace, check=True
+    )
     entry = CONFIGURED[name]
     argv = [os.path.expandvars(part) for part in (entry["command"], *entry["args"])]
     server = subprocess.Popen(  # noqa: S603 - the configured command, on an interpreter of this test's making

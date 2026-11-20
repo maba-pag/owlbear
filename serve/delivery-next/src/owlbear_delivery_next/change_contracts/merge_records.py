@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 QUEUE_UNSEEN = "gate:merge:queue-unseen"  # the owner's question about an enqueue GitHub shows no trace of
 
@@ -21,6 +21,14 @@ class Pullback(_Record):
     reason: str = ""
     worktree: str = ""
     at: datetime
+
+
+class ReleaseLook(_Record):
+    """A proven delivery whose owner-approved look waits for its installed release."""
+
+    version: int = Field(ge=1)
+    commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    done_at: datetime | None = None
 
 
 class QueueClaim(_Record):

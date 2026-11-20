@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.git.command_failure import rpc_failure as failed
 
 if TYPE_CHECKING:
+    from copilot.generated.session_events import UsageGetMetricsResult, UsageMetricsAgentMetric
     from copilot.session import CopilotSession
 
 READ = 10.0  # seconds for one usage request
@@ -26,7 +27,7 @@ def unexpected_models(before: dict[str, Any], after: dict[str, Any], model: str 
     return sorted(grew - {model})
 
 
-def _models(metrics: Any) -> dict[str, dict[str, Any]]:  # noqa: ANN401 - the SDK's per-model metrics holder
+def _models(metrics: UsageGetMetricsResult | UsageMetricsAgentMetric) -> dict[str, dict[str, Any]]:
     return {
         name: {
             "credits": None if (aiu := getattr(mm, "total_nano_aiu", None)) is None else aiu / 1e9,
@@ -48,7 +49,7 @@ async def _usage(session: CopilotSession, requested: str | None) -> dict[str, An
     return parsed(m, requested)
 
 
-def parsed(m: Any, requested: str | None) -> dict[str, Any]:  # noqa: ANN401 - the SDK's usage metrics
+def parsed(m: UsageGetMetricsResult, requested: str | None) -> dict[str, Any]:
     """A session's usage metrics as Delivery keeps them: credits, each model's and each agent instance's."""
     nano = getattr(m, "total_nano_aiu", None)
     models = _models(m)

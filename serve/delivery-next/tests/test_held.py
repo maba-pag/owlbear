@@ -20,6 +20,7 @@ from owlbear_delivery_next.change_contracts.round_records import RoundLoop, Roun
 from owlbear_delivery_next.change_flow import loop, moves
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import cli, runner
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import api, pack_routes
 from owlbear_delivery_next.runtimes import session_result
@@ -43,7 +44,9 @@ class Host:
 
 
 def git(cwd: Path, *args: str) -> str:
-    done = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
+    done = subprocess.run(  # noqa: S603 - git callers build fixture Git add/branch/commit/init argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=cwd, check=True, capture_output=True, text=True
+    )
     return done.stdout.strip()
 
 

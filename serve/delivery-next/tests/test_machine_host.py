@@ -27,6 +27,7 @@ from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryC
 from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.commands import chat_client, cli, mcp_server, replay_client, setup
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay, pack_run
 from owlbear_delivery_next.improvement import improvement_view
 from owlbear_delivery_next.local_system import codebase, data_place, local_home, maintenance, processes
@@ -47,7 +48,9 @@ AUTH = {"authorization": "Bearer t"}
 
 def clone(path: Path) -> Path:
     for args in (["init", "-q", str(path)], ["-C", str(path), "commit", "-q", "--allow-empty", "-m", "i"]):
-        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git init/commit loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True
+        )
     return path.resolve()
 
 
@@ -197,7 +200,9 @@ def chat_tool(name: str, **args: object) -> dict:
 
 
 def origin(path: Path, url: str) -> Path:
-    subprocess.run(["git", "-C", str(path), "remote", "add", "origin", url], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git remote argv with path/url operands; no shell.
+        [resolve_git_executable(), "-C", str(path), "remote", "add", "origin", url], check=True
+    )
     return path
 
 
@@ -751,7 +756,7 @@ def test_a_reclone_is_shown_replaced_until_adopted(tmp_path, http, machine):
     old = add(http, work)
     machine.remove(old["id"])
     registry.register(work)  # registered again without the host, then re-cloned at the same path
-    subprocess.run(["rm", "-rf", str(work)], check=True)  # noqa: S603, S607
+    shutil.rmtree(work)
     clone(work)
     machine.load_all()
     pid = registry.load().projects[0].id
@@ -897,7 +902,9 @@ def test_a_start_s_shared_data_notice_clears_after_owlbear_data_sets_it_right(tm
     """#1007: the same host verifies the actual data command's repair without restarting or rebinding Stores."""
     registry.register(clone(tmp_path / "shop"))
     source, dest = clone(tmp_path / "old-data"), data_place.default()
-    subprocess.run(["git", "clone", "-q", str(source), str(dest)], check=True)  # noqa: S603, S607 - a move left both
+    subprocess.run(  # noqa: S603 - Fixture Git clone argv with dest/source operands; no shell.
+        [resolve_git_executable(), "clone", "-q", str(source), str(dest)], check=True
+    )
     data_place.pointer().write_text(json.dumps({"moving_from": str(source), "moving_to": str(dest)}))
     serve._provisioned(machine)  # noqa: SLF001
     machine.load_all()

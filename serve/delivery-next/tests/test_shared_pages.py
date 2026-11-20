@@ -765,6 +765,7 @@ def a_machine_s_draft_never_shows_on_global(page, pds, region) -> None:
     pds.pick(page, "Update itself when idle", "inherit")
     expect(line).to_have_count(0)
     pds.pick(page, "Update itself when idle", "true")  # left unsaved
+    expect(line).to_have_text("in use: On, from this machine")
     pds.pick(page, "Layer", "global")
     pds.pick(page, "Every machine: Update itself when idle", "false")
     expect(line).to_have_text("in use: Off, from global")

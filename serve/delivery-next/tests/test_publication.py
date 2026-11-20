@@ -106,7 +106,9 @@ TIMED_OUT = "timed out"
 def git(cwd, *args):
     if (cwd / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
         args = ("--git-dir=.", *args)
-    done = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
+    done = subprocess.run(  # noqa: S603 - git callers build fixture Git add/checkout/clone/commit argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=cwd, check=True, capture_output=True, text=True
+    )
     return done.stdout.strip()
 
 
@@ -3230,7 +3232,9 @@ def both_prefs_unset(tmp_path, monkeypatch):
         ["init", "-q"],
         ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"],
     ):
-        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git init/commit loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), *args], cwd=tmp_path, check=True, capture_output=True
+        )
     store = Store.open(tmp_path)
     remote = tmp_path / "remote.git"
     for args in (
@@ -3238,7 +3242,9 @@ def both_prefs_unset(tmp_path, monkeypatch):
         ["remote", "add", "origin", str(remote)],
         ["push", "-q", "origin", "HEAD:refs/heads/main"],
     ):
-        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git init/remote/add/push loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), *args], cwd=tmp_path, check=True, capture_output=True
+        )
     head = git(tmp_path, "rev-parse", "HEAD")
     gh = QueueGh(pr(head=head))
     gh.state = QueueState(merged=False, open=True, head_sha=head, entry=entry(), added=ADDED)

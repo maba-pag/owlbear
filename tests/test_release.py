@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -20,8 +21,12 @@ _SPEC.loader.exec_module(release)
 
 
 def git(cwd: Path, *args: str) -> str:
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
     done = subprocess.run(  # noqa: S603 - fixed git argument vector
-        ["git", "-c", "user.name=t", "-c", "user.email=t@t", *args],  # noqa: S607
+        [git_executable, "-c", "user.name=t", "-c", "user.email=t@t", *args],
         cwd=cwd, capture_output=True, text=True, check=True,
     )  # fmt: skip
     return done.stdout.strip()

@@ -16,6 +16,7 @@ from owlbear_delivery_next.change_contracts.models import (
     StepKind,
 )
 from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.mask import redact
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.sdk_adapter import Journal
@@ -24,7 +25,9 @@ from owlbear_delivery_next.workflow_steps import check, publish
 
 
 def git(cwd, *args):
-    done = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
+    done = subprocess.run(  # noqa: S603 - git callers build fixture Git add/clone/commit/init argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=cwd, check=True, capture_output=True, text=True
+    )
     return done.stdout.strip()
 
 

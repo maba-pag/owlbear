@@ -9,6 +9,7 @@ import pytest
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.tools import Worktree
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import pds_skill, preload
 from owlbear_delivery_next.runtimes import lessons, sdk_adapter
 
@@ -45,8 +46,12 @@ def pages(project: Path, *tracked: str, untracked: str = "") -> Path:
     project.mkdir()
     for n, line in enumerate(tracked):
         (project / f"page{n}.html").write_text(f"<script src='{line}'></script>\n")
-    subprocess.run(["git", "init", "-q", str(project)], check=True)  # noqa: S603, S607
-    subprocess.run(["git", "-C", str(project), "add", "."], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with project operands; no shell.
+        [resolve_git_executable(), "init", "-q", str(project)], check=True
+    )
+    subprocess.run(  # noqa: S603 - Fixture Git add argv with project operands; no shell.
+        [resolve_git_executable(), "-C", str(project), "add", "."], check=True
+    )
     if untracked:
         (project / "draft.html").write_text(untracked)
     return project

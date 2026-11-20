@@ -56,9 +56,13 @@ def copy(step: Path, at: Path) -> str:
 def drop(step: Path, at: Path) -> None:
     """Remove the copy, if any."""
     if at.exists():
-        subprocess.run([worktree.GIT, "worktree", "remove", "--force", str(at)], cwd=step, check=False)  # noqa: S603
+        subprocess.run(  # noqa: S603 - fixed Git worktree remove with the repair's disposable copy path, no shell
+            [worktree.GIT, "worktree", "remove", "--force", str(at)], cwd=step, check=False
+        )
     shutil.rmtree(at, ignore_errors=True)
-    subprocess.run([worktree.GIT, "worktree", "prune"], cwd=step, check=False)  # noqa: S603
+    subprocess.run(  # noqa: S603 - fixed local Git worktree prune vector, no dynamic operand or shell
+        [worktree.GIT, "worktree", "prune"], cwd=step, check=False
+    )
 
 
 def changed(at: Path, base: str) -> list[tuple[str, str]]:

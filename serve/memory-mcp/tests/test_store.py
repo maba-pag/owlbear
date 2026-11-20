@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -14,9 +15,17 @@ from owlbear_memory_mcp.store import StoreError, identity, shared_stores
 
 def _workspace(path: Path, origin: str | None = None) -> Path:
     path.mkdir(parents=True)
-    subprocess.run(["git", "init", "-q"], cwd=path, check=True)  # noqa: S607
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with literal operands; no shell.
+        [git_executable, "init", "-q"], cwd=path, check=True
+    )
     if origin:
-        subprocess.run(["git", "remote", "add", "origin", origin], cwd=path, check=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Fixture Git remote argv with origin operands; no shell.
+            [git_executable, "remote", "add", "origin", origin], cwd=path, check=True
+        )
     return path
 
 

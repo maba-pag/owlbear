@@ -5,6 +5,7 @@ import subprocess
 
 import pytest
 
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.provider import BranchState, FailureCode, ProviderError
 
@@ -14,7 +15,7 @@ REF = "refs/heads/owlbear/work"
 def git(root, *args):
     who = ("-c", "user.name=t", "-c", "user.email=t@example.com")
     return subprocess.run(  # noqa: S603 - synthetic Git fixture
-        ("git", *who, *args),  # noqa: S607 - existing test toolchain
+        (resolve_git_executable(), *who, *args),
         cwd=root,
         check=True,
         capture_output=True,
@@ -71,7 +72,7 @@ class RefServer:
                 if self.mode == "race":
                     git(self.root, "update-ref", REF, self.newer, self.merged)
                 deleted = subprocess.run(  # noqa: S603 - synthetic Git fixture
-                    ("git", "update-ref", "-d", REF, self.merged),  # noqa: S607
+                    (resolve_git_executable(), "update-ref", "-d", REF, self.merged),
                     cwd=self.root,
                     capture_output=True,
                     check=False,
