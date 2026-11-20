@@ -66,7 +66,7 @@ def required_approved(c: Change, q: Question, basis: CiBasis, prof: Profile) -> 
     ):
         return True
     required = prof.entries.get(profile.REQUIRED)
-    return bool(q.ci_basis is None and required and required.observed and profile.is_confirmed(required))
+    return bool(q.ci_basis is None and required and required.observed)
 
 
 def covers(c: Change, q: Question | None, basis: CiBasis, prof: Profile) -> bool:
