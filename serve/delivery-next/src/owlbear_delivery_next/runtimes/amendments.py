@@ -119,7 +119,8 @@ def _shaped(
 
 HOSTED = (
     "Delivery hosts this session, not the owner's chat: nobody reads your messages. You only read (view, glob, grep); "
-    "you save no brief, start no challenge and ask nobody. Your only output is `submit_result`."
+    "you save no brief, start no challenge and ask nobody. You end with `submit_result`, or with "
+    "`report_wrong_premise` or `report_missing_tool`."
 )
 CANDIDATE_RULES = (
     "Write the exact candidate against the current version: per item the field, its key as the brief names it (empty "

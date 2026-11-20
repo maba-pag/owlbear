@@ -54,6 +54,7 @@ JOBS: dict[str, tuple[str, ...]] = (
     | dict.fromkeys(("amendment-prepare", "amendment-revise"), ("owlbear-acceptance-criteria",))  # TD-185
 )
 HOSTED = frozenset({"view", "glob", "grep"})  # a chat role's tools when Delivery hosts it: the shaper's candidate
+AGENT_JOBS = dict.fromkeys(("amendment-prepare", "amendment-revise"), "shaper-amendment")  # hosted jobs' own role text
 MEMORY = "owlbear-memory"  # the memory server's name; agent files name its tools as owlbear-memory/<tool>
 MEMORY_MODULE = "owlbear_memory_mcp"  # the memory server's package
 MEMORY_DIR = "OWLBEAR_MEMORY_DIR"  # the memory server's store folder
@@ -77,9 +78,13 @@ def front_matter(doc: str) -> tuple[dict[str, Any], str]:
     return meta, body
 
 
-def agent_file(role: str) -> tuple[dict[str, Any], str]:
-    """The role's agent file, ``agents/owlbear-<role>.agent.md`` (TD-169): its front matter fields and its prose."""
-    path = files("owlbear_delivery_next").joinpath("agents", f"owlbear-{role}.agent.md")
+def agent_file(role: str, job: str = "") -> tuple[dict[str, Any], str]:
+    """The role's agent file, ``agents/owlbear-<role>.agent.md`` (TD-169): its front matter fields and its prose.
+
+    A *job* Delivery hosts on a chat role has its own file (``AGENT_JOBS``), never the chat's.
+    """
+    name = AGENT_JOBS.get(job, role)
+    path = files("owlbear_delivery_next").joinpath("agents", f"owlbear-{name}.agent.md")
     return front_matter(path.read_text(encoding="utf-8"))
 
 
@@ -114,6 +119,7 @@ def memory_agents() -> str:
     """
     package = Path(str(files("owlbear_delivery_next")))  # <repo>/serve/delivery-next/src/owlbear_delivery_next
     own = {path.name.removesuffix(".agent.md").removeprefix("owlbear-") for path in package.glob("agents/*.agent.md")}
+    own -= set(AGENT_JOBS.values())  # a hosted job's file runs as its role
     shared = {path.name.removesuffix(".agent.md") for path in package.parents[3].glob("share/agents/*.agent.md")}
     return ",".join(sorted({*REQUIRED, *own, *shared}))
 
