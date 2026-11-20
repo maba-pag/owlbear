@@ -651,6 +651,27 @@ def test_a_persisted_duplicate_inventory_hold_settles_before_normal_host_schedul
     assert len(settled.questions) == 2  # spent allowance and unanswered history survive.
 
 
+def test_legacy_named_approval_cannot_bypass_a_new_fully_detected_inventory(tmp_path, clone):
+    ci_head(clone, "CI")
+    head = _commit_workflow(clone, "dynamic.yml", "on: pull_request\njobs:\n  t: {name: '${{ inputs.n }}'}\n")
+    texts = profile.workflow_texts_at(clone, head)
+    entries = profile.ci_entries({n: profile.workflow(t) for n, t in texts.items()}, profile.flows_digest(texts))
+    rules = Rules(state="known", evidence="rules", required_checks=("CI",))
+    cx = ctx(tmp_path, FakeGh(pr(head=head)), prof(**(entries | profile.rule_entries(rules))))
+    cx.profile = profile.confirm(cx.profile, profile.REQUIRED, "CI", NOW)
+    c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
+    _, proposal = follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW)
+    c = loop.apply(c, proposal, NOW)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
+    c.questions[-1].ci_basis = None
+    assert follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW) == (("CI",), None)  # exact legacy digest still holds.
+    head = _commit_workflow(clone, "dynamic.yml", "on: pull_request\njobs:\n  t: {name: lint}\n")
+    cx.gh.pr = pr(head=head)
+    _, proposal = follow.declared(cx, c, cx.gh.pr, StepKind.MERGE)
+    assert proposal.exit == Exit.ASK
+    assert "The earlier answer did not record detected check names; now CI, lint." in proposal.question.text
+
+
 def _commit_workflow(clone, name, text):
     (clone / ".github" / "workflows").mkdir(parents=True, exist_ok=True)
     (clone / ".github" / "workflows" / name).write_text(text)

@@ -75,8 +75,8 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
     basis, previous = ci_basis.current(ctx.profile, observed), ci_basis.latest(c)
     if digest != bound:
         entry = observed
-    delta = ci_basis.delta(c, previous, basis, ctx.profile)
     cause = failures.cause_key(ErrorKind.GATE, F, f"declared-{digest}")  # the same inventory gates Follow and Merge
+    delta = ci_basis.delta(c, previous, basis, ctx.profile, cause)
     if previous and previous.cause != cause and ci_basis.covers(c, previous, basis, ctx.profile):
         return (), None
     answer = previous.answer if previous else None

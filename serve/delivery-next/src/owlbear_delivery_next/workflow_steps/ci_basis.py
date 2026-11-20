@@ -81,13 +81,15 @@ def covers(c: Change, q: Question | None, basis: CiBasis, prof: Profile) -> bool
     )
 
 
-def delta(c: Change, q: Question | None, basis: CiBasis, prof: Profile) -> str:
+def delta(c: Change, q: Question | None, basis: CiBasis, prof: Profile, cause: str) -> str:
     """Name what needs new consent, independently of a workflow digest."""
     if q is None:
         return ""
     changes = []
     before = detected(q)
-    if before is not None and before != basis.declared:
+    if before is None and q.cause != cause and basis.declared:
+        changes.append(f"The earlier answer did not record detected check names; now {', '.join(basis.declared)}.")
+    elif before is not None and before != basis.declared:
         was, now = ", ".join(before) or "none", ", ".join(basis.declared or ()) or "none"
         changes.append(f"Detected checks changed from {was} to {now}.")
     if not required_approved(c, q, basis, prof):
