@@ -37,12 +37,15 @@ class Choice(Protocol):
     scope: Literal["change", "project"]
 
 
+def statement(question: str, answer: str) -> bool:
+    """The explicit choice's wording, including the exact historical owner-approved statement."""
+    return (question == QUESTION and answer == ANSWER) or hashlib.sha256(answer.encode()).hexdigest() == LEGACY
+
+
 def chosen(decisions: Iterable[Choice]) -> bool:
     """An explicit owner-origin choice, never arbitrary mentions or an agent's own proposal."""
     return any(
-        d.scope == "change"
-        and d.origin in {"decided", "approved"}
-        and ((d.question == QUESTION and d.answer == ANSWER) or hashlib.sha256(d.answer.encode()).hexdigest() == LEGACY)
+        d.scope == "change" and d.origin in {"decided", "approved"} and statement(d.question, d.answer)
         for d in decisions
     )
 

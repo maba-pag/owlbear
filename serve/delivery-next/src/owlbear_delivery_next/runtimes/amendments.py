@@ -33,7 +33,7 @@ def amendable(c: Change) -> tuple[str, ...]:
     return (*refs, *(f"new:{k}" for k in amend_apply.fresh(c)))
 
 
-def check(args: tools.Args, allowed: tuple[str, ...]) -> list[str]:
+def check(args: tools.Args, allowed: tuple[str, ...], *, repository: str = "") -> list[str]:
     """Field errors of a premise's amendment, the shaper's candidate or the challenger's affected names."""
     if isinstance(args, amend_tools.VerdictResult):
         known = {f"screen:{r[7:]}" for r in allowed if r.startswith("visual:")} | {
@@ -44,7 +44,13 @@ def check(args: tools.Args, allowed: tuple[str, ...]) -> list[str]:
     if isinstance(args, amend_tools.CandidateResult):
         if bool(args.items) == bool(args.refuse.strip()):
             return ["items: give the exact candidate, or refuse with your reason - one of the two"]
-        return _errors(args.items, allowed, "items")
+        errors = _errors(args.items, allowed, "items")
+        if repository.lower() != owner_look.REPOSITORY and any(
+            i.field == "decision" and not i.remove and owner_look.statement(i.question or owner_look.QUESTION, i.text)
+            for i in args.items
+        ):
+            errors.append("items: the after-release look is supported only for OwlBear Changes")
+        return errors
     if not isinstance(args, tools.WrongPremise) or not args.amendment:
         return []
     if args.stage != "brief":
