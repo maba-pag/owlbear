@@ -384,7 +384,12 @@ def design(runs: Sequence[Run], images: Sequence[Image], role: RoleModel, now: d
         for p in r.preferences
         if better[p.pair] == "before"
     ]
-    reasons = [*worse, *(p.doubt for p in finals if p.doubt), *(f"the judge submitted {v}" for v in said), _unknown(runs)]
+    reasons = [
+        *worse,
+        *(p.doubt for p in finals if p.doubt),
+        *(f"the judge submitted {v}" for v in said),
+        _unknown(runs),
+    ]
     return JudgeVerdict(
         lens="design",
         verdict=_worst(derived),
