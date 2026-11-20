@@ -36,21 +36,29 @@ const measured = (c) => (c?.roles ?? []).filter((r) => r.latest);
 // A recorded “kept” note in the page's words: which skill or subagent tokens are still counted in another part.
 const KIND = { skills: ["skill", "Skills"], subagents: ["subagent", "Subagents"] };
 const kind = (part) => KIND[part] ?? [part, part];
+const digits = (s) => s !== "" && [...s].every((ch) => ch >= "0" && ch <= "9");
+const word = (s) => s !== "" && [...s].every((ch) => ch === "_" || digits(ch) || (ch >= "a" && ch <= "z")
+  || (ch >= "A" && ch <= "Z"));
+// Each shape: the text before and after its variable middle, which must pass its test.
 const KEPT = [
-  [/^(\w+): (\d+) tokens stay in their category, which nesting does not name$/, (part, n) =>
+  ["", " tokens stay in their category, which nesting does not name", digits, (part, n) =>
     `${tokens(+n)} ${kind(part)[0]} tokens are counted in one of the other parts, not in ${kind(part)[1]}: the
     attribution does not say which part holds them`],
-  [/^(\w+): (\d+) tokens stay in their category, which holds fewer$/, (part, n) =>
+  ["", " tokens stay in their category, which holds fewer", digits, (part, n) =>
     `${tokens(+n)} ${kind(part)[0]} tokens stay counted in the part that holds them, not in ${kind(part)[1]}: that part
     reports fewer tokens than they need`],
-  [/^(\w+): the preloaded (.+) stay in their category, which the attribution does not itemize$/, (part, names) =>
-    `the preloaded ${names} are counted in one of the other parts, not in ${kind(part)[1]}: the attribution does not
-    list them`],
+  ["the preloaded ", " stay in their category, which the attribution does not itemize", (s) => s !== "",
+    (part, names) => `the preloaded ${names} are counted in one of the other parts, not in ${kind(part)[1]}: the
+    attribution does not list them`],
 ];
+// Plain string parsing, no pattern built or run over the fetched text.
 const keptSaid = (text) => text.split("; ").map((one) => {
-  for (const [shape, say] of KEPT) {
-    const m = one.match(shape);
-    if (m) return say(...m.slice(1));
+  const at = one.indexOf(": "), part = one.slice(0, at), rest = one.slice(at + 2);
+  if (at < 0 || !word(part)) return one;
+  for (const [head, tail, ok, say] of KEPT) {
+    if (!rest.startsWith(head) || !rest.endsWith(tail) || rest.length < head.length + tail.length) continue;
+    const mid = rest.slice(head.length, rest.length - tail.length);
+    if (ok(mid)) return say(part, mid);
   }
   return one;
 }).join("; ");
