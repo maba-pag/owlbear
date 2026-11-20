@@ -93,7 +93,10 @@ def delta(c: Change, q: Question | None, basis: CiBasis, prof: Profile, cause: s
         was, now = ", ".join(before) or "none", ", ".join(basis.declared or ()) or "none"
         changes.append(f"Detected checks changed from {was} to {now}.")
     if not required_approved(c, q, basis, prof):
-        old = ", ".join(q.ci_basis.required or ()) or "none" if q.ci_basis else "not recorded with the earlier answer"
+        if q.ci_basis is None:
+            old = "not recorded with the earlier answer"
+        else:
+            old = ", ".join(q.ci_basis.required) or "none" if q.ci_basis.required is not None else "not readable"
         now = ", ".join(basis.required) or "none" if basis.required is not None else "not readable"
         changes.append(f"Required checks were {old}; now {now}.")
     return " ".join(changes)

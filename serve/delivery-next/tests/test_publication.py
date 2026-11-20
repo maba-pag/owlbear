@@ -3665,3 +3665,6 @@ def test_required_basis_approval_covers_only_the_delta_the_rules_question_showed
     _, inventory = follow.declared(cx, c, gh.pr, StepKind.FOLLOW)
     assert inventory.exit == Exit.ASK
     assert "Required checks were ci; now ci, lint, scan." in inventory.question.text
+    c.questions[0].ci_basis = CiBasis(declared=())
+    _, unreadable = follow.declared(cx, c, gh.pr, StepKind.FOLLOW)
+    assert "Required checks were not readable; now ci, lint, scan." in unreadable.question.text
