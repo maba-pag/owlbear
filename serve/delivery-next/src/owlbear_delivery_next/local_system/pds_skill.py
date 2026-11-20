@@ -8,6 +8,7 @@ project. A PDS project without a usable skill gets none, with the reason.
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -78,7 +79,7 @@ def _installed(worktree: Path) -> Choice | None:
 
 
 def _loaded(worktree: Path, root: Path) -> Choice | None:
-    if (git := shutil.which("git")) is None:
+    if (git := shutil.which("git", path=os.environ.get("PATH", os.defpath) or os.curdir)) is None:
         raise FileNotFoundError(2, "No such file or directory", "git")
     command = ["git", "-C", str(worktree), "grep", "-I", "-h", "-o", "-E", MARKS]
     found = subprocess.run(  # noqa: S603 - a fixed argument list, the pattern ours
