@@ -11,11 +11,9 @@ import dataclasses
 import json
 import logging
 import os
-import shutil
 import subprocess
 import threading
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.git.command_failure import failure
@@ -31,6 +29,7 @@ from owlbear_delivery_next.workflow_steps import sessions as step_sessions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
 
     from owlbear_delivery_next.local_system.maintenance import Maintenance
     from owlbear_delivery_next.runtimes.sdk_adapter import Session
@@ -172,12 +171,9 @@ class Hand:
 
 
 def _commit(package: Path) -> str:
-    if (git := shutil.which("git", path=os.environ.get("PATH", os.defpath) or os.curdir)) is None:
-        raise FileNotFoundError(2, "No such file or directory", "git")
-    command = ["git", "-C", str(package), "rev-parse", "HEAD"]
+    # Native lookup preserves empty/relative PATH and execution-time continuation for the fixed Git tool.
     found = subprocess.run(  # noqa: S603 - a fixed argument list
-        command,
-        executable=str(Path(git).absolute()),
+        ["git", "-C", str(package), "rev-parse", "HEAD"],  # noqa: S607 - native Git PATH; fixed revision query
         capture_output=True,
         text=True,
         check=False,

@@ -9,13 +9,15 @@ from __future__ import annotations
 import os
 import subprocess
 import time
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.git.access import Access
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.git.git_executable import git_executable_in
 from owlbear_delivery_next.git.remote_git import RemoteGitError
 from owlbear_delivery_next.github.account import AccountMissing, Origin, Writer
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 EXPIRED = "the deadline passed before git could run"
 REMOTE = frozenset({"push", "fetch", "pull", "ls-remote", "clone"})
@@ -105,11 +107,9 @@ def _default(cwd: Path, kind: str, deadline: float) -> str:
 
 
 def _read(cwd: Path, args: tuple[str, ...], deadline: float) -> str:
-    git = git_executable_in(cwd)
-    # _default alone builds symbolic-ref/for-each-ref queries; the returned branch is one operand.
-    command = ["git", *args]
-    done = subprocess.run(  # noqa: S603 - resolved Git and internal metadata-query argv, no shell
-        command, executable=str(Path(git).absolute()),
+    # Native lookup preserves child PATH and execution-time continuation; _default owns metadata-query argv.
+    done = subprocess.run(  # noqa: S603 - internal symbolic-ref/for-each-ref metadata arguments; no shell
+        ["git", *args],  # noqa: S607 - preserve native child PATH and execution-time search
         cwd=cwd, capture_output=True, text=True, timeout=_left(deadline), check=False, stdin=subprocess.DEVNULL,
     )  # fmt: skip
     return done.stdout.strip() if done.returncode == 0 else ""

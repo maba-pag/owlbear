@@ -11,7 +11,6 @@ import logging
 import os
 import subprocess
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -20,7 +19,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.audit_runs import record as audit_record
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.git.git_executable import git_executable_in
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.impeccable.detector import DetectorError
 from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_job, pack_replay
@@ -79,11 +77,9 @@ def owner_last(store: Store) -> dict[str, Any] | None:
         return None
     marker = f"memory {store.name}: "  # the subject memory_routes commits each action with
     args = ["log", "-1", "--format=%cI%x00%s", "--fixed-strings", f"--grep={marker}", "--"]
-    git = git_executable_in(store.shared.root)
-    command = ["git", *args, str(store.shared.memory_path(store.name))]
-    # The memory marker is one --grep value and the memory path follows --.
-    done = subprocess.run(  # noqa: S603 - resolved Git and code-owned log query, no shell
-        command, executable=str(Path(git).absolute()),
+    # Native lookup preserves child PATH and execution-time continuation; the memory path follows --.
+    done = subprocess.run(  # noqa: S603 - code-owned log query and separate grep/path operands; no shell
+        ["git", *args, str(store.shared.memory_path(store.name))],  # noqa: S607 - native child PATH search
         cwd=store.shared.root, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}, stdin=subprocess.DEVNULL,
         capture_output=True, text=True, timeout=10, check=False,
     )  # fmt: skip
