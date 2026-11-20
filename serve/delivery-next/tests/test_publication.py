@@ -78,7 +78,7 @@ from owlbear_delivery_next.github.provider import (
 )
 from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.project_host import answers, api
 from owlbear_delivery_next.project_host import host as scheduler
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.runtimes.readiness import Check as SetupCheck
@@ -649,6 +649,15 @@ def test_a_persisted_duplicate_inventory_hold_settles_before_normal_host_schedul
     assert old.answer is None
     assert old.effect_observed_at == NOW
     assert len(settled.questions) == 2  # spent allowance and unanswered history survive.
+    settled.step = Step(kind=StepKind.BUILD, task="t1")
+    refused = answers.answer_item(cx.store, settled, answers.AnswerBody(question=pending, option="yes"))
+    assert refused == (409, f"question {pending} is not open")
+    dropped = []
+    delayed = AnswerItem(at=NOW, question=pending, option="yes")
+    folded, _ = loop.schedule(settled, [delayed], NOW, dropped=dropped)
+    assert folded.step == settled.step
+    assert next(q for q in folded.questions if q.id == pending).answer is None
+    assert dropped == [(delayed, f"question {pending} is no longer open")]
 
 
 def test_legacy_named_approval_cannot_bypass_a_new_fully_detected_inventory(tmp_path, clone):

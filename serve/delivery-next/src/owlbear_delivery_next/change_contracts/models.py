@@ -244,6 +244,11 @@ class Question(Record):
     follows: str = ""  # the question whose cause a worker's re-ask or a repair's proposal asks about again (#1064)
     ci_basis: CiBasis | None = None
 
+    @property
+    def awaiting_answer(self) -> bool:
+        """A settled question takes no further answer, even when settled without an answer record."""
+        return self.answer is None and self.effect_observed_at is None
+
 
 class ItemRef(Record):
     """The pull-request conversation item a task answers, at the version of its human comments it was opened for."""
