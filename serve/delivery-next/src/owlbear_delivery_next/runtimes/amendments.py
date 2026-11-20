@@ -109,6 +109,7 @@ def _shaped(
     wrong = [k for k in a.covers if k not in added and (f"criterion:{k}" not in allowed or f"criterion:{k}" in gone)]
     unkept = f"{name}: covers {', '.join(wrong)} - not criteria the brief keeps or the candidate adds"
     return [
+        *([f"{name}: question is only for a new decision"] if a.question and (a.field != "decision" or a.key) else []),
         *([f"{name}: covers is only for a check"] if a.covers and a.field != "check" else []),
         *([unkept] if wrong else []),
         *([f"{name}: actions are only for a visual state"] if a.actions is not None and a.field != "visual" else []),
