@@ -94,10 +94,8 @@ def router(store: Store, read: Callable[[str], Change]) -> APIRouter:
                 if c.release_look and c.release_look.done_at:
                     return {"accepted": "release-look"}
                 state = shown(store, c)
-                if state is None or not state["ready"]:
+                if c.release_look is None or state is None or not state["ready"]:
                     raise HTTPException(409, str(state["text"]) if state else "No release look is due")
-                if c.release_look is None:
-                    raise HTTPException(409, "No release look receipt")
                 c.release_look.done_at = datetime.now(UTC)
                 store.write(lock, c)
         except (LockHeldError, StoreError) as exc:
