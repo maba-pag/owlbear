@@ -155,11 +155,12 @@ function readBacks(d) {
       r.more ? ` (${r.more} more wait there)` : ""}</p-text></section>`;
 }
 
-// A new shaping chat on the saved brief, offered only while the brief may take a revision.
-export function reviseButton(d) {
+// A new shaping chat on the saved brief, offered only while the brief may take a revision; *form* is the key of the
+// panel it sits in, which locks while the chat launches.
+export function reviseButton(d, form = "") {
   if (d.brief.unrevisable !== "") return nothing;
-  return button("Revise the brief in a new chat", () => reviseBrief(d),
-    { variant: "secondary", icon: "edit", aria: DIALOG, busy: state.creating, ...starts(d) });
+  return button("Revise the brief in a new chat", () => reviseBrief(d, form),
+    { variant: "secondary", icon: "edit", aria: DIALOG, id: `revise:${d.key}`, ...starts(d) });
 }
 
 // Approving the current version, from its line in the version list; off, with the reason above, until it may be.
@@ -247,7 +248,7 @@ export function approval(d) {
     d.brief.approve_refused ? refusal(d.brief.approve_refused) : nothing,
     chatReceipt(d),
     versionList(d.brief.versions, "Versions", act),
-    d.brief.revising.length ? nothing : row(reviseButton(d)));  // while the shaper revises, Open items offers it
+    d.brief.revising.length ? nothing : row(reviseButton(d, key)));  // while the shaper revises, Open items offers it
 }
 
 // What approving starts (TD-151): the brief, details included, becomes the baseline; then the challenge, planning,
@@ -361,6 +362,6 @@ function objecting(a, d) {
     }))) return;
     send(`/amendments/${encodeURIComponent(a.id)}/objection`, { text: draft(key, () => ({})).text ?? "" }, d, key);
   };
-  return html`${field(key, "text", "Why you object (optional)", "1")}
-    ${row(button("Object", go, { variant: "secondary", aria: DIALOG, ...starts(d) }))}`;
+  return html`<div data-form=${key}>${field(key, "text", "Why you object (optional)", "1")}
+    ${row(button("Object", go, { variant: "secondary", aria: DIALOG, ...starts(d) }))}</div>`;
 }

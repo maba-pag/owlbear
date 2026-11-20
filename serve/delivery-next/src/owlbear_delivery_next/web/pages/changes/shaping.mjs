@@ -1,4 +1,5 @@
 import { html } from "/assets/lit-html/3.3.3/lit-html.js";
+import { begin } from "/assets/page/sending/feedback.mjs";
 import { blockedOf, displayName, project, shown } from "/assets/ui.mjs";
 import { state, show, call, several, failed } from "./state.mjs";
 import { button } from "./widgets.mjs";
@@ -55,8 +56,8 @@ function chooserView() {
   const go = () => {
     const of = state.choosing;
     state.choosing = false;
-    show();  // the chooser goes at once, whatever the confirmation then says
-    shape(of);
+    show();  // the chooser goes at once, whatever the confirmation then says: New Change shows the send
+    shape(of, document.querySelector("#header-actions p-button"));
   };
   const stop = () => { state.choosing = false; show(); };
   return html`<div id="choose" class="row"><p-select label="Shape the new Change in" .value=${state.choosing}
@@ -66,9 +67,9 @@ function chooserView() {
     ${button("Cancel", stop, { variant: "secondary" })}</div>`;
 }
 
-function shape(of) {
+function shape(of, on = null) {
   return openChat({
-    path: "/new-change", of, about: "to shape the new Change",
+    path: "/new-change", of, on, about: "to shape the new Change",
     dialog: {
       title: "Shape a new Change?", yes: "Open the chat", no: "Not now",
       now: "A chat opens in VS Code where the shaper works out the brief with you; the chat uses AI credits like any "
@@ -81,10 +82,10 @@ function shape(of) {
 }
 
 // A saved brief opens a new shaping chat in its Change's project; the Change stays as it is until the chat saves.
-export function reviseBrief(d) {
+export function reviseBrief(d, form = "") {
   const v = d.brief.version;
   return openChat({
-    path: `/changes/${encodeURIComponent(d.slug)}/revise-brief`, of: d.project,
+    form, path: `/changes/${encodeURIComponent(d.slug)}/revise-brief`, of: d.project,
     about: `to revise ${d.handle}${several() ? ` in ${d.projectName}` : ""}`,  // handles repeat across projects
     dialog: {
       title: `Revise brief v${v} in a new chat?`, yes: "Open the chat", no: "Not now",
@@ -99,24 +100,29 @@ export function reviseBrief(d) {
 }
 
 // Asks first, then opens the shaping chat through *path* and says how it went (TD-83); *about* names what it opens
-// for, so a launch that ends after the person chose another Change still says which one it was.
-async function openChat({ path, of, dialog, about }) {
+// for, so a launch that ends after the person chose another Change still says which one it was. The clicked button,
+// or *on*, shows the send (sending/feedback.mjs) until the launch ends, and its panel *form*, if any, locks meanwhile:
+// a launch that did not open failed.
+async function openChat({ path, of, dialog, about, form = "", on = null }) {
   if (!(await ask(dialog))) return;
+  const sending = begin(form, { on, hold: false });  // a launch can take minutes: the page goes on reading meanwhile
+  if (!sending) return;
   state.choosing = false;  // New Change's project chooser, left open, would hide this launch's result
-  state.creating = true;
   state.started = { text: "Opening the shaping chat…" };
   show();
   try {
     const r = await call(path, {}, of);
     const s = r.started ? await launched(r.launch, of) : { state: "failed", ...r };
+    if (s.state === "open") sending.done();
+    else sending.failed(new Error(s.reason));
     state.started = s.state === "open"
       ? { text: `A chat opened in VS Code ${about}.${s.warning ? ` Note: ${s.warning}.` : ""}` }
       : { reason: s.reason, warning: s.warning, command: s.command, about };
   } catch (e) {
+    sending.failed(e);
     state.started = null;
     failed(e);
   } finally {
-    state.creating = false;
     show();
   }
 }

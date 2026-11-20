@@ -1,5 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
+import { control, press } from "/assets/page/sending/feedback.mjs";
 import { state, show, draft } from "./state.mjs";
 
 // A toggle whose open state survives every render, kept under *key*: its summary, unless that changes as it runs.
@@ -13,10 +14,13 @@ export function disclosure(summary, ...children) {
   return toggle(summary, summary, ...children);
 }
 
-export function button(label, onclick, { icon, variant, aria, busy = false, disabled = false, title, keys, cls } = {}) {
-  return html`<p-button type="button" compact="true" icon=${icon ?? nothing} variant=${variant ?? nothing}
-    aria=${aria ?? nothing} title=${title ?? nothing} aria-keyshortcuts=${keys ?? nothing} class=${cls ?? nothing}
-    .loading=${busy} ?disabled=${disabled} @click=${onclick}>${label}</p-button>`;
+// A button whose click may send to Delivery: the send shows on it (sending/feedback.mjs). *id* names its action when
+// its label changes with the data, so a send's feedback stays on the action it was for.
+export function button(label, onclick, { icon, variant, aria, busy = false, disabled = false, title, keys, cls,
+  id } = {}) {
+  return html`<p-button type="button" compact="true" variant=${variant ?? nothing} aria=${aria ?? nothing}
+    title=${title ?? nothing} aria-keyshortcuts=${keys ?? nothing} class=${cls ?? nothing}
+    ${control(id ?? label, label, { icon, busy, disabled })} @click=${press(onclick)}></p-button>`;
 }
 
 export function external(label, href) {
@@ -76,7 +80,8 @@ export function row(...children) {
 export function panel(title, form, ...children) {
   const refused = state.refused?.form === form && form ? refusal(state.refused.text, state.refused.unsure)
     : nothing;
-  return html`<section class="panel act">${hd(3, title, "md")}${children}${refused}</section>`;
+  return html`<section class="panel act" data-form=${form || nothing}>${hd(3, title, "md")}${children}${refused}
+    </section>`;
 }
 
 // What Delivery knows about the Change: a plain section under a rule.

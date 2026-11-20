@@ -126,7 +126,9 @@ def test_a_resume_left_unanswered_is_not_sent_again_and_a_slow_read_is_not_calle
                     timeout=10000,
                 )
                 expect(page.locator("#detail .refused p-inline-notification")).to_have_attribute("state", "warning")
-                expect(page.get_by_role("button", name="Resume", exact=True)).to_be_visible()  # as read again
+                # as read again: still paused, its Resume button saying so until it is clicked again
+                expect(page.get_by_role("button", name="Not confirmed", exact=True)).to_be_visible()
+                expect(page.locator("#detail")).to_contain_text("paused by you")
                 page.route("**/api/next/changes**", hold)
                 expect(page.locator("#error")).to_have_text(
                     "Delivery is slow to answer: no reply within 5 s. Try again in a moment.", timeout=15000

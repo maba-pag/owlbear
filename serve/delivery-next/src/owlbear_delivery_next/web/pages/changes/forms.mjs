@@ -227,8 +227,8 @@ export function finale(d) {
     + `updates your local ${d.target} if that is safe.`;
 }
 
-// Withdraw one of the owner's visual criteria (TD-79), after he confirms what that ends.
-export function withdrawing(id, said, d) {
+// Withdraw one of the owner's visual criteria (TD-79), after he confirms what that ends; *form* is the form it sits in.
+export function withdrawing(id, said, d, form = "") {
   return async () => {
     const stop = await ask({
       title: `Stop checking ${id}?`, yes: "Stop checking", no: "Keep it", destructive: true,
@@ -236,14 +236,15 @@ export function withdrawing(id, said, d) {
       after: "There is no restore. A comment on a later Fail adds a new criterion.",
       instead: "Every later visual round keeps checking it.",
     });
-    if (stop) send(`/criteria/${encodeURIComponent(id)}/withdraw`, {}, d);
+    if (stop) send(`/criteria/${encodeURIComponent(id)}/withdraw`, {}, d, form);
   };
 }
 
 export function criteriaPanel(d) {
   return info("Your visual criteria", text("Every later visual round checks these until you withdraw them."),
     d.owner_criteria.map((k) => row(text(`${k.id}: ${k.text}`),
-      button("Withdraw", withdrawing(k.id, k.text, d), { variant: "secondary", aria: DIALOG }))));
+      button("Withdraw", withdrawing(k.id, k.text, d),
+        { variant: "secondary", aria: DIALOG, id: `withdraw:${k.id}` }))));
 }
 
 export function checkForm(check, d) {
@@ -324,6 +325,12 @@ export function restartButton(d) {
   return button("Restart review loop", restart, { variant: "secondary", icon: "refresh", aria: DIALOG, ...starts(d) });
 }
 
+// A notice's action: a button in its text, since the notice's own action button cannot show a send's checkmark.
+function noteAction(label, onclick) {
+  const control = button(label, onclick, { variant: "secondary", icon: "refresh", aria: DIALOG });
+  return html`<div class="note-action">${control}</div>`;
+}
+
 export function pullbackNote(p, d) {
   const behind = p.state === "behind", title = `Pull-back: ${p.state}`;
   const pull = async () => {
@@ -337,8 +344,7 @@ export function pullbackNote(p, d) {
     if (sure) send("/pull", {}, d);
   };
   return html`<p-inline-notification state=${behind ? "warning" : "success"} heading=${title} heading-tag="h3"
-    dismiss-button="false" action-label=${behind ? "Pull" : nothing} action-icon=${behind ? "refresh" : nothing}
-    @action=${behind ? pull : nothing}>${p.reason || ""}</p-inline-notification>`;
+    dismiss-button="false">${p.reason || ""}${behind ? noteAction("Pull", pull) : nothing}</p-inline-notification>`;
 }
 
 // A stop the owner may clear once he did what it asks (#754), so Delivery reruns its step; *d.recovery* has the stop,
@@ -376,8 +382,7 @@ export function stopNotice(d) {
     show();
   };
   return html`<p-inline-notification class="recorded" state="error" heading="Stopped" heading-tag="h3"
-    dismiss-button="false" action-label=${held ? nothing : r.label || "Done: run the step again"}
-    action-icon=${held ? nothing : "refresh"} @action=${held ? nothing : clear}>${
-      kept ? text(said, { cls: "repair-reason" }) : said}</p-inline-notification>
+    dismiss-button="false">${kept ? text(said, { cls: "repair-reason" }) : said}${
+      held ? nothing : noteAction(r.label || "Done: run the step again", clear)}</p-inline-notification>
     ${kept ? text("The fix kept (not applied):") : nothing}${repairPatch(kept?.diff, "The retained repair patch")}`;
 }

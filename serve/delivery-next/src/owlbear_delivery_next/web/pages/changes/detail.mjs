@@ -29,8 +29,8 @@ function detailHead(d) {
         show();
       }
     };
-    intent = button(d.paused ? "Resume" : "Pause", go, d.paused ? { icon: "play", ...starts(d) }
-      : { variant: "secondary", icon: "pause" });
+    intent = button(d.paused ? "Resume" : "Pause", go, d.paused ? { icon: "play", id: "intent", ...starts(d) }
+      : { variant: "secondary", icon: "pause", id: "intent" });
     if (d.brief.approved === d.brief.version && d.amendments?.request != null) {
       const request = async () => {
         const words = await ask({
