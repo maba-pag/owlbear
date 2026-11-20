@@ -120,18 +120,12 @@ def uninstall(say: Say) -> int:
     return 0
 
 
-def _run(command: list[str], *, timeout: float | None = None) -> subprocess.CompletedProcess[str]:
-    """Run a tool check with its caller's deadline; failures propagate to that caller."""
-    # _tools/_fails supply resolved tools with --version; doctor supplies checked gh with auth status.
-    return subprocess.run(  # noqa: S603 - caller-owned tool-check argv and resolved executable, no shell
-        command, capture_output=True, text=True, timeout=timeout, check=False
-    )
-
-
 def _fails(command: list[str]) -> str | None:
     """None when *command* exits 0, else its whole failure: the error, or its exit status and all it printed."""
     try:
-        done = _run(command, timeout=60)
+        done = subprocess.run(  # noqa: S603 - _tools supplies checked tool-version argv; no shell
+            command, capture_output=True, text=True, timeout=60, check=False
+        )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return failure(exc)
     return None if done.returncode == 0 else failed(done)
@@ -188,8 +182,14 @@ def doctor(say: Say, dropped: list[str]) -> int:
     for name in dropped:
         say(f"ignored from this shell: {name} (the host never sees it; a project's own Git settings decide)")
     failed = _tools(say)
-    if gh := shutil.which("gh"):
-        done = _run([str(Path(gh).absolute()), "auth", "status"])
+    if shutil.which("gh"):
+        # Keep the original presence gate and native execution-time search, rather than pinning a wrapper.
+        done = subprocess.run(
+            ["gh", "auth", "status"],  # noqa: S607 - native gh PATH
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         if done.returncode:
             say("gh: not signed in from this environment · fix: gh auth login")
             failed += 1
