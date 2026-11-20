@@ -54,8 +54,10 @@ def _git_executable(cwd: Path) -> str:
 
 def _git(repo_dir: Path, *args: str) -> str:
     """Run a git command and return stripped stdout."""
+    command = ["git", *args]
     result = subprocess.run(  # noqa: S603 - resolved Git; internal commands separate messages and owned paths; no shell
-        [_git_executable(repo_dir), *args],
+        command,
+        executable=_git_executable(repo_dir),
         capture_output=True,
         check=True,
         cwd=repo_dir,
@@ -67,8 +69,10 @@ def _git(repo_dir: Path, *args: str) -> str:
 
 def _git_bytes(repo_dir: Path, *args: str) -> tuple[int, bytes]:
     """Run Git without decoding a staged memory snapshot prematurely."""
+    command = ["git", *args]
     result = subprocess.run(  # noqa: S603 - resolved Git; internal show/rev-parse/reset operands; no shell
-        [_git_executable(repo_dir), *args],
+        command,
+        executable=_git_executable(repo_dir),
         capture_output=True,
         check=False,
         cwd=repo_dir,
@@ -256,8 +260,10 @@ def _git_object_id(repo_dir: Path, revision: str) -> str | None:
 
 
 def _git_blob_id(repo_dir: Path, raw: bytes) -> str:
+    command = ["git", "hash-object", "--stdin"]
     result = subprocess.run(  # noqa: S603 - resolved Git; fixed hash-object flags; snapshot bytes use stdin
-        [_git_executable(repo_dir), "hash-object", "--stdin"],
+        command,
+        executable=_git_executable(repo_dir),
         capture_output=True,
         check=True,
         cwd=repo_dir,
