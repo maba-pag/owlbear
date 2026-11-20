@@ -16,11 +16,11 @@ _GIT_COMMAND = "git"
 
 def git_executable_in(cwd: Path) -> str:
     """Resolve Git against the child's directory, including relative and empty PATH entries."""
-    search = os.pathsep.join(str(cwd.absolute() / entry) for entry in os.get_exec_path())
-    executable = shutil.which(_GIT_COMMAND, path=search)
-    if executable is None:
-        raise FileNotFoundError(2, "No such file or directory", _GIT_COMMAND)
-    return executable
+    for entry in os.get_exec_path():
+        executable = shutil.which(str(cwd.absolute() / entry / _GIT_COMMAND))
+        if executable is not None:
+            return executable
+    raise FileNotFoundError(2, "No such file or directory", _GIT_COMMAND)
 
 
 @cache
