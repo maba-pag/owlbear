@@ -754,7 +754,9 @@ def test_the_offline_rule_ends_with_the_test_that_changed_it(parent, tmp_path):
     probe = f"{Path(__file__).resolve()}::test_a_tests_git_never_reaches_github"
     run = [sys.executable, "-m", "pytest", "-q", "-n", "0", "-p", "no:cacheprovider", "-p", "after_teardown", probe]
     root = Path(__file__).resolve().parents[3]
-    done = subprocess.run(run, cwd=root, env=env, capture_output=True, text=True, check=False)  # noqa: S603
+    done = subprocess.run(  # noqa: S603 - sys.executable runs pytest on this file's fixed offline probe and generated teardown plugin; no shell.
+        run, cwd=root, env=env, capture_output=True, text=True, check=False
+    )
     assert done.returncode == 0, done.stdout[-2000:]
     after = [json.loads(line) for line in seen.read_text().splitlines()]
     assert after == [{name: parent.get(name) for name in names}] * 3

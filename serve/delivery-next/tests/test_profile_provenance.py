@@ -12,6 +12,7 @@ import pytest
 from owlbear_delivery_next.change_contracts.models import Change, Names, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_flow import brief_tools, worktree
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.merge_offer import Block, decide
 from owlbear_delivery_next.github.provider import CiState, MergeMethod, PullRequest, Repository, Rules
@@ -51,7 +52,7 @@ class GitHub:
 
 def git(root, *args):
     return subprocess.run(  # noqa: S603 - fixed synthetic Git test commands
-        ["git", "-c", "user.name=t", "-c", "user.email=t@example.com", *args],  # noqa: S607
+        [resolve_git_executable(), "-c", "user.name=t", "-c", "user.email=t@example.com", *args],
         cwd=root,
         check=True,
         capture_output=True,

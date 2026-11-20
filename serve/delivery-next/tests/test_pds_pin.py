@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.pds_runs import pin
 from owlbear_delivery_next.project_host import pages
 
@@ -132,6 +133,11 @@ def test_shipped_pin_is_closed_served_and_not_ignored() -> None:
     assert first == current.version  # the served header names the pinned release
     repo = Path(pin.package()).parents[3]
     names = "\n".join(f"{pin.PREFIX}{p}" for p in pin.read().files)
-    found = subprocess.run(["git", "-C", str(repo), "check-ignore", "--stdin"], input=names, capture_output=True,  # noqa: S603, S607
-                           text=True, check=False)  # fmt: skip
+    found = subprocess.run(  # noqa: S603 - Fixture Git check-ignore argv with repo operands; no shell.
+        [resolve_git_executable(), "-C", str(repo), "check-ignore", "--stdin"],
+        input=names,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     assert found.stdout == ""

@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.impeccable import pack_files, pack_git
 from owlbear_delivery_next.local_system import codebase, local_home
 from owlbear_delivery_next.machine_host import versions
@@ -15,7 +16,9 @@ GITHUB = "https://github.com/maba-pag/owlbear.git"
 def git(cwd: Path, *args: str) -> str:
     if (cwd / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
         args = ("--git-dir=.", *args)
-    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - git callers build fixture Git add/clone/commit/config argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 @pytest.fixture
@@ -46,8 +49,8 @@ def installed(tmp_path, commit):
 
 
 def assert_no_tracking_ref(bare):
-    absent = subprocess.run(
-        ["git", "--git-dir=.", "rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"],  # noqa: S607
+    absent = subprocess.run(  # noqa: S603 - Fixture Git rev-parse argv with literal operands; no shell.
+        [resolve_git_executable(), "--git-dir=.", "rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"],
         cwd=bare,
         capture_output=True,
         check=False,

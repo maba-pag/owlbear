@@ -8,6 +8,7 @@ import subprocess
 import pytest
 
 from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
@@ -20,7 +21,9 @@ pytestmark = pytest.mark.usefixtures("current_binding")
 @pytest.fixture
 def source(tmp_path, monkeypatch):
     repo = tmp_path / "shop"
-    subprocess.run(["git", "init", "-q", str(repo)], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with repo operands; no shell.
+        [resolve_git_executable(), "init", "-q", str(repo)], check=True, capture_output=True
+    )
     folder = project_home.clone_dir(repo)
     folder.mkdir()
     (folder / MARKER).write_text("7")

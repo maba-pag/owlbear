@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
@@ -25,9 +26,13 @@ class Stop(BaseException):
 
 
 def clone(remote: Path, where: Path, name: str) -> Store:
-    subprocess.run(["git", "clone", "-q", str(remote), str(where)], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git clone argv with remote/where operands; no shell.
+        [resolve_git_executable(), "clone", "-q", str(remote), str(where)], check=True, capture_output=True
+    )
     for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
-        subprocess.run(["git", "-C", str(where), "config", key, value], check=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Fixture Git config argv with key/value/where operands; no shell.
+            [resolve_git_executable(), "-C", str(where), "config", key, value], check=True
+        )
     return Store(where.parent / f"{name}-store", DataRepo(where), "shop-site")
 
 
@@ -35,8 +40,8 @@ def remote_bytes(remote: Path, rel: str) -> bytes:
     """Return empty only for an absent path in a successfully read remote tree."""
 
     def read(*args):
-        return subprocess.run(  # noqa: S603
-            ["git", f"--git-dir={remote}", *args],  # noqa: S607
+        return subprocess.run(  # noqa: S603 - Resolved Git runs fixture-owned ls-tree/show queries on its bare remote.
+            [resolve_git_executable(), f"--git-dir={remote}", *args],
             check=True,
             capture_output=True,
         ).stdout
@@ -352,7 +357,9 @@ def test_an_unknown_shared_pending_lookup_holds_the_automatic_change(shared_repo
     assert a.save(a.config_path, Layer, widths(1600), "owner edit", owner=True)  # pending on the remote
     b = clone(remote, tmp_path / "b", "b")
     pending_file(b).unlink()  # B's checkout has no local copy of the record
-    subprocess.run(["git", "-C", str(b.shared.root), "branch", "--unset-upstream"], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git query argv with b operands; no shell.
+        [resolve_git_executable(), "-C", str(b.shared.root), "branch", "--unset-upstream"], check=True
+    )
     before = remote_bytes(remote, SHARED_CONFIG)
 
     refusing[0] = None

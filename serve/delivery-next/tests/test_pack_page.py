@@ -20,6 +20,7 @@ import uvicorn
 from playwright.sync_api import Error, expect, sync_playwright
 
 from owlbear_delivery_next.change_contracts.round_records import PACK, RoundFinding, RoundLoop, RoundPolicy
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.impeccable_runs import (
     machine_lock,
     pack_activation,
@@ -408,7 +409,9 @@ def test_failed_stage_reaches_record_page_and_log_whole(served, pds, tmp_path, m
         ["-C", str(repo), "remote", "add", "origin", str(origin)],
     ):
         real(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True, capture_output=True)
-    commit = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"], text=True).strip()  # noqa: S603, S607
+    commit = subprocess.check_output(  # noqa: S603 - Fixture Git rev-parse argv with repo operands; no shell.
+        [resolve_git_executable(), "-C", str(repo), "rev-parse", "HEAD"], text=True
+    ).strip()
     job = waiting(Store(tmp_path / "store"))
     job.live = dataclasses.replace(job.live, github=lambda _root: SimpleNamespace())
     ctx = pack_run.Context.model_validate(job.state["context"])

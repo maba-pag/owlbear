@@ -17,6 +17,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile, Profi
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.commands import setup
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
@@ -360,7 +361,7 @@ def delete_config_before_the_shared_lock(monkeypatch, store: Store) -> list[str]
 def remote_config_bytes(remote: Path, store: Store) -> bytes:
     relative = store.config_path.relative_to(store.shared.root).as_posix()
     shown = subprocess.run(  # noqa: S603 - the bare remote's branch as published
-        ["git", "--git-dir", str(remote), "show", f"main:{relative}"],  # noqa: S607
+        [resolve_git_executable(), "--git-dir", str(remote), "show", f"main:{relative}"],
         capture_output=True,
         check=False,
     )
@@ -994,9 +995,15 @@ def readable_private_repaired(repo: Path, shared_repo, monkeypatch, before_snaps
     private, marker = store.root / profile_share.PROFILE, store.root / profile_share.ROLES_MOVED
     # The damaged target is committed and pushed first, so it exists while the ordinary open imports the roles.
     target = shared_only_damaged(store, UNREADABLE % "")
-    subprocess.run(["git", "-C", str(target.parent), "add", "--", target.name], check=True)  # noqa: S603, S607
-    subprocess.run(["git", "-C", str(target.parent), "commit", "-q", "-m", "damaged target"], check=True)  # noqa: S603, S607
-    subprocess.run(["git", "-C", str(target.parent), "push", "-q", "origin", "HEAD"], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git add argv with target operands; no shell.
+        [resolve_git_executable(), "-C", str(target.parent), "add", "--", target.name], check=True
+    )
+    subprocess.run(  # noqa: S603 - Fixture Git commit argv with target operands; no shell.
+        [resolve_git_executable(), "-C", str(target.parent), "commit", "-q", "-m", "damaged target"], check=True
+    )
+    subprocess.run(  # noqa: S603 - Fixture Git push argv with target operands; no shell.
+        [resolve_git_executable(), "-C", str(target.parent), "push", "-q", "origin", "HEAD"], check=True
+    )
     private.write_text(PRIVATE_READABLE)
     assert private.read_bytes() == PRIVATE_READABLE.encode()
     Store.open(repo)
@@ -1300,12 +1307,22 @@ def test_a_staged_repair_cannot_publish_into_a_different_shared_repository(
     _store, receipt = refused_repair_receipt(repo, shared_repo, monkeypatch, capsys)
     other_remote = tmp_path / "other.git"
     other_root = tmp_path / "other-data"
-    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(other_remote)], check=True)  # noqa: S603, S607
-    subprocess.run(["git", "clone", "-q", str(other_remote), str(other_root)], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with other_remote operands; no shell.
+        [resolve_git_executable(), "init", "-q", "--bare", "-b", "main", str(other_remote)], check=True
+    )
+    subprocess.run(  # noqa: S603 - Fixture Git clone argv with other_remote/other_root operands; no shell.
+        [resolve_git_executable(), "clone", "-q", str(other_remote), str(other_root)], check=True
+    )
     for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
-        subprocess.run(["git", "-C", str(other_root), "config", key, value], check=True)  # noqa: S603, S607
-    subprocess.run(["git", "-C", str(other_root), "commit", "-q", "--allow-empty", "-m", "start"], check=True)  # noqa: S603, S607
-    subprocess.run(["git", "-C", str(other_root), "push", "-q", "-u", "origin", "HEAD"], check=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Fixture Git config argv with key/other_root/value operands; no shell.
+            [resolve_git_executable(), "-C", str(other_root), "config", key, value], check=True
+        )
+    subprocess.run(  # noqa: S603 - Fixture Git commit argv with other_root operands; no shell.
+        [resolve_git_executable(), "-C", str(other_root), "commit", "-q", "--allow-empty", "-m", "start"], check=True
+    )
+    subprocess.run(  # noqa: S603 - Fixture Git push argv with other_root operands; no shell.
+        [resolve_git_executable(), "-C", str(other_root), "push", "-q", "-u", "origin", "HEAD"], check=True
+    )
     monkeypatch.setenv("OWLBEAR_DATA", str(other_root))
     (tmp_path / "before").mkdir()
     (tmp_path / "after").mkdir()
@@ -1579,9 +1596,13 @@ def test_an_unreadable_or_invalid_receipt_is_refused_by_name_before_any_change(
 def other_logical_store(store: Store, tmp_path: Path, name: str) -> Store:
     """A second logical shared repository (another origin, no network) on the same private root."""
     other = tmp_path / name
-    subprocess.run(["git", "init", "-q", "-b", "main", str(other)], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with other operands; no shell.
+        [resolve_git_executable(), "init", "-q", "-b", "main", str(other)], check=True
+    )
     origin = f"https://github.com/acme/{name}.git"
-    subprocess.run(["git", "-C", str(other), "remote", "add", "origin", origin], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git remote argv with origin/other operands; no shell.
+        [resolve_git_executable(), "-C", str(other), "remote", "add", "origin", origin], check=True
+    )
     return Store(store.root, DataRepo(other), store.name)
 
 
@@ -1708,9 +1729,13 @@ def test_a_receipt_read_failure_closes_its_descriptor_once_and_names_the_receipt
 def clone_as(remote: Path, tmp_path: Path, name: str, project: str = "shop-site") -> tuple[Store, Profile]:
     """A separate checkout of *remote* named *name*, another clone of the same shared record with its own identity."""
     second = tmp_path / name
-    subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git clone argv with remote/second operands; no shell.
+        [resolve_git_executable(), "clone", "-q", str(remote), str(second)], check=True, capture_output=True
+    )
     for key, value in (("user.name", "t"), ("user.email", "t@example.com")):
-        subprocess.run(["git", "-C", str(second), "config", key, value], check=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Fixture Git config argv with key/second/value operands; no shell.
+            [resolve_git_executable(), "-C", str(second), "config", key, value], check=True
+        )
     fresh = Store(tmp_path / f"{name}-store", DataRepo(second), project)
     return fresh, fresh.read_profile()
 

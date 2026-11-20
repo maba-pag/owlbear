@@ -25,6 +25,7 @@ from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.visual_records import DesignInput, JudgeVerdict, OwnerDecision, VisualRound
 from owlbear_delivery_next.commands import cli, replay_client
 from owlbear_delivery_next.commands.chat_client import NOT_RUNNING, NOT_SERVED
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.account import Writer
 from owlbear_delivery_next.impeccable import calibration, design_tools, detector, pack_files, pack_update
 from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_job, pack_replay, pack_run
@@ -41,7 +42,9 @@ NOW = datetime(2026, 10, 14, 12, tzinfo=UTC)
 
 def git(cwd: Path, *args: str) -> str:
     who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
-    done = subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
+    done = subprocess.run(  # noqa: S603 - git callers build fixture Git add/commit/init/remote argv and repository operands; no shell.
+        [resolve_git_executable(), *who, *args], cwd=cwd, check=True, capture_output=True, text=True
+    )
     return done.stdout.strip()
 
 
