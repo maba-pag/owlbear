@@ -51,7 +51,7 @@ def current(prof: Profile, entry: ProfileEntry) -> CiBasis:
 
 
 def required_approved(c: Change, q: Question, basis: CiBasis, prof: Profile) -> bool:
-    """A matching inventory, or a later applied yes to the required delta actually shown."""
+    """A matching inventory, or a later yes to the current requirements actually shown."""
     if q.ci_basis is not None and q.ci_basis.required == basis.required:
         return True
     later = c.questions[c.questions.index(q) + 1 :]
@@ -63,7 +63,6 @@ def required_approved(c: Change, q: Question, basis: CiBasis, prof: Profile) -> 
         and other.answer is not None
         and other.answer.option == "yes"
         and other.answer.superseded_at is None
-        and other.effect_observed_at is not None
         for other in later
     ):
         return True

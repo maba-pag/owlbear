@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import tarfile
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -3685,7 +3686,12 @@ def test_required_basis_approval_covers_only_the_delta_the_rules_question_showed
     assert proposal.question.ci_basis == CiBasis(required=("ci", "lint"))
     c = loop.apply(c, proposal, NOW)
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
+    other = c.model_copy(deep=True, update={"slug": "c2"})
+    with cx.store.lock("c2") as lock:
+        assert engine.rules_changed(replace(cx, lock=lock), other)[0] is None  # another Change applies it first.
+    cx.profile = cx.store.read_profile()
     assert engine.rules_changed(cx, c)[0] is None
+    assert c.questions[-1].effect_observed_at is None  # no remaining profile delta to apply for this Change.
     c.step = Step(kind=StepKind.FOLLOW)
     assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == ((), None)  # one approval, not two.
 
