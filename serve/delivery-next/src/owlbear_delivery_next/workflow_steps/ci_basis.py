@@ -87,8 +87,7 @@ def required_approved(c: Change, q: Question, basis: CiBasis, prof: Profile) -> 
         return previous is None or previous.required == basis.required
     required = prof.entries.get(profile.REQUIRED)
     return bool(
-        q.ci_basis is None
-        and required
+        required
         and required.observed
         and q.answer
         and prof.confirmed_at
