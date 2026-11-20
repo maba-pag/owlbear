@@ -4,6 +4,7 @@ import { statusLine } from "/assets/page/config/unset.mjs";
 import {
   OWN_TAG, blockedOf, displayName, here, HostDown, isOwn, loaded, project, Restarted, Slow, shown,
 } from "/assets/ui.mjs";
+import { holding } from "/assets/page/sending/feedback.mjs";
 import { KEY, state, page, show, call, keyOf, parts, several, failed } from "./state.mjs";
 import { hd, text } from "./widgets.mjs";
 import { spentText } from "./progress.mjs";
@@ -187,13 +188,22 @@ async function everything() {
 }
 
 export async function refresh() {
+  if (holding()) {  // a send's form stays as it is until its answer and checkmark: the send rereads after them
+    page.skipped = true;
+    return;
+  }
   if (page.busy) {
     page.again = true;  // a selection or an action while a refresh runs gets its own refresh after it
     return;
   }
   page.busy = true;
+  page.skipped = false;
   try {
     const [rows, notes, failing] = await everything();
+    if (holding()) {
+      page.skipped = true;
+      return;
+    }
     [state.changes, state.notes] = [rows, notes];
     const unread = state.selected && failing.has(parts(state.selected)[0]);  // absent only once its project answers
     if (state.selected && !unread && !rows.some((c) => c.key === state.selected)) {  // gone, or a stale link
@@ -211,6 +221,10 @@ export async function refresh() {
       const [of, slug] = parts(key), d = await call(`/changes/${encodeURIComponent(slug)}`, undefined, of);
       const row = state.changes.find((c) => c.key === key);
       Object.assign(d, { key, project: of, projectName: row?.projectName ?? "" });
+      if (holding()) {  // read before a send's answer: it may already lack the form held for its checkmark
+        page.skipped = true;
+        return;
+      }
       if (key === state.selected) state.detail = d;  // the person may have chosen another Change meanwhile
     } else {
       state.detail = null;

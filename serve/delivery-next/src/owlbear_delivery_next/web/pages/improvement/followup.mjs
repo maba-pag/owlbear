@@ -46,12 +46,19 @@ export function said(answer) {
     : `Follow-up queued as ${answer.queued}: Retro writes its backlog entry on its next run.`;
 }
 
-// The follow-up line of *item*, with its button while none is saved or running; *go* runs the follow-up.
-export function followupLine(item, go, { busy = false, disabled = false } = {}) {
-  const now = followupState(item), f = item.followup?.state ?? "";
+// The form key of *item*'s follow-up line, which a send locks alone.
+export function followupForm(item) {
+  return `followup:${item.id}`;
+}
+
+// The follow-up line of *item*, with its button while none is saved or running; *go* runs the follow-up. *make*
+// renders the button: a page's own one may show the send on it.
+export function followupLine(item, go, { busy = false, disabled = false, button: make = button } = {}) {
+  const now = followupState(item), f = item.followup?.state ?? "", form = followupForm(item);
   const open = item.provenance !== "synthetic" && (!now || f === "ended");
-  return html`<div class="row followup">${now ? html`<p-text size="sm">${now}</p-text>` : nothing}
+  return html`<div class="row followup" data-form=${form}>${now ? html`<p-text size="sm">${now}</p-text>` : nothing}
     ${item.provenance === "synthetic" ? html`<p-text size="sm">Synthetic finding: historical only.</p-text>` : nothing}
-    ${open ? button(f === "ended" ? "Follow up again" : "Follow up", go, { busy, disabled, aria: DIALOG }) : nothing}
+    ${open ? make(f === "ended" ? "Follow up again" : "Follow up", go, { busy, disabled, aria: DIALOG, id: form })
+      : nothing}
   </div>`;
 }
