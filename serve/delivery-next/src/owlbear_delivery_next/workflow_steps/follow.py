@@ -78,7 +78,7 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
     cause = failures.cause_key(ErrorKind.GATE, F, f"declared-{digest}")  # the same inventory gates Follow and Merge
     delta = ci_basis.delta(c, previous, basis, ctx.profile, cause)
     if previous and previous.cause != cause and ci_basis.covers(c, previous, basis, ctx.profile):
-        return (), None
+        return profile.listed(entry), None
     answer = previous.answer if previous else None
     declined = answer is not None and (answer.option == "pause" or answer.superseded_at is not None)
     if entry and entry.state == "known" and not delta and not declined:

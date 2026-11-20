@@ -618,6 +618,28 @@ def test_c2s_q4_yes_covers_q5s_workflow_churn_without_reducing_merge_checks(tmp_
     assert "Detected checks changed from none to lint." in named.question.text
 
 
+def test_empty_inventory_consent_keeps_the_current_profiles_confirmed_named_checks(tmp_path, clone):
+    head, entries = ci_head(clone, "${{ inputs.n }}")
+    gh = FakeGh(pr(head=head))
+    rules = Rules(state="known", evidence="rules", required_checks=("CI",))
+    gh.read_rules = lambda _r, _b: rules
+    cx = ctx(tmp_path, gh, prof(**(entries | profile.rule_entries(rules))))
+    c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
+    _, proposal = follow.declared(cx, c, gh.pr, StepKind.FOLLOW)
+    c = loop.apply(c, proposal, NOW)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
+    head, entries = ci_head(clone, "${{ inputs.n }} updated")
+    gh.pr = pr(head=head)
+    cx.profile = cx.profile.model_copy(update={"entries": cx.profile.entries | entries})
+    cx.profile = profile.confirm(cx.profile, profile.DECLARED, "lint", NOW)
+    assert follow.declared(cx, c, gh.pr, StepKind.MERGE) == (("lint",), None)
+    c.step = Step(kind=StepKind.MERGE)
+    c.reviews = [Review(commit=head, inputs=Inputs(), verdict="pass")]
+    gh.checks = (Check(name="CI", status="completed", conclusion="success"),)
+    c, held = merge.run(cx, c)
+    assert (held.exit, gh.merges) == (Exit.PENDING, [])  # a confirmed but never-started lint check still gates.
+
+
 def test_a_persisted_duplicate_inventory_hold_settles_before_normal_host_scheduling(tmp_path, clone):
     head, entries = ci_head(clone, "${{ inputs.n }}")
     cx = ctx(tmp_path, FakeGh(pr(head=head)), prof(**entries))
