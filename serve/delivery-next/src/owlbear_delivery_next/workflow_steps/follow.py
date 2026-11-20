@@ -84,7 +84,7 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
         and (previous.cause != cause or (previous.ci_basis is None and confirmed))
         and ci_basis.covers(c, previous, basis, ctx.profile)
     ):
-        return confirmed or profile.listed(entry), None
+        return confirmed if previous.ci_basis is None and confirmed else profile.listed(entry), None
     answer = previous.answer if previous else None
     declined = answer is not None and (answer.option == "pause" or answer.superseded_at is not None)
     if entry and entry.state == "known" and not delta and not declined:

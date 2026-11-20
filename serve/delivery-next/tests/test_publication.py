@@ -445,6 +445,11 @@ def test_unknown_declared_checks_keep_exact_digest_answers_and_report_save_failu
     assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == ((), None)
     assert follow.declared(cx, c, gh.pr, StepKind.MERGE) == ((), None)
     assert profile.value(cx.profile, profile.DECLARED) == "Release"  # branch evidence never overwrites the profile
+    before = gh.pr
+    head, _ = ci_head(clone, "${{ inputs.n }} updated")
+    gh.pr = pr(head=head)
+    assert follow.declared(cx, c, gh.pr, StepKind.MERGE) == ((), None)
+    gh.pr = before
     cx.profile = p  # the unchanged current-policy confirmation path below still saves its answer
     saving = cx.store.write_profile
 
