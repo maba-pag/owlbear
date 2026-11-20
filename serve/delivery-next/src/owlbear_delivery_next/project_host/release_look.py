@@ -67,7 +67,9 @@ def shown(store: Store, c: Change) -> dict[str, str | bool] | None:
     if look.version != c.brief.version:
         return {"ready": False, "error": True, "text": "The release look's receipt does not match this brief version."}
     root = codebase.ROOT.resolve().parents[3]
-    if root.parent != (local_home.root() / local_home.VERSIONS).resolve() or not re.fullmatch(r"v\d+\.\d+", root.name):
+    if root.parent != (local_home.root() / local_home.VERSIONS).resolve() or not re.fullmatch(
+        r"v\d+(?:\.\d+)?", root.name
+    ):
         return {"ready": False, "text": WAITING}
     try:
         ready = _contains(root, root.name, look.commit)
