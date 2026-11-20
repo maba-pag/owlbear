@@ -145,6 +145,7 @@ def _made(store: Store, lock: Lock, change: Change, a: Amendment) -> Callable[[P
             cap=0 if phase in {"recheck", "reconsider"} or lp is None else lp.policy.max_findings,
             rejectable=tuple(f.id for f in lp.findings if f.state == "open") if shaper and lp else (),
             amendable=amendments.amendable(change),  # the shaper's items, the challenger's affected names
+            repository=profile.value(store.read_profile() or Profile(), profile.REPO),
             journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
             memory=sessions.memory(store),
         )

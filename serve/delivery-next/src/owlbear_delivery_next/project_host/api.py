@@ -43,6 +43,7 @@ from owlbear_delivery_next.project_host import (
     memory_routes,
     pages,
     project_notes,
+    release_look,
     screenshots,
     session_slots,
     shaping_chat,
@@ -459,6 +460,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     router.include_router(brief_routes.revising(read, start_chat))
     router.include_router(brief_actions.router(store, read, wake))
     router.include_router(stop_routes.router(store, read, wake))
+    router.include_router(release_look.router(store, read))
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))
     router.include_router(memory_routes.router(store))
     router.include_router(decision_routes.project(store, lambda: host.repo))

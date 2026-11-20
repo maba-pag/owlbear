@@ -168,7 +168,7 @@ class Gate:
                 errors = [*errors, f"submitted audit {label}:\n{submitted}"]
             return None, errors, None, "invalid"
         errors, tree = tools.check_question(args, self.cfg.checks) if isinstance(args, tools.AskQuestion) else [], None
-        errors += amendments.check(args, self.cfg.amendable)  # a premise's brief items (TD-185)
+        errors += amendments.check(args, self.cfg.amendable, repository=self.cfg.repository)
         order: list[str] = []
         if spec is self.cfg.submit or spec is self.cfg.first_look:
             order = self._order(spec)

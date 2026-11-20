@@ -14,7 +14,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts import failures
+from owlbear_delivery_next.change_contracts import failures, owner_look
 from owlbear_delivery_next.change_contracts.models import Episode, ErrorKind, Exit, Option, StepKind, Stop, Waiting
 from owlbear_delivery_next.change_flow import budgets, delivery_target, worktree
 from owlbear_delivery_next.change_flow.loop import StepResult
@@ -390,6 +390,7 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
     c, proof, held = _delivery(ctx, c, pr)
     if held is not None:
         return c, held
+    owner_look.delivered(c, proof.merge_commit_sha or "" if proof else "", ctx.repository)
     if retired := _retire_branch(ctx, c, proof):
         return c, retired
     if c.step.mode == "abandon" and pr and pr.state == "open":

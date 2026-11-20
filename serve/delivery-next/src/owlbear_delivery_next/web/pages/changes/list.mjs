@@ -8,7 +8,7 @@ import { KEY, state, page, show, call, keyOf, parts, several, failed } from "./s
 import { hd, text } from "./widgets.mjs";
 import { spentText } from "./progress.mjs";
 import { short, split } from "./activity.mjs";
-import { badge, detailView } from "./detail.mjs";
+import { badge, detailView, releaseLook } from "./detail.mjs";
 import { startedView } from "./shaping.mjs";
 import { elsewhereBanner } from "./elsewhere.mjs";
 
@@ -50,6 +50,7 @@ function card([c, label, variant]) {
     <p class=${whole ? "says whole" : "says"}>${stage && !step && stage !== label
       ? html`<span class="stage">${stage}</span> \u00b7 ` : nothing}${rest}</p>
     ${c.action && groupOf(label) !== "working" ? html`<p class="next">Next: ${c.action}</p>` : nothing}
+    ${current ? nothing : releaseLook(c)}
     ${bits.length ? html`<p class="meta">${bits.join(" \u00b7 ")}</p>` : nothing}
     ${(c.overlaps || []).map((o) => html`<p class="meta">${o}</p>`)}
     ${(c.decisions || []).map((d) => html`<p class="meta">${d}</p>`)}
