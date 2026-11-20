@@ -44,8 +44,8 @@ const KEPT = [
     `${tokens(+n)} ${kind(part)[0]} tokens stay counted in the part that holds them, not in ${kind(part)[1]}: that part
     reports fewer tokens than they need`],
   [/^(\w+): the preloaded (.+) stay in their category, which the attribution does not itemize$/, (part, names) =>
-    `the preloaded ${names} are counted in one of the other parts, not in ${kind(part)[1]}: the attribution does not list
-    them`],
+    `the preloaded ${names} are counted in one of the other parts, not in ${kind(part)[1]}: the attribution does not
+    list them`],
 ];
 const keptSaid = (text) => text.split("; ").map((one) => {
   for (const [shape, say] of KEPT) {
