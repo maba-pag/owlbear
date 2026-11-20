@@ -626,7 +626,6 @@ def test_c2s_q4_yes_covers_q5s_workflow_churn_without_reducing_merge_checks(tmp_
     assert result.exit == Exit.ASK
     assert "Required checks were CI; now CI, scan." in result.question.text
     cx.profile = profile.confirm(refreshed, profile.REQUIRED, "CI, scan", NOW + timedelta(seconds=1))
-    c.questions[-1].ci_basis = None
     _, legacy = follow.declared(cx, c, gh.pr, StepKind.MERGE)
     assert "Required checks were CI; now CI, scan." in legacy.question.text
     cx.profile = cx.store.read_profile()
