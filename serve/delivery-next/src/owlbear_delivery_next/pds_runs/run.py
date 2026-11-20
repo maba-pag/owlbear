@@ -241,7 +241,7 @@ def _audit(job: Job, ctx: Context) -> Action:
     """
     at = candidate(job)
 
-    def work() -> Any:  # noqa: ANN401 - audit.Verdict
+    def work() -> audit.Verdict:
         v = checks.audited(job, ctx, at)
         if v.outcome == "stop":
             msg = f"audit: {v.reason}"

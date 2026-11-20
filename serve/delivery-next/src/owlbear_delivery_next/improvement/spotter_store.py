@@ -20,7 +20,7 @@ import time
 from concurrent.futures import Future
 from dataclasses import asdict
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from owlbear_delivery_next.local_system import local_home
 
@@ -31,6 +31,14 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.improvement.spotter import Record
 
 LOCK, GRACE = 5.0, 1.0  # seconds a file lock is waited for; and the Spotter's writes at the process's exit
+
+
+class RecordFields(TypedDict, total=False):
+    """Optional record fields supplied when a look is created."""
+
+    skipped: str
+    category: str
+    note: str
 
 
 def place() -> Path:
@@ -100,7 +108,7 @@ class Worker:
         self.jobs: queue.Queue[tuple[Future[Any], Callable[..., Any], tuple[Any, ...]]] = queue.Queue()
         self.threads, self.started, self.lock = threads, False, threading.Lock()
 
-    def submit[T](self, work: Callable[..., T], *args: Any) -> Future[T]:  # noqa: ANN401 - the work's arguments
+    def submit[T, *Args](self, work: Callable[[*Args], T], *args: *Args) -> Future[T]:
         """Queue *work*; its future."""
         with self.lock:
             if not self.started:

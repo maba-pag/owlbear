@@ -168,7 +168,7 @@ def limit_reached(run: Run, limit: float | None) -> None:
         run.ending, run.detail = "credit-limit", f"credit limit reached: {used:.2f} of {limit:g} (ended {was})"
 
 
-def note_quota(run: Run, kind: str, data: Any) -> None:  # noqa: ANN401 - SDK event data
+def note_quota(run: Run, kind: str, data: object) -> None:
     """Record an exhausted Copilot quota and its reset time from a quota observation or a session error."""
     if kind == "session.error":
         text = " ".join(str(getattr(data, f, "") or "") for f in ("error_type", "error_code", "message"))

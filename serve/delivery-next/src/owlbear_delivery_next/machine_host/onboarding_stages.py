@@ -20,6 +20,7 @@ from owlbear_delivery_next.state_store import github_writer, profile_repair
 from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
+    from owlbear_delivery_next.git.access import Access
     from owlbear_delivery_next.github.gh_client import GhClient
     from owlbear_delivery_next.machine_host.onboarding_job import Job, Stage
 
@@ -43,7 +44,7 @@ def _client(job: Job) -> GhClient:
     return job.context["client"]
 
 
-def _access(job: Job) -> Any:  # noqa: ANN401 - git.access.Access
+def _access(job: Job) -> Access:
     return _client(job).writer.access()  # type: ignore[union-attr]
 
 

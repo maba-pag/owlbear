@@ -7,13 +7,13 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal, Unpack
 
 from owlbear_delivery_next.github.gh_client import Missing, invalid, repo
 from owlbear_delivery_next.github.provider import FailureCode, MergeMethod, ProviderError
 
 if TYPE_CHECKING:
-    from owlbear_delivery_next.github.gh_client import GhClient, Json
+    from owlbear_delivery_next.github.gh_client import GhClient, Json, Options
 
 FIELDS = "nameWithOwner,isEmpty,defaultBranchRef,mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed,visibility,id"
 _UNRESOLVED = "could not resolve to a repository"  # gh's answer for a repository that is absent or hidden from us
@@ -31,11 +31,11 @@ class RepoState:
     visibility: str  # private, public or internal
 
 
-def _gh(client: GhClient, operation: str, args: tuple[str, ...], **kw: Any) -> Json:  # noqa: ANN401 - JSON
+def _gh(client: GhClient, operation: str, args: tuple[str, ...], **kw: Unpack[Options]) -> Json:
     return client._gh(operation, args, **kw)  # noqa: SLF001 - the account's transport, as GhProvider's mixins use it
 
 
-def _api(client: GhClient, operation: str, method: str, endpoint: str, **kw: Any) -> Json:  # noqa: ANN401 - JSON
+def _api(client: GhClient, operation: str, method: str, endpoint: str, **kw: Unpack[Options]) -> Json:
     return client._api(operation, method, endpoint, **kw)  # noqa: SLF001 - as `_gh`
 
 

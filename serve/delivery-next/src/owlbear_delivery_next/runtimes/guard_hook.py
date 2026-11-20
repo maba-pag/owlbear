@@ -14,6 +14,10 @@ from owlbear_delivery_next.change_contracts.permissions import Request, judge
 from owlbear_delivery_next.local_system.mask import redact
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from copilot.session import PreToolUseHookOutput
+
     from owlbear_delivery_next.runtimes.sdk_adapter import _Step
 
 WARNING = (  # D-01M6DX667JAWPWV2RY3BB4G879
@@ -22,7 +26,7 @@ WARNING = (  # D-01M6DX667JAWPWV2RY3BB4G879
 )
 
 
-def pre_tool(step: _Step, data: dict[str, Any]) -> dict[str, str] | None:
+def pre_tool(step: _Step, data: Mapping[str, Any]) -> PreToolUseHookOutput | None:
     """The added context for a shell call the guard only warns about, else None; a failure stops the step."""
     if data.get("toolName") != "bash":  # the runtime's shell tool; its arguments hold the whole command
         return None

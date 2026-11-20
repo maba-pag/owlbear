@@ -39,6 +39,7 @@ from owlbear_delivery_next.settings import rounds
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from owlbear_delivery_next.impeccable.calibration import Replay
     from owlbear_delivery_next.impeccable_runs.pack_job import Job
     from owlbear_delivery_next.runtimes.session_result import Run
 
@@ -274,7 +275,7 @@ def _replay(job: Job, c: pack_candidate.Candidate, ctx: Context) -> Action:
     return ctx.after
 
 
-def _replayed(r: Any) -> str:  # noqa: ANN401 - calibration.Replay
+def _replayed(r: Replay) -> str:
     said = pack_candidate.said_replay(r)
     if not r.ok:
         msg = f"calibration replay: {said}"

@@ -26,7 +26,7 @@ import tempfile
 import uuid
 from contextvars import ContextVar
 from functools import partial
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from copilot import CopilotClient, RuntimeConnection
 from copilot.rpc import PermissionDecisionReject
@@ -39,6 +39,12 @@ from owlbear_delivery_next.runtimes.copilot_cli import cli_path
 from owlbear_delivery_next.runtimes.credit_limit import Limit
 from owlbear_delivery_next.runtimes.model_choices import takes_effort
 from owlbear_delivery_next.state_store import spend_ledger
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
+    from copilot.generated.session_events import SessionEvent, UsageGetMetricsResult
+    from copilot.session import CopilotSession
 
 UNENDED: ContextVar[list[str] | None] = ContextVar("spotter_look_unended", default=None)
 """Where a caller owning the runtimes' lifetime (the cases job) collects each session whose runtime's end is unknown."""
@@ -58,7 +64,7 @@ async def judged(the_card: dict[str, Any], ctx: spotter.Context, meter: credit_m
     said: list[str] = []
     limit = Limit(meter)
 
-    def heard(ev: Any) -> None:  # noqa: ANN401 - an SDK event
+    def heard(ev: SessionEvent) -> None:
         d = as_dict(ev)
         if d.get("type") == "assistant.message" and (text := (d.get("data") or {}).get("content")):
             said.append(text)
@@ -111,7 +117,7 @@ class Spent:
     ) -> None:  # fmt: skip
         self.run, self.place, self.meter, self.model, self.sid = run, place, meter, model, ""
         self.agent, self.job, self.look = agent, job, look
-        self.read: list[Any] = []  # the session's metrics as the settle read them
+        self.read: list[UsageGetMetricsResult] = []  # the session's metrics as the settle read them
 
     def started(self, sid: str) -> None:
         """Its ``start``, once its session *sid* exists."""
@@ -121,7 +127,7 @@ class Spent:
         spend_ledger.started(self.run, sid, agent=self.agent, job=self.job, model=self.model, before={},
                              place=self.place, look=self.look)  # fmt: skip
 
-    async def metrics(self, session: Any) -> Any:  # noqa: ANN401 - the SDK session and its usage
+    async def metrics(self, session: CopilotSession) -> UsageGetMetricsResult:
         """The session's reported metrics, kept for its ``end``."""
         got = await _metrics(session)
         self.read.append(got)
@@ -156,7 +162,9 @@ class Spent:
                            place=self.place, look=self.look, read_error=read_error)  # fmt: skip
 
 
-async def _end(client: Any, session: Any, limit: Limit, spent: Spent, *, confirmed: bool) -> None:  # noqa: ANN401
+async def _end(
+    client: CopilotClient, session: CopilotSession | None, limit: Limit, spent: Spent, *, confirmed: bool
+) -> None:
     """Reconcile the look's share with the session's reported total, then tear the session down; each bounded."""
     if session is None:
         limit.part.ended(0.0, confirmed=True)  # no session, no turn: nothing was billed
@@ -166,15 +174,15 @@ async def _end(client: Any, session: Any, limit: Limit, spent: Spent, *, confirm
     await teardown(client, session, spent.sid)
 
 
-async def _metrics(session: Any) -> Any:  # noqa: ANN401 - the SDK session and its usage
+async def _metrics(session: CopilotSession) -> UsageGetMetricsResult:
     return await session.rpc.usage.get_metrics()
 
 
-async def _abort(session: Any) -> None:  # noqa: ANN401 - the SDK session
+async def _abort(session: CopilotSession) -> None:
     await session.abort()
 
 
-async def _stage(work: Any) -> bool:  # noqa: ANN401 - an SDK coroutine
+async def _stage(work: Awaitable[object]) -> bool:
     """Run one teardown stage within ``spotter.TEARDOWN``; whether it ended well. One left over is cancelled."""
     task = asyncio.ensure_future(work)
     done, _ = await asyncio.wait({task}, timeout=spotter.TEARDOWN)
@@ -184,7 +192,7 @@ async def _stage(work: Any) -> bool:  # noqa: ANN401 - an SDK coroutine
     return not task.cancelled() and task.exception() is None
 
 
-async def teardown(client: Any, session: Any, sid: str) -> bool:  # noqa: ANN401 - the SDK client and session
+async def teardown(client: CopilotClient, session: CopilotSession | None, sid: str) -> bool:
     """End the look's session and runtime gracefully, else force the runtime; whether its end was confirmed.
 
     Its end is noted, provisional unless confirmed; an unconfirmed one is named in ``UNENDED`` when a caller set it.

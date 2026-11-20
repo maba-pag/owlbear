@@ -30,7 +30,7 @@ from __future__ import annotations
 import functools
 import re
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 from owlbear_delivery_next.change_contracts import git_reading, shell_walk, tools
 from owlbear_delivery_next.change_contracts.shell_walk import BYPASS, CORE, DOUBTFUL, VARIANT
@@ -39,6 +39,9 @@ from owlbear_delivery_next.local_system import shell_parse, shell_programs
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from pathlib import Path
+
+    from copilot.generated.session_events import PermissionRequestRead, PermissionRequestShell, PermissionRequestWrite
+    from copilot.session import PermissionRequest
 
 Level = Literal["strict", "standard", "lenient", "off"]
 _REFUSED = {"strict": DOUBTFUL, "standard": VARIANT, "lenient": CORE}  # classes below it are refused
@@ -306,16 +309,18 @@ def _outside(policy: Policy, req: Request) -> str | None:
     return None
 
 
-def view(r: Any) -> Request:  # noqa: ANN401 - one of the SDK's permission request classes
+def view(r: PermissionRequest) -> Request:
     """Normalise one SDK permission request into a Request."""
     kind = getattr(r, "kind", type(r).__name__)
     if kind == "shell":
-        whole = getattr(r, "full_command_text", "") or ""
-        texts = [s.full_command_text for s in r.command_segments or ()] or [c.identifier for c in r.commands]
-        return Request(kind, tuple(texts or [whole]), tuple(r.possible_paths or ()), text=whole)
+        shell = cast("PermissionRequestShell", r)
+        whole = getattr(shell, "full_command_text", "") or ""
+        texts = [s.full_command_text for s in shell.command_segments or ()] or [c.identifier for c in shell.commands]
+        return Request(kind, tuple(texts or [whole]), tuple(shell.possible_paths or ()), text=whole)
     if kind in {"read", "write"}:
-        path = r.resolved_path or getattr(r, "path", None) or getattr(r, "file_name", "")
-        edits = getattr(r, "file_edits", None) or ()  # a move names a before and an after path
+        file = cast("PermissionRequestRead | PermissionRequestWrite", r)
+        path = file.resolved_path or getattr(file, "path", None) or getattr(file, "file_name", "")
+        edits = getattr(file, "file_edits", None) or ()  # a move names a before and an after path
         moved = [side.path for e in edits for side in (e.before, e.after) if side is not None and side.path]
         return Request(kind, paths=tuple(dict.fromkeys([*([path] if path else []), *moved])))
     if kind == "memory":  # a Copilot Memory save or vote names its tool by its action

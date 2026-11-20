@@ -24,7 +24,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict, Unpack
 
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import cases
@@ -144,7 +144,16 @@ def _get(cid: str) -> dict[str, Any]:
     return {"remote": "", "pushed": True, "review": {}, **state().get(cid, {})}
 
 
-def _set(cid: str, **fields: Any) -> None:  # noqa: ANN401 - the case's publication state
+class PublicationUpdate(TypedDict, total=False):
+    """The publication fields updated while keeping the rest of the case's state."""
+
+    remote: str
+    why: str
+    pushed: bool
+    review: dict[str, str]
+
+
+def _set(cid: str, **fields: Unpack[PublicationUpdate]) -> None:
     with cases.locked():
         found = state()
         found[cid] = {**_get(cid), **fields, "at": cases.now()}
@@ -156,7 +165,7 @@ def eligible(cid: str, entry: cases.Entry) -> bool:
     return entry.get("stage") in PUBLISHED and cases.fact(cid)["source"] != "synthetic"
 
 
-def leaks(value: Any) -> list[str]:  # noqa: ANN401 - an export's JSON value, or its serialized text
+def leaks(value: object) -> list[str]:
     """What the deterministic check finds in *value*: credentials, emails, home paths.
 
     Every decoded string *value* holds is checked, keys included, as is any serialized form given with it: JSON
@@ -173,7 +182,7 @@ def leaks(value: Any) -> list[str]:  # noqa: ANN401 - an export's JSON value, or
     return sorted(found)
 
 
-def _texts(value: Any) -> list[str]:  # noqa: ANN401 - JSON values
+def _texts(value: object) -> list[str]:
     if isinstance(value, str):
         return [value]
     if isinstance(value, dict):

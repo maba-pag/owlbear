@@ -170,11 +170,11 @@ class ChatActor:
         elif not waiter.done():
             waiter.set_result("seen")
 
-    async def _host[T](self, work: Callable[..., T], *args: Any) -> T:  # noqa: ANN401 - the work's arguments
+    async def _host[T, *Args](self, work: Callable[[Transport, *Args], T], *args: *Args) -> T:
         """*work* on a connection of its own to the host, the chat resolved, on a worker thread."""
         return await asyncio.to_thread(self._on_host, work, *args)
 
-    def _on_host[T](self, work: Callable[..., T], *args: Any) -> T:  # noqa: ANN401 - the work's arguments
+    def _on_host[T, *Args](self, work: Callable[[Transport, *Args], T], *args: *Args) -> T:
         stored = chat_of(self.session, self.db) if not self.chat else ("", "")  # the store before any connection
         with contextlib.closing((self.connect or opened)()) as conn:
             self.chat = self.chat or channel(conn, *stored)

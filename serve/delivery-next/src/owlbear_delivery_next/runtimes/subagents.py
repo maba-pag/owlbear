@@ -44,7 +44,7 @@ class Watch:
         """*allowed*: this session may start built-in subagents, several at once."""
         self.allowed, self.seen = allowed, dict[str, Seen]()
 
-    def started(self, data: Any) -> str:  # noqa: ANN401 - SDK subagent event data
+    def started(self, data: object) -> str:
         """Register a start; why it voids the step ("auto" for a wrong model), or "" when it is allowed."""
         cid, name = getattr(data, "tool_call_id", "") or "", getattr(data, "agent_name", "") or ""
         model = getattr(data, "model", None)
@@ -63,7 +63,7 @@ class Watch:
         s = self.seen.get(parent or "")
         return bool(s and s.allowed)
 
-    def ended(self, data: Any, outcome: str) -> dict[str, Any] | None:  # noqa: ANN401 - SDK subagent event data
+    def ended(self, data: object, outcome: str) -> dict[str, Any] | None:
         """Its end: outcome, tokens, tool calls and duration where the event says them; its record, if known."""
         cid = getattr(data, "tool_call_id", "") or ""
         if (s := self.seen.get(cid)) is None:
@@ -74,7 +74,7 @@ class Watch:
         s.seconds = took.total_seconds() if took is not None else None
         return {"call": cid, **asdict(s)}
 
-    def call(self, data: Any) -> bool:  # noqa: ANN401 - SDK usage event data
+    def call(self, data: object) -> bool:
         """Count one billed call of an allowed subagent; False when its parent is none (the gate then decides)."""
         s = self.seen.get(getattr(data, "parent_tool_call_id", None) or "")
         if s is None or not s.allowed:
