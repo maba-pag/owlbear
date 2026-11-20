@@ -131,7 +131,7 @@ def suites(paths: list[str]) -> list[str]:
 
 def changed(base: str, head: str) -> list[str]:
     """Paths the pull request changes, from the merge base of *base* and *head* to *head*, unquoted by ``-z``."""
-    executable = shutil.which("git")
+    executable = shutil.which("git", path=os.environ.get("PATH", os.defpath) or os.curdir)
     if executable is None:
         message = "Git executable not found on PATH"
         raise FileNotFoundError(message)

@@ -64,7 +64,7 @@ def _git_paths(*, staged: bool) -> list[str]:
 
 def _git_root() -> Path:
     try:
-        executable = shutil.which("git")
+        executable = shutil.which("git", path=os.environ.get("PATH", os.defpath) or os.curdir)
         if executable is None:
             message = "Git executable not found on PATH"
             raise FileNotFoundError(message)

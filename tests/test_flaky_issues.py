@@ -37,7 +37,7 @@ def test_an_issue_is_read_through_gh_and_its_error_kept(monkeypatch: pytest.Monk
         return subprocess.CompletedProcess(argv, 0, stdout='{"state": "open"}')
 
     monkeypatch.setattr(flaky_issues.subprocess, "run", run)
-    monkeypatch.setattr(flaky_issues.shutil, "which", lambda command: f"/tools/{command}")
+    monkeypatch.setattr(flaky_issues.shutil, "which", lambda command, **_: f"/tools/{command}")
 
     assert flaky_issues.fetch_issue("owner/repo", 1) == {"state": "open"}
     with pytest.raises(RuntimeError, match="HTTP 403: Resource not accessible"):

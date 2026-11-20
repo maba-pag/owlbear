@@ -26,8 +26,11 @@ def marked_issues(root: Path) -> list[int]:
 
     A match inside a string only adds an issue to look up; the plugin re-runs only tests whose mark names it.
     """
-    executable = shutil.which("git")
-    if executable is None:
+    for entry in os.get_exec_path():
+        executable = shutil.which(str(root.absolute() / entry / "git"))
+        if executable is not None:
+            break
+    else:
         message = "Git executable not found on PATH"
         raise FileNotFoundError(message)
     listed = subprocess.run(  # noqa: S603 - resolved Git with fixed tracked-Python inventory flags; no shell
@@ -46,7 +49,7 @@ def marked_issues(root: Path) -> list[int]:
 def fetch_issue(repository: str, number: int) -> dict[str, object]:
     """One issue from the GitHub API through the gh CLI, read with the job's token."""
     try:
-        executable = shutil.which("gh")
+        executable = shutil.which("gh", path=os.environ.get("PATH", os.defpath) or os.curdir)
         if executable is None:
             message = "gh executable not found on PATH"
             raise FileNotFoundError(message)
