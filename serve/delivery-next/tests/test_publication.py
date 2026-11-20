@@ -640,7 +640,7 @@ def test_empty_inventory_consent_keeps_the_current_profiles_confirmed_named_chec
     assert (held.exit, gh.merges) == (Exit.PENDING, [])  # a confirmed but never-started lint check still gates.
 
 
-def test_a_persisted_duplicate_inventory_hold_settles_before_normal_host_scheduling(tmp_path, clone):
+def test_a_persisted_duplicate_inventory_hold_settles_before_normal_host_scheduling(tmp_path, clone, capsys):
     head, entries = ci_head(clone, "${{ inputs.n }}")
     cx = ctx(tmp_path, FakeGh(pr(head=head)), prof(**entries))
     c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
@@ -661,6 +661,12 @@ def test_a_persisted_duplicate_inventory_hold_settles_before_normal_host_schedul
     host = scheduler.Host(
         cx.store, clone, spawn=lambda _slug: scheduler.RunnerRecord(pid=424242, created=1.0, started_at=NOW)
     )
+    missing = c.model_copy(deep=True)
+    missing.names.worktree = str(tmp_path / "removed-worktree")
+    cx.store.write(cx.lock, missing)
+    assert host.tick(NOW) == []
+    assert f"cannot read CI workflows at {missing.names.worktree}: FileNotFoundError" in capsys.readouterr().out
+    cx.store.write(cx.lock, c)
     assert host.tick(NOW) == []  # the now-named inventory cannot settle an empty-inventory proposal.
     assert loop.open_question(cx.store.read("c1")).id == pending
     ci_head(clone, "${{ inputs.n }} restored")

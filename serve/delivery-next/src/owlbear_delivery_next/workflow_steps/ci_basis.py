@@ -8,7 +8,9 @@ from typing import TYPE_CHECKING
 from owlbear_delivery_next.change_contracts.merge_records import CiBasis
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_flow import asking, loop
+from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -120,7 +122,11 @@ def settle(store: Store, c: Change, now: datetime) -> None:
     ):
         return
     prof = store.read_profile()
-    texts = profile.workflow_texts_at(Path(c.names.worktree), "HEAD")
+    try:
+        texts = profile.workflow_texts_at(Path(c.names.worktree), "HEAD")
+    except OSError as exc:
+        message = f"cannot read CI workflows at {c.names.worktree}: {failure(exc)}"
+        raise StoreError(message) from exc
     if prof is None or texts is None:
         return
     entries = profile.ci_entries({n: profile.workflow(t) for n, t in texts.items()}, profile.flows_digest(texts))
