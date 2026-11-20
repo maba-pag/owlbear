@@ -58,7 +58,8 @@ def run(
         return subprocess.CompletedProcess(["git", *args], 128, "", said)
     command = ["git", *access.options(), *args]
     try:
-        done = subprocess.run(  # noqa: S603
+        # Shared-data and pack callers own Git verbs/argv; access adds account options, operands stay separate.
+        done = subprocess.run(  # noqa: S603 - code-owned Git vectors with per-launch account environment, no shell
             command,
             cwd=cwd,
             env=access.environment({**os.environ, "GIT_TERMINAL_PROMPT": "0"}),
@@ -106,8 +107,9 @@ def _default(cwd: Path, kind: str, deadline: float) -> str:
 
 
 def _read(cwd: Path, args: tuple[str, ...], deadline: float) -> str:
-    done = subprocess.run(  # noqa: S603
-        ["git", *args],  # noqa: S607
+    # Native lookup preserves child PATH and execution-time continuation; _default owns metadata-query argv.
+    done = subprocess.run(  # noqa: S603 - internal symbolic-ref/for-each-ref metadata arguments; no shell
+        ["git", *args],  # noqa: S607 - preserve native child PATH and execution-time search
         cwd=cwd, capture_output=True, text=True, timeout=_left(deadline), check=False, stdin=subprocess.DEVNULL,
     )  # fmt: skip
     return done.stdout.strip() if done.returncode == 0 else ""

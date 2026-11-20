@@ -12,7 +12,7 @@ import contextlib
 import shlex
 import time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import psutil
 from copilot.rpc import SessionUpdateOptionsParams, ShellInitScript, ShellInitScriptShell, ShellOptions
@@ -26,6 +26,8 @@ from owlbear_delivery_next.runtimes.sdk_teardown import call as _call
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
     from pathlib import Path
+
+    from copilot.session import CopilotSession
 
     from owlbear_delivery_next.change_contracts.user_config import UserConfig
     from owlbear_delivery_next.state_store.store import Lock, Store
@@ -67,7 +69,7 @@ def marking(store: Store, lock: Lock, slug: str) -> Iterator[None]:
         remote_git.launched = None
 
 
-async def opened(session: Any, worktree: Path, user: UserConfig, log: Callable[..., None]) -> None:  # noqa: ANN401
+async def opened(session: CopilotSession, worktree: Path, user: UserConfig, log: Callable[..., None]) -> None:
     """The session's options before its first message: its instruction scope, and in a runner its command marks.
 
     Raises:

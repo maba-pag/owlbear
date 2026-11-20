@@ -17,6 +17,7 @@ from owlbear_decisions import Decision, Link, LinkType, Origin, ReadBackKind, Sc
 from owlbear_decisions.validate import validate_repo
 from owlbear_delivery_next.change_contracts.models import Brief, Change, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.commands import chat_client, mcp_server
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import publication_hold
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -51,7 +52,9 @@ class Host:
 def git(cwd: Path, *args: str) -> str:
     if (cwd / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
         args = ("--git-dir=.", *args)
-    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - git callers build fixture Git add/clone/commit/config argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 def make(**changes) -> Decision:

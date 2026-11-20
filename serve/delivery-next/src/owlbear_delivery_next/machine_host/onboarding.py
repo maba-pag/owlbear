@@ -110,7 +110,7 @@ class Onboarding:
                 raise OnboardingError(404, self.unreadable.get(ident) or f"no Add project run {ident}")
             return job
 
-    def answer(self, ident: str, kind: str, value: Any) -> dict[str, Any]:  # noqa: ANN401 - the dialog's answer
+    def answer(self, ident: str, kind: str, value: object) -> dict[str, Any]:
         """The owner's answer to what the job waits for; it goes on from there."""
         job = self._current(ident)
         if job.waiting is None or job.waiting[0] != kind:

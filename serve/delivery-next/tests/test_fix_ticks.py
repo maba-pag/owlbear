@@ -12,6 +12,7 @@ from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, ne
 from owlbear_delivery_next.change_contracts.models import Change, Exit, Names, Step, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.settings import profile
@@ -33,7 +34,9 @@ URL = "https://github.com/o/r/pull/7"
 
 def git(cwd: Path, *args: str) -> str:
     who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
-    return subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - git callers build fixture Git add/clone/commit/init argv and repository operands; no shell.
+        [resolve_git_executable(), *who, *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 def write(root: Path, files: dict[str, str]) -> None:

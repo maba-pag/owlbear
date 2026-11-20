@@ -69,8 +69,24 @@ function said(line, label) {
 
 const PAUSED = /· paused by you/;
 
+export function releaseLook(d) {
+  if (!d.release_look) return nothing;
+  const looked = async (e) => {
+    const control = e.currentTarget;
+    control.disabled = true;
+    try {
+      await send("/release-look", {}, state.detail?.key === d.key ? state.detail : d);
+    } finally {
+      if (control.isConnected) control.disabled = false;
+    }
+  };
+  return html`<p class="next">${d.release_look.text} ${d.release_look.ready
+    ? button("Mark done", looked) : nothing}</p>`;
+}
+
 export function badge(c) {
   if (c.stopped) return ["error", "Stopped"];
+  if (c.release_look?.ready || c.release_look?.error) return ["warning", "Your turn"];
   if (PAUSED.test(c.line)) return ["secondary", "Paused"];
   if (c.actor === "you") return ["warning", "Your turn"];
   if (c.actor === "admin") return ["warning", "Admin"];
@@ -105,6 +121,7 @@ export function detailView(d) {
   return html`${detailHead(d)}
     <div class="row status"><p-tag variant=${variant} compact="true">${label}</p-tag>${
       text(said(statusLine(d), label))}</div>
+    ${releaseLook(d)}
     ${d.now && label !== "Done" ? text(d.now, { size: "sm", color: "contrast-medium" }) : nothing}
     ${refusedTop}
     ${d.settings_fault ? notice("error", "Settings could not be read", d.settings_fault,

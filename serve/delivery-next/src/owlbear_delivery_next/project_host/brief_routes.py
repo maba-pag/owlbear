@@ -12,11 +12,11 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from owlbear_delivery_next.change_contracts import tools
+from owlbear_delivery_next.change_contracts import owner_look, tools
 from owlbear_delivery_next.change_contracts.inbox import BriefApproval
 from owlbear_delivery_next.change_contracts.round_records import BRIEF
 from owlbear_delivery_next.change_flow import brief_rounds, brief_starts, picks, shaping_capture
-from owlbear_delivery_next.settings import rounds
+from owlbear_delivery_next.settings import profile, rounds
 from owlbear_delivery_next.settings.config import SettingsUnset
 from owlbear_delivery_next.state_store.briefs import unrevisable
 from owlbear_delivery_next.state_store.store import LockHeldError, StoreError
@@ -79,7 +79,15 @@ def refused(store: Store, c: Change, body: ApproveBody, view: DataView | None) -
     # TD-459: approval pins the pick, never picks; wording is checked before the baseline reads it
     if why := pick.unapproved(store, c) or decisions_gate.unworded(view, c):
         return f"brief v{brief.version} cannot be approved yet: {why}"
-    if (stepped := [s.name for s in brief.visual if s.steps]) and not store.settings().preparations:
+    deferred = (
+        brief.ui
+        and owner_look.chosen(brief.decisions)
+        and (
+            (prof := store.read_profile()) is not None
+            and profile.value(prof, profile.REPO).lower() == owner_look.REPOSITORY
+        )
+    )
+    if (stepped := [s.name for s in brief.visual if s.steps]) and not deferred and not store.settings().preparations:
         return (
             f"The visual states {', '.join(stepped)} have clicks or typing, which run only on a prepared test copy "
             "(TD-96); declare the project's preparation options in its settings first, or revise the brief "

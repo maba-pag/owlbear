@@ -47,6 +47,14 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    one in this Change, declare a person-only visual check, or change the scope. A person check proves the
    eventual interaction, not the shaping baseline: every UI brief still needs current-page states and a render
    recipe so Delivery can capture the target, or report why it cannot.
+   For OwlBear Changes only, offer a look after release only on the owner's word. Keep `ui: true` and
+   browser tests before merge. Record his Change-scoped decision with question
+   `When does the owner judge the look?` and answer
+   `After the release; browser tests must pass before merge.`, with his origin, never `autonomous`.
+   Delivery records that choice as the shaping capture's stated reason, rather than launching a preview.
+   Once the containing release is installed, the Changes page reminds him to look and mark it done.
+   Mid-work, use the existing owner-approved amendment path; a worker cannot waive a pre-merge check.
+   Other projects keep their current visual checks.
    Establish the render recipe from the repository's own scripts and docs: the `command` that starts its
    preview, passing `{port}` to the server (Delivery picks the port), the `directory` it runs in, and the
    `ready_url` with `{port}` that answers once it is up. Name the `preparation` when the project declares

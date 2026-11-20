@@ -3,6 +3,8 @@
 import subprocess
 from pathlib import Path
 
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
+
 
 def test_a_copied_template_repository_starts_no_background_maintenance(change_repo: Path, shared_repo) -> None:
     """A commit or a push starts Git's maintenance in the background unless the repository turns it off, and a copy
@@ -10,8 +12,8 @@ def test_a_copied_template_repository_starts_no_background_maintenance(change_re
     clone, remote = shared_repo
     for repo in (change_repo / ".git", clone / ".git", remote):
         found = [
-            subprocess.run(  # noqa: S603
-                ["git", "config", "--file", str(repo / "config"), "--get", key],  # noqa: S607
+            subprocess.run(  # noqa: S603 - Resolved Git reads fixed maintenance keys from fixture config files.
+                [resolve_git_executable(), "config", "--file", str(repo / "config"), "--get", key],
                 capture_output=True,
                 text=True,
                 check=False,  # a missing key fails the assertion, which names the repository

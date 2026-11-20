@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import data_place, data_repo, local_home, maintenance
 from owlbear_delivery_next.local_system.storage_io import open_lock
 from owlbear_delivery_next.machine_host import data_move
@@ -20,7 +21,9 @@ processes = data_move._processes  # noqa: SLF001 - the real scan, which the sour
 
 def git(cwd: Path, *args: str) -> str:
     who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
-    return subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - git callers build fixture Git add/clone/commit/config argv and repository operands; no shell.
+        [resolve_git_executable(), *who, *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 @pytest.fixture

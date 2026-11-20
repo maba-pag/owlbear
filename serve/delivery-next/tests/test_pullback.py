@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import stat
 import subprocess
 from datetime import UTC, datetime
@@ -9,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.models import Change, Names, Step, StepKind
 from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.git.remote_git import RemoteGitTimeout
 from owlbear_delivery_next.github.account import Writer
 from owlbear_delivery_next.project_host import api
@@ -20,7 +22,9 @@ NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 
 
 def git(cwd, *args):
-    done = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
+    done = subprocess.run(  # noqa: S603 - git callers build fixture Git add/branch/checkout/clone argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=cwd, check=True, capture_output=True, text=True
+    )
     return done.stdout.strip()
 
 
@@ -262,7 +266,9 @@ def test_a_target_mid_rebase_or_bisect_is_behind(repos, op):
         commit(repo, "c.txt", "side\n")
         git(repo, "switch", "-q", "main")
         commit(repo, "c.txt", "main\n")
-        subprocess.run(["git", "rebase", "side"], cwd=repo, capture_output=True, check=False)  # noqa: S607
+        subprocess.run(  # noqa: S603 - Fixture Git rebase argv with literal operands; no shell.
+            [resolve_git_executable(), "rebase", "side"], cwd=repo, capture_output=True, check=False
+        )
     else:
         git(repo, "bisect", "start")
     detached = git(repo, "rev-parse", "HEAD")
@@ -649,7 +655,13 @@ def test_a_failed_reverse_names_a_recovery_that_restores_the_local_copy(repos, m
     assert full(repo) != before
     command = re.search(r"then run `([^`]+)`", result.reason)
     assert command is not None
-    subprocess.run(["bash", "-c", command[1]], cwd=repo, check=True, capture_output=True)  # noqa: S603, S607
+    bash_executable = shutil.which("bash")
+    if bash_executable is None:
+        message = "bash executable is unavailable"
+        raise FileNotFoundError(message)
+    subprocess.run(  # noqa: S603 - Execute the recovery command emitted by pullback for this fixture repository; intentional bash -c, no shell=True.
+        [bash_executable, "-c", command[1]], cwd=repo, check=True, capture_output=True
+    )
     assert full(repo) == before
 
 

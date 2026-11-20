@@ -10,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.provider import MergeMethod
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -87,7 +88,9 @@ def owner_save(store: Store, edit) -> None:
 
 def fresh_clone(remote: Path, tmp_path: Path, name: str = "fresh") -> Store:
     second = tmp_path / name
-    subprocess.run(["git", "clone", "-q", str(remote), str(second)], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git clone argv with remote/second operands; no shell.
+        [resolve_git_executable(), "clone", "-q", str(remote), str(second)], check=True, capture_output=True
+    )
     return Store(tmp_path / f"{name}-store", DataRepo(second), "shop-site")
 
 

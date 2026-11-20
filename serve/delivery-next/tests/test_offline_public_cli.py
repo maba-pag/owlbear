@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.machine_host import command
 from owlbear_delivery_next.state_store import legacy_family, offline_protocol, project_home
 from owlbear_delivery_next.state_store.database import MARKER
@@ -46,7 +47,9 @@ ARGPARSE_ONLY = pytest.mark.parametrize("run", [via_argparse], ids=["argparse"])
 @pytest.fixture
 def repo(tmp_path: Path) -> Path:
     path = tmp_path / "shop"
-    subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with path operands; no shell.
+        [resolve_git_executable(), "init", "-q", "-b", "main", str(path)], check=True, capture_output=True
+    )
     folder = project_home.clone_dir(path)  # a legacy clone: its own store, format 7, still in the clone
     folder.mkdir(parents=True)
     (folder / MARKER).write_text("7")
@@ -203,7 +206,9 @@ def test_an_unproven_binding_refuses_prepare_without_cutover(  # noqa: PLR0913, 
         move_src = current_package / "state_store" / "project_move.py"
         move_src.write_text(move_src.read_text().replace('FENCE = "999"', 'FENCE = "998"'))
         who = ["-c", "user.name=t", "-c", "user.email=t@t"]
-        subprocess.run(["git", *who, "-C", str(current_package), "commit", "-qam", "altered"], check=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Fixed Git commit argv and fixture identity commit the altered current_package checkout; no shell.
+            [resolve_git_executable(), *who, "-C", str(current_package), "commit", "-qam", "altered"], check=True
+        )
 
     assert run(repo, "prepare") == 1
     assert REFUSED in capsys.readouterr().err
@@ -219,7 +224,9 @@ def test_a_no_op_quarantine_refusal_helper_refuses_public_prepare(run, repo, cur
     assert helper.read_text().count(old) == 1
     helper.write_text(helper.read_text().replace(old, "    kept = []"))
     who = ["-c", "user.name=t", "-c", "user.email=t@t"]
-    subprocess.run(["git", *who, "-C", str(current_package), "commit", "-qam", "no-op helper"], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixed Git commit argv and fixture identity commit the altered current_package checkout; no shell.
+        [resolve_git_executable(), *who, "-C", str(current_package), "commit", "-qam", "no-op helper"], check=True
+    )
 
     assert run(repo, "prepare") == 1
     assert REFUSED in capsys.readouterr().err
@@ -253,7 +260,9 @@ def test_a_committed_storage_io_guard_removal_refuses_default_public_prepare_bef
     assert text.count(guard) == 1
     storage.write_text(text.replace(guard, ""), encoding="utf-8")
     who = ["-c", "user.name=t", "-c", "user.email=t@t"]
-    subprocess.run(["git", *who, "-C", str(current_package), "commit", "-qam", "drop lock guard"], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixed Git commit argv and fixture identity commit the altered current_package checkout; no shell.
+        [resolve_git_executable(), *who, "-C", str(current_package), "commit", "-qam", "drop lock guard"], check=True
+    )
     before = tree(repo)
 
     assert run(repo, "prepare") == 1

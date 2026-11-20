@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -16,7 +17,13 @@ from owlbear_memory_mcp import tools
 
 
 def git(root: Path, *args: str) -> str:
-    return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    git_executable = shutil.which("git")
+    if git_executable is None:
+        message = "git executable is unavailable"
+        raise FileNotFoundError(message)
+    return subprocess.run(  # noqa: S603 - git callers build fixture Git add/commit/config/init argv and repository operands; no shell.
+        [git_executable, *args], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 @pytest.mark.asyncio

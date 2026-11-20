@@ -15,6 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import data_repo, local_home
 from owlbear_delivery_next.machine_host import app, command, control, install
 from owlbear_delivery_next.runtimes import settings_read
@@ -284,7 +285,9 @@ def test_doctor_says_a_tool_that_does_not_run_and_a_project_it_cannot_read_whole
 def shared_data() -> Path:
     """The default shared checkout, holding one file only it has."""
     data = local_home.root() / local_home.DATA
-    subprocess.run(["git", "init", "-q", str(data)], check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with data operands; no shell.
+        [resolve_git_executable(), "init", "-q", str(data)], check=True
+    )
     (data / "note.md").write_text("only here\n")
     return data
 
@@ -499,7 +502,9 @@ def test_a_running_host_whose_api_does_not_answer_is_no_success(monkeypatch) -> 
 
 def git(cwd: Path, *args: str) -> None:
     who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
-    subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - git callers build fixture Git clone/commit/init/pull argv and repository operands; no shell.
+        [resolve_git_executable(), *who, *args], cwd=cwd, check=True, capture_output=True
+    )
 
 
 def flip_channel(other: Path) -> tuple[str | None, str]:

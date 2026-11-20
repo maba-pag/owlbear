@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts import amend_tools, tools
+from owlbear_delivery_next.change_contracts import amend_tools, owner_look, tools
 from owlbear_delivery_next.change_flow import amend_apply, answer_kinds
 from owlbear_delivery_next.change_flow.brief_tools import BriefDraft
 from owlbear_delivery_next.runtimes import step_decisions
@@ -33,7 +33,7 @@ def amendable(c: Change) -> tuple[str, ...]:
     return (*refs, *(f"new:{k}" for k in amend_apply.fresh(c)))
 
 
-def check(args: tools.Args, allowed: tuple[str, ...]) -> list[str]:
+def check(args: tools.Args, allowed: tuple[str, ...], *, repository: str = "") -> list[str]:
     """Field errors of a premise's amendment, the shaper's candidate or the challenger's affected names."""
     if isinstance(args, amend_tools.VerdictResult):
         known = {f"screen:{r[7:]}" for r in allowed if r.startswith("visual:")} | {
@@ -44,7 +44,13 @@ def check(args: tools.Args, allowed: tuple[str, ...]) -> list[str]:
     if isinstance(args, amend_tools.CandidateResult):
         if bool(args.items) == bool(args.refuse.strip()):
             return ["items: give the exact candidate, or refuse with your reason - one of the two"]
-        return _errors(args.items, allowed, "items")
+        errors = _errors(args.items, allowed, "items")
+        if repository.lower() != owner_look.REPOSITORY and any(
+            i.field == "decision" and not i.remove and owner_look.statement(i.question or owner_look.QUESTION, i.text)
+            for i in args.items
+        ):
+            errors.append("items: the after-release look is supported only for OwlBear Changes")
+        return errors
     if not isinstance(args, tools.WrongPremise) or not args.amendment:
         return []
     if args.stage != "brief":
@@ -103,6 +109,7 @@ def _shaped(
     wrong = [k for k in a.covers if k not in added and (f"criterion:{k}" not in allowed or f"criterion:{k}" in gone)]
     unkept = f"{name}: covers {', '.join(wrong)} - not criteria the brief keeps or the candidate adds"
     return [
+        *([f"{name}: question is only for a new decision"] if a.question and (a.field != "decision" or a.key) else []),
         *([f"{name}: covers is only for a check"] if a.covers and a.field != "check" else []),
         *([unkept] if wrong else []),
         *([f"{name}: actions are only for a visual state"] if a.actions is not None and a.field != "visual" else []),
@@ -122,7 +129,8 @@ CANDIDATE_RULES = (
     "the owner's intent and every item you do not need. A change against a project decision the Change follows is a "
     "new Change-scoped decision (field decision, empty key, its question and answer) recording the exception; the "
     "project decision stays. A change that needs the outcome or the non-goals is not an amendment: set `refuse` with "
-    "why, and no items."
+    "why, and no items. "
+    f"{owner_look.INSTRUCTIONS}"
 )
 
 

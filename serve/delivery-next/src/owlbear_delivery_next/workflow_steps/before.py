@@ -22,6 +22,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from owlbear_delivery_next.change_contracts import owner_look
 from owlbear_delivery_next.change_contracts.models import VISUAL, BriefRecipe, Environment, StepKind
 from owlbear_delivery_next.change_contracts.visual_records import VisualResult
 from owlbear_delivery_next.change_flow import worktree
@@ -295,6 +296,9 @@ def at_target(  # noqa: PLR0913 - the capture's widths come from the settings, i
     *finish* ends its test copy in the throwaway checkout before it is removed; a fetch that fails ends it whole.
     """
     now, r, target = datetime.now(UTC), c.brief.recipe, c.names.target
+    repository = profile.entries.get("github:repository")
+    if repository and repository.value.lower() == owner_look.REPOSITORY and owner_look.chosen(c.brief.decisions):
+        return VisualResult(head="", tree="", findings=[owner_look.REASON], at=now)
     missing = []
     if r is None:
         missing.append("the brief has no render recipe; establish the target's preview command, directory and URL")

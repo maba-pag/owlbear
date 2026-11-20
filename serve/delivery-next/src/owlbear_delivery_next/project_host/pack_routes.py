@@ -77,8 +77,9 @@ def owner_last(store: Store) -> dict[str, Any] | None:
         return None
     marker = f"memory {store.name}: "  # the subject memory_routes commits each action with
     args = ["log", "-1", "--format=%cI%x00%s", "--fixed-strings", f"--grep={marker}", "--"]
-    done = subprocess.run(  # noqa: S603
-        ["git", *args, str(store.shared.memory_path(store.name))],  # noqa: S607
+    # Native lookup preserves child PATH and execution-time continuation; the memory path follows --.
+    done = subprocess.run(  # noqa: S603 - code-owned log query and separate grep/path operands; no shell
+        ["git", *args, str(store.shared.memory_path(store.name))],  # noqa: S607 - native child PATH search
         cwd=store.shared.root, env={**os.environ, "GIT_TERMINAL_PROMPT": "0"}, stdin=subprocess.DEVNULL,
         capture_output=True, text=True, timeout=10, check=False,
     )  # fmt: skip

@@ -11,6 +11,7 @@ import pytest
 
 from owlbear_delivery_next.change_flow import worktree
 from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.local_system import data_place, data_repo, local_home
 
@@ -29,7 +30,9 @@ def machine(monkeypatch, tmp_path) -> Path:
 
 
 def repo(at: Path) -> Path:
-    subprocess.run(["git", "init", "-q", "-b", "main", str(at)], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with at operands; no shell.
+        [resolve_git_executable(), "init", "-q", "-b", "main", str(at)], check=True, capture_output=True
+    )
     return at.resolve()
 
 

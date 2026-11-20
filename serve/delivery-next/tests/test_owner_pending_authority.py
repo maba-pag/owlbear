@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.project_host import api
@@ -16,6 +17,7 @@ from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.state_store import profile_share
+from owlbear_delivery_next.state_store.pending_intents import shared_pending
 from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -39,7 +41,9 @@ def client(store: Store) -> TestClient:
 
 
 def clone(remote: Path, where: Path, name: str) -> Store:
-    subprocess.run(["git", "clone", "-q", str(remote), str(where)], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git clone argv with remote/where operands; no shell.
+        [resolve_git_executable(), "clone", "-q", str(remote), str(where)], check=True, capture_output=True
+    )
     return Store(where.parent / f"{name}-store", DataRepo(where), "shop-site")
 
 
@@ -67,8 +71,8 @@ def no_network(monkeypatch) -> None:
 
 
 def remote_subjects(remote: Path) -> list[str]:
-    return subprocess.run(  # noqa: S603
-        ["git", f"--git-dir={remote}", "log", "--reverse", "--format=%s", "main"],  # noqa: S607
+    return subprocess.run(  # noqa: S603 - Resolved Git reads fixed log fields from the fixture's bare remote.
+        [resolve_git_executable(), f"--git-dir={remote}", "log", "--reverse", "--format=%s", "main"],
         check=True,
         capture_output=True,
         text=True,
@@ -94,18 +98,18 @@ def test_a_refused_automatic_start_cannot_replace_an_owners_pending_edit_or_publ
         json={"rev": original["project_rev"], "layer": original["project"] | {"widths": [1600]}},
     )
     assert edited.status_code == (200 if mode == "notice" else 409), edited.text
-    owner_pending = profile_share._shared_pending(a)  # noqa: SLF001
+    owner_pending = shared_pending(a)
     assert owner_pending  # the owner's refused edit is pending
 
     b = clone(remote, tmp_path / "b", "b")
     checks = readiness.ready(b, tmp_path / "b", carry=True)  # B's normal start: an automatic config write, refused
     assert [check for check in checks if not check.ok]  # the refusal is reported, not hidden
-    assert profile_share._shared_pending(b) == owner_pending  # noqa: SLF001 - the owner's intent is kept
+    assert shared_pending(b) == owner_pending  # the owner's intent is kept
     assert not any(s.endswith("import done") for s in remote_subjects(remote))
 
     refusing[0] = None
     readiness.ready(b, tmp_path / "b", carry=True)  # B's retry publishes its config, but not over the owner's intent
-    assert profile_share._shared_pending(b) == owner_pending  # noqa: SLF001
+    assert shared_pending(b) == owner_pending
     assert not any(s.endswith("import done") for s in remote_subjects(remote))
 
 
@@ -121,7 +125,7 @@ def test_a_refused_owner_clear_supersedes_the_earlier_pending_edit(shared_repo, 
     refusing[0] = "notice"
     edit = {"rev": original["project_rev"], "layer": original["project"] | {"widths": [1600]}}
     assert c.put("/api/next/config/project", json=edit).status_code == 200
-    stale_intent = profile_share._shared_pending(a)  # noqa: SLF001
+    stale_intent = shared_pending(a)
     assert stale_intent
 
     current = c.get("/api/next/config").json()
@@ -132,5 +136,5 @@ def test_a_refused_owner_clear_supersedes_the_earlier_pending_edit(shared_repo, 
     )
     assert cleared.status_code == (200 if mode == "notice" else 409), cleared.text
     cleared_digest = profile_share.config_digest(a.config_path)
-    assert profile_share._shared_pending(a) == cleared_digest  # noqa: SLF001 - the owner's clear, not the old edit
-    assert profile_share._shared_pending(a) != stale_intent  # noqa: SLF001
+    assert shared_pending(a) == cleared_digest  # the owner's clear, not the old edit
+    assert shared_pending(a) != stale_intent

@@ -9,7 +9,7 @@ import asyncio
 import contextlib
 import time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import psutil
 from copilot import CopilotClient, RuntimeConnection
@@ -49,7 +49,8 @@ from owlbear_delivery_next.runtimes.session_result import PROVEN, Run, limit_rea
 from owlbear_delivery_next.runtimes.step_tools import StepTools
 
 if TYPE_CHECKING:
-    from copilot.session import CopilotSession
+    from copilot.generated.session_events import SessionEvent
+    from copilot.session import CopilotSession, PermissionRequest, PreToolUseHookInput, PreToolUseHookOutput
 
     from owlbear_delivery_next.runtimes import context_start
     from owlbear_delivery_next.runtimes.session_result import Ending
@@ -117,7 +118,7 @@ class _Step(StepTools):
     def _wake(self) -> None:
         self.loop.call_soon_threadsafe(self.changed.set)
 
-    def log(self, **event: Any) -> None:  # noqa: ANN401 - JSON values; the SDK calls handlers on this loop
+    def log(self, **event: object) -> None:
         """Journal *event*; once the session opened it names that session and its role, so its stage can be told."""
         who = {"session": self.run.session_id, "role": role_of(self.cfg)} if self.session is not None else {}
         self.cfg.journal.event({"at": datetime.now(UTC).isoformat(timespec="seconds"), **who, **event})
@@ -125,7 +126,7 @@ class _Step(StepTools):
     def finish(self, ending: Ending, payload: tools.Args | None = None, detail: str = "", classified: str = "") -> None:
         self.gate.finish(ending, payload, detail, classified)
 
-    def on_event(self, ev: Any) -> None:  # noqa: ANN401, C901 - an SDK session event; one branch per family
+    def on_event(self, ev: SessionEvent) -> None:  # noqa: C901 - one branch per family
         kind = getattr(ev.type, "value", str(ev.type))
         for seer in filter(None, (self.feed, self.actor, self.start)):  # its watcher, a Spotter note, its context
             seer.seen(kind, ev)
@@ -151,7 +152,7 @@ class _Step(StepTools):
         elif kind.startswith("subagent."):
             self.subagent_seen(kind, ev.data)
 
-    def subagent_seen(self, kind: str, data: Any) -> None:  # noqa: ANN401 - SDK subagent event data
+    def subagent_seen(self, kind: str, data: object) -> None:
         """Any built-in may run when the role allows it (TD-374); any other start voids the step; Auto is a wrong model.
 
         Each end is journaled as it arrives, so a runner killed later keeps what its subagents did.
@@ -169,7 +170,7 @@ class _Step(StepTools):
         ):
             self.log(event="subagent", **ended)
 
-    def call_seen(self, data: Any) -> None:  # noqa: ANN401 - SDK usage event data
+    def call_seen(self, data: object) -> None:
         """One billed call: Auto voids the step for anyone (TD-53); an allowed subagent's is counted as its own."""
         parent = getattr(data, "parent_tool_call_id", None)
         if getattr(data, "is_auto", None):
@@ -178,7 +179,7 @@ class _Step(StepTools):
         if not self.watch.call(data):
             self.model_seen(getattr(data, "model", None), parent)
 
-    def skill_seen(self, data: Any) -> None:  # noqa: ANN401 - SDK skill event data
+    def skill_seen(self, data: object) -> None:
         """Note a skill the runtime loaded; a preload from Delivery's folder counts toward the role's skills."""
         trigger = getattr(getattr(data, "trigger", None), "value", getattr(data, "trigger", None))
         name, path = getattr(data, "name", "") or "", getattr(data, "path", "") or ""
@@ -208,7 +209,7 @@ class _Step(StepTools):
         elif model and self.cfg.model and model != self.cfg.model:
             self.gate.wrong_model(f"a turn ran on {model}, the step needs {self.cfg.model}")
 
-    def now(self, tool: str, arguments: Any) -> None:  # noqa: ANN401 - the SDK's JSON tool arguments
+    def now(self, tool: str, arguments: object) -> None:
         """Overwrite the now line with this tool call, at most once per ``NOW_EVERY`` seconds."""
         if (t := time.monotonic()) - self.shown < NOW_EVERY:
             return
@@ -217,10 +218,12 @@ class _Step(StepTools):
         with contextlib.suppress(OSError):  # the now line is a hint; a failed write never ends the step
             self.cfg.journal.now({"tool": tool, "summary": watch_feed.summary(tool, arguments), "at": at})
 
-    def pre_tool(self, data: Any, _invocation: Any) -> dict[str, str] | None:  # noqa: ANN401 - the SDK's hook input
+    def pre_tool(self, data: PreToolUseHookInput, _invocation: object) -> PreToolUseHookOutput | None:
         return guard_hook.pre_tool(self, data)
 
-    def permission(self, request: Any, _invocation: Any) -> Any:  # noqa: ANN401 - SDK types
+    def permission(
+        self, request: PermissionRequest, _invocation: object
+    ) -> PermissionDecisionApproveOnce | PermissionDecisionReject:
         req = view(request)
         user = self.cfg.user
         offered = frozenset(preload.tools(role_of(self.cfg)))
@@ -231,8 +234,8 @@ class _Step(StepTools):
             return PermissionDecisionApproveOnce()
         reason = redact(reason)
         self.run.deny(identities(req), reason)
-        request = [redact(t) for t in req.commands] or [redact(str(p)) for p in req.paths]
-        self.log(event="denied", kind=req.kind, request=request, reason=reason)
+        denied = [redact(t) for t in req.commands] or [redact(str(p)) for p in req.paths]
+        self.log(event="denied", kind=req.kind, request=denied, reason=reason)
         return PermissionDecisionReject(feedback=f"Denied: {reason}")
 
     def record(self, *pids: int | None, keep: bool = False) -> None:
@@ -418,7 +421,7 @@ async def _run(st: _Step) -> Run:
     return st.run
 
 
-async def _proven(st: _Step, session: Any) -> None:  # noqa: ANN401 - the SDK session
+async def _proven(st: _Step, session: CopilotSession | None) -> None:
     """Settle the model check from the usage alone: verified, mismatch or unknown (TD-94).
 
     Every usage read is checked for models nobody may use. A processed ending needs its own model's tokens to have
@@ -436,7 +439,8 @@ async def _proven(st: _Step, session: Any) -> None:  # noqa: ANN401 - the SDK se
         if again or why or not proof or st.run.ending not in PROVEN:
             break
         await asyncio.sleep(USAGE_PAUSE)
-        st.run.usage = await usage_read(session, st.cfg.model)
+        # _open sets sending only after storing the opened session on st.
+        st.run.usage = await usage_read(cast("CopilotSession", session), st.cfg.model)
     st.run.usage_unread = why or (proof if st.run.ending in PROVEN else "")
     st.run.model_check = "unknown" if why or proof else "verified"
     if st.run.usage_unread:

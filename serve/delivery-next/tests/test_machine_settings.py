@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import Slots
@@ -34,7 +35,9 @@ def no_base(monkeypatch):
 def _git(root, *args: str) -> str:
     if (Path(root) / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
         args = ("--git-dir=.", *args)
-    return subprocess.run(["git", *args], cwd=root, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - _git callers build fixture Git add/branch/clone/commit argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=root, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 def _committed(shared: DataRepo, layer: dict, *, push: bool = True) -> None:

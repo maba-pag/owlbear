@@ -123,7 +123,9 @@ def uninstall(say: Say) -> int:
 def _fails(command: list[str]) -> str | None:
     """None when *command* exits 0, else its whole failure: the error, or its exit status and all it printed."""
     try:
-        done = subprocess.run(command, capture_output=True, text=True, timeout=60, check=False)  # noqa: S603
+        done = subprocess.run(  # noqa: S603 - _tools supplies checked tool-version argv; no shell
+            command, capture_output=True, text=True, timeout=60, check=False
+        )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return failure(exc)
     return None if done.returncode == 0 else failed(done)
@@ -181,7 +183,13 @@ def doctor(say: Say, dropped: list[str]) -> int:
         say(f"ignored from this shell: {name} (the host never sees it; a project's own Git settings decide)")
     failed = _tools(say)
     if shutil.which("gh"):
-        done = subprocess.run(["gh", "auth", "status"], capture_output=True, text=True, check=False)  # noqa: S607
+        # Keep the original presence gate and native execution-time search, rather than pinning a wrapper.
+        done = subprocess.run(
+            ["gh", "auth", "status"],  # noqa: S607 - native gh PATH
+            capture_output=True,
+            text=True,
+            check=False,
+        )
         if done.returncode:
             say("gh: not signed in from this environment · fix: gh auth login")
             failed += 1

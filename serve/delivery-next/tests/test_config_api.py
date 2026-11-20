@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github import account
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import data_repo, local_home
@@ -148,8 +149,12 @@ def test_the_settings_say_which_account_td_402_s_rule_gives_on_the_project_s_ori
 ):
     clone = tmp_path / "tools"
     origin = "https://github.com/acme/tools.git"
-    subprocess.run(("git", "init", "-q", str(clone)), check=True)  # noqa: S603, S607
-    subprocess.run(("git", "-C", str(clone), "remote", "add", "origin", origin), check=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with clone operands; no shell.
+        (resolve_git_executable(), "init", "-q", str(clone)), check=True
+    )
+    subprocess.run(  # noqa: S603 - Fixture Git remote argv with clone/origin operands; no shell.
+        (resolve_git_executable(), "-C", str(clone), "remote", "add", "origin", origin), check=True
+    )
     assert client(store, headers=AUTH).get("/api/next/config").json()["github_rule"]["error"]  # no clone to read
 
     monkeypatch.setattr(Host, "repo", clone)
@@ -718,8 +723,8 @@ def test_this_machine_s_layer_sits_between_global_and_project_and_stays_local(st
         assert reloaded["inherited"]["project"][key] == machine[key]
         assert reloaded["inherited"]["machine"][key] == glob[key]
     assert reloaded["settings"]["prefs"] == project["prefs"]
-    shown = subprocess.run(  # noqa: S603
-        ["git", "--git-dir", str(remote), "log", "--format=%s", "main"],  # noqa: S607
+    shown = subprocess.run(  # noqa: S603 - Resolved Git reads the fixture's bare remote with fixed log argv; no shell.
+        [resolve_git_executable(), "--git-dir", str(remote), "log", "--format=%s", "main"],
         check=True, capture_output=True, text=True,
     ).stdout  # fmt: skip
     assert "machine" not in shown  # never published
@@ -802,7 +807,9 @@ class _Abrupt(BaseException):
 def _git_project(path: Path) -> Path:
     path.mkdir()
     for args in (("init", "-q"), ("remote", "add", "origin", "https://github.com/acme/shop.git")):
-        subprocess.run(["git", *args], cwd=path, check=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git init/remote/add loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), *args], cwd=path, check=True
+        )
     return path
 
 

@@ -35,6 +35,7 @@ from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import chat_client, setup
 from owlbear_delivery_next.commands.chat_client import NOT_RUNNING, NOT_SERVED, OWLBEAR_DOWN, Chat, OwlBear
 from owlbear_delivery_next.git.access import Access
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.account import AccountMissing
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -79,7 +80,9 @@ def client(store):
 
 @pytest.fixture
 def repo(tmp_path):
-    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)  # noqa: S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with literal operands; no shell.
+        [resolve_git_executable(), "init", "-q"], cwd=tmp_path, check=True
+    )
     return tmp_path
 
 
@@ -497,7 +500,9 @@ def test_an_untracked_write_is_excluded_once_and_the_exclude_file_is_created(rep
 def test_a_tracked_file_is_left_untouched_with_the_manual_alternative(repo):
     path = repo / ".mcp.json"
     path.write_text("{}\n")
-    subprocess.run(["git", "add", ".mcp.json"], cwd=repo, check=True)  # noqa: S607
+    subprocess.run(  # noqa: S603 - Fixture Git add argv with literal operands; no shell.
+        [resolve_git_executable(), "add", ".mcp.json"], cwd=repo, check=True
+    )
     said = setup.consent(repo, path, lambda d: d | {"a": 1}, "Write?", lambda _q: "y", yes=True)
     assert said.startswith("not written")
     assert "tracked" in said
@@ -507,7 +512,9 @@ def test_a_tracked_file_is_left_untouched_with_the_manual_alternative(repo):
 
 def test_an_untracked_link_to_a_tracked_file_is_refused_and_its_target_untouched(repo, tmp_path):
     (repo / "real.json").write_text("{}\n")
-    subprocess.run(["git", "add", "real.json"], cwd=repo, check=True)  # noqa: S607
+    subprocess.run(  # noqa: S603 - Fixture Git add argv with literal operands; no shell.
+        [resolve_git_executable(), "add", "real.json"], cwd=repo, check=True
+    )
     (repo / ".mcp.json").symlink_to("real.json")
     said = setup.consent(repo, repo / ".mcp.json", lambda d: d | {"a": 1}, "Write?", lambda _q: "y", yes=True)
     assert said.startswith("not written")
@@ -525,7 +532,9 @@ def test_a_file_tracked_while_the_owner_answers_is_not_written(repo):
     path.write_text("{}\n")
 
     def answer(_q):
-        subprocess.run(["git", "add", ".mcp.json"], cwd=repo, check=True)  # noqa: S607
+        subprocess.run(  # noqa: S603 - Fixture Git add argv with literal operands; no shell.
+            [resolve_git_executable(), "add", ".mcp.json"], cwd=repo, check=True
+        )
         return "y"
 
     said = setup.consent(repo, path, lambda d: d | {"a": 1}, "Write?", answer, yes=False)

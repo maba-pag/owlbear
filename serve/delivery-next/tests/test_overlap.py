@@ -24,6 +24,7 @@ from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.change_flow.moves import carry_integrations
 from owlbear_delivery_next.change_flow.status import Activity, card
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.runtimes import step_input
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -36,7 +37,9 @@ C1 = Lock("c1")  # the integrating Change's writer lock
 
 
 def git(cwd, *args, check=True):
-    done = subprocess.run(["git", *args], cwd=cwd, check=check, capture_output=True, text=True)  # noqa: S603, S607
+    done = subprocess.run(  # noqa: S603 - git callers build fixture Git add/commit/init/merge argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=cwd, check=check, capture_output=True, text=True
+    )
     return done.stdout.strip()
 
 

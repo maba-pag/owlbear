@@ -16,7 +16,7 @@ import asyncio
 import tempfile
 import uuid
 from functools import partial
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from copilot import CopilotClient, RuntimeConnection
 from copilot.rpc import PermissionDecisionReject
@@ -30,6 +30,7 @@ from owlbear_delivery_next.runtimes.model_choices import takes_effort
 from owlbear_delivery_next.state_store import spend_ledger
 
 if TYPE_CHECKING:
+    from copilot.generated.session_events import SessionEvent
     from copilot.session import CopilotSession
 
     from owlbear_delivery_next.change_contracts.profile_record import RoleModel
@@ -55,7 +56,7 @@ async def asked(
     said: list[str] = []
     limit = Limit(meter)
 
-    def heard(ev: Any) -> None:  # noqa: ANN401 - an SDK event
+    def heard(ev: SessionEvent) -> None:
         d = as_dict(ev)
         if d.get("type") == "assistant.message" and (text := (d.get("data") or {}).get("content")):
             said.append(text)
@@ -111,5 +112,5 @@ async def _end(  # noqa: PLR0913 - the session's runtime, session, meter, run an
     await spotter_look.teardown(client, session, spent.sid)
 
 
-async def _abort(session: Any) -> None:  # noqa: ANN401 - the SDK session
+async def _abort(session: CopilotSession) -> None:
     await session.abort()

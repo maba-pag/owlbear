@@ -103,7 +103,7 @@ def transaction(  # noqa: PLR0913, PLR0917 - the head the caller proved travels 
     be a second one.
     """
     store._interrupted(shared)  # noqa: SLF001 - same package; store helpers stay private to it
-    rows = [(p.relative_to(shared.root).as_posix(), store._content(p), data) for p, data in files]  # noqa: SLF001
+    rows = [(p.relative_to(shared.root).as_posix(), storage_io.read_regular(p), data) for p, data in files]
     planned(shared, [p for p, _ in files])
     generation = decision_batch.begin(shared, project, head, message, [p.stem for p, _ in files], rows)
     images = {shared.root / rel: (before, after) for rel, before, after in rows}

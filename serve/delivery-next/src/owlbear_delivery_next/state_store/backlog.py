@@ -87,7 +87,7 @@ class Entry(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _scoped(cls, data: Any) -> Any:  # noqa: ANN401 - pydantic's raw input
+    def _scoped(cls, data: object) -> object:
         """An entry written before TD-241: only what its scope states becomes ``projects``; its project, the origin."""
         if not isinstance(data, dict) or not {"scope", "project"} & data.keys():
             return data

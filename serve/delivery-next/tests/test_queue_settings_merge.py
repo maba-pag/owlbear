@@ -12,6 +12,7 @@ import pytest
 
 from owlbear_delivery_next.change_contracts.models import Change, Exit, Names, Plan, Step, StepKind, Task
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.provider import (
     EnqueueResult,
     EnqueueStatus,
@@ -51,7 +52,9 @@ def store(tmp_path: Path, monkeypatch) -> Store:
         ["init", "-q"],
         ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"],
     ):
-        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git init/commit loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), *args], cwd=tmp_path, check=True, capture_output=True
+        )
     return Store.open(tmp_path)
 
 

@@ -22,6 +22,7 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_flow import loop
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.provider import MergeMethod, Repository, Rules
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import answers
@@ -84,7 +85,9 @@ def confirmed(prof: Profile, home: str, value: str = "npm test") -> Profile:
 
 
 def git(repo, *args) -> None:
-    subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)  # noqa: S603, S607 - fixed test commands
+    subprocess.run(  # noqa: S603 - git callers build fixture Git add/commit argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=repo, check=True, capture_output=True
+    )
 
 
 def committed(repo, files: dict[str, str]) -> None:

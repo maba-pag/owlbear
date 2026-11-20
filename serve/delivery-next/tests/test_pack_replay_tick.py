@@ -25,6 +25,7 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay, pack_state
 from owlbear_delivery_next.local_system import local_home, maintenance, processes
 from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -84,7 +85,9 @@ def init_repo(path: Path) -> Path:
         ["init", "-q"],
         ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "i"],
     ):
-        subprocess.run(["git", *args], cwd=path, check=True, capture_output=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git init/commit loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), *args], cwd=path, check=True, capture_output=True
+        )
     return path
 
 

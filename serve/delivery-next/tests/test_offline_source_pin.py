@@ -9,6 +9,7 @@ import subprocess
 
 import pytest
 
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.state_store import fd_tree, offline_protocol, project_home, project_move
 from owlbear_delivery_next.state_store.database import MARKER, StoreError
 
@@ -20,7 +21,9 @@ PREPARED = offline_protocol.PREPARED
 def make_clone(root):
     repo = root / "repo"
     repo.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=repo, check=True, capture_output=True)  # noqa: S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with literal operands; no shell.
+        [resolve_git_executable(), "init", "-q"], cwd=repo, check=True, capture_output=True
+    )
     folder = project_home.clone_dir(repo)
     folder.mkdir()
     return repo, folder

@@ -10,7 +10,7 @@ fields are stored for the config page and stay inactive until their features use
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, get_args
+from typing import Annotated, Any, Literal, get_args, overload
 
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
@@ -376,7 +376,19 @@ class Settings(Record):
 BASE: GlobalLayer | None = None  # a layer under Global; empty in production (no code defaults), tests set one
 
 
-def pref(settings: Settings, key: str) -> Any:  # noqa: ANN401 - each key has its own type; callers know which
+@overload
+def pref(settings: Settings, key: Literal["merge_method"]) -> MergeMethod: ...
+
+
+@overload
+def pref(settings: Settings, key: Literal["delete_remote_branch", "ask_before_merge"]) -> bool: ...
+
+
+@overload
+def pref(settings: Settings, key: Literal["ci_poll_seconds", "ci_start_window_seconds"]) -> int: ...
+
+
+def pref(settings: Settings, key: str) -> MergeMethod | bool | int:
     """One preference's value; ``SettingsUnset`` while no layer sets it (R15: no code default fills it in)."""
     settings.need(f"prefs.{key}")
     return getattr(settings.prefs, key)

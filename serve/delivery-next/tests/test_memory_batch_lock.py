@@ -8,6 +8,7 @@ from pathlib import Path
 from owlbear_memory import MemoryCategory, MemoryEngine
 
 from owlbear_delivery_next.change_flow.worktree import git
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 # reference-transaction: once, when a rebase moves the branch, wait until the test releases it
@@ -34,7 +35,9 @@ def curated(folder: Path, title: str) -> Path:
 
 def bare(remote: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
     # CI sets safe.bareRepository=explicit: the bare remote is always named
-    return subprocess.run(["git", f"--git-dir={remote}", *args], capture_output=True, check=False)  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - bare callers build fixture Git show argv and repository operands; no shell.
+        [resolve_git_executable(), f"--git-dir={remote}", *args], capture_output=True, check=False
+    )
 
 
 def waited(path: Path, seconds: float) -> bool:
@@ -113,7 +116,12 @@ def test_a_memory_batch_during_a_publications_rebase_waits_and_its_commit_reache
     assert holder == {"said": ""}
     assert "error" not in batch, batch
     sha = batch["sha"]
-    assert subprocess.run(["git", "merge-base", "--is-ancestor", sha, "main"], cwd=root, check=False).returncode == 0  # noqa: S603, S607
+    assert (
+        subprocess.run(  # noqa: S603 - Fixture Git merge-base argv with sha operands; no shell.
+            [resolve_git_executable(), "merge-base", "--is-ancestor", sha, "main"], cwd=root, check=False
+        ).returncode
+        == 0
+    )
     assert git(root, "status", "--porcelain", "--", "shop/memory") == ""
     with shared.locked():
         assert shared.publish([], "again") == ""

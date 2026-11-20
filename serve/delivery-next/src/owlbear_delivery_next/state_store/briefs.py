@@ -8,7 +8,7 @@ from itertools import count
 from typing import TYPE_CHECKING, Any
 
 from owlbear_decisions import new_id
-from owlbear_delivery_next.change_contracts import chat_contract, evidence, tool_schema
+from owlbear_delivery_next.change_contracts import chat_contract, evidence, owner_look, tool_schema
 from owlbear_delivery_next.change_contracts.models import (
     BriefDecision,
     BriefRecipe,
@@ -178,7 +178,10 @@ def save_brief(
     errors = brief_tools.check_brief(draft, recipe=chat_contract.captures(contract)) if draft else errors
     if draft is None or errors:
         return 422, {"errors": errors}
-    draft, errors = _prepared(store, draft)
+    try:
+        draft, errors = _prepared(store, draft)
+    except StoreError as exc:
+        return 409, {"errors": [f"change: {failure(exc)}; try again"]}
     if errors:
         return 422, {"errors": errors}
     return _revise(store, draft, binding) if draft.change else _create(store, draft, binding)
@@ -189,6 +192,11 @@ def _prepared(store: Store, d: brief_tools.BriefDraft) -> tuple[brief_tools.Brie
 
     Without a declared option the draft keeps none, and its capture ends saying so (D-01M6Q56RXK85C5T4AG7R051X6N).
     """
+    if owner_look.chosen(d.decisions):
+        prof = store.read_profile()
+        if prof is None or profile.value(prof, profile.REPO).lower() != owner_look.REPOSITORY:
+            return d, ["decisions: the after-release look is supported only for OwlBear Changes"]
+        return d, []
     if not (d.ui and d.visual and d.recipe):
         return d, []
     declared = [o.id for o in store.settings().preparations]

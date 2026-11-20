@@ -130,8 +130,9 @@ def suites(paths: list[str]) -> list[str]:
 
 def changed(base: str, head: str) -> list[str]:
     """Paths the pull request changes, from the merge base of *base* and *head* to *head*, unquoted by ``-z``."""
-    done = subprocess.run(  # noqa: S603 - fixed git argument vector
-        ["git", "diff", "--name-only", "-z", f"{base}...{head}"],  # noqa: S607 - git from the runner's PATH
+    # Native lookup preserves the runner's empty/relative PATH and execution-time continuation.
+    done = subprocess.run(  # noqa: S603 - CI base/head form one diff revision operand; no shell
+        ["git", "diff", "--name-only", "-z", f"{base}...{head}"],  # noqa: S607 - native installed Git lookup
         capture_output=True,
         text=True,
         check=True,

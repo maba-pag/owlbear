@@ -13,6 +13,7 @@ import hashlib
 import json
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.change_contracts import owner_look
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.visual_records import ShapingCapture
 
@@ -30,6 +31,8 @@ def key(b: Brief) -> str:
         "preparation": b.preparation,
         "states": [[s.name, s.path, [x.model_dump() for x in s.steps]] for s in b.visual],
     }
+    if owner_look.chosen(b.decisions):
+        shown["owner_look"] = "after-release"
     return hashlib.sha256(json.dumps(shown, sort_keys=True).encode()).hexdigest()
 
 

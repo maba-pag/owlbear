@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from owlbear_decisions import new_id
+from owlbear_delivery_next.change_contracts import owner_look
 from owlbear_delivery_next.change_contracts.amend_tools import ITEMS
 from owlbear_delivery_next.change_contracts.amendment_records import AmendedItem
 from owlbear_delivery_next.change_contracts.decision_records import BriefDecision
@@ -367,8 +368,10 @@ def resume(c: Change, a: Amendment, level: Level, now: datetime) -> None:
         c.outcome = Outcome(exit=Exit.BACK, cause=cause, reason=r.reason, at=now)
         budgets.back(c, r, now)
         return
-    if s.kind == StepKind.CHECK and (not c.brief.visual if s.task == VISUAL else all(p.id != s.task for p in c.checks)):
-        go(c, StepKind.FOLLOW)  # its check is gone: the next one is chosen as after any follow
+    if s.kind == StepKind.CHECK and (
+        (not c.brief.visual or owner_look.approved(c)) if s.task == VISUAL else all(p.id != s.task for p in c.checks)
+    ):
+        go(c, StepKind.FOLLOW)  # its check is gone or its look deferred; Follow chooses any remaining person check
     else:
         go(c, s.kind, s.task, None if level != "autonomous" and s.kind == StepKind.PLAN else s.mode)
     c.outcome = None

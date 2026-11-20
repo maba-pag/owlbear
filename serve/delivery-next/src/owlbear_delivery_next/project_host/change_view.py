@@ -15,6 +15,7 @@ from owlbear_delivery_next.change_flow import exception_gate, loop, quality, wor
 from owlbear_delivery_next.change_flow.progress import progress
 from owlbear_delivery_next.change_flow.status import card, status, unloadable
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.project_host import release_look
 from owlbear_delivery_next.state_store import spend_ledger, tool_metrics, watch_reports
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import held
@@ -49,6 +50,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
         out["suppressions_fault"] = failure(exc)
     out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
+    out["release_look"] = release_look.shown(store, c)
     out["watcher"] = watch_reports.counts(store.db, slug)  # observed calls writing outside, unresolved ones apart
     if q := loop.open_question(c):
         options = [o.model_dump(include={"id", "label"}) for o in held.offered(store, c, q)]

@@ -16,6 +16,7 @@ from owlbear_memory import MemoryBusyError, MemoryCategory, MemoryEngine, Memory
 
 from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryCurationResult
 from owlbear_delivery_next.change_flow.worktree import git
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import curation_apply, data_place, preload
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.local_system.processes import Termination
@@ -82,7 +83,9 @@ def committed(memory: Path, *paths: str) -> str:
 
 def bare(remote: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
     # CI sets safe.bareRepository=explicit: the bare remote is always named
-    return subprocess.run(["git", f"--git-dir={remote}", *args], capture_output=True, check=False)  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - bare callers build fixture Git log/ls-tree/rev-parse/show argv and repository operands; no shell.
+        [resolve_git_executable(), f"--git-dir={remote}", *args], capture_output=True, check=False
+    )
 
 
 def remote_has(remote: Path, sha: str) -> bool:
@@ -118,7 +121,9 @@ def held(repo: Path, reason: str, path: str) -> bytes:
     """What the ref the reason names holds at *path*."""
     found = HELD.search(reason)
     assert found, reason
-    return subprocess.run(["git", "show", f"{found.group()}:{path}"], cwd=repo, capture_output=True, check=True).stdout  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - Fixture Git show argv with found/path operands; no shell.
+        [resolve_git_executable(), "show", f"{found.group()}:{path}"], cwd=repo, capture_output=True, check=True
+    ).stdout
 
 
 REFUSALS = {

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, NotRequired, TypedDict, cast, overload
 
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import assumptions, case_intake, cases
@@ -27,6 +27,8 @@ from owlbear_delivery_next.improvement.events import clean, clip
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from pydantic import JsonValue
 
 CARDS = (
     "moments-dev-v2p.jsonl",
@@ -40,7 +42,27 @@ SYNTHETIC = Path(__file__).with_name("synthetic_cases.json")
 MAPPED = "mapped from the pilot's saved card (2026-10-25): evidence outputs were not saved, only result excerpts"
 
 
-def _cleaned(value: Any) -> Any:  # noqa: ANN401 - the card's JSON values
+class Hindsight(TypedDict):
+    """A pilot hindsight row's identity, verdict and optional evidence."""
+
+    id: str
+    verdict: str
+    problem: NotRequired[str]
+    why: NotRequired[str]
+    cost: NotRequired[JsonValue]
+    self_corrected: NotRequired[JsonValue]
+    channel: NotRequired[JsonValue]
+
+
+@overload
+def _cleaned(value: dict[str, JsonValue]) -> dict[str, JsonValue]: ...
+
+
+@overload
+def _cleaned(value: JsonValue) -> JsonValue: ...
+
+
+def _cleaned(value: JsonValue) -> JsonValue:
     if isinstance(value, str):
         return clean(value)
     if isinstance(value, list):
@@ -104,7 +126,7 @@ def mapped(saved: dict[str, Any]) -> dict[str, Any]:
     return bounded(_cleaned(card))
 
 
-def _read(folder: Path, name: str) -> Any:  # noqa: ANN401 - each file's JSON
+def _read(folder: Path, name: str) -> JsonValue:
     try:
         text = (folder / name).read_text()
     except OSError as exc:
@@ -119,8 +141,10 @@ def _read(folder: Path, name: str) -> Any:  # noqa: ANN401 - each file's JSON
 
 def _sides(folder: Path, saved: Mapping[str, dict[str, Any]], ids: list[str]) -> dict[str, str]:
     """Each moment's family side: both pilot assignments kept, the rest hashed once; all persisted."""
-    sessions = _read(folder, "split.json").get("sessions", {})
-    evals = {m: k for k, ms in _read(folder, "eval-ids.json").items() for m in ms}
+    split = cast("dict[str, dict[str, dict[str, str]]]", _read(folder, "split.json"))
+    sessions = split.get("sessions", {})
+    evaluation = cast("dict[str, list[str]]", _read(folder, "eval-ids.json"))
+    evals = {m: k for k, ms in evaluation.items() for m in ms}
     given: dict[str, tuple[str, str]] = {}
     for mid in ids:
         family, sid = saved[mid]["family"], saved[mid]["source"]["session"]
@@ -153,8 +177,9 @@ def seed(folder: Path, calls: Mapping[str, str], by: str) -> dict[str, Any]:
     Raises:
         CaseError: A pilot file is unreadable, a moment's saved card is missing, or a ``should`` has no category.
     """
-    rows = _read(folder, "hindsight.jsonl")
-    saved = {r["id"]: r for name in CARDS for r in _read(folder, name) if r.get("id")}
+    rows = cast("list[Hindsight]", _read(folder, "hindsight.jsonl"))
+    cards = (r for name in CARDS for r in cast("list[dict[str, JsonValue]]", _read(folder, name)))
+    saved = {cast("str", r["id"]): r for r in cards if r.get("id")}
     missing = sorted(r["id"] for r in rows if r["id"] not in saved)
     if missing:
         msg = f"no saved card for {', '.join(missing)}"
@@ -171,14 +196,15 @@ def seed(folder: Path, calls: Mapping[str, str], by: str) -> dict[str, Any]:
         if r["verdict"] == "unknown" or mid in done:
             continue
         s = saved[mid]
+        source, family = cast("dict[str, JsonValue]", s["source"]), cast("str", s["family"])
         call = "none" if r["verdict"] in NONE else calls[mid]
         why = clip(f"{r.get('problem') or ''} {r.get('why') or ''}".strip(), cases.WHY)
         provenance = {
             "pilot": {
                 "moment": mid,
-                "session": s["source"].get("session"),
-                "cutoff_event_index": s["source"].get("cutoff_event_index"),
-                "cutoff_event_id": s["source"].get("cutoff_event_id"),
+                "session": source.get("session"),
+                "cutoff_event_index": source.get("cutoff_event_index"),
+                "cutoff_event_id": source.get("cutoff_event_id"),
                 "hindsight": {k: r.get(k) for k in ("verdict", "cost", "self_corrected", "channel")},
             }
         }
@@ -187,8 +213,8 @@ def seed(folder: Path, calls: Mapping[str, str], by: str) -> dict[str, Any]:
             {
                 "source": "pilot",
                 "provenance": provenance,
-                "family": s["family"],
-                "reserve": sides[s["family"]] == "reserve",
+                "family": family,
+                "reserve": sides[family] == "reserve",
                 "unscored": UNSCORED.get(mid, ""),
             },
         )

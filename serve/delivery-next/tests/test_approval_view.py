@@ -27,6 +27,7 @@ from owlbear_delivery_next.change_contracts.visual_records import OwnerCriterion
 from owlbear_delivery_next.change_flow import shaping_capture
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
 from owlbear_delivery_next.change_flow.status import Activity
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api, brief_view
@@ -225,7 +226,9 @@ def shared_url(tmp_path: Path, shared_repo) -> Iterator[tuple[str, dict[str, Dec
         folder = {Scope.GLOBAL: shared.root, Scope.PROJECT: shared.root / PROJECT}.get(r.scope)
         write(r, folder or shared.root / PROJECT / "changes" / "flip")
     for args in (("add", "-A"), ("commit", "-qm", "seed"), ("push", "-q", "origin", "HEAD")):
-        subprocess.run(["git", *args], cwd=shared.root, check=True, capture_output=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git add/commit/push loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), *args], cwd=shared.root, check=True, capture_output=True
+        )
     store = Store(tmp_path / "store", shared, PROJECT)
     c = change()
     said = [PickedDecision(id=r.id, revision=r.revision, title=r.title, statement=r.statement) for r in rules.values()]

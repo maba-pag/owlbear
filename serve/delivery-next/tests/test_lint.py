@@ -21,6 +21,7 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_flow import worktree
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import lint, processes
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.results import ACCEPTED, ENDED, Gate
@@ -35,7 +36,9 @@ def commit(work: Path, files: dict[str, str]) -> None:
         (work / name).parent.mkdir(parents=True, exist_ok=True)
         (work / name).write_text(text)
     for args in (("add", "-A"), ("commit", "-qm", "work")):
-        subprocess.run(["git", *args], cwd=work, check=True, capture_output=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git add/commit loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), *args], cwd=work, check=True, capture_output=True
+        )
 
 
 def head(work: Path) -> str:
@@ -372,7 +375,9 @@ def test_names_git_quotes_reach_the_gates_and_lint_as_real_paths(change_repo: Pa
     since, log = head(change_repo), []
 
     def git(*args: str) -> None:
-        subprocess.run(["git", *args], cwd=change_repo, check=True, capture_output=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - git callers build fixture Git add/commit argv and repository operands; no shell.
+            [resolve_git_executable(), *args], cwd=change_repo, check=True, capture_output=True
+        )
 
     def observe() -> tools.Worktree:
         return worktree.observe(change_repo, "main", since)

@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.commands import cli
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.impeccable_runs import pack_run, pack_state
 from owlbear_delivery_next.local_system import codebase, local_home, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
@@ -31,7 +32,9 @@ def offline(tmp_path, monkeypatch):
         ["init", "-q", "-b", "main", str(repo)],
         ["-C", str(repo), "commit", "-q", "--allow-empty", "-m", "initial"],
     ):
-        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git init/commit loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), "-c", "user.name=t", "-c", "user.email=t@t", *args], check=True
+        )
     source = project_home.clone_dir(repo)
     source.mkdir(parents=True)
     (source / MARKER).write_text("7")
@@ -100,7 +103,9 @@ def hold_legacy_run(repo, source, machines, recovered):
 def test_held_generation_survives_prepare_finish_and_restart(offline, machines, recovered):
     repo, source, boot = offline
     entry, lease, stored, workspace, sentinel = hold_legacy_run(repo, source, machines, recovered)
-    head = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"])  # noqa: S603, S607
+    head = subprocess.check_output(  # noqa: S603 - Fixture Git rev-parse argv with repo operands; no shell.
+        [resolve_git_executable(), "-C", str(repo), "rev-parse", "HEAD"]
+    )
     assert cli.main(["--repo", str(repo), "prepare"]) == 0
     boot["id"] = AFTER
     ledger = local_home.root() / maintenance.FILE
@@ -117,7 +122,12 @@ def test_held_generation_survives_prepare_finish_and_restart(offline, machines, 
     assert (record["state"], record["reason"]) == ("failed", pack_state.HOST_STOPPED)
     assert record[pack_state.REWRITTEN] == stored["generation"]
     assert ledger.read_bytes() == ledger_bytes
-    assert subprocess.check_output(["git", "-C", str(repo), "rev-parse", "HEAD"]) == head  # noqa: S603, S607
+    assert (
+        subprocess.check_output(  # noqa: S603 - Fixture Git rev-parse argv with repo operands; no shell.
+            [resolve_git_executable(), "-C", str(repo), "rev-parse", "HEAD"]
+        )
+        == head
+    )
 
     again = machines()
     again.load_all()
@@ -135,10 +145,12 @@ def test_held_generation_survives_prepare_finish_and_restart(offline, machines, 
     again.stop_all()
 
     other_repo = repo.parent / "other"
-    subprocess.run(["git", "init", "-q", str(other_repo)], check=True, capture_output=True)  # noqa: S603, S607
-    subprocess.run(  # noqa: S603
-        [  # noqa: S607
-            "git",
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with other_repo operands; no shell.
+        [resolve_git_executable(), "init", "-q", str(other_repo)], check=True, capture_output=True
+    )
+    subprocess.run(  # noqa: S603 - Resolved Git makes a fixed empty commit in the fixture-owned other_repo.
+        [
+            resolve_git_executable(),
             "-c",
             "user.name=t",
             "-c",

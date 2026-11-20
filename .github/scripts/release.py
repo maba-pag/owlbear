@@ -54,7 +54,13 @@ class Step:
 
 def git(*args: str) -> str:
     """Run one git command in the checkout and return its output; a failure prints git's own message."""
-    done = subprocess.run(["git", *args], capture_output=True, text=True, check=False)  # noqa: S603, S607
+    # Internal Git vectors keep native PATH and execution-time continuation, without shell interpretation.
+    done = subprocess.run(  # noqa: S603 - code-owned release queries and tag-message operands; no shell
+        ["git", *args],  # noqa: S607 - native installed Git lookup
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     if done.returncode:
         sys.stderr.write(done.stderr)
         done.check_returncode()

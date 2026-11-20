@@ -2,6 +2,7 @@
 
 import contextlib
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -177,7 +178,13 @@ def test_a_leaderless_session_without_a_recorded_member_is_reported_not_signalle
 
 
 def test_a_leader_without_a_recorded_start_proves_nothing(monkeypatch) -> None:
-    leader = subprocess.Popen(["sh", "-c", "sleep 300 & wait"], start_new_session=True)  # noqa: S607
+    sh_executable = shutil.which("sh")
+    if sh_executable is None:
+        message = "sh executable is unavailable"
+        raise FileNotFoundError(message)
+    leader = subprocess.Popen(  # noqa: S603 - Fixed sh -c sleep/wait script creates the session leader under test; no shell=True.
+        [sh_executable, "-c", "sleep 300 & wait"], start_new_session=True
+    )
     sent: list[int] = []
     try:
         e = env("sleep 300", pgid=leader.pid, pids={leader.pid: None})  # its start time was unreadable at launch

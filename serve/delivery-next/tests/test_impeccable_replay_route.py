@@ -14,6 +14,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.impeccable import calibration, pack_files
 from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_job, pack_replay, pack_run
 from owlbear_delivery_next.local_system import maintenance
@@ -124,7 +125,9 @@ def legacy_host(tmp_path, state, *, updater_dir):
     """A real project host whose store holds *state* as the last run, optionally with its pre-ledger updater."""
     path = tmp_path / "repo"
     path.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=path, check=True, capture_output=True)  # noqa: S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with literal operands; no shell.
+        [resolve_git_executable(), "init", "-q"], cwd=path, check=True, capture_output=True
+    )
     store = Store.open(path)
     (store.root / pack_job.FILE).write_text(json.dumps(state), encoding="utf-8")
     updater = store.root / pack_run.UPDATER
