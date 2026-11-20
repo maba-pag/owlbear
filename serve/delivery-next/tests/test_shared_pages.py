@@ -555,6 +555,7 @@ def a_read_begun_during_a_save_never_undoes_it(page, pds) -> None:
             held.append(route)
 
     page.route("**/api/next/machine**", hold)
+    pds.settled(page)
     pds.pick(page, "Update itself when idle", "true")
     page.get_by_role("region", name="This machine").get_by_role("button", name="Save machine settings").click()
     page.evaluate("document.dispatchEvent(new Event('owlbear-machine'))")  # a refresh begun before the save
