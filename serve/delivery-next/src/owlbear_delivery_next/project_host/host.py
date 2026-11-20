@@ -307,7 +307,7 @@ class Host:
                 self.passing.add(slug)  # its launch passes the pause in this same pass
             if c.step.kind == StepKind.MERGE:
                 merge.settle_method(c, self.store.settings().prefs.merge_method)
-            settle_ci_basis(self.store, c, now)
+            settle_ci_basis(self.store, lock, c, now)
             act = self.env_action(c)
             if c.env and act in {"dispose", "settle"}:
                 if left := self.clear(c, c.env):

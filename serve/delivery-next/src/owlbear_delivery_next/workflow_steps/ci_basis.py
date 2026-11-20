@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
     from owlbear_delivery_next.change_contracts.models import Change, Question
     from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
-    from owlbear_delivery_next.state_store.store import Store
+    from owlbear_delivery_next.state_store.store import Lock, Store
 
 LEGACY_NONE = "for those it could read: none it could read. Merge on that basis?"
 
@@ -103,7 +103,7 @@ def delta(c: Change, q: Question | None, basis: CiBasis, prof: Profile, cause: s
     return " ".join(changes)
 
 
-def settle(store: Store, c: Change, now: datetime) -> None:
+def settle(store: Store, lock: Lock, c: Change, now: datetime) -> None:
     """Release only a redundant inventory hold; the runner still rereads GitHub and gates the actual head."""
     q = loop.open_question(c)
     if (
@@ -125,6 +125,7 @@ def settle(store: Store, c: Change, now: datetime) -> None:
         texts = profile.workflow_texts_at(Path(c.names.worktree), "HEAD")
     except OSError as exc:
         message = f"cannot read CI workflows at {c.names.worktree}: {failure(exc)}"
+        store.log(lock, c.slug, {"event": "ci-inventory-unread", "at": now.isoformat(), "reason": message})
         raise StoreError(message) from exc
     if prof is None or texts is None:
         return

@@ -667,6 +667,10 @@ def test_a_persisted_duplicate_inventory_hold_settles_before_normal_host_schedul
     cx.store.write(cx.lock, missing)
     assert host.tick(NOW) == []
     assert f"cannot read CI workflows at {missing.names.worktree}: FileNotFoundError" in capsys.readouterr().out
+    client = TestClient(
+        api.create_app(cx.store, "t", host), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
+    )
+    assert "FileNotFoundError" in client.get("/api/next/changes/c1").json()["diagnostics"][0]["reason"]
     cx.store.write(cx.lock, c)
     assert host.tick(NOW) == []  # the now-named inventory cannot settle an empty-inventory proposal.
     assert loop.open_question(cx.store.read("c1")).id == pending
