@@ -60,6 +60,9 @@ def approved(c: Change) -> bool:
 
 def delivered(c: Change, commit: str, repository: str) -> None:
     """Keep the intended delivery's receipt, preserving a matching acknowledgement on cleanup retries."""
+    if c.step.mode == "abandon" or c.intent.abandoned_at:
+        c.release_look = None
+        return
     if not commit or repository.lower() != REPOSITORY or not approved(c):
         return
     look = c.release_look

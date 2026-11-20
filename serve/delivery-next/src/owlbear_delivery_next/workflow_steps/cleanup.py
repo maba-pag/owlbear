@@ -390,8 +390,7 @@ def run(ctx: Ctx, c: Change) -> tuple[Change, StepResult]:
     c, proof, held = _delivery(ctx, c, pr)
     if held is not None:
         return c, held
-    if proof:
-        owner_look.delivered(c, proof.merge_commit_sha or "", ctx.repository)
+    owner_look.delivered(c, proof.merge_commit_sha or "" if proof else "", ctx.repository)
     if retired := _retire_branch(ctx, c, proof):
         return c, retired
     if c.step.mode == "abandon" and pr and pr.state == "open":

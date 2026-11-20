@@ -59,7 +59,14 @@ def _contains(root: Path, tag: str, commit: str) -> bool:
 def shown(store: Store, c: Change) -> dict[str, str | bool] | None:
     """The pending look, or none; installation failures stay visible without permitting acknowledgement."""
     look = c.release_look
-    if not c.finished_at or look is None or look.done_at or not owner_look.approved(c):
+    if (
+        c.step.mode == "abandon"
+        or c.intent.abandoned_at
+        or not c.finished_at
+        or look is None
+        or look.done_at
+        or not owner_look.approved(c)
+    ):
         return None
     prof = store.read_profile()
     if prof is None or profile.value(prof, profile.REPO).lower() != owner_look.REPOSITORY:
