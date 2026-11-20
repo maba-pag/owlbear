@@ -35,6 +35,7 @@ from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.git import remote_git
 from owlbear_delivery_next.git.access import Access
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github import account
 from owlbear_delivery_next.github.provider import MergeMethod
 from owlbear_delivery_next.impeccable import pack_files
@@ -674,7 +675,9 @@ def _git(cwd: Path, *args: str) -> str:
     if (cwd / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
         args = ("--git-dir=.", *args)
     who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
-    return subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - _git callers build fixture Git init argv and repository operands; no shell.
+        [resolve_git_executable(), *who, *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 _RUN = subprocess.run  # templates are built once per worker: a test's patched subprocess must not build them
@@ -1087,9 +1090,13 @@ GIT_IDENTITY = ("-c", "user.name=fixture", "-c", "user.email=fixture@example.inv
 
 def commit_package(package: Path) -> None:
     """Commit every change in a fixture checkout so the gate sees a clean build."""
-    subprocess.run(["git", "-C", str(package), "add", "-A"], check=True, capture_output=True)  # noqa: S603, S607
-    commit = ["git", "-C", str(package), *GIT_IDENTITY, "commit", "-q", "-m", "fixture"]
-    subprocess.run(commit, check=True, capture_output=True)  # noqa: S603
+    subprocess.run(  # noqa: S603 - Fixture Git add argv with package operands; no shell.
+        [resolve_git_executable(), "-C", str(package), "add", "-A"], check=True, capture_output=True
+    )
+    commit = [resolve_git_executable(), "-C", str(package), *GIT_IDENTITY, "commit", "-q", "-m", "fixture"]
+    subprocess.run(  # noqa: S603 - commit_package builds Git commit argv with fixed GIT_IDENTITY/message and a temporary package path; no shell.
+        commit, check=True, capture_output=True
+    )
 
 
 @pytest.fixture
@@ -1108,10 +1115,14 @@ def checkout_package(root: Path, commit: str, files: tuple[str, ...]) -> Path:
     """Write the named package files of one commit into a fresh clean git checkout under root."""
     package = root / "owlbear_delivery_next"
     package.mkdir(parents=True)
-    subprocess.run(["git", "init", "-q", str(package)], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with package operands; no shell.
+        [resolve_git_executable(), "init", "-q", str(package)], check=True, capture_output=True
+    )
     for rel in files:
-        show = ["git", "-C", str(Path(__file__).parent), "show", f"{commit}:{AUDITED_PACKAGE}/{rel}"]
-        blob = subprocess.run(show, capture_output=True, check=True).stdout  # noqa: S603
+        show = [resolve_git_executable(), "-C", str(Path(__file__).parent), "show", f"{commit}:{AUDITED_PACKAGE}/{rel}"]
+        blob = subprocess.run(  # noqa: S603 - checkout_package supplies the audited fixture commit and package-relative file operands to Git show; no shell.
+            show, capture_output=True, check=True
+        ).stdout
         (package / rel).parent.mkdir(parents=True, exist_ok=True)
         (package / rel).write_bytes(blob)
     commit_package(package)
@@ -1136,7 +1147,9 @@ def current_package(tmp_path: Path) -> Path:
     source = Path(__file__).resolve().parents[1] / "src" / "owlbear_delivery_next"
     package = tmp_path / "current" / "owlbear_delivery_next"
     package.mkdir(parents=True)
-    subprocess.run(["git", "init", "-q", str(package)], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git init argv with package operands; no shell.
+        [resolve_git_executable(), "init", "-q", str(package)], check=True, capture_output=True
+    )
     for rel in legacy_family.CURRENT_FILES:
         (package / rel).parent.mkdir(parents=True, exist_ok=True)
         (package / rel).write_bytes((source / rel).read_bytes())

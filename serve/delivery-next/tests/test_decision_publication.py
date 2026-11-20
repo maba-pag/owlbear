@@ -31,6 +31,7 @@ from owlbear_delivery_next.change_flow.budgets import EPISODE_ASK
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.commands.runner import _run
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.provider import PullRequest
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.project_host import api
@@ -59,7 +60,9 @@ MERGED = PullRequest(
 def git(cwd: Path, *args: str) -> str:
     if (cwd / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
         args = ("--git-dir=.", *args)
-    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - git callers build fixture Git add/commit/diff/log argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 def rel(decision_id: str) -> str:

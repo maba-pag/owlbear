@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from owlbear_decisions import Decision, Origin, Scope, State, new_id
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.state_store import decision_batch, decision_recovery, decision_sync
 from owlbear_delivery_next.state_store.decision_store import DecisionsUnavailable, save
@@ -27,11 +28,15 @@ OWNER = "notes.txt"
 def git(cwd: Path, *args: str) -> str:
     if (cwd / "HEAD").is_file():  # a bare repository: safe.bareRepository=explicit wants it named
         args = ("--git-dir=.", *args)
-    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - git callers build fixture Git add/clone/commit/config argv and repository operands; no shell.
+        [resolve_git_executable(), *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 def is_ancestor(root: Path, older: str, newer: str) -> bool:
-    ran = subprocess.run(["git", "merge-base", "--is-ancestor", older, newer], cwd=root, check=False)  # noqa: S603, S607
+    ran = subprocess.run(  # noqa: S603 - Fixture Git merge-base argv with newer/older operands; no shell.
+        [resolve_git_executable(), "merge-base", "--is-ancestor", older, newer], cwd=root, check=False
+    )
     return ran.returncode == 0
 
 

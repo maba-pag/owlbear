@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api
@@ -29,7 +30,9 @@ def client(store: Store) -> TestClient:
 
 def fresh_config(remote: Path, tmp_path: Path) -> Store:
     where = tmp_path / "fresh"
-    subprocess.run(["git", "clone", "-q", str(remote), str(where)], check=True, capture_output=True)  # noqa: S603, S607
+    subprocess.run(  # noqa: S603 - Fixture Git clone argv with remote/where operands; no shell.
+        [resolve_git_executable(), "clone", "-q", str(remote), str(where)], check=True, capture_output=True
+    )
     return Store(tmp_path / "fresh-store", DataRepo(where), "shop")
 
 

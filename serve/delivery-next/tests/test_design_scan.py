@@ -18,6 +18,7 @@ from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.models import Change, Names, StepKind, VisualState, VisualStep
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.visual_records import DetectorFinding, DetectorScan, VisualResult
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.impeccable import design_tools, detector, pack_files
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.runtimes import sdk_adapter
@@ -37,7 +38,9 @@ def found(rule: str, where: str) -> detector.Finding:
 
 def git(cwd: Path, *args: str) -> str:
     who = ["-c", "user.name=t", "-c", "user.email=t@t"]
-    done = subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True)  # noqa: S603, S607
+    done = subprocess.run(  # noqa: S603 - git callers build fixture Git add/clone/commit/init argv and repository operands; no shell.
+        [resolve_git_executable(), *who, *args], cwd=cwd, check=True, capture_output=True, text=True
+    )
     return done.stdout.strip()
 
 

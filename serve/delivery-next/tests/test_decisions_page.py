@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 from playwright.sync_api import Error, expect, sync_playwright
 
 from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, new_id, write
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import publication_hold
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -59,7 +60,9 @@ def store(tmp_path, shared_repo) -> Store:
     write(make(), shared.root / PROJECT)
     write(make(scope=Scope.GLOBAL, project="", title="Pages are plain HTML", statement="No build step."), shared.root)
     for args in (("add", "-A"), ("commit", "-qm", "seed"), ("push", "-q", "origin", "HEAD")):
-        subprocess.run(["git", *args], cwd=shared.root, check=True, capture_output=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git add/commit/push loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), *args], cwd=shared.root, check=True, capture_output=True
+        )
     return Store(tmp_path / "store", shared, PROJECT)
 
 
@@ -595,7 +598,9 @@ def replaced(store: Store) -> Decision:
     for d in (old, new):
         write(d, store.shared.root / PROJECT)
     for args in (("add", "-A"), ("commit", "-qm", "replaced"), ("push", "-q", "origin", "HEAD")):
-        subprocess.run(["git", *args], cwd=store.shared.root, check=True, capture_output=True)  # noqa: S603, S607
+        subprocess.run(  # noqa: S603 - Inline fixture Git add/commit/push loop owns argv and temporary repository paths; no shell.
+            [resolve_git_executable(), *args], cwd=store.shared.root, check=True, capture_output=True
+        )
     return new
 
 

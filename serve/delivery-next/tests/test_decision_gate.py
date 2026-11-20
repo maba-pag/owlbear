@@ -38,6 +38,7 @@ from owlbear_delivery_next.change_contracts.preparation import Preparation
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import loop, worktree
 from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api, environment
 from owlbear_delivery_next.project_host.host import Host
@@ -319,7 +320,9 @@ def test_a_change_pinned_with_whole_revisions_does_not_ask_while_they_hold(tmp_p
 
 def git(cwd: Path, *args: str) -> str:
     who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
-    return subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - git callers build fixture Git clone/remote argv and repository operands; no shell.
+        [resolve_git_executable(), *who, *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 def pushed(root: Path, message: str) -> None:

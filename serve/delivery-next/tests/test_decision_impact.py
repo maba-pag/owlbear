@@ -15,6 +15,7 @@ from owlbear_decisions import Decision, Link, LinkType, Origin, Scope, State, ne
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline, Said
 from owlbear_delivery_next.change_contracts.models import Change, Step, StepKind
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.data_repo import DataRepo
@@ -45,7 +46,9 @@ CHAT = AUTH | {"x-owlbear-use": "chat"}
 
 def git(cwd: Path, *args: str) -> str:
     who = ["-c", "user.name=t", "-c", "user.email=t@example.com"]
-    return subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()  # noqa: S603, S607
+    return subprocess.run(  # noqa: S603 - git callers build fixture Git add/clone/commit/config argv and repository operands; no shell.
+        [resolve_git_executable(), *who, *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout.strip()
 
 
 def make(**changes) -> Decision:
