@@ -92,6 +92,6 @@ export function contextChart(c, choose) {
     colours: (t) => t.parts, relative: pick.relative, said: (r) => said(m[r]),
     about: (r) => `${esc(m[r].model || "Model unknown")}, ran ${esc(ran(m[r]))}`, note: () => esc(MESSAGES),
   });  // fmt: skip
-  draw("context", { ...spec, height: 270, facts: [...spec.facts, m.map((x) => [x.window, x.model, x.at])], ids: rows.map((r) =>
-    r.role), key: query(), label: "Context at start chart", act: (i) => choose(rows[i].role) });
+  draw("context", { ...spec, height: 270, facts: [...spec.facts, m.map((x) => [x.window, x.model, x.at])],
+    ids: rows.map((r) => r.role), key: query(), label: "Context at start chart", act: (i) => choose(rows[i].role) });
 }
