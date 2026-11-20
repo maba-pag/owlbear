@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
+from owlbear_delivery_next.change_contracts import owner_look
 from owlbear_delivery_next.change_contracts.models import VISUAL, StepKind
 from owlbear_delivery_next.change_contracts.round_records import FINAL
 from owlbear_delivery_next.change_flow.brief_rounds import MODES as CHALLENGING
@@ -167,7 +168,7 @@ def progress(c: Change) -> Progress:
     """Derive the progress display of *c* from its records alone."""
     rounds = _rounds(c)
     keys = list(STAGES)
-    unused = {"visual"} if not c.brief.visual else set()
+    unused = {"visual"} if not c.brief.visual or owner_look.approved(c) else set()
     unused |= {"checks"} if not c.checks else set()
     gone = bool(c.intent.abandoned_at) or c.step.mode == "abandon"
     if gone:
