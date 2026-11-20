@@ -44,12 +44,12 @@ class BatchCommitResult:
 
 
 def _git_executable(cwd: Path) -> str:
-    search = os.pathsep.join(str(cwd.absolute() / entry) for entry in os.get_exec_path())
-    executable = shutil.which("git", path=search)
-    if executable is None:
-        message = "Git executable not found on PATH"
-        raise FileNotFoundError(message)
-    return executable
+    for entry in os.get_exec_path():
+        executable = shutil.which(str(cwd.absolute() / entry / "git"))
+        if executable is not None:
+            return executable
+    message = "Git executable not found on PATH"
+    raise FileNotFoundError(message)
 
 
 def _git(repo_dir: Path, *args: str) -> str:
