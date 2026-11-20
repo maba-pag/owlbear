@@ -39,10 +39,10 @@ function unmeasured(c) {
   const errors = c.roles.flatMap((r) => r.errors.map((e) => ({ ...e, role: r.role })));
   const failed = new Set(errors.map((e) => e.session)).size, before = c.unmeasured - failed;
   const sessions = (n) => `${count(n)} session${n === 1 ? "" : "s"}`;
-  const why = [before ? `${sessions(before)} ran before this release measured context` : "",
-    failed ? `${sessions(failed)} could not read ${failed === 1 ? "its" : "their"} context` : ""].filter(Boolean);
-  return html`<p-text id="context-unmeasured" size="sm">${sessions(c.unmeasured)} in these filters
-    ${c.unmeasured === 1 ? "has" : "have"} no measurement: ${why.join(", ")}.</p-text>
+  const why = [before ? `${count(before)} ran before this release` : "",
+    failed ? `${count(failed)} failed to read` : ""].filter(Boolean);
+  return html`<p-text id="context-unmeasured" size="sm">${sessions(c.unmeasured)} unmeasured: ${why.join(", ")}.
+    </p-text>
     ${errors.length ? html`<ul id="context-errors" class="notes">${errors.map((e) => html`<li class="error">Could not
       read the context of ${e.role}'s session ${e.session}${e.at ? ` at ${new Date(e.at).toLocaleString()}` : ""}:
       <span class="why">${e.error}</span></li>`)}</ul>` : nothing}`;
@@ -64,9 +64,8 @@ export function contextAtStart(c) {
   const heads = ["Role", ...PARTS.map(([, h]) => h), "Total", "Share of window", "Model", "Ran"];
   return html`<section id="context" aria-labelledby="context-title">
     <p-heading size="lg"><h2 id="context-title">Context at start</h2></p-heading>
-    <p-text size="sm">What filled each role's context window after its session's first model call, for the role's
-      latest measured session in these filters. The bars share one scale, set by the largest total shown; each label
-      gives the share of the window the session ran with. ${MESSAGES}</p-text>
+    <p-text size="sm">Each role's latest measured session after its first model call, on one shared scale; labels
+      give the share of its window.</p-text>
     ${rows.length ? html`<div id="context-controls" class="row">${lengthSwitch(pick.relative, (on) => {
       pick.relative = on;
       show();
@@ -93,6 +92,6 @@ export function contextChart(c, choose) {
     colours: (t) => t.parts, relative: pick.relative, said: (r) => said(m[r]),
     about: (r) => `${esc(m[r].model || "Model unknown")}, ran ${esc(ran(m[r]))}`, note: () => esc(MESSAGES),
   });  // fmt: skip
-  draw("context", { ...spec, facts: [...spec.facts, m.map((x) => [x.window, x.model, x.at])], ids: rows.map((r) =>
+  draw("context", { ...spec, height: 270, facts: [...spec.facts, m.map((x) => [x.window, x.model, x.at])], ids: rows.map((r) =>
     r.role), key: query(), label: "Context at start chart", act: (i) => choose(rows[i].role) });
 }
