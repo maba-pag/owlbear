@@ -52,24 +52,28 @@ function verdictLine(v) {
   const said = v.verdict ?? "no verified verdict";
   const first = v.unanchored && v.unanchored !== v.verdict
     ? `, ${v.unanchored} before it saw the detector's findings` : "";
-  return html`<div>${text(`${JUDGE[v.lens]}: ${said}${first}`, { weight: "semibold" })}
+  const label = v.lens === "design" ? "Design (Delivery's derived verdict)" : JUDGE[v.lens];
+  return html`<div>${text(`${label}: ${said}${first}`, { weight: "semibold" })}
     ${v.reason ? text(v.reason) : nothing}</div>`;
 }
 
 // The design judge's blind preferences, mapped back to before and after.
 function comparison(r) {
-  const sides = new Map();
+  const lines = [];
   for (const v of r.verdicts) {
     for (const [pair, side] of Object.entries(v.preferences || {})) {
       const cut = pair.lastIndexOf("-"), at = pair.slice(0, cut);
-      if (!sides.has(side)) sides.set(side, new Map());
-      if (!sides.get(side).has(at)) sides.get(side).set(at, []);
-      sides.get(side).get(at).push(Number(pair.slice(cut + 1)));
+      const labels = ["A", "B"].map((label) => {
+        const mapped = r.blind?.[`${pair}-${label}.png`];
+        return mapped ? `${label} is ${mapped}` : "";
+      }).filter(Boolean).join("; ");
+      const why = v.preference_reasons?.[pair];
+      lines.push(`${where(at, [Number(pair.slice(cut + 1))])}: `
+        + `${side === "equal" ? "no difference" : `${side} better`}${labels ? ` (${labels})` : ""}`
+        + `${why ? `: ${why}` : ""}`);
     }
   }
-  const said = [...sides].flatMap(([side, states]) => [...states].map(([at, widths]) =>
-    `${side === "equal" ? "no difference" : `${side} better`} for ${where(at, widths.sort((a, b) => a - b))}`));
-  return said.length ? `Without knowing which was which, the design judge found ${said.join("; ")}.` : "";
+  return lines;
 }
 
 function detectorLines(r) {
@@ -172,7 +176,8 @@ export function decisionForm(q, r, pictures, d) {
       + "builder.")}${made.map((p) => problemRow(p, mine))}` : nothing,
     old.length ? disclosure(`Already there before the Change: ${old.length} (never sent to the build)`,
       list(old.map((p) => `${where(p.first.state, widthsOf(p.items))}: ${p.first.text}`))) : nothing,
-    preferred ? text(preferred, { size: "xs" }) : nothing,
+    preferred.length ? html`${text("Without knowing which was which, the design judge found:")}${list(preferred)}`
+      : nothing,
     evidence.length ? disclosure("What the design detector found (evidence for the judges)", list(evidence))
       : nothing,
     field(key, "text", "Comment: on Fail it becomes a criterion every later round checks until you withdraw it; on "
