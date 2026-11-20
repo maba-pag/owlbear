@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from subprocess import TimeoutExpired
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.merge_records import CiBasis
@@ -130,7 +131,7 @@ def settle(store: Store, lock: Lock, c: Change, now: datetime) -> None:
     prof = store.read_profile()
     try:
         texts = profile.workflow_texts_at(Path(c.names.worktree), "HEAD")
-    except OSError as exc:
+    except (OSError, TimeoutExpired) as exc:
         message = f"cannot read CI workflows at {c.names.worktree}: {failure(exc)}"
         store.log(lock, c.slug, {"event": "ci-inventory-unread", "at": now.isoformat(), "reason": message})
         raise StoreError(message) from exc
