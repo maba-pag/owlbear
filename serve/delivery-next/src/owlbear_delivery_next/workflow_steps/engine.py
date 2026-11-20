@@ -6,9 +6,10 @@ import hashlib
 import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 from owlbear_delivery_next.change_contracts import failures
+from owlbear_delivery_next.change_contracts.merge_records import CiBasis
 from owlbear_delivery_next.change_contracts.models import (
     ErrorKind,
     Exit,
@@ -245,7 +246,11 @@ def rules_changed(ctx: Ctx, c: Change) -> tuple[StepResult | None, Rules]:
         f"{'; '.join(lines)}. Go on under the rules as they are now?"
     )
     options = [Option(id="yes", label="Yes: record them and go on", next=kind), PAUSE]
-    return ask(kind, text, cause, options, subject="reserved"), rules
+    required_shown = any(d.startswith(f"{profile.REQUIRED}:") for d in diffs)
+    basis = CiBasis(required=tuple(sorted(rules.required_checks))) if required_shown else None
+    result = ask(kind, text, cause, options, subject="reserved")
+    cast("Question", result.question).ci_basis = basis
+    return result, rules
 
 
 def failed(c: Change, exc: Exception, now: datetime) -> StepResult:

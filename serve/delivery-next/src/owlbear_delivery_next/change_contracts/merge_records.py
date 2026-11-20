@@ -14,6 +14,13 @@ class _Record(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class CiBasis(_Record):
+    """Checks shown for approval; None is an unrecorded inventory or unreadable required checks."""
+
+    declared: tuple[str, ...] | None = None
+    required: tuple[str, ...] | None = None
+
+
 class Pullback(_Record):
     """The last attempt to bring the local target branch up to the merged remote one."""
 
