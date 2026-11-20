@@ -10,7 +10,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
 
-from owlbear_delivery_next.change_contracts import evidence
+from owlbear_delivery_next.change_contracts import evidence, owner_look
 from owlbear_delivery_next.change_contracts.models import VISUAL
 from owlbear_delivery_next.change_contracts.tools import LOCAL_URL, Args, bounded, relative
 
@@ -251,10 +251,12 @@ def check_brief(brief: BriefDraft, *, recipe: bool = True) -> list[str]:
         if v.path.startswith("//") or ".." in PurePosixPath(v.path.split("?")[0]).parts
     ]
     person = any(p.visual for p in brief.person_checks)
-    if evidence.need(ui=brief.ui, states=bool(brief.visual), person=person) == "unmet":
+    if evidence.need(ui=brief.ui, states=bool(brief.visual), person=person) == "unmet" and not owner_look.chosen(
+        brief.decisions
+    ):
         errors.append(
             'visual: empty for a UI Change - add a state, e.g. {"name": "home", "path": "/", "expect": "..."}, '
-            "or a person-only check with visual: true"
+            "or a person-only check with visual: true; an OwlBear owner may explicitly choose the after-release look"
         )
     known = [f"AC-{i}" for i in range(1, len(brief.criteria) + 1)]
     errors += [
@@ -275,7 +277,7 @@ def _recipe(brief: BriefDraft) -> list[str]:
     """A UI brief with states has its render recipe: a local URL with `{port}`, run inside the repository."""
     r = brief.recipe
     if r is None:
-        needs = brief.ui and brief.visual
+        needs = brief.ui and brief.visual and not owner_look.chosen(brief.decisions)
         example = (
             '{"command": "npm run dev -- --port {port}", "directory": ".", "ready_url": "http://127.0.0.1:{port}/"}'
         )

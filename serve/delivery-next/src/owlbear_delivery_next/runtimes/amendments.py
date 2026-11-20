@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts import amend_tools, tools
+from owlbear_delivery_next.change_contracts import amend_tools, owner_look, tools
 from owlbear_delivery_next.change_flow import amend_apply, answer_kinds
 from owlbear_delivery_next.change_flow.brief_tools import BriefDraft
 from owlbear_delivery_next.runtimes import step_decisions
@@ -113,7 +113,7 @@ def _shaped(
 HOSTED = (
     "Delivery hosts this session, not the owner's chat: nobody reads your messages. You only read (view, glob, grep); "
     "you save no brief, start no challenge and ask nobody. Your only output is `submit_result`."
-)
+) + " " + owner_look.INSTRUCTIONS
 CANDIDATE_RULES = (
     "Write the exact candidate against the current version: per item the field, its key as the brief names it (empty "
     "to add one), the whole new wording, and why; a new visual state's path and a new or changed one's clicks and "

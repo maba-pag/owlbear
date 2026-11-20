@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts import evidence
+from owlbear_delivery_next.change_contracts import evidence, owner_look
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind, Waiting
 from owlbear_delivery_next.change_flow import loop
@@ -63,12 +63,14 @@ def checks(state: CiState) -> list[dict[str, str]]:
     return [{"name": n, "state": s} for n, s in rows]
 
 
-def visual_ok(c: Change, head: str, ui: Sequence[str]) -> bool:
+def visual_ok(c: Change, head: str, ui: Sequence[str], *, repository: str = "") -> bool:
     """Fail-closed visual acceptance of *head*: states need a passed result for its exact head and tree.
 
-    A Change that is not UI (by brief or by *ui* diff paths) passes; a UI Change without states passes only with
-    a person-only check marked ``visual`` or the owner's "Not a UI change" for this brief version and these paths.
+    An approved OwlBear after-release look defers only this gate. Other UI Changes still need current visual
+    evidence, a visual person check, or the owner's "Not a UI change" for this version and these paths.
     """
+    if repository.lower() == owner_look.REPOSITORY and owner_look.approved(c):
+        return True
     person = any(p.visual for p in c.checks)
     match evidence.need(ui=c.brief.ui or bool(ui), states=bool(c.brief.visual), person=person):
         case "states":
@@ -178,7 +180,7 @@ def gate(  # noqa: C901, PLR0911 - one exit per condition
         return _blocked(ctx, c, pr, state, decision)
     ui = [] if c.brief.visual else visual.ui_paths(c, pr.head_sha)
     c = visual.decide(c, ui, ctx.now)
-    if not visual_ok(c, pr.head_sha, ui):
+    if not visual_ok(c, pr.head_sha, ui, repository=ctx.repository):
         return c, visual.held(c, pr.head_sha, ui)
     asking = pref(ctx.store.settings(), "ask_before_merge")
     if asking and merge_offer.consent(c.consent.head if c.consent else None, pr.head_sha) != "valid":

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field
 
-from owlbear_delivery_next.change_contracts import evidence
+from owlbear_delivery_next.change_contracts import evidence, owner_look
 from owlbear_delivery_next.change_contracts.failures import DEFECT, ENVIRONMENT, UNREAD, VISUAL_MODEL, kind_of
 from owlbear_delivery_next.change_contracts.inbox import (
     AnswerItem,
@@ -480,7 +480,12 @@ def _done(c: Change, r: StepResult | None, now: datetime) -> None:  # noqa: C901
         case StepKind.FOLLOW | StepKind.CHECK:
             check, person = evidence.next_check(c, paths), any(p.visual for p in c.checks)
             states = evidence.need(ui=c.brief.ui, states=bool(c.brief.visual), person=person) == "states"
-            if s.kind == StepKind.FOLLOW and states and not evidence.visual_valid(c, r.head if r else None):
+            if (
+                s.kind == StepKind.FOLLOW
+                and states
+                and not owner_look.approved(c)
+                and not evidence.visual_valid(c, r.head if r else None)
+            ):
                 go(c, StepKind.CHECK, VISUAL)  # the visual check runs before person-only checks
             elif check:
                 go(c, StepKind.CHECK, check.id)
