@@ -646,11 +646,14 @@ def test_empty_inventory_consent_keeps_the_current_profiles_confirmed_named_chec
     _, proposal = follow.declared(cx, c, gh.pr, StepKind.FOLLOW)
     c = loop.apply(c, proposal, NOW)
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
+    c.questions[-1].ci_basis = None
+    cx.profile = profile.confirm(cx.profile, profile.DECLARED, "lint", NOW)
     head, entries = ci_head(clone, "${{ inputs.n }} updated")
     gh.pr = pr(head=head)
-    cx.profile = cx.profile.model_copy(update={"entries": cx.profile.entries | entries})
-    cx.profile = profile.confirm(cx.profile, profile.DECLARED, "lint", NOW)
     assert follow.declared(cx, c, gh.pr, StepKind.MERGE) == (("lint",), None)
+    cause = f"{asking.DECLARED}{profile.digest_of(entries[profile.DECLARED])}"
+    c.questions.append(c.questions[-1].model_copy(update={"id": "q5", "cause": cause, "ci_observation": None}))
+    assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == (("lint",), None)
     c.step = Step(kind=StepKind.MERGE)
     c.reviews = [Review(commit=head, inputs=Inputs(), verdict="pass")]
     gh.checks = (Check(name="CI", status="completed", conclusion="success"),)
