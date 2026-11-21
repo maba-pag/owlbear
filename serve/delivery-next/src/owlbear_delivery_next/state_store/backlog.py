@@ -104,6 +104,19 @@ def key(source: str, title: str) -> str:
     return f"{source}:{' '.join(re.findall(r'\w+', title.casefold()))}"
 
 
+_REVIEW = re.compile(r"Review .+ in .+ \[[0-9a-f]{16}\]", re.DOTALL)
+
+
+def suppression_title(rule: str, place: str, group: str) -> str:
+    """The title the Suppression review files a refused group of copies under; *group* is its 16-hex key."""
+    return f"Review {rule[:80]} in {place[:60]} [{group}]"
+
+
+def suppression_review(entry: Entry) -> bool:
+    """Whether *entry* is one the Suppression review filed: an audit's, under ``suppression_title``'s format."""
+    return entry.source == "audit" and _REVIEW.fullmatch(entry.title) is not None
+
+
 def named(entry: Entry) -> frozenset[str]:
     """The projects an entry names: its triaged ones, else its origin, else none (TD-406)."""
     return frozenset(entry.projects if entry.projects is not None else [entry.origin] if entry.origin else [])

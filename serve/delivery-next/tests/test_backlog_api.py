@@ -20,7 +20,7 @@ from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api, backlog_routes
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.state_store import backlog_issues
-from owlbear_delivery_next.state_store.backlog import Backlog
+from owlbear_delivery_next.state_store.backlog import Backlog, suppression_title
 from owlbear_delivery_next.state_store.store import Store
 
 from .test_machine_pages import page_at
@@ -124,6 +124,20 @@ def test_the_owner_adds_an_idea_and_the_list_puts_the_inbox_first(store):
         c.patch("/api/next/backlog/..%2Fconfig", json={"notes": "x"}),
     ]
     assert [r.status_code for r in refused] == [422, 422, 422, 404, 404]
+
+
+def test_get_backlog_marks_only_an_audit_entry_under_the_suppression_filer_s_title(store):
+    title = suppression_title("# noqa: SLF001", "serve/x/src/y.py", "0123456789abcdef")
+    book = Backlog.of(store)
+    book.add(title, source="audit")
+    book.add("Wrong config in the audit", source="audit")
+    book.add(title, source="owner")
+
+    listed = client(store).get("/api/next/backlog").json()["entries"]
+
+    assert title == "Review # noqa: SLF001 in serve/x/src/y.py [0123456789abcdef]"  # the filer's format, unchanged
+    marked = sorted((e["source"], e["title"] == title, e["suppression_review"]) for e in listed)
+    assert marked == [("audit", False, False), ("audit", True, True), ("owner", True, False)]
 
 
 def settled(c, launch):
@@ -435,3 +449,65 @@ def test_an_inbox_entry_is_one_compact_row_triaged_with_the_keyboard_alone(store
         expect(page.locator("#inbox-title")).to_have_text("Inbox (0)")
     kinds = {e.title: (e.kind, e.status) for e in Backlog.of(store).read()[0].values()}
     assert kinds == {"Wider status line": ("idea", "open"), "Faster first paint": ("untriaged", "dropped")}
+
+
+def tab_to(page, target, presses: int = 80) -> None:
+    """Press Tab until *target* has the focus: reached by keyboard alone."""
+    for _ in range(presses):
+        if target.evaluate("e => e === document.activeElement"):
+            return
+        page.keyboard.press("Tab")
+    pytest.fail("not reached by Tab")
+
+
+@pytest.mark.browser
+def test_untriaged_suppression_reviews_fold_below_open_and_are_triaged_there(store, pds):
+    """AC-2, 3, 5, 7: the Inbox lists what the owner may act on; the filer's entries wait folded below Open."""
+    book = Backlog.of(store)
+    review = [suppression_title("# noqa: SLF001", f"serve/{n}.py", f"{n:016x}") for n in range(3)]
+    book.add("Show the build date")
+    book.add("Wrong config in the audit", source="audit")
+    added = [book.add(title, source="audit")[0] for title in review]
+    book.update(added[2].id, {"status": "dropped"})
+    with backlog_page(store, pds) as page:
+        page.set_viewport_size({"width": 1280, "height": 900})
+        section, summary = page.locator("#suppression-reviews"), page.locator("#reviews-title")
+        expect(summary).to_have_text("Suppression reviews (2)")
+        expect(page.locator("#inbox-title")).to_have_text("Inbox (2)")
+        expect(page.locator("#inbox .title p-text")).to_have_text(["Wrong config in the audit", "Show the build date"])
+        expect(page.locator("#open > li.entry")).to_have_count(0)
+        expect(section).not_to_have_attribute("open", "")
+        order = "ids => ids.map(i => document.getElementById(i)).every((e, n, all) => !n || all[n - 1]"
+        order += ".compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING)"
+        assert page.evaluate(order, ["open", "suppression-reviews", "later"])
+        expect(page.locator("#later .title p-text")).to_have_text([review[2]])
+
+        tab_to(page, summary)
+        style = "e => [getComputedStyle(e).outlineStyle, parseFloat(getComputedStyle(e).outlineWidth)]"
+        outline = summary.evaluate(style)
+        assert outline[0] != "none"
+        assert outline[1] >= 2
+        box = summary.bounding_box()
+        assert box
+        assert box["width"] >= 24
+        assert box["height"] >= 24
+        page.keyboard.press("Enter")
+        expect(section).to_have_attribute("open", "")
+        page.keyboard.press("Enter")
+        expect(section).not_to_have_attribute("open", "")
+        page.keyboard.press("Enter")
+        link = section.get_by_role("link", name="Maintenance page")
+        expect(link).to_have_attribute("href", "/maintenance")  # a project host alone knows no clone by id
+        expect(section.locator(".maintenance")).to_have_text(
+            "Suppression review of shop-site: open the Maintenance page and choose a project there."
+        )
+        page.keyboard.press("Tab")
+        expect(link).to_be_focused()
+
+        rows = page.locator("#reviews > li.entry")
+        expect(rows).to_have_count(2)
+        expect(rows.first.get_by_role("button", name=f"Drop {review[1]}")).to_be_visible()  # the Inbox's controls
+        pds.pick(rows.first.locator(".triage"), "Kind", "defect")
+        expect(page.locator("#open .title p-text")).to_have_text([review[1]])
+        expect(summary).to_have_text("Suppression reviews (1)")
+        expect(page.locator("#inbox-title")).to_have_text("Inbox (2)")
