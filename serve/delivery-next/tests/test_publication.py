@@ -665,11 +665,39 @@ def test_empty_inventory_consent_keeps_the_current_profiles_confirmed_named_chec
     head, _ = ci_head(clone, "${{ inputs.n }} revised")
     gh.pr = pr(head=head)
     assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == (("lint",), None)
+    c, head = _global_named_then_detected(cx, clone, head)
     c.step = Step(kind=StepKind.MERGE)
     c.reviews = [Review(commit=head, inputs=Inputs(), verdict="pass")]
     gh.checks = (Check(name="CI", status="completed", conclusion="success"),)
     c, held = merge.run(cx, c)
     assert (held.exit, gh.merges) == (Exit.PENDING, [])  # a confirmed but never-started lint check still gates.
+
+
+def _global_named_then_detected(cx, clone, head):
+    cx.store.write_profile(cx.profile, previous=cx.store.read_profile())
+    c = change(StepKind.FOLLOW, worktree=str(clone)).model_copy(update={"slug": "fresh"})
+    c.brief.approved_version = 1
+    c.names.branch, cx.lock = "owlbear/fresh", Lock("fresh")
+    cx.gh.pr = pr(head=head, head_branch=c.names.branch)
+    _, proposed = follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW)
+    c = loop.apply(c, proposed, NOW + timedelta(seconds=2))
+    c, _ = loop.schedule(
+        c,
+        [AnswerItem(at=NOW + timedelta(seconds=2), question=c.outcome.question, option="yes")],
+        NOW + timedelta(seconds=2),
+    )
+    assert follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW) == (("lint",), None)
+    head, _ = ci_head(clone, "new suite")
+    cx.gh.pr = pr(head=head, head_branch=c.names.branch)
+    _, proposed = follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW)
+    c = loop.apply(c, proposed, NOW + timedelta(seconds=3))
+    c, _ = loop.schedule(
+        c,
+        [AnswerItem(at=NOW + timedelta(seconds=3), question=c.outcome.question, option="yes")],
+        NOW + timedelta(seconds=3),
+    )
+    assert follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW) == (("lint", "new suite"), None)
+    return c, head
 
 
 def test_a_persisted_duplicate_inventory_hold_settles_before_normal_host_scheduling(tmp_path, clone, capsys):
@@ -3771,7 +3799,11 @@ def test_required_basis_approval_covers_only_the_delta_the_rules_question_showed
     assert engine.rules_changed(cx, newer)[0] is None
     assert follow.declared(cx, newer, gh.pr, StepKind.FOLLOW) == ((), None)
     # The pre-project within-Change path still refuses an unshown required snapshot.
-    c.questions[0].ci_observation, c.questions[0].ci_basis = c.questions[0].ci_basis, None
+    c.questions[0].ci_observation, c.questions[0].ci_basis, c.questions[1].cause = (
+        c.questions[0].ci_basis,
+        None,
+        "gate:publish:rules-legacy",
+    )
     cx.store, cx.profile.entries[profile.DECLARED].ci_consent = Store(tmp_path / "legacy-store"), None
     _, inventory = follow.declared(cx, c, gh.pr, StepKind.FOLLOW)
     assert inventory.exit == Exit.ASK
@@ -3900,12 +3932,39 @@ def _seed_completed_consent(cx, c, monkeypatch, whole_error):
             answer=Answer(option="yes", at=NOW + timedelta(seconds=1)),
         )
     )
+    c.questions.append(
+        Question(
+            id="q4",
+            step=StepKind.FOLLOW,
+            text="Also wait for lint on this Change?",
+            cause="gate:follow:declared-named",
+            ci_basis=CiBasis(declared=("lint",), required=("CI",)),
+            answer=Answer(option="yes", at=NOW + timedelta(milliseconds=1500)),
+        )
+    )
     cx.store.write(cx.lock, c)
     ci_basis.settle(cx.store, cx.lock, c, NOW)
     cx.profile = cx.store.read_profile()
     consent = cx.profile.entries[profile.DECLARED].ci_consent
     assert consent.basis == CiBasis(declared=(), required=("CI",))
     assert consent.at == NOW + timedelta(seconds=1)
+    proposal = Question(
+        id="q1",
+        step=StepKind.PUBLISH,
+        text="Required plus started for all project Changes?",
+        cause="gate:publish:rules-ci-saved",
+        ci_basis=CiBasis(required=("CI",)),
+        answer=Answer(option="yes", at=NOW + timedelta(milliseconds=1700)),
+    )
+    named = c.questions[-1].model_copy(deep=True)
+    named.answer.at = NOW + timedelta(milliseconds=1800)
+    renewed = c.model_copy(deep=True, update={"slug": "completed-renewal", "questions": [proposal, named]})
+    with cx.store.lock(renewed.slug) as lock:
+        cx.store.write(lock, renewed)
+        ci_basis.settle(cx.store, lock, renewed, NOW)
+    cx.profile = cx.store.read_profile()
+    consent = cx.profile.entries[profile.DECLARED].ci_consent
+    assert consent.at == proposal.answer.at
     return consent
 
 

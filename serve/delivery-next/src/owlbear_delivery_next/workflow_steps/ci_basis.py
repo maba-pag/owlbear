@@ -55,20 +55,42 @@ def current(prof: Profile, entry: ProfileEntry) -> CiBasis:
     )
 
 
+def _approval(c: Change) -> Question | None:
+    return next(
+        (
+            q
+            for q in reversed(c.questions)
+            if q.ci_basis
+            and ((inventory(q) and q.ci_basis.declared == ()) or _project_renewal(q))
+            and q.answer
+            and q.answer.option == "yes"
+            and q.answer.superseded_at is None
+        ),
+        None,
+    )
+
+
+def _project_renewal(q: Question) -> bool:
+    return bool(requirements(q) and ":rules-ci-" in (q.cause or "") and q.ci_basis and q.ci_basis.required is not None)
+
+
 def effective(c: Change, prof: Profile) -> ProjectCiConsent | None:
     """The latest structured empty-inventory yes, with its later explicit requirements renewal."""
-    q = latest(c)
-    if not q or not q.answer or q.answer.option != "yes" or q.answer.superseded_at or not q.ci_basis:
-        return None
-    if q.ci_basis.declared != ():
+    q = _approval(c)
+    if q is None:
         return None
     basis, at = q.ci_basis, q.answer.at
     for other in c.questions[c.questions.index(q) + 1 :]:
-        if not requirements(other) or not other.answer:
+        if not (inventory(other) or requirements(other)) or not other.answer:
             continue
         if other.answer.option != "yes" or other.answer.superseded_at:
             return None
-        if other.ci_basis and other.ci_basis.declared is None and other.ci_basis.required is not None:
+        if (
+            requirements(other)
+            and other.ci_basis
+            and (other.ci_basis.declared is None or _project_renewal(other))
+            and other.ci_basis.required is not None
+        ):
             candidate = CiBasis(declared=(), required=tuple(sorted(set(other.ci_basis.required))))
             if required_approved(c, q, candidate, prof):
                 basis, at = candidate, other.answer.at
@@ -122,9 +144,16 @@ def acquire(store: Store, lock: Lock, c: Change, prof: Profile) -> Profile:
     entry = prof.entries.get(profile.DECLARED)
     if not consent or not entry or not consent.repository:
         return prof
+    primary = _approval(c)
+    if entry.ci_consent and entry.ci_consent.basis is None and primary.answer.at <= entry.ci_consent.at:
+        return prof
     if entry.ci_consent and entry.ci_consent.at >= consent.at:
         return prof
-    value = entry.value if profile.is_confirmed(entry) else "none"
+    names = (
+        *(profile.listed(entry) if profile.is_confirmed(entry) else ()),
+        *((primary.ci_basis.declared or ()) if _project_renewal(primary) else ()),
+    )
+    value = ", ".join(dict.fromkeys(names)) or "none"
     confirmed = profile.confirm(prof, profile.DECLARED, value, consent.at, consent=consent)
     return save(store, lock, c, prof, confirmed)
 
@@ -232,7 +261,7 @@ def required_approved(c: Change, q: Question, basis: CiBasis, prof: Profile) -> 
     later = c.questions[c.questions.index(q) + 1 :]
     if any(
         other.ci_basis is not None
-        and other.ci_basis.declared is None
+        and (other.ci_basis.declared is None or _project_renewal(other))
         and other.ci_basis.required == basis.required
         and (other.cause or "").startswith(("gate:publish:rules-", "gate:follow:rules-", "gate:merge:rules-"))
         and other.answer is not None
