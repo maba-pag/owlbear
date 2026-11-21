@@ -47,7 +47,6 @@ LAST = [
     Option(id="retry", label="Plan again from the brief", next="retry"),
 ]
 RETIRED = "retired"  # the answer that retires a question about a plan attempt that ended
-LIMIT = 12000  # the whole plan, so a challenger never judges a goal cut mid-sentence
 HOW = {
     "fixed": "revised for, not challenged again",
     "standing": "rejected; the challenger accepted that",
@@ -76,15 +75,13 @@ def _flat(text: str, limit: int = 1400) -> str:
     return " ".join(text.split())[:limit]
 
 
-def lines(plan: Plan, limit: int = LIMIT) -> list[str]:
-    """The plan, one task per line, whole up to *limit* characters; a cut is said."""
-    shown = [
+def lines(plan: Plan) -> list[str]:
+    """The whole plan, one task per line: a challenger must judge every criterion's coverage (#1361)."""
+    return [
         f"- {t.id}: {' '.join(t.title.split())} · scope {', '.join(t.scope)} · checks {', '.join(t.checks)} · "
         + " ".join(t.detail.split())
         for t in plan.tasks
     ]
-    text = "\n".join(shown)
-    return shown if len(text) <= limit else [*text[:limit].splitlines(), "(truncated)"]
 
 
 def current(c: Change) -> RoundLoop | None:
