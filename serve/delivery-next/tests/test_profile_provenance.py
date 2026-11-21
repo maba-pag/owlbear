@@ -214,6 +214,11 @@ def test_project_ci_redetection_keeps_consent_across_churn_but_a_mismatch_is_onl
     assert profile.project_ci(fresh, "release", profile.ci_entries(profile.workflows(repo))[profile.DECLARED])
     assert profile.names(fresh, profile.DECLARED) == ("lint",)
     assert not profile.project_ci(fresh, "main", ProfileEntry(state="unknown", value="none"))
+    (flows / "ci.yml").write_text("on: pull_request\njobs:\n  t:\n    name: new suite\n")
+    named = profile.detect(repo, gh, fresh)
+    assert profile.names(named, profile.DECLARED) == ("lint",)
+    assert profile.is_confirmed(named.entries[profile.DECLARED])
+    assert not profile.project_ci(named, "release", profile.ci_entries(profile.workflows(repo))[profile.DECLARED])
     gh.known = False
     mismatch = profile.detect(repo, gh, fresh)
     assert mismatch.entries[profile.DECLARED].ci_consent == consent

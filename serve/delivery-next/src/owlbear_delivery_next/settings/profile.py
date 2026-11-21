@@ -334,7 +334,11 @@ def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
             )
             entries[DECLARED] = bound.entries[DECLARED]
         else:
-            entries[DECLARED] = entries[DECLARED].model_copy(update={"ci_consent": consent})
+            entries[DECLARED] = (
+                old
+                if is_confirmed(old) and consent.repository == r.repository
+                else entries[DECLARED].model_copy(update={"ci_consent": consent})
+            )
     changed = shared_entries(entries) != shared_entries(prev.entries)
     return prev.model_copy(update={"entries": entries, "version": prev.version + 1 if changed else prev.version})
 
