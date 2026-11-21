@@ -90,9 +90,10 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
     )
     answer = previous.answer if previous else None
     declined = answer is not None and (answer.option == "pause" or answer.superseded_at is not None)
+    scoped = bool(consent and consent.repository == ctx.repository and consent.target == c.names.target)
     extra = (
         confirmed
-        if not consent or (consent.repository == ctx.repository and consent.target in {"", c.names.target})
+        if (consent and scoped and consent.basis) or (previous is None and (not consent or scoped))
         else ci_basis.named_after(c, ctx.profile.entries.get(profile.DECLARED))
     )
     if covered or (entry and entry.state == "known" and not delta and not declined):
@@ -117,11 +118,17 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
         if observed.state == "known"
         else "Delivery could not read the names of every check this project's CI runs before a merge"
     )
+    scope = (
+        "With no detected names, this yes covers all Changes of this project into that target until its required "
+        "check names change; Delivery then asks once with the difference."
+        if basis.required is not None
+        else "The required check names are unreadable, so this yes does not establish project-wide consent. "
+        "Delivery must read GitHub's requirements before merging."
+    )
     text = (
         f"GitHub requires {', '.join(basis.required) or 'none' if basis.required is not None else 'unreadable checks'} "
         f"on {ctx.repository}/{c.names.target}. "
-        "With no detected names, this yes covers all Changes of this project into that target until its required "
-        "check names change; Delivery then asks once with the difference. No pauses or named checks are waived.\n\n"
+        f"{scope} No pauses or named checks are waived.\n\n"
         f"{delta + ' ' if delta else ''}{detection}{changed}. "
         "It waits for the checks GitHub requires, for every check that starts on the pull request, and for those it "
         f"could read: {read if read != 'none' else 'none it could read'}. Merge on that basis?"
