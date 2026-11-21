@@ -29,6 +29,7 @@ from owlbear_delivery_next.state_store.pending_intents import shared_pending as 
 from owlbear_delivery_next.state_store.profile_authority import config_digest
 from owlbear_delivery_next.state_store.profile_errors import (
     Basis,
+    SharedError,
     SourceChangedError,
     TargetChangedError,
 )
@@ -205,8 +206,6 @@ def publish_layer(store: Store, path: Path, message: str, until: float, *, owner
     A raised project config refusal is recorded as pending before it propagates, as a returned refusal is, so another
     clone cannot publish a completed import over it. The raised error is re-raised with that record in its message.
     """
-    from owlbear_delivery_next.state_store.store import SharedError  # noqa: PLC0415 - the store imports this module
-
     try:
         notice = store.shared.publish(path, message, until)
     except DataRepoError as exc:
@@ -251,8 +250,6 @@ def _settle_claim(store: Store, notice: str, claim: str) -> bool:
 
 
 def _publish_mark(store: Store, prof: Profile, message: str, *, claimed: bool) -> str:
-    from owlbear_delivery_next.state_store.store import SharedError  # noqa: PLC0415 - the store imports this module
-
     try:
         return _publish_locked(store, prof, message)
     except DataRepoError as exc:
