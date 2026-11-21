@@ -71,12 +71,21 @@ def write(
     with _writer(store):
         if basis and basis.owned:
             basis.owned()  # a newer or missing replacement is refused before anything is pulled or written
+        current = _current_for_write(store, replace_unreadable=replace_unreadable)
+        authority = any(
+            entry and entry.ci_consent
+            for profiled in (prof, current, previous)
+            if profiled is not None
+            for entry in (profiled.entries.get(profile.DECLARED),)
+        )
         if basis is None and previous == prof and _read_unlocked(store) == prof:
             notice = _publish_locked(store, prof, f"settings: {store.name}: project profile")
-            profile_authority.sync(store, notice)
+            if authority:
+                profile_authority.sync(store, notice)
             return notice
         # the target is judged against the remote's current bytes, not a stale clone; a failed sync says nothing of them
-        profile_authority.sync(store)
+        if basis or authority:
+            profile_authority.sync(store)
         if basis and basis.source and config_digest(store.root / PROFILE) != basis.source:
             msg = "The old profile changed while you answered; nothing was saved. Run setup again to review it."
             raise SourceChangedError(msg)
