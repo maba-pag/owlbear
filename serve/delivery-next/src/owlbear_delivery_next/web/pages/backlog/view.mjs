@@ -45,7 +45,8 @@ function filters() {
 function list(id, entries, byId, empty) {
   const items = entries.length ? repeat(entries, (e) => e.key, (e) => card(e, byId))
     : html`<li><p-text size="sm" color="contrast-medium">${empty}</p-text></li>`;
-  return html`<ul id=${id} class="entries" aria-labelledby=${["later", "reviews"].includes(id) ? `${id}-title` : nothing}>${items}</ul>`;
+  const labelled = ["later", "reviews"].includes(id) ? `${id}-title` : nothing;
+  return html`<ul id=${id} class="entries" aria-labelledby=${labelled}>${items}</ul>`;
 }
 
 function addForm() {
