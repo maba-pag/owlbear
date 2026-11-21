@@ -221,17 +221,7 @@ def show_profile(
     gh = profile.provider(previous, repo, github_writer.of(store, repo, detecting=True))
     prof = profile.detect(repo, gh, previous)
     for key, value in confirms:
-        prof = (
-            ci_consent.confirm_ci(
-                prof,
-                value,
-                datetime.now(UTC),
-                prof.entries.get(key, profile.ProfileEntry(state="unknown")).ci_consent,
-                ci_consent.parse_names(value),
-            )
-            if key == profile.DECLARED
-            else profile.confirm(prof, key, value, datetime.now(UTC))
-        )
+        prof = ci_consent.confirm_explicit(prof, key, value, datetime.now(UTC))
     publication = store.write_profile(prof, previous=previous)
     prefs_import.run(store)
     notice = (

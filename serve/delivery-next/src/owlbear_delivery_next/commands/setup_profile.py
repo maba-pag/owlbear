@@ -57,17 +57,7 @@ def confirm(prof: Profile, ask: Ask, *, yes: bool) -> tuple[Profile, list[str]]:
             and not yes
             and (value := ask(f"{key} is unknown ({e.evidence}). Value you confirm: "))
         ):
-            prof = (
-                ci_consent.confirm_ci(
-                    prof,
-                    value,
-                    now,
-                    e.ci_consent,
-                    ci_consent.parse_names(value),
-                )
-                if key == profile.DECLARED
-                else profile.confirm(prof, key, value, now)
-            )
+            prof = ci_consent.confirm_explicit(prof, key, value, now)
     unknown = [k for k, e in prof.entries.items() if e.state == "unknown" and k not in profile.SETTINGS]
     if not (yes or ask("Confirm this profile? [y/N] ").lower().startswith("y")):
         return prof.model_copy(update={"confirmed_at": None}), unknown
@@ -78,17 +68,7 @@ def confirmed(prof: Profile, values: dict[str, str], *, by: str) -> Profile:
     """*prof* with the owner's *values* for unknown entries and his confirmation, recorded as given *by*."""
     now = datetime.now(UTC)
     for key, value in sorted(values.items()):
-        prof = (
-            ci_consent.confirm_ci(
-                prof,
-                value,
-                now,
-                prof.entries.get(key, ProfileEntry(state="unknown")).ci_consent,
-                ci_consent.parse_names(value),
-            )
-            if key == profile.DECLARED
-            else profile.confirm(prof, key, value, now)
-        )
+        prof = ci_consent.confirm_explicit(prof, key, value, now)
     mark = ProfileEntry(state="known", value=by, evidence=f"owner confirmed {now:%Y-%m-%d}")
     entries = {**prof.entries, "setup:confirmed-by": mark}
     return prof.model_copy(update={"entries": entries, "confirmed_at": now, "version": prof.version + 1})

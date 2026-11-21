@@ -16,6 +16,14 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.github.provider import Provider, Repository, Rules
 
 
+def confirm_explicit(prof: Profile, key: str, value: str, now: datetime) -> Profile:
+    """Confirm explicit input without replacing independent project merge-basis consent."""
+    if key != profile.DECLARED:
+        return profile.confirm(prof, key, value, now)
+    entry = prof.entries.get(key)
+    return confirm_ci(prof, value, now, entry.ci_consent if entry else None, parse_names(value))
+
+
 def confirm_ci(
     prof: Profile, value: str, now: datetime, consent: ProjectCiConsent | None, names: tuple[str, ...]
 ) -> Profile:

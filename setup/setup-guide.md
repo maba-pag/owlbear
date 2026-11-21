@@ -149,8 +149,9 @@ After setup, [confirm the project's `lint` command](operating-owlbear.md#lint-be
 `owlbear profile --confirm lint=...` to use its own checks before builder submissions.
 
 The shared profile also carries [project-wide merge-basis consent](operating-owlbear.md#delivery-workflow).
-Fresh-clone detection retains it only for the same repository, target and readable required check names.
-Explicitly replacing or withdrawing `ci:declared` revokes that consent; historical approvals cannot restore it.
+Fresh-clone detection reuses it only for the same repository, target and readable required check names.
+Explicit names selected through setup or `owlbear profile --confirm ci:declared=...` remain additional gates
+without revoking that consent. Withdrawing `ci:declared` revokes it; historical approvals cannot restore it.
 
 The `.mcp.json` entries name OwlBear's Python through `${HOME}` and no project path: VS Code and the
 Copilot CLI start them in the project folder, so they serve whichever project they sit in.
