@@ -3835,6 +3835,7 @@ def test_completed_project_yes_seeds_shared_intent_releases_a_hold_and_renews_on
     version = cx.profile.version
     assert follow.declared(cx, fresh, gh.pr, StepKind.FOLLOW) == ((), None)
     assert cx.profile.version == version
+    obsolete = held.model_copy(deep=True, update={"slug": "c4"})
     ci_basis.settle(cx.store, Lock("c2"), held, NOW)
     assert held.questions[0].answer is None
     assert held.questions[0].effect_observed_at == NOW
@@ -3863,6 +3864,28 @@ def test_completed_project_yes_seeds_shared_intent_releases_a_hold_and_renews_on
     fresh.step = Step(kind=StepKind.FOLLOW)
     assert follow.declared(cx, fresh, gh.pr, StepKind.FOLLOW) == ((), None)
     assert len(fresh.questions) == 1  # Publish and inventory do not ask for the same required update twice.
+    ci_basis.settle(cx.store, Lock("c4"), obsolete, NOW)
+    assert loop.open_question(obsolete) is None
+    assert obsolete.questions[0].answer is None
+    legacy = loop.apply(
+        change(StepKind.FOLLOW, worktree=str(clone)).model_copy(update={"slug": "c5"}),
+        engine.ask(
+            StepKind.FOLLOW,
+            "The merge rules of main on GitHub differ from what Delivery recorded for this project: "
+            "checks GitHub requires before merging: was old-ci, now CI. Go on under the rules as they are now?",
+            "gate:follow:rules-legacy",
+            subject="reserved",
+        ),
+        NOW,
+    )
+    legacy.questions[0].ci_basis = CiBasis(required=("CI",))
+    unrelated = legacy.model_copy(deep=True, update={"slug": "c6"})
+    unrelated.questions[0].text += " the branch must be up to date before merging: was no, now yes"
+    ci_basis.settle(cx.store, Lock("c5"), legacy, NOW)
+    assert loop.open_question(legacy) is None
+    assert legacy.questions[0].answer is None
+    ci_basis.settle(cx.store, Lock("c6"), unrelated, NOW)
+    assert loop.open_question(unrelated) is not None
     _named_after_rules(cx, fresh, clone, rules)
     _profile_error_after_activity(cx, monkeypatch, whole_error)
 

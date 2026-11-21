@@ -209,6 +209,21 @@ def _was(old: ProfileEntry | None) -> str:
     return old.value if old.state == "known" else "not readable"
 
 
+def required_only(q: Question, target: str) -> bool:
+    """Whether a saved rules proposal showed only requirements covered by project CI consent."""
+    if not ci_basis.requirements(q) or q.ci_basis is None or q.ci_basis.declared not in {None, ()}:
+        return False
+    if ":rules-ci-" in (q.cause or "") and q.ci_basis.required is not None:
+        return True
+    prefix = (
+        f"The merge rules of {target} on GitHub differ from what Delivery recorded for this project: "
+        f"{_RULES[profile.REQUIRED]}:"
+    )
+    return q.text.startswith(prefix) and not any(
+        words in q.text for key, words in _RULES.items() if key != profile.REQUIRED
+    )
+
+
 def _project_rules(ctx: Ctx, c: Change, rules: Rules) -> StepResult | None:
     try:
         ctx.profile = ci_basis.acquire(ctx.store, ctx.lock, c, ctx.profile)

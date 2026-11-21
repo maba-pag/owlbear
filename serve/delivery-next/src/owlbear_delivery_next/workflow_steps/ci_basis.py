@@ -15,6 +15,7 @@ from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.state_store.profile_errors import SharedSyncError, TargetChangedError
 from owlbear_delivery_next.state_store.store import StoreError
+from owlbear_delivery_next.workflow_steps import engine
 
 if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change, Question
@@ -373,7 +374,8 @@ def settle(store: Store, lock: Lock, c: Change, now: datetime) -> None:
     saved_entry = prof.entries.get(profile.DECLARED)
     consent = saved_entry.ci_consent if saved_entry else None
     shared = bool(consent and profile.project_ci(prof, c.names.target, entry) and compatible(c, consent))
-    rules_hold = (q.cause or "").find(":rules-ci-") >= 0 and q.ci_basis and q.ci_basis.required == basis.required
-    if (inventory(q) and pending == basis and (shared or covers(c, previous, basis, prof))) or (shared and rules_hold):
+    covered = inventory(q) and pending == basis and covers(c, previous, basis, prof)
+    shared_hold = shared and ((inventory(q) and pending.declared == ()) or engine.required_only(q, c.names.target))
+    if covered or shared_hold:
         retain(c, previous, basis, prof)
         q.effect_observed_at, c.outcome = now, None
