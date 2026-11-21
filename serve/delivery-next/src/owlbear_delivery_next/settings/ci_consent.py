@@ -73,6 +73,14 @@ def confirmation(prof: Profile, old: ProfileEntry, now: datetime, consent: Proje
     )
 
 
+def legacy_bound(confirmed: ProfileEntry, observed: ProfileEntry) -> ProfileEntry:
+    """Carry exact names through an already-matching legacy confirmation, not an explicit override."""
+    names = observed.ci_checks
+    if confirmed.ci_checks is None and names is not None and confirmed.value == (", ".join(names) or "none"):
+        return confirmed.model_copy(update={"ci_checks": names, "observed": profile.fingerprint(observed)})
+    return confirmed
+
+
 def redetected(
     prof: Profile, entries: dict[str, ProfileEntry], repo: Repository, rules: Rules, gh: Provider
 ) -> ProfileEntry:

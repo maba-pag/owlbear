@@ -378,6 +378,7 @@ def test_owner_selected_ci_checks_keep_their_workflow_digest_through_confirmatio
     assert profile.digest_of(chosen.entries[profile.DECLARED]) == profile.digest_of(raw.entries[profile.DECLARED])
     assert chosen.entries[profile.DECLARED].evidence.count("observed:") == 1
     _legacy_named_recheck(shared, tmp_path, monkeypatch, raw, pr)
+    _legacy_exact_recheck(shared, tmp_path, monkeypatch, pr)
 
 
 def _legacy_named_recheck(shared, tmp_path, monkeypatch, raw, pr):
@@ -424,6 +425,76 @@ def _legacy_named_recheck(shared, tmp_path, monkeypatch, raw, pr):
     changed = profile.detect(repo, gh, recovered)
     assert not profile.holds(saved.entries[profile.DECLARED], changed.entries[profile.DECLARED])
     assert changed.entries[profile.DECLARED].ci_named == ("lint",)
+
+
+def _legacy_exact_recheck(shared, tmp_path, monkeypatch, pr):
+    exact = "Tests (Python 3.14, macOS)"
+    rules = Rules(state="known", evidence="rules", required_checks=(exact,))
+    gh = GitHub()
+    gh.read_rules = lambda *_a: rules
+    repo = clone(tmp_path, "exact-shop")
+    flows = repo / ".github/workflows"
+    flows.mkdir(parents=True)
+    (flows / "ci.yml").write_text(f'on: pull_request\njobs:\n  t:\n    name: "{exact}"\n    runs-on: ubuntu-latest\n')
+    (flows / "reusable.yml").write_text("on: pull_request\njobs:\n  reusable:\n    uses: ./shared.yml\n")
+    git(repo, "add", ".github")
+    git(repo, "commit", "-qm", "exact workflow name")
+    raw = profile.detect(repo, gh, None)
+    assert raw.entries[profile.DECLARED].ci_checks == (exact,)
+    payload = raw.model_dump(mode="json")
+    payload["format"] = 5
+    for key in (profile.DECLARED, profile.REQUIRED):
+        observed = raw.entries[key]
+        legacy = ", ".join(observed.ci_checks) or "none"
+        payload["entries"][key] = {
+            "state": "known",
+            "value": legacy,
+            "evidence": f"{profile.CONFIRMED} 2026-10-24{profile.OBSERVED}{observed.evidence}",
+            "observed": hashlib.sha256(json.dumps([observed.state, legacy, observed.evidence]).encode()).hexdigest(),
+        }
+    target = shared / "shop-site" / profile_share.PROFILE
+    target.write_text(json.dumps(payload))
+    assert DataRepo(shared).publish(target, "fixture matching format-5 names") == ""
+    fresh_repo = tmp_path / "exact-fresh"
+    git(tmp_path, "clone", "-q", str(repo), str(fresh_repo))
+    git(fresh_repo, "remote", "set-url", "origin", "git@github.com:acme/shop-site.git")
+    store = Store.open(fresh_repo)
+    monkeypatch.setattr(profile, "provider", lambda *_a: gh)
+    recovered = profile_share.checked(store, fresh_repo)
+    again = profile.detect(fresh_repo, gh, recovered)
+    for key in (profile.DECLARED, profile.REQUIRED):
+        kept = store.read_profile().entries[key]
+        assert kept.ci_checks == (exact,)
+        assert kept.ci_named == ()
+        assert kept.ci_consent is None
+        assert profile.holds(kept, raw.entries[key])
+        assert again.entries[key] == kept
+    _legacy_exact_merge_gate(store, fresh_repo, gh, pr, exact)
+
+
+def _legacy_exact_merge_gate(store, repo, gh, pr, exact):
+    pr = pr.model_copy(update={"head_sha": git(repo, "rev-parse", "HEAD"), "mergeable": True, "merge_state": "clean"})
+    fresh = Change(slug="c3", names=Names(worktree=str(repo), target="main", pr=1))
+    cx = engine.Ctx(store, Lock("c3"), repo, store.read_profile(), gh, NOW)
+    declared, held = follow.declared(cx, fresh, pr, StepKind.MERGE)
+    assert (declared, held) == ((exact,), None)
+    gh.observe_checks = lambda *_a: (Check(name=exact, status="completed", conclusion="success"),)
+    ci = follow.ci(cx, pr, declared)
+    assert ci.missing == ()
+    assert ci.expected == 1
+    assert (
+        decide(
+            pr,
+            target="main",
+            ci=ci,
+            rules=gh.read_rules(cx.repository, "main"),
+            rules_confirmed=True,
+            method=MergeMethod.MERGE,
+            methods=(MergeMethod.MERGE,),
+            can_push=True,
+        ).action
+        == "merge"
+    )
 
 
 def _pair(default, push):

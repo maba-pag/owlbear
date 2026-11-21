@@ -333,9 +333,10 @@ def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
             entries[key] = new
         if is_confirmed(old) and holds(old, new):
             stamp = old.evidence.partition(OBSERVED)[0]
-            entries[key] = old.model_copy(update={"evidence": f"{stamp}{OBSERVED}{new.evidence}"})
+            bound = ci_consent.legacy_bound(old, new)
+            entries[key] = bound.model_copy(update={"evidence": f"{stamp}{OBSERVED}{new.evidence}"})
             if key == DECLARED and old.ci_checks is None and old.value != (", ".join(new.ci_checks or ()) or "none"):
-                entries[key] = entries[key].model_copy(update={"ci_named": listed(old)})
+                entries[key] = entries[key].model_copy(update={"ci_named": old.ci_named or listed(old)})
     entries[DECLARED] = ci_consent.redetected(prev, entries, r, rules, gh)
     changed = shared_entries(entries) != shared_entries(prev.entries)
     return prev.model_copy(update={"entries": entries, "version": prev.version + 1 if changed else prev.version})
