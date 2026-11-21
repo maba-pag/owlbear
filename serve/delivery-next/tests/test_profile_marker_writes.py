@@ -122,9 +122,10 @@ def test_project_ci_authority_survives_stale_saves_but_not_explicit_revocation(s
     late.write_profile(approved)  # even an old writer without previous evidence cannot restore authority.
     assert late.read_profile().entries[profile.DECLARED].ci_consent.basis is None
     before = profile_share.path(late).read_bytes()
+    current = late.read_profile()
     monkeypatch.setattr(DataRepo, "pull", lambda _self: "cannot fetch shared current authority")
     with pytest.raises(SharedSyncError, match="cannot fetch"):
-        late.write_profile(withdrawn, previous=withdrawn)
+        late.write_profile(current, previous=current)
     assert profile_share.path(late).read_bytes() == before
 
 

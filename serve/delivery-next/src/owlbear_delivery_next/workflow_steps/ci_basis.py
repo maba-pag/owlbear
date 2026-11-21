@@ -117,6 +117,7 @@ def save(store: Store, lock: Lock, c: Change, old: Profile, new: Profile) -> Pro
 
 def acquire(store: Store, lock: Lock, c: Change, prof: Profile) -> Profile:
     """Seed completed or active structured approvals without altering their historical questions."""
+    prof = _stored_consent(store, prof)
     consent = effective(c, prof)
     entry = prof.entries.get(profile.DECLARED)
     if not consent or not entry or not consent.repository:
@@ -126,6 +127,17 @@ def acquire(store: Store, lock: Lock, c: Change, prof: Profile) -> Profile:
     value = entry.value if profile.is_confirmed(entry) else "none"
     confirmed = profile.confirm(prof, profile.DECLARED, value, consent.at, consent=consent)
     return save(store, lock, c, prof, confirmed)
+
+
+def _stored_consent(store: Store, prof: Profile) -> Profile:
+    current = store.read_profile()
+    entry = current.entries.get(profile.DECLARED) if current else None
+    old = prof.entries.get(profile.DECLARED)
+    if entry and entry.ci_consent and (not old or not old.ci_consent or entry.ci_consent.at > old.ci_consent.at):
+        return prof.model_copy(
+            update={"entries": prof.entries | {profile.DECLARED: entry}, "version": max(prof.version, current.version)}
+        )
+    return prof
 
 
 def compatible(c: Change, consent: ProjectCiConsent) -> bool:

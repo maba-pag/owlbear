@@ -3772,7 +3772,7 @@ def test_required_basis_approval_covers_only_the_delta_the_rules_question_showed
     assert follow.declared(cx, newer, gh.pr, StepKind.FOLLOW) == ((), None)
     # The pre-project within-Change path still refuses an unshown required snapshot.
     c.questions[0].ci_observation, c.questions[0].ci_basis = c.questions[0].ci_basis, None
-    cx.profile.entries[profile.DECLARED].ci_consent = None
+    cx.store, cx.profile.entries[profile.DECLARED].ci_consent = Store(tmp_path / "legacy-store"), None
     _, inventory = follow.declared(cx, c, gh.pr, StepKind.FOLLOW)
     assert inventory.exit == Exit.ASK
     assert "Required checks were ci; now ci, lint, scan." in inventory.question.text
@@ -3792,11 +3792,13 @@ def test_completed_project_yes_seeds_shared_intent_releases_a_hold_and_renews_on
     cx.store = Store(tmp_path / "store", DataRepo(shared_repo[0]), "shop-site")
     cx.store.write_profile(cx.profile)
     c, held = _completed_and_held(cx, clone, head)
+    stale = cx.profile
     consent = _seed_completed_consent(cx, c, monkeypatch, whole_error)
     head, _ = ci_head(clone, "${{ inputs.n }} updated")
     gh.pr = pr(head=head)
     fresh = change(StepKind.FOLLOW, worktree=str(clone)).model_copy(update={"slug": "c3"})
     cx.lock = Lock("c3")
+    cx.profile = stale
     assert follow.declared(cx, fresh, gh.pr, StepKind.FOLLOW) == ((), None)
     version = cx.profile.version
     assert follow.declared(cx, fresh, gh.pr, StepKind.FOLLOW) == ((), None)

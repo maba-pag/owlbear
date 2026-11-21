@@ -29,7 +29,6 @@ from owlbear_delivery_next.state_store.pending_intents import shared_pending as 
 from owlbear_delivery_next.state_store.profile_authority import config_digest
 from owlbear_delivery_next.state_store.profile_errors import (
     Basis,
-    SharedSyncError,
     SourceChangedError,
     TargetChangedError,
 )
@@ -73,15 +72,11 @@ def write(
         if basis and basis.owned:
             basis.owned()  # a newer or missing replacement is refused before anything is pulled or written
         if basis is None and previous == prof and _read_unlocked(store) == prof:
-            return _publish_locked(store, prof, f"settings: {store.name}: project profile")
+            notice = _publish_locked(store, prof, f"settings: {store.name}: project profile")
+            profile_authority.sync(store, notice)
+            return notice
         # the target is judged against the remote's current bytes, not a stale clone; a failed sync says nothing of them
-        if store.shared:
-            try:
-                why = store.shared.pull()
-            except (DataRepoError, OSError) as exc:
-                why = failure(exc)
-            if why:
-                raise SharedSyncError(why)
+        profile_authority.sync(store)
         if basis and basis.source and config_digest(store.root / PROFILE) != basis.source:
             msg = "The old profile changed while you answered; nothing was saved. Run setup again to review it."
             raise SourceChangedError(msg)
