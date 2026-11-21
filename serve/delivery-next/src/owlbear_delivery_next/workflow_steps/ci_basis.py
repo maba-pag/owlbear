@@ -333,6 +333,9 @@ def delta(c: Change, q: Question | None, basis: CiBasis, prof: Profile, cause: s
 
 def settle(store: Store, lock: Lock, c: Change, now: datetime) -> None:
     """Release only a redundant inventory hold; the runner still rereads GitHub and gates the actual head."""
+    q = loop.open_question(c)
+    if _approval(c) is None and (q is None or not (inventory(q) or requirements(q))):
+        return
     prof = store.read_profile()
     if prof is None:
         return
@@ -340,7 +343,6 @@ def settle(store: Store, lock: Lock, c: Change, now: datetime) -> None:
         prof = acquire(store, lock, c, prof)
     except (SharedSyncError, TargetChangedError) as exc:
         raise StoreError(str(exc)) from exc
-    q = loop.open_question(c)
     if (
         q is None
         or not (inventory(q) or requirements(q))
