@@ -147,7 +147,7 @@ def acquire(store: Store, lock: Lock, c: Change, prof: Profile) -> Profile:
         *(profile.listed(entry) if profile.is_confirmed(entry) else ()),
         *((primary.ci_basis.declared or ()) if _project_renewal(primary) else ()),
     )
-    value = ", ".join(dict.fromkeys(names)) or "none"
+    value = ci_consent.format_names(tuple(dict.fromkeys(names)))
     pinned = tuple(
         dict.fromkeys(
             (

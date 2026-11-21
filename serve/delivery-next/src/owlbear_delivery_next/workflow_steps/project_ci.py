@@ -71,7 +71,7 @@ def _reuse(
         if profile.holds(entry, observed)
         else ci_consent.confirm_ci(
             raw,
-            ", ".join(confirmed) or "none",
+            ci_consent.format_names(confirmed),
             consent.at,
             consent,
             pinned,
@@ -140,7 +140,7 @@ def renew(ctx: Ctx, c: Change, rules: Rules) -> StepResult | None:
             raw = before.model_copy(
                 update={"entries": before.entries | {profile.REQUIRED: profile.rule_entries(rules)[profile.REQUIRED]}}
             )
-            ctx.profile = profile.confirm(raw, profile.REQUIRED, ", ".join(names) or "none", consent.at)
+            ctx.profile = profile.confirm(raw, profile.REQUIRED, ci_consent.format_names(names), consent.at)
             ctx.profile = ci_basis.save(ctx.store, ctx.lock, c, before, ctx.profile)
         return None
     texts = profile.workflow_texts_at(Path(c.names.worktree), "HEAD") if c.names.worktree else None
@@ -188,7 +188,7 @@ def renew(ctx: Ctx, c: Change, rules: Rules) -> StepResult | None:
         named = tuple(dict.fromkeys((*pinned, *detected)))
         updated = ci_consent.confirm_ci(
             before.model_copy(update={"entries": entries}),
-            ", ".join(named) or "none",
+            ci_consent.format_names(named),
             approved.at,
             approved,
             pinned,

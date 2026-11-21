@@ -43,7 +43,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile, Profi
 from owlbear_delivery_next.change_contracts.round_records import LeftOpen, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import asking, budgets, delivery_target, loop, round_flow, stuck, worktree
 from owlbear_delivery_next.change_flow.status import Activity
-from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.commands import runner, setup_profile
 from owlbear_delivery_next.git import access as git_access
 from owlbear_delivery_next.git import remote_git
 from owlbear_delivery_next.git.access import Access
@@ -3915,11 +3915,51 @@ def test_project_ci_snapshot_preserves_a_required_matrix_check_name(tmp_path, cl
     fresh = change(StepKind.MERGE, worktree=str(clone), head=head)
     cx.profile = cx.store.read_profile()
     assert follow.declared(cx, fresh, gh.pr, StepKind.MERGE) == ((), None)
-    gh.checks = (Check(name=required, status="completed", conclusion="success"),)
+    named = "Lint (Ruff, Biome)"
+    before = cx.store.read_profile()
+    cx.profile = setup_profile.confirmed(before, {profile.DECLARED: '"Lint (Ruff, Biome)"'}, by="prompt")
+    cx.store.write_profile(cx.profile, previous=before)
+    consent = cx.profile.entries[profile.DECLARED].ci_consent
+    head, _ = ci_head(clone, "${{ inputs.n }} changed again")
+    gh.pr = pr(head=head)
+    fresh = change(StepKind.MERGE, worktree=str(clone), head=head)
+    assert follow.declared(cx, fresh, gh.pr, StepKind.MERGE) == ((named,), None)
+    assert cx.store.read_profile().entries[profile.DECLARED].ci_checks == (named,)
+    assert cx.profile.entries[profile.DECLARED].ci_consent == consent
+    fresh, added = _renew_exact_ci_names(cx, fresh, required, named)
+    gh.checks = tuple(Check(name=n, status="completed", conclusion="success") for n in (required, added))
+    _, held = merge.run(cx, fresh)
+    assert held.exit == Exit.PENDING
+    assert gh.merges == []
+    gh.checks += (Check(name=named, status="completed", conclusion="success"),)
     merged(gh)
     _, result = merge.run(cx, fresh)
     assert result.exit == Exit.DONE
     assert [request.expected_head_sha for request in gh.merges] == [head]
+
+
+def _renew_exact_ci_names(cx, fresh, required, named):
+    before = cx.profile
+    cx.profile = before.model_copy(
+        update={"entries": before.entries | {profile.REQUIRED: ProfileEntry(state="known", value="none")}}
+    )
+    cx.store.write_profile(cx.profile, previous=before)
+    assert engine.rules_changed(cx, fresh)[0] is None
+    assert profile.names(cx.store.read_profile(), profile.REQUIRED) == (required,)
+    added = "Audit (uv, deps)"
+    rules = cx.gh.read_rules(cx.repository, fresh.names.target).model_copy(
+        update={"required_checks": (required, added)}
+    )
+    cx.gh.read_rules = lambda _r, _b: rules
+    proposal, _ = engine.rules_changed(cx, fresh)
+    assert proposal.question.ci_basis.required == tuple(sorted((required, added)))
+    fresh = loop.apply(fresh, proposal, NOW)
+    fresh, _ = loop.schedule(fresh, [AnswerItem(at=NOW, question=fresh.outcome.question, option="yes")], NOW)
+    assert engine.rules_changed(cx, fresh)[0] is None
+    assert cx.store.read_profile().entries[profile.DECLARED].ci_checks == (named,)
+    assert follow.declared(cx, fresh, cx.gh.pr, StepKind.MERGE) == ((named,), None)
+    assert len(fresh.questions) == 1
+    return fresh, added
 
 
 def _named_after_rules(cx, c, clone, rules, obsolete):
