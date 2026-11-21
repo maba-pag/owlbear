@@ -129,13 +129,9 @@ def _publish_locked(store: Store, prof: Profile, message: str) -> str:
     return notice
 
 
-def _digest(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
 def held_by_pending(store: Store, data: bytes) -> bool:
     """Whether an automatic config write of *data* would replace another clone's different pending intent."""
-    digest = _digest(data)
+    digest = hashlib.sha256(data).hexdigest()
     return any(pending != digest for pending in pending_intents(store))
 
 
