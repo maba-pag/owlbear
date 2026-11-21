@@ -84,7 +84,7 @@ from owlbear_delivery_next.project_host import host as scheduler
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.runtimes.readiness import Check as SetupCheck
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.settings import config, profile
+from owlbear_delivery_next.settings import ci_consent, config, profile
 from owlbear_delivery_next.state_store.store import Lock, SharedError, Store
 from owlbear_delivery_next.workflow_steps import (
     check,
@@ -687,6 +687,19 @@ def test_empty_inventory_consent_keeps_the_current_profiles_confirmed_named_chec
     _, held = merge.run(cx, fresh)
     assert held.exit == Exit.PENDING
     assert gh.merges == []
+    _partial_named_after(cx, clone)
+
+
+def _partial_named_after(cx, clone):
+    gh = cx.gh
+    head = _commit_workflow(clone, "unresolved.yml", "on: pull_request\njobs:\n  t: {uses: './shared.yml'}\n")
+    gh.pr = gh.pr.model_copy(update={"head_sha": head})
+    fresh = change(StepKind.FOLLOW, worktree=str(clone), head=head)
+    fresh.names.target = "release"
+    _, proposal = follow.declared(cx, fresh, gh.pr, StepKind.FOLLOW)
+    fresh = loop.apply(fresh, proposal, NOW)
+    fresh, _ = loop.schedule(fresh, [AnswerItem(at=NOW, question=fresh.outcome.question, option="yes")], NOW)
+    assert follow.declared(cx, fresh, gh.pr, StepKind.FOLLOW) == (("lint", "suite"), None)
 
 
 def _global_named_then_detected(cx, clone, head):
@@ -3884,6 +3897,31 @@ def test_completed_project_yes_seeds_shared_intent_releases_a_hold_and_renews_on
     _profile_error_after_activity(cx, monkeypatch, whole_error)
 
 
+def test_project_ci_snapshot_preserves_a_required_matrix_check_name(tmp_path, clone):
+    head, entries = ci_head(clone, "${{ inputs.n }}")
+    required = "Tests (Python 3.14, macOS)"
+    rules = Rules(state="known", evidence="rules", required_checks=(required,))
+    gh = FakeGh(pr(head=head))
+    gh.read_rules = lambda _r, _b: rules
+    cx = ctx(tmp_path, gh, prof(**(entries | profile.rule_entries(rules))))
+    c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
+    _, proposal = follow.run(cx, c)
+    assert proposal.question.ci_basis == CiBasis(declared=(), required=(required,))
+    c = loop.apply(c, proposal, NOW)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
+    assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == ((), None)
+    head, _ = ci_head(clone, "${{ inputs.n }} updated")
+    gh.pr = pr(head=head)
+    fresh = change(StepKind.MERGE, worktree=str(clone), head=head)
+    cx.profile = cx.store.read_profile()
+    assert follow.declared(cx, fresh, gh.pr, StepKind.MERGE) == ((), None)
+    gh.checks = (Check(name=required, status="completed", conclusion="success"),)
+    merged(gh)
+    _, result = merge.run(cx, fresh)
+    assert result.exit == Exit.DONE
+    assert [request.expected_head_sha for request in gh.merges] == [head]
+
+
 def _named_after_rules(cx, c, clone, rules, obsolete):
     ci_basis.settle(cx.store, Lock("c4"), obsolete, NOW)
     assert loop.open_question(obsolete) is None
@@ -3952,7 +3990,7 @@ def _seed_completed_consent(cx, c, monkeypatch, whole_error):
     saved = cx.store.read_profile()
     consent = saved.entries[profile.DECLARED].ci_consent
     assert consent.basis == CiBasis(declared=(), required=("old-ci",))
-    assert not profile.project_ci(saved, "main", saved.entries[profile.DECLARED])
+    assert not ci_consent.project_ci(saved, "main", saved.entries[profile.DECLARED])
     assert cx.store.read("c1").questions == c.questions  # no fabricated historical answer or effect.
     cx.profile = saved
     _, mismatch = follow.declared(cx, change(StepKind.FOLLOW, worktree=str(clone)), cx.gh.pr, StepKind.FOLLOW)

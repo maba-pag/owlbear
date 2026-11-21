@@ -508,6 +508,9 @@ Delivery saves that consent in the shared project profile and rechecks it in eac
 ask once, listing additions and removals; a rename is both. Newly detected names still need approval, and confirmed
 named checks remain gates. Unreadable requirements, a refusal or a withdrawn confirmation confer no project reuse.
 Existing completed structured approvals can seed this shared consent; legacy observations remain Change-local.
+Explicitly selected check names stay in the profile separately from names inferred from a workflow. They still
+gate a new Change or another target after later inventory answers. Names containing commas use quoted CSV.
+The shared CI-intent profile format requires an updated runtime; an older runtime refuses it instead of replacing it.
 
 A failed profile publication keeps its whole reason in the Change's diagnostics, visible with details off even
 after later activity. The next save retries the current saved intent without another yes. A stale explicit CI

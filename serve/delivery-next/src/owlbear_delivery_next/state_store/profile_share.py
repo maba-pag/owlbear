@@ -418,6 +418,7 @@ def _local(store: Store) -> dict[str, ProfileEntry]:
 
 
 def _stage(store: Store, prof: Profile) -> Path:
+    prof = _parse(prof.model_dump_json(), "profile", Profile, PROFILE_FORMAT, migrations.PROFILE)
     target = path(store)
     target.parent.mkdir(parents=True, exist_ok=True)
     atomic_write(target, _shared_part(prof).model_dump_json(indent=1))

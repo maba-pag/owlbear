@@ -12,7 +12,7 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.profile_record import ProjectCiConsent
 from owlbear_delivery_next.change_flow import asking, loop
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.settings import ci_consent, profile
 from owlbear_delivery_next.state_store.profile_errors import SharedSyncError, TargetChangedError
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import engine
@@ -51,8 +51,8 @@ def current(prof: Profile, entry: ProfileEntry) -> CiBasis:
     """Canonical observed names; a refreshed profile's raw facts are not owner consent."""
     required = prof.entries.get(profile.REQUIRED)
     return CiBasis(
-        declared=tuple(sorted(n.strip() for n in entry.value.split(",") if n.strip() and n.strip() != "none")),
-        required=(profile.required_names(required)),
+        declared=tuple(sorted(ci_consent.raw_names(entry))),
+        required=ci_consent.required_names(required),
     )
 
 
@@ -148,7 +148,31 @@ def acquire(store: Store, lock: Lock, c: Change, prof: Profile) -> Profile:
         *((primary.ci_basis.declared or ()) if _project_renewal(primary) else ()),
     )
     value = ", ".join(dict.fromkeys(names)) or "none"
-    confirmed = profile.confirm(prof, profile.DECLARED, value, consent.at, consent=consent)
+    pinned = tuple(
+        dict.fromkeys(
+            (
+                *entry.ci_named,
+                *(profile.listed(entry) if entry.ci_consent is None and profile.is_confirmed(entry) else ()),
+            )
+        )
+    )
+    if not ci_consent.raw_names(entry):
+        confirmed = ci_consent.confirm_ci(prof, value, consent.at, consent, pinned)
+    else:
+        confirmed = prof.model_copy(
+            update={
+                "entries": prof.entries
+                | {
+                    profile.DECLARED: entry.model_copy(
+                        update={
+                            "ci_consent": consent,
+                            "ci_named": pinned,
+                        }
+                    )
+                },
+                "version": prof.version + 1,
+            }
+        )
     return save(store, lock, c, prof, confirmed)
 
 
@@ -156,7 +180,16 @@ def _stored_consent(store: Store, prof: Profile) -> Profile:
     current = store.read_profile()
     entry = current.entries.get(profile.DECLARED) if current else None
     old = prof.entries.get(profile.DECLARED)
-    if entry and entry.ci_consent and (not old or not old.ci_consent or entry.ci_consent.at > old.ci_consent.at):
+    if (
+        entry
+        and entry.ci_consent
+        and (
+            not old
+            or not old.ci_consent
+            or entry.ci_consent.at > old.ci_consent.at
+            or (entry.ci_consent.at == old.ci_consent.at and entry != old)
+        )
+    ):
         return prof.model_copy(
             update={"entries": prof.entries | {profile.DECLARED: entry}, "version": max(prof.version, current.version)}
         )
@@ -177,12 +210,7 @@ def compatible(c: Change, consent: ProjectCiConsent) -> bool:
     saved = q.ci_basis or q.ci_observation
     return bool(
         q.answer.at <= consent.at
-        or (
-            saved
-            and saved.declared in {(), None}
-            and saved.required is not None
-            and tuple(sorted(set(saved.required))) == consent.basis.required
-        )
+        or (saved and saved.required is not None and tuple(sorted(set(saved.required))) == consent.basis.required)
     )
 
 
@@ -220,11 +248,19 @@ def required_delta(before: tuple[str, ...] | None, after: tuple[str, ...] | None
     return " ".join(parts)
 
 
-def project_delta(prof: Profile, c: Change, basis: CiBasis) -> str:
+def project_delta(prof: Profile, c: Change, basis: CiBasis, observed: ProfileEntry) -> str:
     """A shared empty baseline does not approve new head names or a different target."""
     entry = prof.entries.get(profile.DECLARED)
     consent = entry.ci_consent if entry else None
     if not consent or not consent.basis or consent.repository != profile.value(prof, profile.REPO):
+        return ""
+    if (
+        entry
+        and profile.is_confirmed(entry)
+        and profile.holds(entry, observed)
+        and consent.target == c.names.target
+        and consent.basis.required == basis.required
+    ):
         return ""
     q = latest(c)
     if q and q.ci_basis == basis and q.answer.option == "yes" and not q.answer.superseded_at:
@@ -286,13 +322,14 @@ def required_approved(c: Change, q: Question, basis: CiBasis, prof: Profile) -> 
 
 
 def covers(c: Change, q: Question | None, basis: CiBasis, prof: Profile) -> bool:
-    """An empty-inventory yes covers workflow-only changes, never newly read names or a later refusal."""
+    """An unchanged approved inventory covers workflow churn, never newly read names or a later refusal."""
     return bool(
         q is not None
         and q.answer is not None
         and q.answer.option == "yes"
         and q.answer.superseded_at is None
-        and detected(q) == basis.declared == ()
+        and detected(q) is not None
+        and detected(q) == basis.declared
         and required_approved(c, q, basis, prof)
     )
 
@@ -366,7 +403,7 @@ def settle(store: Store, lock: Lock, c: Change, now: datetime) -> None:
     pending = q.ci_basis or CiBasis(declared=detected(q), required=basis.required)
     saved_entry = prof.entries.get(profile.DECLARED)
     consent = saved_entry.ci_consent if saved_entry else None
-    shared = bool(consent and profile.project_ci(prof, c.names.target, entry) and compatible(c, consent))
+    shared = bool(consent and ci_consent.project_ci(prof, c.names.target, entry) and compatible(c, consent))
     covered = inventory(q) and pending == basis and covers(c, previous, basis, prof)
     shared_hold = shared and ((inventory(q) and pending.declared == ()) or engine.required_only(q, c.names.target))
     if covered or shared_hold:

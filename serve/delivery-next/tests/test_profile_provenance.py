@@ -18,7 +18,7 @@ from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.merge_offer import Block, decide
 from owlbear_delivery_next.github.provider import CiState, MergeMethod, PullRequest, Repository, Rules
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
-from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.settings import ci_consent, profile
 from owlbear_delivery_next.state_store import briefs, profile_share
 from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
 from owlbear_delivery_next.workflow_steps import engine, follow
@@ -211,18 +211,18 @@ def test_project_ci_redetection_keeps_consent_across_churn_but_a_mismatch_is_onl
     monkeypatch.setattr(profile, "provider", lambda *_a: gh)
     fresh = profile_share.checked(store, repo)
     assert fresh.entries[profile.DECLARED].ci_consent == consent
-    assert profile.project_ci(fresh, "release", profile.ci_entries(profile.workflows(repo))[profile.DECLARED])
+    assert ci_consent.project_ci(fresh, "release", profile.ci_entries(profile.workflows(repo))[profile.DECLARED])
     assert profile.names(fresh, profile.DECLARED) == ("lint",)
-    assert not profile.project_ci(fresh, "main", ProfileEntry(state="unknown", value="none"))
+    assert not ci_consent.project_ci(fresh, "main", ProfileEntry(state="unknown", value="none"))
     (flows / "ci.yml").write_text("on: pull_request\njobs:\n  t:\n    name: new suite\n")
     named = profile.detect(repo, gh, fresh)
-    assert profile.names(named, profile.DECLARED) == ("lint",)
-    assert profile.is_confirmed(named.entries[profile.DECLARED])
-    assert not profile.project_ci(named, "release", profile.ci_entries(profile.workflows(repo))[profile.DECLARED])
+    assert profile.names(named, profile.DECLARED) == ("lint", "new suite")
+    assert named.entries[profile.DECLARED].ci_named == ("lint",)
+    assert not ci_consent.project_ci(named, "release", profile.ci_entries(profile.workflows(repo))[profile.DECLARED])
     gh.known = False
     mismatch = profile.detect(repo, gh, fresh)
     assert mismatch.entries[profile.DECLARED].ci_consent == consent
-    assert not profile.project_ci(mismatch, "release", mismatch.entries[profile.DECLARED])
+    assert not ci_consent.project_ci(mismatch, "release", mismatch.entries[profile.DECLARED])
     assert json.loads((shared / "shop-site/profile.json").read_text())["entries"][profile.DECLARED]["ci_consent"]
 
 

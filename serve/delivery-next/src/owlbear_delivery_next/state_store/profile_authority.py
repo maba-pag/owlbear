@@ -46,7 +46,9 @@ def keep(prof: Profile, current: Profile | None, previous: Profile | None) -> Pr
     saved = current.entries.get(profile.DECLARED) if current else None
     authority = offered.ci_consent if offered else None
     prior = before.ci_consent if before else None
-    updating = previous is not None and authority != prior
+    updating = previous is not None and (
+        authority != prior or (offered.ci_named if offered else ()) != (before.ci_named if before else ())
+    )
     if updating and current is not None and saved != before:
         msg = (
             "The shared CI authority changed while you answered; nothing was saved. "

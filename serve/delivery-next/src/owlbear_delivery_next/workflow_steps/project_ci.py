@@ -12,7 +12,7 @@ from owlbear_delivery_next.change_contracts.models import Option
 from owlbear_delivery_next.change_contracts.profile_record import ProjectCiConsent
 from owlbear_delivery_next.change_flow import asking
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.settings import ci_consent, profile
 from owlbear_delivery_next.state_store.profile_errors import SharedSyncError, TargetChangedError
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import ci_basis, engine
@@ -40,7 +40,10 @@ def _reuse(
     ctx: Ctx, c: Change, observed: ProfileEntry, step: StepKind
 ) -> tuple[tuple[str, ...], StepResult | None] | None:
     entry = ctx.profile.entries.get(profile.DECLARED)
-    confirmed = profile.listed(entry) if entry and profile.is_confirmed(entry) else ()
+    pinned = entry.ci_named if entry else ()
+    confirmed = tuple(
+        dict.fromkeys((*pinned, *(profile.listed(entry) if entry and profile.is_confirmed(entry) else ())))
+    )
     consent = entry.ci_consent if entry else None
     if consent and consent.basis and consent.repository == ctx.repository and consent.target == c.names.target:
         rules = ctx.gh.read_rules(ctx.repository, c.names.target)
@@ -57,26 +60,48 @@ def _reuse(
             update={"entries": ctx.profile.entries | {profile.REQUIRED: profile.rule_entries(rules)[profile.REQUIRED]}}
         )
     if ci_basis.head_approved(c, ci_basis.current(ctx.profile, observed)):
-        return tuple(dict.fromkeys((*confirmed, *(ci_basis.current(ctx.profile, observed).declared or ())))), None
-    if not (consent and profile.project_ci(ctx.profile, c.names.target, observed) and ci_basis.compatible(c, consent)):
+        return tuple(dict.fromkeys((*pinned, *(ci_basis.current(ctx.profile, observed).declared or ())))), None
+    if not (
+        consent and ci_consent.project_ci(ctx.profile, c.names.target, observed) and ci_basis.compatible(c, consent)
+    ):
         return None
     raw = ctx.profile.model_copy(update={"entries": ctx.profile.entries | {profile.DECLARED: observed}})
     bound = (
         ctx.profile
         if profile.holds(entry, observed)
-        else profile.confirm(raw, profile.DECLARED, ", ".join(confirmed) or "none", consent.at, consent=consent)
+        else ci_consent.confirm_ci(
+            raw,
+            ", ".join(confirmed) or "none",
+            consent.at,
+            consent,
+            pinned,
+        )
     )
     ctx.profile = ci_basis.save(ctx.store, ctx.lock, c, ctx.profile, bound)
     actual = ctx.profile.entries.get(profile.DECLARED)
-    if not actual or not actual.ci_consent or not profile.project_ci(ctx.profile, c.names.target, observed):
+    if not actual or not actual.ci_consent or not ci_consent.project_ci(ctx.profile, c.names.target, observed):
         return admit(ctx, c, observed, step)
     return tuple(dict.fromkeys((*confirmed, *profile.listed(actual)))), None
 
 
-def confirm_value(ctx: Ctx, c: Change, value: str) -> StepResult | None:
+def confirm_value(ctx: Ctx, c: Change, value: str, *, explicit: bool = False) -> StepResult | None:
     """Keep exact-digest Change-local answers effective when their profile save fails visibly."""
     before = ctx.profile
-    confirmed = profile.confirm(before, profile.DECLARED, value, ctx.now)
+    entry = before.entries.get(profile.DECLARED)
+    pinned = (
+        profile.listed(profile.ProfileEntry(state="known", value=value))
+        if explicit
+        else entry.ci_named
+        if entry
+        else ()
+    )
+    confirmed = ci_consent.confirm_ci(
+        before,
+        value,
+        ctx.now,
+        entry.ci_consent if entry else None,
+        pinned,
+    )
     try:
         ctx.profile = ci_basis.save(ctx.store, ctx.lock, c, before, confirmed)
     except (SharedSyncError, TargetChangedError) as exc:
@@ -110,7 +135,7 @@ def renew(ctx: Ctx, c: Change, rules: Rules) -> StepResult | None:
         )
     names = tuple(sorted(set(rules.required_checks)))
     if tuple(sorted(set(consent.basis.required))) == names:
-        if profile.required_names(ctx.profile.entries.get(profile.REQUIRED)) != names:
+        if ci_consent.required_names(ctx.profile.entries.get(profile.REQUIRED)) != names:
             before = ctx.profile
             raw = before.model_copy(
                 update={"entries": before.entries | {profile.REQUIRED: profile.rule_entries(rules)[profile.REQUIRED]}}
@@ -152,13 +177,21 @@ def renew(ctx: Ctx, c: Change, rules: Rules) -> StepResult | None:
         entries = before.entries | {profile.REQUIRED: profile.rule_entries(rules)[profile.REQUIRED]}
         if observed is not None:
             entries[profile.DECLARED] = observed
-        named = tuple(dict.fromkeys((*(profile.listed(entry) if profile.is_confirmed(entry) else ()), *detected)))
-        updated = profile.confirm(
+        pinned = tuple(
+            dict.fromkeys(
+                (
+                    *entry.ci_named,
+                    *(profile.listed(entry) if not detected and profile.is_confirmed(entry) else ()),
+                )
+            )
+        )
+        named = tuple(dict.fromkeys((*pinned, *detected)))
+        updated = ci_consent.confirm_ci(
             before.model_copy(update={"entries": entries}),
-            profile.DECLARED,
             ", ".join(named) or "none",
             approved.at,
-            consent=approved,
+            approved,
+            pinned,
         )
         ctx.profile = ci_basis.save(ctx.store, ctx.lock, c, before, updated)
         agreed.effect_observed_at = ctx.now

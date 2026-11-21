@@ -24,7 +24,7 @@ from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.git.remote_git import RemoteGitError
 from owlbear_delivery_next.github.provider import ProviderError, classify_checks
-from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.settings import ci_consent, profile
 from owlbear_delivery_next.settings.config import pref
 from owlbear_delivery_next.workflow_steps import check, ci_basis, engine, project_ci
 from owlbear_delivery_next.workflow_steps import conversation as conv
@@ -82,7 +82,9 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
         entry = observed
     cause = failures.cause_key(ErrorKind.GATE, F, f"declared-{digest}")  # the same inventory gates Follow and Merge
     ci_basis.retain(c, previous, basis, ctx.profile)
-    delta = ci_basis.delta(c, previous, basis, ctx.profile, cause) or ci_basis.project_delta(ctx.profile, c, basis)
+    delta = ci_basis.delta(c, previous, basis, ctx.profile, cause) or ci_basis.project_delta(
+        ctx.profile, c, basis, observed
+    )
     covered = bool(
         previous
         and (previous.cause != cause or (previous.ci_basis is None and confirmed))
@@ -90,27 +92,38 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
     )
     answer = previous.answer if previous else None
     declined = answer is not None and (answer.option == "pause" or answer.superseded_at is not None)
-    scoped = bool(consent and consent.repository == ctx.repository and consent.target == c.names.target)
-    extra = (
+    recorded = ctx.profile.entries.get(profile.DECLARED)
+    pinned = recorded.ci_named if recorded else ()
+    legacy = (
         confirmed
-        if (consent and scoped and consent.basis)
-        or (previous is None and (not consent or consent.repository == ctx.repository))
+        if consent and consent.basis and consent.repository == ctx.repository and not basis.declared
         else ci_basis.named_after(c, ctx.profile.entries.get(profile.DECLARED))
     )
+    extra = tuple(dict.fromkeys((*pinned, *legacy)))
     if covered or (entry and entry.state == "known" and not delta and not declined):
-        chosen = confirmed if covered and previous.ci_basis is None and confirmed else profile.listed(entry)
+        chosen = (
+            confirmed
+            if covered and previous.ci_basis is None and confirmed
+            else (basis.declared or ())
+            if covered
+            else profile.listed(entry)
+        )
         return tuple(dict.fromkeys((*extra, *chosen))), None
     if not previous or previous.cause != cause or delta or (answer and answer.superseded_at is not None):
         answer = None
-    names = ", ".join(n.strip() for n in answer.text.split(",") if n.strip()) if answer else ""
+    names = ci_consent.format_names(ci_consent.parse_names(answer.text)) if answer and answer.text else ""
     read = entry.value if entry and entry.value else "none"  # what the workflow files name, as far as they say
     said = answer.option if answer else None
     value = "none" if said == "none" else read if said == "yes" else names
-    held = project_ci.confirm_value(ctx, c, value) if value and digest == bound else None
+    held = (
+        project_ci.confirm_value(ctx, c, value, explicit=said not in {"yes", "none"})
+        if value and digest == bound
+        else None
+    )
     if held is not None:
         return (), held
     if value:
-        chosen = () if value == "none" else tuple(n.strip() for n in value.split(","))
+        chosen = ci_consent.parse_names(value)
         return tuple(dict.fromkeys((*extra, *chosen))), None
     options = [Option(id="yes", label="Yes: merge once those pass", next=step), engine.PAUSE]
     changed = " (the CI check-detection evidence changed)" if digest != bound else ""

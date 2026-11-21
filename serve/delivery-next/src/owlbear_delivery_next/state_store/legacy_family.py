@@ -124,7 +124,7 @@ CURRENT_FUNCTIONS = (
 )
 CURRENT_IMPORTS = (
     ("commands/chat_client.py", "9866dc9c9b91443ad60def9b98ba520b2d3f5ecbbafb334a7d89ee9775cd53e2"),
-    ("commands/cli.py", "df6736030e82eb8a18a49295f631d27febcc5f46bc015785e1ad6d0367117a70"),
+    ("commands/cli.py", "d41c66dad4806254b595b32f81572699788c4d29f3a68f84e526844c443f0a9e"),
     ("commands/dispatch.py", "326c281057f28ebdb70e9ddfb43e62ad0693957ce5cf2305201d67e7d4cba0e4"),
     ("commands/mcp_server.py", "a9c65527a1870f03a9fc9719b527642633456fab1e361be2e7516934d4f785f9"),
     ("commands/runner.py", "0eabef7a935161a8006c365a2a50914115931a6fdac5bf7ebc1df0c67912e9d5"),

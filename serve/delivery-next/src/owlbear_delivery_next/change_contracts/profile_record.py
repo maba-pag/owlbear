@@ -10,7 +10,7 @@ from pydantic import Field, model_validator
 from owlbear_delivery_next.change_contracts.merge_records import CiBasis
 from owlbear_delivery_next.change_contracts.models import Context, Effort, Record
 
-PROFILE_FORMAT = 5  # 2: role overrides moved to config.json; 3: preference import; 4: its basis; 5: no runtime switch
+PROFILE_FORMAT = 6  # 2: roles moved; 3: preference import; 4: its basis; 5: no runtime switch; 6: shared CI intent
 
 
 def named(model: str) -> str:
@@ -61,6 +61,8 @@ class ProfileEntry(Record):
     evidence: str = ""
     observed: str = Field(default="", pattern=r"^(?:[0-9a-f]{64})?$", exclude_if=lambda value: not value)
     ci_consent: ProjectCiConsent | None = Field(default=None, exclude_if=lambda value: value is None)
+    ci_named: tuple[str, ...] = Field(default=(), exclude_if=lambda value: not value)
+    ci_checks: tuple[str, ...] | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class RoleModel(Record):

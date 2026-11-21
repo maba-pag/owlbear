@@ -11,7 +11,7 @@ from owlbear_delivery_next.change_contracts.models import Change
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry, ProjectCiConsent
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
-from owlbear_delivery_next.settings import config, profile
+from owlbear_delivery_next.settings import ci_consent, config, profile
 from owlbear_delivery_next.state_store import prefs_import, profile_share
 from owlbear_delivery_next.state_store.profile_errors import Basis, SharedSyncError, TargetChangedError
 from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
@@ -117,6 +117,16 @@ def test_project_ci_authority_survives_stale_saves_but_not_explicit_revocation(s
     late.write_profile(profile.confirm(stale, "allow:install", "yes", now), previous=stale)
     current = late.read_profile()
     assert current.entries[profile.DECLARED].ci_consent == consent
+    pinned = ci_consent.confirm_ci(current, "lint", now + timedelta(seconds=1), consent, ("lint",))
+    late.write_profile(pinned, previous=current)
+    refreshed = ci_basis.acquire(late, Lock("plain"), Change(slug="plain"), current)
+    assert refreshed.entries[profile.DECLARED].ci_named == ("lint",)
+    with pytest.raises(TargetChangedError, match="current profile"):
+        late.write_profile(
+            ci_consent.confirm_ci(current, "scan", now + timedelta(seconds=2), consent, ("scan",)),
+            previous=current,
+        )
+    current = late.read_profile()
     with pytest.raises(TargetChangedError, match="current profile"):
         late.write_profile(profile.confirm(stale, profile.DECLARED, "lint", now), previous=stale)
     withdrawn = profile.withdraw(current, profile.DECLARED, raw.entries[profile.DECLARED])

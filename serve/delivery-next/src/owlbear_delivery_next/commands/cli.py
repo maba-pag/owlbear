@@ -36,7 +36,7 @@ from owlbear_delivery_next.impeccable.detector import DetectorError
 from owlbear_delivery_next.impeccable_runs import pack_replay
 from owlbear_delivery_next.local_system import data_place, data_repo, local_home
 from owlbear_delivery_next.project_host import host
-from owlbear_delivery_next.settings import profile, roles
+from owlbear_delivery_next.settings import ci_consent, profile, roles
 from owlbear_delivery_next.settings.config import Agent, Layer
 from owlbear_delivery_next.state_store import (
     backlog_migrate,
@@ -221,7 +221,17 @@ def show_profile(
     gh = profile.provider(previous, repo, github_writer.of(store, repo, detecting=True))
     prof = profile.detect(repo, gh, previous)
     for key, value in confirms:
-        prof = profile.confirm(prof, key, value, datetime.now(UTC))
+        prof = (
+            ci_consent.confirm_ci(
+                prof,
+                value,
+                datetime.now(UTC),
+                prof.entries.get(key, profile.ProfileEntry(state="unknown")).ci_consent,
+                ci_consent.parse_names(value),
+            )
+            if key == profile.DECLARED
+            else profile.confirm(prof, key, value, datetime.now(UTC))
+        )
     publication = store.write_profile(prof, previous=previous)
     prefs_import.run(store)
     notice = (

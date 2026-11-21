@@ -20,7 +20,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile, Profi
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github import account
 from owlbear_delivery_next.github.gh import GhProvider
-from owlbear_delivery_next.settings.ci_consent import project_ci, required_names
+from owlbear_delivery_next.settings import ci_consent
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -116,7 +116,10 @@ def _detected(key: str) -> bool:
 
 def fingerprint(entry: ProfileEntry) -> str:
     """The complete raw observation, independent of the value the owner chose instead."""
-    return hashlib.sha256(json.dumps([entry.state, entry.value, entry.evidence]).encode()).hexdigest()
+    observed: list[object] = [entry.state, entry.value, entry.evidence]
+    if entry.ci_checks is not None:
+        observed.append(entry.ci_checks)
+    return hashlib.sha256(json.dumps(observed).encode()).hexdigest()
 
 
 def is_confirmed(entry: ProfileEntry) -> bool:
@@ -240,13 +243,16 @@ def ci_entries(flows: dict[str, Workflow], digest: str = "") -> dict[str, Profil
     triggers = [n for n, w in ci.items() if w.events is None]
     on_head = {n: w for n, w in ci.items() if w.events and w.events & HEAD_EVENTS}
     names = [n for n, w in on_head.items() if w.jobs is None]
-    declared = ", ".join(dict.fromkeys(j for w in on_head.values() for j in w.jobs or ())) or "none"
+    checks = tuple(dict.fromkeys(j for w in on_head.values() for j in w.jobs or ()))
+    declared = ci_consent.format_names(checks)
     flow_ev = f"unresolved trigger: {', '.join(triggers)}" if triggers else ".github/workflows CI triggers"
     job_ev = f"unresolved check names: {', '.join(names + triggers)}" if names or triggers else "jobs"
     job_ev += f"{DIGEST}{digest}" if digest else ""
     return {
         WORKFLOWS: _entry("unknown" if triggers else "known", ", ".join(ci) or "none", flow_ev),
-        DECLARED: _entry("unknown" if names or triggers else "known", declared, job_ev),
+        DECLARED: _entry("unknown" if names or triggers else "known", declared, job_ev).model_copy(
+            update={"ci_checks": checks}
+        ),
     }
 
 
@@ -274,7 +280,9 @@ def rule_entries(rules: Rules) -> dict[str, ProfileEntry]:
         return {k: _entry("unknown", "", rules.evidence) for k in (RULES, REQUIRED, QUEUE, STRICT, RESOLUTION)}
     return {
         RULES: _entry("known", ", ".join(rules.types) or "none", rules.evidence),
-        REQUIRED: _entry("known", ", ".join(rules.required_checks) or "none", rules.evidence),
+        REQUIRED: _entry("known", ci_consent.format_names(rules.required_checks), rules.evidence).model_copy(
+            update={"ci_checks": rules.required_checks}
+        ),
         QUEUE: _entry("known", "yes" if rules.queue_required else "no", rules.evidence),
         STRICT: _entry("known", "yes" if rules.strict else "no", rules.evidence),
         RESOLUTION: _entry("known", "yes" if rules.conversation_resolution else "no", rules.evidence),
@@ -321,30 +329,18 @@ def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
         if is_confirmed(old) and holds(old, new):
             stamp = old.evidence.partition(OBSERVED)[0]
             entries[key] = old.model_copy(update={"evidence": f"{stamp}{OBSERVED}{new.evidence}"})
-    old = prev.entries.get(DECLARED)
-    if old and old.ci_consent:
-        consent = old.ci_consent
-        target_rules = rules if consent.target == r.default_branch else gh.read_rules(r.repository, consent.target)
-        candidate = prev.model_copy(
-            update={"entries": entries | {DECLARED: old, REQUIRED: rule_entries(target_rules)[REQUIRED]}}
-        )
-        if project_ci(candidate, consent.target, entries[DECLARED]):
-            bound = confirm(
-                prev.model_copy(update={"entries": entries}), DECLARED, old.value, consent.at, consent=consent
-            )
-            entries[DECLARED] = bound.entries[DECLARED]
-        else:
-            entries[DECLARED] = (
-                old
-                if is_confirmed(old) and consent.repository == r.repository
-                else entries[DECLARED].model_copy(update={"ci_consent": consent})
-            )
+    entries[DECLARED] = ci_consent.redetected(prev, entries, r, rules, gh)
     changed = shared_entries(entries) != shared_entries(prev.entries)
     return prev.model_copy(update={"entries": entries, "version": prev.version + 1 if changed else prev.version})
 
 
 def confirm(
-    profile: Profile, key: str, value: str, now: datetime, *, consent: ProjectCiConsent | None = None
+    profile: Profile,
+    key: str,
+    value: str,
+    now: datetime,
+    *,
+    consent: ProjectCiConsent | None = None,
 ) -> Profile:
     """Record the owner's value independently of the complete raw observation it is confirmed against."""
     if key in SETTINGS:
@@ -363,18 +359,17 @@ def confirm(
         value=value,
         evidence=f"{CONFIRMED} {now:%Y-%m-%d}{OBSERVED}{label or old.evidence}",
         observed=old.observed or fingerprint(old),
-        ci_consent=(
-            consent
-            or ProjectCiConsent.revoked(
-                repository=profile.entries.get(REPO, _absent(REPO)).value,
-                target=old.ci_consent.target
-                if old.ci_consent
-                else profile.entries.get(DEFAULT, _absent(DEFAULT)).value,
-                at=now,
-            )
-            if key == DECLARED
-            else old.ci_consent
+        ci_checks=(
+            old.ci_checks
+            if value == old.value
+            else ci_consent.parse_names(value)
+            if key in {DECLARED, REQUIRED}
+            else old.ci_checks
         ),
+        ci_named=(
+            listed(ProfileEntry(state="known", value=value)) if key == DECLARED and value != old.value else old.ci_named
+        ),
+        ci_consent=(ci_consent.confirmation(profile, old, now, consent) if key == DECLARED else old.ci_consent),
     )
     entries = {**profile.entries, key: entry}
     return profile.model_copy(update={"entries": entries, "version": profile.version + 1, "confirmed_at": now})
@@ -394,7 +389,7 @@ def withdraw(profile: Profile, key: str, observed: ProfileEntry | None) -> Profi
             target=prior.target if prior else value(profile, DEFAULT),
             at=datetime.now(UTC),
         )
-        entries[key] = (observed or _absent(key)).model_copy(update={"ci_consent": marker})
+        entries[key] = (observed or _absent(key)).model_copy(update={"ci_consent": marker, "ci_named": ()})
     return profile.model_copy(update={"entries": entries, "version": profile.version + 1})
 
 
@@ -424,7 +419,9 @@ def differences(profile: Profile, rules: Rules) -> list[str]:
         d
         for key, new in read
         if not (
-            key == REQUIRED and required_names(profile.entries.get(key)) == required_names(new) and new.state == "known"
+            key == REQUIRED
+            and ci_consent.required_names(profile.entries.get(key)) == ci_consent.required_names(new)
+            and new.state == "known"
         )
         and (d := _differs(profile.entries.get(key), key, new))
     ]
@@ -442,6 +439,8 @@ def adopt(profile: Profile, rules: Rules, now: datetime) -> Profile:
 def value(profile: Profile, key: str, default: str = "") -> str:
     """Return one entry's value, or *default* when it is absent or empty."""
     entry = profile.entries.get(key)
+    if entry and key == DECLARED and entry.ci_named:
+        return ", ".join(dict.fromkeys((*entry.ci_named, *ci_consent.raw_names(entry))))
     return entry.value if entry and entry.value else default
 
 
@@ -465,14 +464,18 @@ def notes(profile: Profile) -> list[str]:
 
 def names(profile: Profile, key: str) -> tuple[str, ...]:
     """Return a comma-separated entry as names; ``none`` and unknown entries give none."""
-    return listed(profile.entries.get(key))
+    entry = profile.entries.get(key)
+    pinned = entry.ci_named if entry and key == DECLARED else ()
+    return tuple(dict.fromkeys((*pinned, *listed(entry))))
 
 
 def listed(entry: ProfileEntry | None) -> tuple[str, ...]:
     """Return a known comma-separated entry's names; ``none`` and unknown entries give none."""
-    if entry is None or entry.state != "known" or entry.value in {"", "none"}:
+    if entry is None or entry.state != "known":
         return ()
-    return tuple(n.strip() for n in entry.value.split(",") if n.strip())
+    if entry.ci_checks is not None:
+        return entry.ci_checks
+    return tuple(n.strip() for n in entry.value.split(",") if n.strip()) if entry.value not in {"", "none"} else ()
 
 
 def known(profile: Profile, key: str) -> bool:
