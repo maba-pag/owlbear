@@ -96,7 +96,12 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
     pinned = recorded.ci_named if recorded else ()
     legacy = (
         confirmed
-        if consent and consent.basis and consent.repository == ctx.repository and not basis.declared
+        if consent
+        and consent.basis
+        and consent.repository == ctx.repository
+        and not basis.declared
+        and recorded
+        and profile.holds(recorded, observed)
         else ci_basis.named_after(c, ctx.profile.entries.get(profile.DECLARED))
     )
     extra = tuple(dict.fromkeys((*pinned, *legacy)))

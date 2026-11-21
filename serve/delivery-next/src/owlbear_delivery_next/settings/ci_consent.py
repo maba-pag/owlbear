@@ -92,9 +92,10 @@ def redetected(
         }
     )
     if project_ci(candidate, consent.target, found):
+        names = tuple(dict.fromkeys((*old.ci_named, *(profile.listed(old) if profile.holds(old, found) else ()))))
         return confirm_ci(
             prof.model_copy(update={"entries": entries}),
-            old.value,
+            format_names(names),
             consent.at,
             consent,
             old.ci_named,

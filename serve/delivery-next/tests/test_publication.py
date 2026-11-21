@@ -700,6 +700,51 @@ def _partial_named_after(cx, clone):
     fresh = loop.apply(fresh, proposal, NOW)
     fresh, _ = loop.schedule(fresh, [AnswerItem(at=NOW, question=fresh.outcome.question, option="yes")], NOW)
     assert follow.declared(cx, fresh, gh.pr, StepKind.FOLLOW) == (("lint", "suite"), None)
+    _persisted_partial_returns_empty(cx, clone)
+
+
+def _persisted_partial_returns_empty(cx, clone):
+    gh = cx.gh
+    before = cx.store.read_profile()
+    cx.profile = profile.detect(clone, gh, before)
+    cx.store.write_profile(cx.profile, previous=before)
+    consent = cx.profile.entries[profile.DECLARED].ci_consent
+    assert consent.basis == CiBasis(declared=(), required=("CI",))
+    gh.pr = gh.pr.model_copy(update={"base_branch": consent.target})
+    c = change(StepKind.FOLLOW, worktree=str(clone), head=gh.pr.head_sha)
+    cx.lock = Lock(c.slug)
+    c.names.target = consent.target
+    cx.now = NOW + timedelta(seconds=20)
+    _, proposal = follow.declared(cx, c, gh.pr, StepKind.FOLLOW)
+    c = loop.apply(c, proposal, cx.now)
+    c, _ = loop.schedule(c, [AnswerItem(at=cx.now, question=c.outcome.question, option="yes")], cx.now)
+    assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == (("lint", "suite"), None)
+    saved = cx.store.read_profile().entries[profile.DECLARED]
+    assert saved.ci_checks == ("suite",)
+    assert saved.ci_named == ("lint",)
+    assert saved.ci_consent == consent
+    head, _ = ci_head(clone, "${{ inputs.n }} returned to empty")
+    gh.pr = gh.pr.model_copy(update={"head_sha": head})
+    _, changed = follow.declared(cx, c, gh.pr, StepKind.FOLLOW)
+    assert changed.exit == Exit.ASK
+    assert "Detected checks changed from suite to none." in changed.question.text
+    redetected = profile.detect(clone, gh, cx.profile)
+    assert profile.names(redetected, profile.DECLARED) == ("lint",)
+    assert redetected.entries[profile.DECLARED].ci_consent == consent
+    cx.now += timedelta(seconds=1)
+    c = loop.apply(c, changed, cx.now)
+    c, _ = loop.schedule(c, [AnswerItem(at=cx.now, question=c.outcome.question, option="yes")], cx.now)
+    assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == (("lint",), None)
+    assert len(c.questions) == 2
+    assert [q.ci_basis.declared for q in c.questions] == [("suite",), ()]
+    assert cx.store.read_profile().entries[profile.DECLARED].ci_named == ("lint",)
+    c.step = Step(kind=StepKind.MERGE)
+    c.reviews = [Review(commit=head, inputs=Inputs(), verdict="pass")]
+    gh.checks = tuple(Check(name=n, status="completed", conclusion="success") for n in ("CI", "lint", "matrix run"))
+    merged(gh)
+    _, result = merge.run(cx, c)
+    assert result.exit == Exit.DONE
+    assert [request.expected_head_sha for request in gh.merges] == [head]
 
 
 def _global_named_then_detected(cx, clone, head):

@@ -210,7 +210,12 @@ def compatible(c: Change, consent: ProjectCiConsent) -> bool:
     saved = q.ci_basis or q.ci_observation
     return bool(
         q.answer.at <= consent.at
-        or (saved and saved.required is not None and tuple(sorted(set(saved.required))) == consent.basis.required)
+        or (
+            saved
+            and saved.declared in {(), None}
+            and saved.required is not None
+            and tuple(sorted(set(saved.required))) == consent.basis.required
+        )
     )
 
 

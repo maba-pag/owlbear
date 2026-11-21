@@ -42,7 +42,7 @@ def _reuse(
     entry = ctx.profile.entries.get(profile.DECLARED)
     pinned = entry.ci_named if entry else ()
     confirmed = tuple(
-        dict.fromkeys((*pinned, *(profile.listed(entry) if entry and profile.is_confirmed(entry) else ())))
+        dict.fromkeys((*pinned, *(profile.listed(entry) if entry and profile.holds(entry, observed) else ())))
     )
     consent = entry.ci_consent if entry else None
     if consent and consent.basis and consent.repository == ctx.repository and consent.target == c.names.target:
@@ -181,7 +181,7 @@ def renew(ctx: Ctx, c: Change, rules: Rules) -> StepResult | None:
             dict.fromkeys(
                 (
                     *entry.ci_named,
-                    *(profile.listed(entry) if not detected and profile.is_confirmed(entry) else ()),
+                    *(profile.listed(entry) if observed is not None and profile.holds(entry, observed) else ()),
                 )
             )
         )
