@@ -15,8 +15,8 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.change_contracts.repair_records import Repair
 
-CI_LOG, AMENDMENT_EXIT, MERGE_BASIS = 1310, 1312, 1342
-FIXED = (CI_LOG, AMENDMENT_EXIT, MERGE_BASIS)  # travels with actual fixes, never inferred from version order
+CI_LOG, AMENDMENT_EXIT, MERGE_BASIS, PLAN_CUT = 1310, 1312, 1342, 1361
+FIXED = (CI_LOG, AMENDMENT_EXIT, MERGE_BASIS, PLAN_CUT)  # travels with actual fixes, never inferred from version order
 LEGACY = {
     "91b09919eb68085ecbcbabaf3ff9604cd27d898f6697ca168296f1f4ea269c22": (1310, "v1.279"),
     "94031b7acb33968ff62c895b8d03bc83786b9eb087e0a254ec928a7ef8834d74": (1312, "v1.284"),
@@ -108,16 +108,16 @@ def _repair(c: Change) -> int | None:
         url = f"https://github.com/maba-pag/owlbear/issues/{issue}"
         if url not in r.defect.split() and (old is None or old[0] != issue):
             continue
-        if issue == AMENDMENT_EXIT and c.amending and r.cause == f"liveness:{c.step.kind}:runner-gone":
-            return issue
-        if (
+        amendment = issue == AMENDMENT_EXIT and c.amending and r.cause == f"liveness:{c.step.kind}:runner-gone"
+        ci = (
             issue == CI_LOG
             and c.step.kind == StepKind.BUILD
             and stop.kind == ErrorKind.PROJECT_ENV
             and task
             and task.origin == "ci"
             and not task.done
-        ):
+        )
+        if amendment or ci or (issue == PLAN_CUT and c.step.kind == StepKind.PLAN):
             return issue
     return None
 
@@ -128,6 +128,8 @@ def action(c: Change, remedy: int) -> str:
         return "Recheck merge checks and continue"
     if remedy == AMENDMENT_EXIT and c.amending:
         return f"Continue amendment {c.amending.id}"
+    if remedy == PLAN_CUT:
+        return "Challenge the whole plan again"
     return "Refresh CI evidence and run the build again"
 
 
