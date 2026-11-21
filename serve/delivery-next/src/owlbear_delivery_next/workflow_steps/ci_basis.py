@@ -106,31 +106,24 @@ def save(store: Store, lock: Lock, c: Change, old: Profile, new: Profile) -> Pro
         current = save(store, lock, c, old, old)
         if current != old:
             return current
+    notice = ""
     try:
         notice = store.write_profile(new, previous=old)
     except (StoreError, SharedSyncError, TargetChangedError) as exc:
-        store.log(
-            lock,
-            c.slug,
-            {
-                "event": "profile-not-saved",
-                "key": profile.DECLARED,
-                "at": datetime.now(UTC).isoformat(),
-                "reason": failure(exc),
-            },
-        )
+        notice = failure(exc)
         raise
-    if notice:
-        store.log(
-            lock,
-            c.slug,
-            {
-                "event": "profile-not-saved",
-                "key": profile.DECLARED,
-                "at": datetime.now(UTC).isoformat(),
-                "reason": notice,
-            },
-        )
+    finally:
+        if notice:
+            store.log(
+                lock,
+                c.slug,
+                {
+                    "event": "profile-not-saved",
+                    "key": profile.DECLARED,
+                    "at": datetime.now(UTC).isoformat(),
+                    "reason": notice,
+                },
+            )
     saved = store.read_profile()
     if saved is None:
         msg = "The project profile is absent after its save; run the step again from the current profile."
