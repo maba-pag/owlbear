@@ -31,7 +31,7 @@ def prepare(store: Store, state: dict) -> None:
         key = hashlib.sha256(json.dumps([rule, place]).encode()).hexdigest()[:16]
         state["findings"].append(
             {
-                "title": f"Review {rule[:80]} in {place[:60]} [{key}]",
+                "title": backlog.suppression_title(rule, place, key),
                 "type": "improvement",
                 "severity": "low",
                 "where": "Pinned inventory; full places in this entry's comments.",

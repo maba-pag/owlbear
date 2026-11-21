@@ -35,7 +35,7 @@ from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import Agent, GlobalLayer, Layer
 from owlbear_delivery_next.state_store import backlog_issues, machine_settings, registry
-from owlbear_delivery_next.state_store.backlog import Backlog, Entry
+from owlbear_delivery_next.state_store.backlog import Backlog, Entry, suppression_title
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.store import Store, read_layer
 
@@ -263,6 +263,49 @@ def test_a_failed_backlog_launch_shows_its_warning_whole(
         )
         assert len(launched.calls) == 1
         assert str(launched.calls[0][0]) == docs.path
+
+
+@pytest.mark.browser
+@pytest.mark.usefixtures("github")
+def test_suppression_reviews_link_each_origin_s_maintenance_page_and_follow_the_filters(
+    tmp_path: Path, shared_repo, pds, monkeypatch
+) -> None:
+    """AC-4, AC-6: one link per origin, to its clone's Suppression review; the filters fold the section away."""
+    monkeypatch.setenv(data_place.VIEW, str(shared_repo[0]))
+    shop_clone = registry.register(clone(tmp_path / "shop", origin="https://github.com/acme/shop-site.git"))
+    docs = registry.register(clone(tmp_path / "docs", origin="https://github.com/acme/docs-site.git"))
+    twin = registry.register(clone(tmp_path / "twin", origin="https://github.com/acme/shop-site.git"))
+    for origin, n in (("shop-site", 1), ("shop-site", 2), ("gone-site", 3)):
+        title = suppression_title("# noqa", f"x{n}.py", f"{n:016x}")
+        Backlog(DataRepo(shared_repo[0]), origin).add(title, source="audit")
+    target = "/maintenance?project={}#audit-suppressions"
+    with browsing(monkeypatch, pds) as (page, base):
+        page.set_viewport_size({"width": 1280, "height": 720})
+        summary, links = page.locator("#reviews-title"), page.locator("#suppression-reviews .maintenance a")
+        page.goto(f"{base}/backlog?project={twin.id}#token=t")  # the page's project is a clone of the origin
+        expect(summary).to_have_text("Suppression reviews (2)")
+        summary.click()
+        expect(links).to_have_count(1)
+        expect(links).to_have_attribute("href", target.format(twin.id))
+        page.goto(f"{base}/backlog")
+        expect(summary).to_have_text("Suppression reviews (3)")
+        summary.click()
+        expect(links).to_have_count(2)
+        hrefs = links.evaluate_all("as => as.map(a => [a.textContent, a.getAttribute('href')])")
+        assert sorted(hrefs) == [
+            ["Maintenance page", "/maintenance"],
+            ["Suppression review of shop-site", target.format(shop_clone.id)],
+        ]
+        expect(page.locator("#suppression-reviews .maintenance p-text").filter(has_text="gone-site")).to_have_text(
+            "Suppression review of gone-site: open the Maintenance page and choose a project there."
+        )
+        pds.pick(page.locator("#filters"), "Class", "idea")
+        expect(page.locator("#suppression-reviews")).to_have_count(0)
+        pds.pick(page.locator("#filters"), "Class", "untriaged")
+        expect(summary).to_have_text("Suppression reviews (3)")
+        page.goto(f"{base}/backlog?project={docs.id}#token=t")  # no review was found in the docs
+        expect(page.locator("#inbox-title")).to_have_text("Inbox (0)")
+        expect(page.locator("#suppression-reviews")).to_have_count(0)
 
 
 def curated(folder: Path, title: str) -> None:

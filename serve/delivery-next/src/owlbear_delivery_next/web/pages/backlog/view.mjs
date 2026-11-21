@@ -4,6 +4,7 @@ import { call, here, loaded, project } from "/assets/ui.mjs";
 import { KINDS, DIALOG, GET, WRITE, state, filter, show, notify } from "./state.mjs";
 import { button, select, field } from "./widgets.mjs";
 import { card } from "./entries.mjs";
+import { reviews } from "./reviews.mjs";
 import { chooser, createChange, held } from "./change.mjs";
 
 // An untriaged entry shows under its origin too, so the project it was found in sees it to triage (TD-241).
@@ -44,7 +45,7 @@ function filters() {
 function list(id, entries, byId, empty) {
   const items = entries.length ? repeat(entries, (e) => e.key, (e) => card(e, byId))
     : html`<li><p-text size="sm" color="contrast-medium">${empty}</p-text></li>`;
-  return html`<ul id=${id} class="entries" aria-labelledby=${id === "later" ? "later-title" : nothing}>${items}</ul>`;
+  return html`<ul id=${id} class="entries" aria-labelledby=${["later", "reviews"].includes(id) ? `${id}-title` : nothing}>${items}</ul>`;
 }
 
 function addForm() {
@@ -82,8 +83,11 @@ export function view() {
     for (const key of [...state.selected]) if (!chosen().some((e) => e.key === key)) state.selected.delete(key);
     const byId = new Map(loaded.entries.map((e) => [e.key, e]));
     const head = filters();
-    const lists = { inbox: [], open: [], later: [] };
-    for (const e of loaded.entries.filter(shows)) lists[e.status in lists ? e.status : "later"].push(e);
+    const lists = { inbox: [], open: [], reviews: [], later: [] };
+    for (const e of loaded.entries.filter(shows)) {
+      const review = e.status === "inbox" && e.suppression_review;
+      lists[review ? "reviews" : ["inbox", "open"].includes(e.status) ? e.status : "later"].push(e);
+    }
     const repositories = [...new Set(loaded.clones.map((c) => c.repository))];
     const notes = [`The backlog is the issues of ${repositories.join(" and ")}.`,
       loaded.unreadable.length ? `Issues without a readable entry: ${loaded.unreadable.join(", ")}.` : "",
@@ -102,6 +106,7 @@ export function view() {
           <p-text>Tick entries to shape a Change from them.</p-text></div>
         ${list("open", lists.open, byId, "No open entries.")}
       </section>
+      ${reviews(lists.reviews, list("reviews", lists.reviews, byId, ""))}
       <details class="later quiet">
         <summary id="later-title">In a Change, done or dropped (${lists.later.length})</summary>
         ${list("later", lists.later, byId, "Nothing here yet.")}

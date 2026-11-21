@@ -26,6 +26,7 @@ from owlbear_delivery_next.state_store.backlog import (
     Kind,
     Status,
     ordered,
+    suppression_review,
 )
 
 if TYPE_CHECKING:
@@ -85,7 +86,8 @@ def prompt(chosen: list[Entry], found: dict[str, Entry]) -> str:
 
 
 def _shown(entry: Entry, raw: dict[str, Any]) -> dict[str, Any]:
-    return entry.model_dump(mode="json") | {"url": raw.get(entry.id, {}).get("html_url", "")}
+    url = raw.get(entry.id, {}).get("html_url", "")
+    return entry.model_dump(mode="json") | {"url": url, "suppression_review": suppression_review(entry)}
 
 
 def _run[T](store: Store, work: Callable[[Backlog], T]) -> T:
