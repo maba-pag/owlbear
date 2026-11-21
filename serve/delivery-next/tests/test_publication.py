@@ -653,6 +653,7 @@ def test_empty_inventory_consent_keeps_the_current_profiles_confirmed_named_chec
     c = loop.apply(c, proposal, NOW)
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
     c.questions[-1].ci_basis = None
+    cx.profile.entries[profile.DEFAULT] = ProfileEntry(state="known", value="main")
     cx.profile = profile.confirm(cx.profile, profile.DECLARED, "lint", NOW)
     head, entries = ci_head(clone, "${{ inputs.n }} updated")
     gh.pr = pr(head=head)
@@ -671,6 +672,17 @@ def test_empty_inventory_consent_keeps_the_current_profiles_confirmed_named_chec
     gh.checks = (Check(name="CI", status="completed", conclusion="success"),)
     c, held = merge.run(cx, c)
     assert (held.exit, gh.merges) == (Exit.PENDING, [])  # a confirmed but never-started lint check still gates.
+    head, _ = ci_head(clone, "suite")
+    gh.pr, gh.can_push = pr(head=head), True
+    cx.profile = profile.confirm(cx.profile, profile.DECLARED, "lint", NOW + timedelta(seconds=10))
+    cx.profile = profile.detect(clone, gh, cx.profile)
+    fresh = change(StepKind.MERGE, worktree=str(clone), head=head)
+    assert not fresh.questions
+    assert follow.declared(cx, fresh, gh.pr, StepKind.MERGE) == (("lint", "suite"), None)
+    gh.checks = tuple(Check(name=n, status="completed", conclusion="success") for n in ("CI", "suite"))
+    _, held = merge.run(cx, fresh)
+    assert held.exit == Exit.PENDING
+    assert gh.merges == []
 
 
 def _global_named_then_detected(cx, clone, head):

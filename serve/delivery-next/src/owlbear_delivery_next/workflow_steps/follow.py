@@ -92,7 +92,7 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
     declined = answer is not None and (answer.option == "pause" or answer.superseded_at is not None)
     extra = (
         confirmed
-        if consent and consent.basis and consent.repository == ctx.repository and consent.target == c.names.target
+        if not consent or (consent.repository == ctx.repository and consent.target in {"", c.names.target})
         else ci_basis.named_after(c, ctx.profile.entries.get(profile.DECLARED))
     )
     if covered or (entry and entry.state == "known" and not delta and not declined):
