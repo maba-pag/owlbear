@@ -1,6 +1,7 @@
 """Observation-bound confirmations and clone-local facts, using synthetic repositories and GitHub observations."""
 
 import contextlib
+import hashlib
 import json
 import subprocess
 import threading
@@ -16,7 +17,7 @@ from owlbear_delivery_next.change_flow import brief_tools, worktree
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.merge_offer import Block, decide
-from owlbear_delivery_next.github.provider import CiState, MergeMethod, PullRequest, Repository, Rules
+from owlbear_delivery_next.github.provider import Check, CiState, MergeMethod, PullRequest, Repository, Rules
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
 from owlbear_delivery_next.settings import ci_consent, profile
 from owlbear_delivery_next.state_store import briefs, profile_share
@@ -351,7 +352,7 @@ def test_detection_publication_failure_preserves_local_progress_and_retries_with
     assert calls == ["failed"]
 
 
-def test_owner_selected_ci_checks_keep_their_workflow_digest_through_confirmation(tmp_path):
+def test_owner_selected_ci_checks_keep_their_workflow_digest_through_confirmation(shared, tmp_path, monkeypatch):
     repo = clone(tmp_path, "shop")
     raw = profile.detect(repo, GitHub(), None)
     chosen = profile.confirm(raw, profile.DECLARED, "lint", NOW)
@@ -376,6 +377,53 @@ def test_owner_selected_ci_checks_keep_their_workflow_digest_through_confirmatio
     assert declared == ("lint",)
     assert profile.digest_of(chosen.entries[profile.DECLARED]) == profile.digest_of(raw.entries[profile.DECLARED])
     assert chosen.entries[profile.DECLARED].evidence.count("observed:") == 1
+    _legacy_named_recheck(shared, tmp_path, monkeypatch, raw, pr)
+
+
+def _legacy_named_recheck(shared, tmp_path, monkeypatch, raw, pr):
+    observed = raw.entries[profile.DECLARED]
+    binding = hashlib.sha256(json.dumps([observed.state, observed.value, observed.evidence]).encode()).hexdigest()
+    payload = raw.model_dump(mode="json")
+    payload["format"] = 5
+    payload["entries"][profile.DECLARED] = {
+        "state": "known",
+        "value": "lint",
+        "evidence": f"{profile.CONFIRMED} 2026-10-24{profile.OBSERVED}{observed.evidence}",
+        "observed": binding,
+    }
+    target = shared / "shop-site" / profile_share.PROFILE
+    target.parent.mkdir()
+    target.write_text(json.dumps(payload))
+    assert DataRepo(shared).publish(target, "fixture format-5 profile") == ""
+    repo = clone(tmp_path, "fresh-shop")
+    store = Store.open(repo)
+    saved = store.read_profile()
+    assert saved.format == 6
+    assert saved.entries[profile.DECLARED].ci_checks is None
+    assert saved.entries[profile.DECLARED].ci_named == ()
+    assert saved.entries[profile.DECLARED].ci_consent is None
+    gh = GitHub()
+    monkeypatch.setattr(profile, "provider", lambda *_a: gh)
+    recovered = profile_share.checked(store, repo)
+    assert profile.names(recovered, profile.DECLARED) == ("lint",)
+    assert recovered.entries[profile.DECLARED].ci_named == ("lint",)
+    assert recovered.entries[profile.DECLARED].ci_consent is None
+    assert store.read_profile().entries[profile.DECLARED] == recovered.entries[profile.DECLARED]
+    fresh = Change(slug="c2", names=Names(worktree=str(repo), target="main", pr=1))
+    pr = pr.model_copy(update={"head_sha": git(repo, "rev-parse", "HEAD")})
+    cx = engine.Ctx(store, Lock("c2"), repo, recovered, gh, NOW)
+    assert follow.declared(cx, fresh, pr, StepKind.FOLLOW) == (("lint",), None)
+    gh.observe_checks = lambda *_a: (Check(name="CI", status="completed", conclusion="success"),)
+    cx.profile.entries[profile.REQUIRED] = profile.rule_entries(
+        Rules(state="known", evidence="rules", required_checks=("CI",))
+    )[profile.REQUIRED]
+    assert follow.ci(cx, pr, ("lint",)).missing == ("lint",)
+    flows = repo / ".github/workflows"
+    flows.mkdir(parents=True)
+    (flows / "ci.yml").write_text("on: pull_request\njobs:\n  t:\n    name: suite\n")
+    changed = profile.detect(repo, gh, recovered)
+    assert not profile.holds(saved.entries[profile.DECLARED], changed.entries[profile.DECLARED])
+    assert changed.entries[profile.DECLARED].ci_named == ("lint",)
 
 
 def _pair(default, push):

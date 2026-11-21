@@ -71,8 +71,15 @@ def redetected(
     """Recheck shared CI authority without discarding explicitly selected names."""
     old = prof.entries.get(profile.DECLARED)
     found = entries[profile.DECLARED]
-    if not old or not old.ci_consent:
+    if not old:
         return found
+    if not old.ci_consent:
+        return found.model_copy(
+            update={
+                "ci_named": found.ci_named
+                or (old.ci_named if profile.value(prof, profile.REPO) == repo.repository else ()),
+            }
+        )
     consent = old.ci_consent
     target = rules if consent.target == repo.default_branch else gh.read_rules(repo.repository, consent.target)
     candidate = prof.model_copy(

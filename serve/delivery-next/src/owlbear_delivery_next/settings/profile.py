@@ -143,7 +143,12 @@ def lint_commands(prof: Profile) -> tuple[tuple[str, ...], ...]:
 
 def holds(confirmed: ProfileEntry, observed: ProfileEntry) -> bool:
     """Only a confirmation bound to this exact observation is fresh."""
-    return bool(confirmed.observed) and confirmed.observed == fingerprint(observed)
+    if confirmed.observed == fingerprint(observed):
+        return True
+    if confirmed.ci_checks is None and observed.ci_checks is not None:
+        legacy = observed.model_copy(update={"value": ", ".join(observed.ci_checks) or "none", "ci_checks": None})
+        return bool(confirmed.observed) and confirmed.observed == fingerprint(legacy)
+    return False
 
 
 def unbound(prof: Profile) -> bool:
@@ -329,6 +334,8 @@ def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
         if is_confirmed(old) and holds(old, new):
             stamp = old.evidence.partition(OBSERVED)[0]
             entries[key] = old.model_copy(update={"evidence": f"{stamp}{OBSERVED}{new.evidence}"})
+            if key == DECLARED and old.ci_checks is None and old.value != (", ".join(new.ci_checks or ()) or "none"):
+                entries[key] = entries[key].model_copy(update={"ci_named": listed(old)})
     entries[DECLARED] = ci_consent.redetected(prev, entries, r, rules, gh)
     changed = shared_entries(entries) != shared_entries(prev.entries)
     return prev.model_copy(update={"entries": entries, "version": prev.version + 1 if changed else prev.version})
