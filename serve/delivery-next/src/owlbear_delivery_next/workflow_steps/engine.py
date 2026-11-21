@@ -238,7 +238,7 @@ def rules_changed(ctx: Ctx, c: Change) -> tuple[StepResult | None, Rules]:
     Rules GitHub would not show stop the step. A difference is the owner's yes or no on the rules as they are now;
     his yes to exactly these differences records them in the profile, and the step goes on.
     """
-    _, rules = profile.reread(ctx.profile, ctx.gh, c.names.target)
+    rules = ctx.gh.read_rules(ctx.repository, c.names.target)
     if renewed := _project_rules(ctx, c, rules):
         return renewed, rules
     diffs = profile.differences(ctx.profile, rules)
