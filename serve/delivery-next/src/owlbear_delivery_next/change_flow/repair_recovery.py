@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.failures import kind_of
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind
-from owlbear_delivery_next.change_flow import asking, moves
+from owlbear_delivery_next.change_flow import asking, moves, plan_rounds
 from owlbear_delivery_next.local_system import codebase
 
 if TYPE_CHECKING:
@@ -117,7 +117,8 @@ def _repair(c: Change) -> int | None:
             and task.origin == "ci"
             and not task.done
         )
-        if amendment or ci or (issue == PLAN_CUT and c.step.kind == StepKind.PLAN):
+        plan = issue == PLAN_CUT and c.step.kind == StepKind.PLAN and c.step.mode == plan_rounds.CHALLENGE
+        if amendment or ci or (plan and not c.amending):
             return issue
     return None
 
