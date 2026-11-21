@@ -3903,6 +3903,7 @@ def _named_after_rules(cx, c, clone, rules, obsolete):
     assert engine.rules_changed(cx, c)[0] is None
     assert follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW) == ((), None)
     head, _ = ci_head(clone, "lint")
+    head = _commit_workflow(clone, "dynamic.yml", "on: pull_request\njobs:\n  t: {name: '${{ inputs.n }}'}\n")
     cx.gh.pr = pr(head=head)
     _, named = follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW)
     assert named.question.ci_basis == CiBasis(declared=("lint",), required=("CI", "scan"))
@@ -3913,6 +3914,12 @@ def _named_after_rules(cx, c, clone, rules, obsolete):
         NOW + timedelta(seconds=4),
     )
     assert follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW) == (("lint",), None)
+    c.step = Step(kind=StepKind.MERGE)
+    c.reviews = [Review(commit=head, inputs=Inputs(), verdict="pass")]
+    cx.gh.checks = tuple(Check(name=n, status="completed", conclusion="success") for n in rules.required_checks)
+    _, missing = merge.run(cx, c)
+    assert missing.exit == Exit.PENDING
+    assert cx.gh.merges == []
 
 
 def _seed_completed_consent(cx, c, monkeypatch, whole_error):

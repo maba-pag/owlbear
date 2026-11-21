@@ -57,7 +57,7 @@ def _reuse(
             update={"entries": ctx.profile.entries | {profile.REQUIRED: profile.rule_entries(rules)[profile.REQUIRED]}}
         )
     if ci_basis.head_approved(c, ci_basis.current(ctx.profile, observed)):
-        return tuple(dict.fromkeys((*confirmed, *profile.listed(observed)))), None
+        return tuple(dict.fromkeys((*confirmed, *(ci_basis.current(ctx.profile, observed).declared or ())))), None
     if not (consent and profile.project_ci(ctx.profile, c.names.target, observed) and ci_basis.compatible(c, consent)):
         return None
     raw = ctx.profile.model_copy(update={"entries": ctx.profile.entries | {profile.DECLARED: observed}})
@@ -126,7 +126,7 @@ def renew(ctx: Ctx, c: Change, rules: Rules) -> StepResult | None:
         if texts is not None
         else None
     )
-    detected = tuple(sorted(set(profile.listed(observed))))
+    detected = tuple(sorted(set(ci_basis.current(ctx.profile, observed).declared or ()))) if observed else ()
     basis = CiBasis(declared=detected or None, required=names)
     shown = hashlib.sha256(json.dumps([ctx.repository, c.names.target, basis.model_dump()]).encode()).hexdigest()[:12]
     cause = f"gate:{c.step.kind.value}:rules-ci-{shown}"

@@ -28,5 +28,5 @@ def project_ci(prof: Profile, target: str, observed: ProfileEntry) -> bool:
         and consent.basis.declared == ()
         and consent.basis.required is not None
         and tuple(sorted(set(consent.basis.required))) == required
-        and not profile.listed(observed)
+        and observed.value.strip() in {"", "none"}
     )
