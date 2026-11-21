@@ -26,7 +26,7 @@ from owlbear_delivery_next.state_store.layers import _parse
 from owlbear_delivery_next.state_store.pending_intents import pending_file as _pending_file
 from owlbear_delivery_next.state_store.pending_intents import pending_intents
 from owlbear_delivery_next.state_store.pending_intents import shared_pending as _shared_pending
-from owlbear_delivery_next.state_store.profile_authority import config_digest
+from owlbear_delivery_next.state_store.profile_authority import ABSENT, config_digest
 from owlbear_delivery_next.state_store.profile_errors import (
     Basis,
     SourceChangedError,
@@ -46,7 +46,6 @@ LOCAL = "profile.local.json"
 DETECTED = "profile.detected"  # a new marker forces the old unbound observations to be checked once
 ROLES_MOVED = "roles-moved"  # marks that a format-1 profile's role overrides were merged into the settings
 UNPUBLISHED = "prefs-import.unpublished"  # the legacy import is done here but its completion was not published yet
-ABSENT = "absent"
 CONFIG_WAITING = "the project settings change is not published yet; the legacy preference import completes after it"
 
 
