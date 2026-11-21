@@ -52,7 +52,8 @@ def test_the_preview_serves_its_fixture_and_never_the_owners_data(tmp_path, monk
         port = sock.getsockname()[1]
     env = os.environ | {"HOME": str(home), "OWLBEAR_DATA": str(data), "COPILOT_HOME": str(copilot)}
     argv = [sys.executable, backlog_preview.__file__, str(port)]
-    preview = subprocess.Popen(argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)  # noqa: S603
+    pipes = {"stdout": subprocess.PIPE, "stderr": subprocess.STDOUT, "text": True}
+    preview = subprocess.Popen(argv, env=env, **pipes)  # noqa: S603 - this interpreter runs the adjacent script, no shell
     base, auth = f"http://127.0.0.1:{port}", {"authorization": f"Bearer {backlog_preview.TOKEN}"}
     try:
         deadline = time.monotonic() + 30
