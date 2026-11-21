@@ -224,14 +224,6 @@ def required_only(q: Question, target: str) -> bool:
     )
 
 
-def _project_rules(ctx: Ctx, c: Change, rules: Rules) -> StepResult | None:
-    try:
-        ctx.profile = ci_basis.acquire(ctx.store, ctx.lock, c, ctx.profile)
-        return project_ci.renew(ctx, c, rules)
-    except (SharedSyncError, TargetChangedError) as exc:
-        return blocked("state:follow:profile", str(exc), failure(exc), ctx.now)
-
-
 def rules_changed(ctx: Ctx, c: Change) -> tuple[StepResult | None, Rules]:
     """Re-read effective rules and required checks against the profile.
 
@@ -239,7 +231,12 @@ def rules_changed(ctx: Ctx, c: Change) -> tuple[StepResult | None, Rules]:
     his yes to exactly these differences records them in the profile, and the step goes on.
     """
     rules = ctx.gh.read_rules(ctx.repository, c.names.target)
-    if renewed := _project_rules(ctx, c, rules):
+    try:
+        ctx.profile = ci_basis.acquire(ctx.store, ctx.lock, c, ctx.profile)
+        renewed = project_ci.renew(ctx, c, rules)
+    except (SharedSyncError, TargetChangedError) as exc:
+        renewed = blocked("state:follow:profile", str(exc), failure(exc), ctx.now)
+    if renewed:
         return renewed, rules
     diffs = profile.differences(ctx.profile, rules)
     kind, target = c.step.kind, c.names.target
