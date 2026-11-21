@@ -677,6 +677,10 @@ def test_empty_inventory_consent_keeps_the_current_profiles_confirmed_named_chec
     cx.profile = profile.confirm(cx.profile, profile.DECLARED, "lint", NOW + timedelta(seconds=10))
     cx.profile = profile.detect(clone, gh, cx.profile)
     fresh = change(StepKind.MERGE, worktree=str(clone), head=head)
+    fresh.names.target = "release"
+    gh.pr = gh.pr.model_copy(update={"base_branch": "release"})
+    git(clone, "branch", "release", "origin/main")
+    git(clone, "push", "-q", "origin", "release")
     assert not fresh.questions
     assert follow.declared(cx, fresh, gh.pr, StepKind.MERGE) == (("lint", "suite"), None)
     gh.checks = tuple(Check(name=n, status="completed", conclusion="success") for n in ("CI", "suite"))
