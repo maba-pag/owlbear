@@ -542,7 +542,8 @@ adding a suppression, even when the judge accepts it.
 
 Set **quality judge** in **Settings** before starting work. Its model, effort, context, minutes and subagent switch
 start unset, like every new role's. Unset settings disable work-starting controls and automatic steps until set.
-The recommendations are `gpt-6.1-sol`, high effort, default context, 15 minutes and subagents on; they are not defaults.
+To set or change these values, open **Settings**, choose the layer you want to edit, and find the **quality judge**
+row under **Agents and runs**.
 
 Run `owlbear quality lint [--base REF]` by hand without the host. It includes committed, staged, working and
 untracked changes against the merge-base with `REF`, defaulting to the profile's target branch. It prints each
