@@ -68,7 +68,7 @@ NOW_EVERY = 1.0  # seconds between now-line writes
 def agent(kind: StepKind, *, ui: bool = False, role: str = "", judging: bool = False, job: str = "") -> dict[str, Any]:
     """Return the role's custom agent from the package's ``agents/`` prose, with its tools and preloaded skills."""
     role = role or ROLES[kind]
-    meta, body = preload.agent_file(role)
+    meta, body = preload.agent_file(role, job)
     return {
         "name": meta["name"],
         "description": meta["description"],

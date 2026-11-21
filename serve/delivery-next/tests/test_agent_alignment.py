@@ -15,6 +15,7 @@ from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.commands import mcp_server, setup
 from owlbear_delivery_next.local_system import preload
+from owlbear_delivery_next.machine_host import install
 from owlbear_delivery_next.runtimes import readiness, sdk_adapter, step_input, subagents
 from owlbear_delivery_next.runtimes.results import Gate
 from owlbear_delivery_next.runtimes.session_result import Run
@@ -127,7 +128,8 @@ def test_every_worker_role_has_its_own_agent_file_or_is_explicitly_pending() -> 
     assert set(AGENTS) == set(roles.ROLES) - PENDING - {CHAT}
     assert {r for k, r in roles.SESSIONS.items() if "challenge" in k} == {"challenger"}
     files_ = {p.name for p in folder.iterdir()}
-    assert files_ == {f"owlbear-{r}.agent.md" for r in (*AGENTS, "shaper")}  # no agent file without a check
+    hosted = set(preload.AGENT_JOBS.values())  # a hosted job's own role text, checked with its job
+    assert files_ == {f"owlbear-{r}.agent.md" for r in (*AGENTS, "shaper", *hosted)}  # no agent file without a check
 
 
 @pytest.mark.parametrize("role", AGENTS)
@@ -258,6 +260,37 @@ def test_a_judge_runs_as_its_labels_role(label, role, monkeypatch) -> None:
     assert (tools.ASK.name in offered) == (tools.ASK.name in opts["custom_agents"][0]["tools"]) == asks
     reminder = step_input.reminder(role, judging=cfg.judging)
     assert (tools.ASK.name in reminder) == asks
+
+
+@pytest.mark.parametrize("label", ["amendment-prepare", "amendment-revise"])
+def test_an_amendment_job_runs_as_the_shaper_on_its_own_role_text(label, monkeypatch) -> None:
+    """Its own file replaces the chat's prose only; the tools, skills and role stay the shaper's (TD-185)."""
+    built: list[sdk_adapter.Session] = []
+
+    def isolated(_store, _lock, _change, source, make, _go, **_kw):
+        built.extend(make(source))
+        raise _Made
+
+    monkeypatch.setattr(sessions, "isolated", isolated)
+    store, settings = SimpleNamespace(read_profile=lambda: None), resolve(None, Layer(spotter=Spotter(switch="off")))
+    with pytest.raises(_Made):
+        sessions.judges(
+            store, SimpleNamespace(slug="c1"), None, PLAIN, lambda _at: [(label, _session(label))], settings
+        )
+    (cfg,) = built
+    assert sdk_adapter.role_of(cfg) == roles.SESSIONS[label] == CHAT
+    agent = sdk_adapter._Step(cfg, SimpleNamespace(call_soon_threadsafe=lambda *_: None)).options()  # noqa: SLF001
+    (own,) = agent["custom_agents"]
+    meta, body = preload.agent_file(CHAT, label)
+    assert (agent["agent"], own["description"]) == (meta["name"], meta["description"])
+    assert own["prompt"].startswith(body.strip())  # then the delegation note while subagents are on
+    assert meta["name"] == "owlbear-shaper-amendment"
+    assert [ln for ln in shaper_file()[2].splitlines() if len(ln.strip()) > 20 and ln.strip() in own["prompt"]] == []
+    granted_ = [*preload.tools(CHAT), *tools.results(CHAT, judging=True)]
+    assert own["tools"] == [*granted_, *([subagents.LAUNCHER] if cfg.subagents else [])]
+    assert own["skills"] == ["owlbear-acceptance-criteria"]
+    assert audit([*granted_, subagents.LAUNCHER], body) == []
+    assert [to.name for _, to in install.shaper_links()] == [readiness.SHAPER, preload.CHAT]  # nothing new linked
 
 
 def test_check_preparation_runs_as_the_preparer() -> None:
