@@ -22,15 +22,18 @@ def _get(url: str, **headers: str) -> httpx.Response:
 
 def _sentinel_data(path: Path) -> None:
     """A data checkout whose origin, settings and files all say ``sentinel``."""
-    git = [resolve_git_executable(), "-c", "user.name=t", "-c", "user.email=t@example.com", "-C", str(path)]
     path.mkdir(parents=True)
-    subprocess.run([*git, "init", "-q"], check=True)  # noqa: S603 - fixture Git argv on a temporary path
-    subprocess.run([*git, "remote", "add", "origin", "https://github.com/sentinel/sentinel-data.git"], check=True)  # noqa: S603
     (path / "config.json").write_text('{"sentinel": "sentinel-setting"}\n')
     (path / "sentinel-project").mkdir()
     (path / "sentinel-project" / "repository").write_text("github.com/sentinel/sentinel-project\n")
-    subprocess.run([*git, "add", "-A"], check=True)  # noqa: S603
-    subprocess.run([*git, "commit", "-qm", "sentinel"], check=True)  # noqa: S603
+    git = [resolve_git_executable(), "-c", "user.name=t", "-c", "user.email=t@example.com", "-C", str(path)]
+    for args in (
+        ["init", "-q"],
+        ["remote", "add", "origin", "https://github.com/sentinel/sentinel-data.git"],
+        ["add", "-A"],
+        ["commit", "-qm", "sentinel"],
+    ):
+        subprocess.run([*git, *args], check=True)  # noqa: S603 - fixture Git argv on a temporary path
 
 
 def test_the_preview_serves_its_fixture_and_never_the_owners_data(tmp_path, monkeypatch) -> None:
@@ -48,8 +51,8 @@ def test_the_preview_serves_its_fixture_and_never_the_owners_data(tmp_path, monk
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
     env = os.environ | {"HOME": str(home), "OWLBEAR_DATA": str(data), "COPILOT_HOME": str(copilot)}
-    preview = subprocess.Popen([sys.executable, backlog_preview.__file__, str(port)], env=env, stdout=subprocess.PIPE,  # noqa: S603
-                               stderr=subprocess.STDOUT, text=True)  # fmt: skip
+    argv = [sys.executable, backlog_preview.__file__, str(port)]
+    preview = subprocess.Popen(argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)  # noqa: S603
     base, auth = f"http://127.0.0.1:{port}", {"authorization": f"Bearer {backlog_preview.TOKEN}"}
     try:
         deadline = time.monotonic() + 30

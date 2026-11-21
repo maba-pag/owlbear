@@ -31,6 +31,28 @@ from urllib.parse import parse_qsl
 import uvicorn
 from metrics_preview import SEED, TOKEN, _isolate, seed_pages
 
+from owlbear_delivery_next.git.access import Access
+from owlbear_delivery_next.git.git_executable import resolve_git_executable
+from owlbear_delivery_next.github import account
+from owlbear_delivery_next.local_system import codebase
+from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.machine_host import app
+from owlbear_delivery_next.machine_host.machine import Machine
+from owlbear_delivery_next.project_host import pages
+from owlbear_delivery_next.project_host.host import HostRecord
+from owlbear_delivery_next.runtimes import readiness
+from owlbear_delivery_next.state_store import backlog_issues, registry
+from owlbear_delivery_next.state_store.backlog import Backlog
+
+try:
+    from owlbear_delivery_next.state_store.backlog import suppression_title
+except ImportError:  # the merge-base the Before capture runs this script at has no shared definition yet
+
+    def suppression_title(rule: str, place: str, group: str) -> str:
+        """The Suppression review's title, as its filer wrote it before ``backlog.suppression_title``."""
+        return f"Review {rule[:80]} in {place[:60]} [{group}]"
+
+
 __all__ = ["OPEN", "SEED", "TOKEN"]
 
 DATA = "https://github.com/preview/owlbear-data.git"
@@ -63,15 +85,6 @@ REVIEWS = (  # (directive, place, status): inbox ones fold into the Suppression 
 )
 
 
-def _title(rule: str, place: str, group: str) -> str:
-    """The Suppression review's title; a merge-base without ``backlog.suppression_title`` gets the same literal."""
-    try:
-        from owlbear_delivery_next.state_store.backlog import suppression_title  # noqa: PLC0415
-    except ImportError:
-        return f"Review {rule[:80]} in {place[:60]} [{group}]"
-    return suppression_title(rule, place, group)
-
-
 class Issues:
     """GitHub's issue and label REST API for one repository, in memory, behind the ``gh api`` runner."""
 
@@ -88,25 +101,31 @@ class Issues:
             return subprocess.CompletedProcess(argv, 1, b"", f"gh: {out} (HTTP {status})\n".encode())
         return subprocess.CompletedProcess(argv, 0, json.dumps(out).encode(), b"")
 
-    def _answer(self, method: str, parts: list[str], params: dict, body: dict | None) -> tuple[int, object]:  # noqa: PLR0911
+    def _answer(self, method: str, parts: list[str], params: dict, body: dict | None) -> tuple[int, object]:
         if not parts:
             return 0, {"full_name": "preview/owlbear-data", "private": True, "visibility": "private"}
         if parts == ["labels"]:
-            if method == "GET":
-                return 0, _page(list(self.labels.values()), params)
-            self.labels.setdefault(body["name"], {"name": body["name"], "color": body["color"]})
-            return 0, self.labels[body["name"]]
-        if parts == ["issues"] and method == "GET":
-            return 0, _page(sorted(self.issues.values(), key=lambda i: -i["number"]), params)
+            if method != "GET":
+                self.labels.setdefault(body["name"], {"name": body["name"], "color": body["color"]})
+                return 0, self.labels[body["name"]]
+            return 0, _page(list(self.labels.values()), params)
         if parts == ["issues"]:
-            number = len(self.issues) + 1
-            url = f"https://github.com/preview/owlbear-data/issues/{number}"
-            self.issues[number] = {"number": number, "state": "open", "state_reason": None, "html_url": url}
-            return 0, self._edit(self.issues[number], body)
-        number = int(parts[1])
+            return 0, self._listed(params) if method == "GET" else self._opened(body)
+        return self._issue(method, int(parts[1]), parts[2:], body)
+
+    def _listed(self, params: dict) -> list:
+        return _page(sorted(self.issues.values(), key=lambda i: -i["number"]), params)
+
+    def _opened(self, body: dict) -> dict:
+        number = len(self.issues) + 1
+        url = f"https://github.com/preview/owlbear-data/issues/{number}"
+        self.issues[number] = {"number": number, "state": "open", "state_reason": None, "html_url": url}
+        return self._edit(self.issues[number], body)
+
+    def _issue(self, method: str, number: int, rest: list[str], body: dict | None) -> tuple[int, object]:
         if number not in self.issues:
             return 404, "Not Found"
-        if parts[2:] == ["comments"]:
+        if rest == ["comments"]:
             return 0, [] if method == "GET" else {"id": 1, "html_url": self.issues[number]["html_url"]}
         return 0, self.issues[number] if method == "GET" else self._edit(self.issues[number], body)
 
@@ -128,7 +147,8 @@ def _page(items: list, params: dict) -> list:
 
 def _git(cwd: Path, *args: str) -> None:
     who = ("-c", "user.name=preview", "-c", "user.email=preview@example.invalid")
-    subprocess.run(["git", *who, *args], cwd=cwd, check=True, capture_output=True)  # noqa: S603, S607
+    git = resolve_git_executable()
+    subprocess.run([git, *who, *args], cwd=cwd, check=True, capture_output=True)  # noqa: S603 - fixture git argv
 
 
 def _checkout(path: Path, origin: str, remote: Path | None = None) -> Path:
@@ -157,12 +177,6 @@ def _offline(home: Path) -> None:
 
 def seed(home: Path) -> None:
     """The shared data checkout, the registered clone, and the backlog's entries written through ``Backlog``."""
-    from owlbear_delivery_next.git.access import Access  # noqa: PLC0415 - imported once HOME is the fixture's
-    from owlbear_delivery_next.github import account  # noqa: PLC0415
-    from owlbear_delivery_next.local_system.data_repo import DataRepo  # noqa: PLC0415
-    from owlbear_delivery_next.machine_host import project  # noqa: PLC0415
-    from owlbear_delivery_next.state_store import backlog_issues, registry  # noqa: PLC0415
-    from owlbear_delivery_next.state_store.backlog import Backlog  # noqa: PLC0415
 
     def offline(setting: str, origin: account.Origin, *, until: float | None = None) -> Access:
         del until
@@ -174,7 +188,7 @@ def seed(home: Path) -> None:
     _offline(home)
     backlog_issues.RUNNER = Issues()
     account.resolve = offline
-    project.readiness.ready = lambda _store, _repo, **_kwargs: []  # its checks ask GitHub
+    readiness.ready = lambda _store, _repo, **_kwargs: []  # its checks ask GitHub
     shared = DataRepo(_checkout(home / ".owlbear" / "data", DATA, home / "remotes" / "owlbear-data.git"))
     name, origin = CLONE
     registry.register(_checkout(home / "projects" / name, origin))
@@ -188,7 +202,9 @@ def seed(home: Path) -> None:
         if kind != "untriaged":
             book.update(entry.id, {"kind": kind})
     for n, (rule, place, status) in enumerate(REVIEWS, 1):
-        entry, _ = book.add(_title(rule, place, f"{n:016x}"), "Refused in the pinned inventory.", source="audit")
+        entry, _ = book.add(
+            suppression_title(rule, place, f"{n:016x}"), "Refused in the pinned inventory.", source="audit"
+        )
         if status == "open":
             book.update(entry.id, {"kind": "improvement"})
         elif status != "inbox":
@@ -198,18 +214,14 @@ def seed(home: Path) -> None:
 def open_reviews(pages) -> None:
     """The Backlog page *pages* serves gets ``OPEN`` after ``<head>``: ``?reviews=open`` unfolds its reviews."""
     served = pages.pages
-    pages.pages = lambda: {p: h.replace("<head>", "<head>" + OPEN, 1) if p == "/backlog" else h
-                           for p, h in served().items()}  # fmt: skip
+    pages.pages = lambda: {
+        p: h.replace("<head>", "<head>" + OPEN, 1) if p == "/backlog" else h for p, h in served().items()
+    }
 
 
 def main() -> None:
     port = int(sys.argv[1])
     home = _isolate()
-    from owlbear_delivery_next.local_system import codebase  # noqa: PLC0415
-    from owlbear_delivery_next.machine_host import app  # noqa: PLC0415
-    from owlbear_delivery_next.machine_host.machine import Machine  # noqa: PLC0415
-    from owlbear_delivery_next.project_host import pages  # noqa: PLC0415
-    from owlbear_delivery_next.project_host.host import HostRecord  # noqa: PLC0415
 
     def gone() -> None:
         shutil.rmtree(home, ignore_errors=True)
@@ -219,8 +231,8 @@ def main() -> None:
         open_reviews(pages)
         seed_pages(pages)  # last: the token's seed comes first in <head>, before any other script
         base = f"http://127.0.0.1:{port}"
-        record = HostRecord(url=f"{base}/", token=TOKEN, pid=os.getpid(), started_at=datetime.now(UTC),
-                            code=codebase.CURRENT)  # fmt: skip
+        now = datetime.now(UTC)
+        record = HostRecord(url=f"{base}/", token=TOKEN, pid=os.getpid(), started_at=now, code=codebase.CURRENT)
         machine = Machine(record)
         machine.load_all()  # the registered clone, so the page lists its backlog
         print(f"Backlog preview: {base}/backlog#token={TOKEN}", flush=True)  # noqa: T201 - the recipe's address
