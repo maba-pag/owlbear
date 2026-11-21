@@ -38,7 +38,7 @@ CURRENT_MODULES = (
     ("machine_host/selfcheck.py", "9de8ebe6ebef5712eab7cc5b6c461d8dbce3936c85b040c50a2f504663604ca1"),
     ("impeccable_runs/pack_state.py", "40301bffd38974df0455ff3b4231cf3ff2b8824bdee11fbc18bbc1d49b3b05f0"),
     ("project_host/host.py", "be3b7b60fbdd33f4ddd095d4c3103411cbe81b9f0bf7200eff92f8aee76d57ba"),
-    ("state_store/database.py", "760cf7e9c5aa9ce7731d64748ea8267211df0ac5c51e85216acc62281022a44a"),
+    ("state_store/database.py", "7c4a0e4bb9e752be3dfa97ca442dda1d31fa3724877669c50172d78bc97cf5fd"),
     ("state_store/fd_tree.py", "1c18c4551d606cf311408badf4ce3b6d41606a7ce2fdd635907cf15ef8cebc64"),
     ("state_store/format_marker.py", "5a396d9d875098b975d3f75b9d47267a163661667c8344c258004b47668a0fec"),
     ("state_store/git_images.py", "a93719076ab2320973c3f27c789490004752fb6bf9e6d971b74d7baa8722e66b"),
@@ -49,5 +49,5 @@ CURRENT_MODULES = (
     ("state_store/project_home.py", "09b8175a64ade927a3a78ad786c6abab3bb7a2962ea5d8842ec681a35d725982"),
     ("state_store/project_move.py", "df85983badd83d2d857ec877865faf449ba9eb0d866321877ad1ae6d01a7f19e"),
     ("state_store/project_switch.py", "a33aa43982231c62d593202ba68dbcabc029829e324022d712a39b21777385e7"),
-    ("state_store/store.py", "2952520a2194073eec32d8b643755f46c49b35263901341ed23233e902627fb5"),
+    ("state_store/store.py", "4acd5b9bbb3e706ef08f591b04b672ecf970072f57f5e0fe697ff4dc73e77656"),
 )

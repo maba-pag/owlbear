@@ -88,6 +88,7 @@ from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.state_store.store import Lock, SharedError, Store
 from owlbear_delivery_next.workflow_steps import (
     check,
+    ci_basis,
     cleanup,
     conversation,
     disposable,
@@ -453,7 +454,7 @@ def test_unknown_declared_checks_keep_exact_digest_answers_and_report_save_failu
     cx.profile = p  # the unchanged current-policy confirmation path below still saves its answer
     saving = cx.store.write_profile
 
-    def locked(_profile) -> None:
+    def locked(_profile, **_kwargs) -> None:
         busy = SharedError(whole_error)
         busy.add_note("NOTE-MARK")
         raise busy
@@ -658,6 +659,11 @@ def test_empty_inventory_consent_keeps_the_current_profiles_confirmed_named_chec
     assert follow.declared(cx, c, gh.pr, StepKind.MERGE) == (("lint",), None)
     cause = f"{asking.DECLARED}{profile.digest_of(entries[profile.DECLARED])}"
     c.questions.append(c.questions[-1].model_copy(update={"id": "q5", "cause": cause, "ci_observation": None}))
+    assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == (("lint",), None)
+    c.questions[-1].ci_basis = CiBasis(declared=(), required=("CI",))
+    cx.profile = profile.confirm(cx.profile, profile.DECLARED, "lint", NOW + timedelta(seconds=1))
+    head, _ = ci_head(clone, "${{ inputs.n }} revised")
+    gh.pr = pr(head=head)
     assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == (("lint",), None)
     c.step = Step(kind=StepKind.MERGE)
     c.reviews = [Review(commit=head, inputs=Inputs(), verdict="pass")]
@@ -3720,6 +3726,7 @@ def test_required_basis_approval_covers_only_the_delta_the_rules_question_showed
     rules = Rules(state="known", evidence="rules", required_checks=("ci",))
     cx = ctx(tmp_path, gh, prof(**(entries | profile.rule_entries(rules))))
     c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
+    c.brief.approved_version = 1
     _, inventory = follow.declared(cx, c, gh.pr, StepKind.FOLLOW)
     c = loop.apply(c, inventory, NOW)
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
@@ -3747,13 +3754,178 @@ def test_required_basis_approval_covers_only_the_delta_the_rules_question_showed
     stricter = refreshed.model_copy(update={"strict": True})
     gh.read_rules = lambda _r, _b: stricter
     strict, _ = engine.rules_changed(cx, c)
-    assert strict.question.ci_basis is None  # this yes must not vouch for unseen changed requirements.
-    c = loop.apply(c, strict, NOW)
-    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
-    assert engine.rules_changed(cx, c)[0] is None
+    assert strict.question.ci_basis == CiBasis(required=("ci", "lint", "scan"))
+    assert "Added: scan." in strict.question.text  # observed requirements are now shown for project renewal.
+    spent = loop.apply(c, strict, NOW)
+    assert spent.stop is not None  # project renewal does not reset the shared inventory question allowance.
+    newer = loop.apply(change(StepKind.FOLLOW, worktree=str(clone)), strict, NOW)
+    newer, _ = loop.schedule(
+        newer,
+        [AnswerItem(at=NOW + timedelta(seconds=1), question=newer.outcome.question, option="yes")],
+        NOW + timedelta(seconds=1),
+    )
+    strict, _ = engine.rules_changed(cx, newer)
+    assert strict.question.ci_basis is None  # the remaining strictness proposal grants no unseen CI authority.
+    newer = loop.apply(newer, strict, NOW)
+    newer, _ = loop.schedule(newer, [AnswerItem(at=NOW, question=newer.outcome.question, option="yes")], NOW)
+    assert engine.rules_changed(cx, newer)[0] is None
+    assert follow.declared(cx, newer, gh.pr, StepKind.FOLLOW) == ((), None)
+    # The pre-project within-Change path still refuses an unshown required snapshot.
+    c.questions[0].ci_observation, c.questions[0].ci_basis = c.questions[0].ci_basis, None
+    cx.profile.entries[profile.DECLARED].ci_consent = None
     _, inventory = follow.declared(cx, c, gh.pr, StepKind.FOLLOW)
     assert inventory.exit == Exit.ASK
     assert "Required checks were ci; now ci, lint, scan." in inventory.question.text
-    c.questions[0].ci_basis = CiBasis(declared=())
+    c.questions = [c.questions[0].model_copy(update={"ci_basis": CiBasis(declared=())})]
     _, unreadable = follow.declared(cx, c, gh.pr, StepKind.FOLLOW)
     assert "Required checks were not readable; now ci, lint, scan." in unreadable.question.text
+
+
+def test_completed_project_yes_seeds_shared_intent_releases_a_hold_and_renews_once(
+    tmp_path, clone, shared_repo, monkeypatch, whole_error
+):
+    head, entries = ci_head(clone, "${{ inputs.n }}")
+    rules = Rules(state="known", evidence="rules", required_checks=("CI",))
+    gh = FakeGh(pr(head=head))
+    gh.read_rules = lambda _r, _b: rules
+    cx = ctx(tmp_path, gh, prof(**(entries | profile.rule_entries(rules))))
+    cx.store = Store(tmp_path / "store", DataRepo(shared_repo[0]), "shop-site")
+    cx.store.write_profile(cx.profile)
+    c, held = _completed_and_held(cx, clone, head)
+    consent = _seed_completed_consent(cx, c, monkeypatch, whole_error)
+    head, _ = ci_head(clone, "${{ inputs.n }} updated")
+    gh.pr = pr(head=head)
+    fresh = change(StepKind.FOLLOW, worktree=str(clone)).model_copy(update={"slug": "c3"})
+    cx.lock = Lock("c3")
+    assert follow.declared(cx, fresh, gh.pr, StepKind.FOLLOW) == ((), None)
+    version = cx.profile.version
+    assert follow.declared(cx, fresh, gh.pr, StepKind.FOLLOW) == ((), None)
+    assert cx.profile.version == version
+    ci_basis.settle(cx.store, Lock("c2"), held, NOW)
+    assert held.questions[0].answer is None
+    assert held.questions[0].effect_observed_at == NOW
+    assert loop.open_question(held) is None
+    assert len(held.questions) == 1
+    cx.store.write(Lock("c2"), held)
+    refused_change = held.model_copy(deep=True)
+    refused_change.questions[0].answer = Answer(option="pause", at=NOW)
+    refused_change.intent.paused_at = NOW
+    ci_basis.settle(cx.store, Lock("c2"), refused_change, NOW)
+    assert refused_change.intent.paused_at == NOW
+    assert not ci_basis.compatible(refused_change, consent)
+
+    rules = rules.model_copy(update={"required_checks": ("CI", "scan")})
+    fresh.step = Step(kind=StepKind.PUBLISH)
+    renewal, _ = engine.rules_changed(cx, fresh)
+    assert renewal.question.ci_basis == CiBasis(required=("CI", "scan"))
+    assert "Added: scan." in renewal.question.text
+    fresh = loop.apply(fresh, renewal, NOW + timedelta(seconds=2))
+    fresh, _ = loop.schedule(
+        fresh,
+        [AnswerItem(at=NOW + timedelta(seconds=2), question=fresh.outcome.question, option="yes")],
+        NOW + timedelta(seconds=2),
+    )
+    assert engine.rules_changed(cx, fresh)[0] is None
+    fresh.step = Step(kind=StepKind.FOLLOW)
+    assert follow.declared(cx, fresh, gh.pr, StepKind.FOLLOW) == ((), None)
+    assert len(fresh.questions) == 1  # Publish and inventory do not ask for the same required update twice.
+    _named_after_rules(cx, fresh, clone, rules)
+    _profile_error_after_activity(cx, monkeypatch, whole_error)
+
+
+def _named_after_rules(cx, c, clone, rules):
+    cx.gh.read_rules = lambda _r, _b: rules.model_copy(update={"strict": True})
+    proposal, _ = engine.rules_changed(cx, c)
+    assert proposal.question.ci_basis is None
+    c = loop.apply(c, proposal, NOW + timedelta(seconds=3))
+    c, _ = loop.schedule(
+        c,
+        [AnswerItem(at=NOW + timedelta(seconds=3), question=c.outcome.question, option="yes")],
+        NOW + timedelta(seconds=3),
+    )
+    assert engine.rules_changed(cx, c)[0] is None
+    assert follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW) == ((), None)
+    head, _ = ci_head(clone, "lint")
+    cx.gh.pr = pr(head=head)
+    _, named = follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW)
+    assert named.question.ci_basis == CiBasis(declared=("lint",), required=("CI", "scan"))
+    c = loop.apply(c, named, NOW + timedelta(seconds=4))
+    c, _ = loop.schedule(
+        c,
+        [AnswerItem(at=NOW + timedelta(seconds=4), question=c.outcome.question, option="yes")],
+        NOW + timedelta(seconds=4),
+    )
+    assert follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW) == (("lint",), None)
+
+
+def _seed_completed_consent(cx, c, monkeypatch, whole_error):
+    clone = Path(c.names.worktree)
+    publish_profile = DataRepo.publish
+
+    def refused(self, path, message, until=None):
+        if path.name == "profile.json":
+            return whole_error
+        return publish_profile(self, path, message, until)
+
+    monkeypatch.setattr(DataRepo, "publish", refused)
+    ci_basis.settle(cx.store, cx.lock, c, NOW)
+    saved = cx.store.read_profile()
+    consent = saved.entries[profile.DECLARED].ci_consent
+    assert consent.basis == CiBasis(declared=(), required=("old-ci",))
+    assert not profile.project_ci(saved, "main", saved.entries[profile.DECLARED])
+    assert cx.store.read("c1").questions == c.questions  # no fabricated historical answer or effect.
+    cx.profile = saved
+    _, mismatch = follow.declared(cx, change(StepKind.FOLLOW, worktree=str(clone)), cx.gh.pr, StepKind.FOLLOW)
+    assert "Required checks were old-ci; now CI." in mismatch.question.text
+    monkeypatch.setattr(DataRepo, "publish", publish_profile)
+    c.questions.append(
+        Question(
+            id="q2",
+            step=StepKind.FOLLOW,
+            text="Merge on required plus started checks?",
+            cause="gate:follow:declared-later",
+            ci_basis=CiBasis(declared=()),
+            answer=Answer(option="yes", at=NOW + timedelta(milliseconds=500)),
+        )
+    )
+    c.questions.append(
+        Question(
+            id="q3",
+            step=StepKind.PUBLISH,
+            text="Require CI?",
+            cause="gate:publish:rules-fixture",
+            ci_basis=CiBasis(required=("CI",)),
+            answer=Answer(option="yes", at=NOW + timedelta(seconds=1)),
+        )
+    )
+    cx.store.write(cx.lock, c)
+    ci_basis.settle(cx.store, cx.lock, c, NOW)
+    cx.profile = cx.store.read_profile()
+    consent = cx.profile.entries[profile.DECLARED].ci_consent
+    assert consent.basis == CiBasis(declared=(), required=("CI",))
+    assert consent.at == NOW + timedelta(seconds=1)
+    return consent
+
+
+def _completed_and_held(cx, clone, head):
+    c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
+    _, first = follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW)
+    c = loop.apply(c, first, NOW)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
+    c.questions[0].ci_basis = CiBasis(declared=(), required=("old-ci",))
+    c.step, c.finished_at = Step(kind=StepKind.CLEANUP), NOW + timedelta(seconds=2)
+    cx.store.write(cx.lock, c)
+    held = loop.apply(change(StepKind.FOLLOW, worktree=str(clone)).model_copy(update={"slug": "c2"}), first, NOW)
+    cx.store.write(Lock("c2"), held)
+    return c, held
+
+
+def _profile_error_after_activity(cx, monkeypatch, whole_error):
+    """Diagnostics survive successful retry and later activity on the existing API."""
+    monkeypatch.setattr("owlbear_delivery_next.state_store.store.ACTIVITY_LIMIT", 1)
+    for i in range(3):
+        cx.store.log(Lock("c1"), "c1", {"event": "ci", "passed": [str(i)]})
+    client = TestClient(
+        api.create_app(cx.store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
+    )
+    assert client.get("/api/next/changes/c1").json()["diagnostics"][0]["reason"] == whole_error

@@ -20,20 +20,19 @@ from owlbear_delivery_next.impeccable.detector import DetectorError
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import migrations, profile
-from owlbear_delivery_next.state_store import github_writer
-from owlbear_delivery_next.state_store import profile_authority
+from owlbear_delivery_next.state_store import github_writer, profile_authority
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.layers import _parse
 from owlbear_delivery_next.state_store.pending_intents import pending_file as _pending_file
 from owlbear_delivery_next.state_store.pending_intents import pending_intents
 from owlbear_delivery_next.state_store.pending_intents import shared_pending as _shared_pending
+from owlbear_delivery_next.state_store.profile_authority import config_digest
 from owlbear_delivery_next.state_store.profile_errors import (
     Basis,
     SharedSyncError,
     SourceChangedError,
     TargetChangedError,
 )
-from owlbear_delivery_next.state_store.profile_authority import config_digest
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -73,6 +72,8 @@ def write(
     with _writer(store):
         if basis and basis.owned:
             basis.owned()  # a newer or missing replacement is refused before anything is pulled or written
+        if basis is None and previous == prof and _read_unlocked(store) == prof:
+            return _publish_locked(store, prof, f"settings: {store.name}: project profile")
         # the target is judged against the remote's current bytes, not a stale clone; a failed sync says nothing of them
         if store.shared:
             try:
@@ -89,8 +90,7 @@ def write(
             raise TargetChangedError(msg)
         try:
             current = _current_for_write(store, replace_unreadable=replace_unreadable)
-            if not replace_unreadable:
-                prof = profile_authority.keep(prof, current, previous)
+            prof = prof if replace_unreadable else profile_authority.keep(prof, current, previous)
             if current is not None:  # only mark() moves the legacy import marker; a snapshot never rewinds it
                 prof = prof.model_copy(
                     update={

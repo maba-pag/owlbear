@@ -26,8 +26,7 @@ from owlbear_delivery_next.git.remote_git import RemoteGitError
 from owlbear_delivery_next.github.provider import ProviderError, classify_checks
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import pref
-from owlbear_delivery_next.state_store.store import StoreError
-from owlbear_delivery_next.workflow_steps import check, ci_basis, engine
+from owlbear_delivery_next.workflow_steps import check, ci_basis, engine, project_ci
 from owlbear_delivery_next.workflow_steps import conversation as conv
 
 if TYPE_CHECKING:
@@ -73,38 +72,40 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
         return (), engine.pending(Waiting.NETWORK, f"reading the workflow files at {pr.head_sha[:7]}", ctx.poll())
     bound, digest = profile.digest_of(entry), profile.flows_digest(texts)
     observed = profile.ci_entries({n: profile.workflow(t) for n, t in texts.items()}, digest)[profile.DECLARED]
+    if (shared := project_ci.admit(ctx, c, observed, step)) is not None:
+        return shared
+    entry = ctx.profile.entries.get(profile.DECLARED)
+    confirmed = profile.listed(entry) if entry and profile.is_confirmed(entry) else confirmed
+    consent = entry.ci_consent if entry else None
     basis, previous = ci_basis.current(ctx.profile, observed), ci_basis.latest(c)
-    if digest != bound:
+    if digest != bound or (consent and consent.basis and consent.repository != ctx.repository):
         entry = observed
     cause = failures.cause_key(ErrorKind.GATE, F, f"declared-{digest}")  # the same inventory gates Follow and Merge
     ci_basis.retain(c, previous, basis, ctx.profile)
-    delta = ci_basis.delta(c, previous, basis, ctx.profile, cause)
-    if (
+    delta = ci_basis.delta(c, previous, basis, ctx.profile, cause) or ci_basis.project_delta(ctx.profile, c, basis)
+    covered = bool(
         previous
         and (previous.cause != cause or (previous.ci_basis is None and confirmed))
         and ci_basis.covers(c, previous, basis, ctx.profile)
-    ):
-        return confirmed if previous.ci_basis is None and confirmed else profile.listed(entry), None
+    )
     answer = previous.answer if previous else None
     declined = answer is not None and (answer.option == "pause" or answer.superseded_at is not None)
-    if entry and entry.state == "known" and not delta and not declined:
-        return profile.listed(entry), None
+    extra = ci_basis.named_after(c, ctx.profile.entries.get(profile.DECLARED))
+    if covered or (entry and entry.state == "known" and not delta and not declined):
+        chosen = confirmed if covered and previous.ci_basis is None and confirmed else profile.listed(entry)
+        return tuple(dict.fromkeys((*extra, *chosen))), None
     if not previous or previous.cause != cause or delta or (answer and answer.superseded_at is not None):
         answer = None
     names = ", ".join(n.strip() for n in answer.text.split(",") if n.strip()) if answer else ""
     read = entry.value if entry and entry.value else "none"  # what the workflow files name, as far as they say
     said = answer.option if answer else None
     value = "none" if said == "none" else read if said == "yes" else names
-    if value and digest == bound:
-        ctx.profile = profile.confirm(ctx.profile, profile.DECLARED, value, ctx.now)
-        try:
-            ctx.store.write_profile(ctx.profile)
-        except StoreError as exc:  # the answer still holds; the next pass saves the confirmation again
-            ctx.log(c.slug, "profile-not-saved", key=profile.DECLARED, reason=failure(exc))
-        else:
-            ctx.log(c.slug, "profile-confirmed", key=profile.DECLARED, value=value)
+    held = project_ci.confirm_value(ctx, c, value) if value and digest == bound else None
+    if held is not None:
+        return (), held
     if value:
-        return () if value == "none" else tuple(n.strip() for n in value.split(",")), None
+        chosen = () if value == "none" else tuple(n.strip() for n in value.split(","))
+        return tuple(dict.fromkeys((*extra, *chosen))), None
     options = [Option(id="yes", label="Yes: merge once those pass", next=step), engine.PAUSE]
     changed = " (the CI check-detection evidence changed)" if digest != bound else ""
     detection = (
@@ -113,8 +114,11 @@ def declared(ctx: Ctx, c: Change, pr: PullRequest, step: StepKind) -> tuple[tupl
         else "Delivery could not read the names of every check this project's CI runs before a merge"
     )
     text = (
-        f"{delta + ' ' if delta else ''}"
-        f"{detection}{changed}. "
+        f"GitHub requires {', '.join(basis.required) or 'none' if basis.required is not None else 'unreadable checks'} "
+        f"on {ctx.repository}/{c.names.target}. "
+        "With no detected names, this yes covers all Changes of this project into that target until its required "
+        "check names change; Delivery then asks once with the difference. No pauses or named checks are waived.\n\n"
+        f"{delta + ' ' if delta else ''}{detection}{changed}. "
         "It waits for the checks GitHub requires, for every check that starts on the pull request, and for those it "
         f"could read: {read if read != 'none' else 'none it could read'}. Merge on that basis?"
     )

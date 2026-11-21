@@ -38,6 +38,6 @@ def keep(prof: Profile, current: Profile | None, previous: Profile | None) -> Pr
             "Run the step again from the current profile."
         )
         raise TargetChangedError(msg)
-    if not updating and saved and saved.ci_consent:
+    if not updating and saved and saved.ci_consent and (previous is None or saved != before):
         return prof.model_copy(update={"entries": prof.entries | {profile.DECLARED: saved}})
     return prof

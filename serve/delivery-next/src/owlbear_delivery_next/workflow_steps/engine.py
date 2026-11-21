@@ -31,7 +31,8 @@ from owlbear_delivery_next.github.provider import FailureCode, ProviderError
 from owlbear_delivery_next.settings import profile
 from owlbear_delivery_next.settings.config import SettingsUnset, pref
 from owlbear_delivery_next.state_store import github_writer
-from owlbear_delivery_next.workflow_steps import conversation
+from owlbear_delivery_next.state_store.profile_errors import SharedSyncError, TargetChangedError
+from owlbear_delivery_next.workflow_steps import ci_basis, conversation, project_ci
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -208,13 +209,24 @@ def _was(old: ProfileEntry | None) -> str:
     return old.value if old.state == "known" else "not readable"
 
 
+def _project_rules(ctx: Ctx, c: Change, rules: Rules) -> StepResult | None:
+    try:
+        ctx.profile = ci_basis.acquire(ctx.store, ctx.lock, c, ctx.profile)
+        return project_ci.renew(ctx, c, rules)
+    except (SharedSyncError, TargetChangedError) as exc:
+        return blocked("state:follow:profile", str(exc), failure(exc), ctx.now)
+
+
 def rules_changed(ctx: Ctx, c: Change) -> tuple[StepResult | None, Rules]:
     """Re-read effective rules and required checks against the profile.
 
     Rules GitHub would not show stop the step. A difference is the owner's yes or no on the rules as they are now;
     his yes to exactly these differences records them in the profile, and the step goes on.
     """
-    diffs, rules = profile.reread(ctx.profile, ctx.gh, c.names.target)
+    _, rules = profile.reread(ctx.profile, ctx.gh, c.names.target)
+    if renewed := _project_rules(ctx, c, rules):
+        return renewed, rules
+    diffs = profile.differences(ctx.profile, rules)
     kind, target = c.step.kind, c.names.target
     if not diffs:
         return None, rules  # rules recorded as unreadable stay so: the merge gate handles them as before
@@ -231,7 +243,7 @@ def rules_changed(ctx: Ctx, c: Change) -> tuple[StepResult | None, Rules]:
             ctx.profile = latest
             return rules_changed(ctx, c)
         ctx.profile = profile.adopt(latest, rules, ctx.now)
-        ctx.store.write_profile(ctx.profile)
+        ctx.profile = ci_basis.save(ctx.store, ctx.lock, c, latest, ctx.profile)
         q.effect_observed_at = ctx.now
         ctx.log(c.slug, "profile-confirmed", key="branch rules", value="; ".join(diffs))
         return None, rules

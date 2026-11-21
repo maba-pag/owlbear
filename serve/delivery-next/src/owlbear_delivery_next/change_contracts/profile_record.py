@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime  # noqa: TC003 - pydantic resolves annotations at runtime
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import Field, model_validator
@@ -33,6 +33,21 @@ class ProjectCiConsent(Record):
     target: str
     at: datetime
     basis: CiBasis | None = None
+
+    @classmethod
+    def approved(cls, repository: str, target: str, at: datetime, required: tuple[str, ...]) -> ProjectCiConsent:
+        """Bind an empty-inventory yes to its canonical required-name set."""
+        return cls(
+            repository=repository,
+            target=target,
+            at=at,
+            basis=CiBasis(declared=(), required=tuple(sorted(set(required)))),
+        )
+
+    @classmethod
+    def revoked(cls, repository: str, target: str, at: datetime | None = None) -> ProjectCiConsent:
+        """Keep an explicit replacement or withdrawal newer than historical approvals."""
+        return cls(repository=repository, target=target, at=at or datetime.now(UTC))
 
 
 class ProfileEntry(Record):

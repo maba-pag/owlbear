@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next.change_contracts.models import Change, Names, StepKind
 from owlbear_delivery_next.change_contracts.merge_records import CiBasis
+from owlbear_delivery_next.change_contracts.models import Change, Names, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry, ProjectCiConsent
 from owlbear_delivery_next.change_flow import brief_tools, worktree
 from owlbear_delivery_next.git.git_executable import resolve_git_executable

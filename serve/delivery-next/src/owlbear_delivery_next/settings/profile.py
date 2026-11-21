@@ -20,6 +20,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile, Profi
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github import account
 from owlbear_delivery_next.github.gh import GhProvider
+from owlbear_delivery_next.settings.ci_consent import project_ci, required_names
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -140,28 +141,6 @@ def lint_commands(prof: Profile) -> tuple[tuple[str, ...], ...]:
 def holds(confirmed: ProfileEntry, observed: ProfileEntry) -> bool:
     """Only a confirmation bound to this exact observation is fresh."""
     return bool(confirmed.observed) and confirmed.observed == fingerprint(observed)
-
-
-def required_names(entry: ProfileEntry | None) -> tuple[str, ...] | None:
-    """Canonical case-sensitive required names, with unreadable distinct from empty."""
-    return tuple(sorted(set(listed(entry)))) if entry and entry.state == "known" else None
-
-
-def project_ci(prof: Profile, target: str, observed: ProfileEntry) -> bool:
-    """Only readable matching requirements and an empty head inventory confer project reuse."""
-    entry = prof.entries.get(DECLARED)
-    consent = entry.ci_consent if entry else None
-    required = required_names(prof.entries.get(REQUIRED))
-    return bool(
-        consent
-        and consent.basis
-        and consent.repository == value(prof, REPO)
-        and consent.target == target
-        and consent.basis.declared == ()
-        and consent.basis.required is not None
-        and tuple(sorted(set(consent.basis.required))) == required
-        and not listed(observed)
-    )
 
 
 def unbound(prof: Profile) -> bool:
@@ -382,7 +361,7 @@ def confirm(
         observed=old.observed or fingerprint(old),
         ci_consent=(
             consent
-            or ProjectCiConsent(
+            or ProjectCiConsent.revoked(
                 repository=profile.entries.get(REPO, _absent(REPO)).value,
                 target=old.ci_consent.target
                 if old.ci_consent
@@ -406,7 +385,7 @@ def withdraw(profile: Profile, key: str, observed: ProfileEntry | None) -> Profi
     if key == DECLARED:
         old = profile.entries.get(key)
         prior = old.ci_consent if old else None
-        marker = ProjectCiConsent(
+        marker = ProjectCiConsent.revoked(
             repository=prior.repository if prior else value(profile, REPO),
             target=prior.target if prior else value(profile, DEFAULT),
             at=datetime.now(UTC),
@@ -437,7 +416,14 @@ def reread(profile: Profile, gh: Provider, branch: str) -> tuple[list[str], Rule
 def differences(profile: Profile, rules: Rules) -> list[str]:
     """Each difference of the read *rules* from the profile's rule entries."""
     read = rule_entries(rules).items()
-    return [d for key, new in read if (d := _differs(profile.entries.get(key), key, new))]
+    return [
+        d
+        for key, new in read
+        if not (
+            key == REQUIRED and required_names(profile.entries.get(key)) == required_names(new) and new.state == "known"
+        )
+        and (d := _differs(profile.entries.get(key), key, new))
+    ]
 
 
 def adopt(profile: Profile, rules: Rules, now: datetime) -> Profile:

@@ -502,9 +502,17 @@ OwlBear's pages run Changes; open them at the address `owlbear status` prints.
 
 Delivery infers PR-head check names from `pull_request` workflows, not base-context `pull_request_target`
 jobs such as release or triage automation. Required checks and every check actually reported on the PR head
-still gate merging. When check names cannot be fully detected, your consent to the displayed basis holds
-through CI follow-up and merge for the same workflow and detection-policy evidence. Changed evidence needs
-fresh consent; an old confirmation cannot keep an obsolete detection result in force.
+still gate merging. A structured yes with no detected names covers all Changes of the same project into the
+same target branch while GitHub's readable required check names stay unchanged, even after workflow updates.
+Delivery saves that consent in the shared project profile and rechecks it in each clone. Changed required names
+ask once, listing additions and removals; a rename is both. Newly detected names still need approval, and confirmed
+named checks remain gates. Unreadable requirements, a refusal or a withdrawn confirmation confer no project reuse.
+Existing completed structured approvals can seed this shared consent; legacy observations remain Change-local.
+
+A failed profile publication keeps its whole reason in the Change's diagnostics, visible with details off even
+after later activity. The next save retries the current saved intent without another yes. A stale explicit CI
+authority update refuses and asks you to run the step again from the current profile; unrelated saves keep newer
+shared CI authority.
 
 ### Lint before submission
 

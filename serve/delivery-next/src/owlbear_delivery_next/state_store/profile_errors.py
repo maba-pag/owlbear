@@ -5,8 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from owlbear_delivery_next.state_store.database import StoreError
+
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+
+class SharedError(StoreError):
+    """The shared settings repository could not be locked or found for a save (TD-57)."""
+
+    action = "Check the shared settings repository, then try again"
+    resume = "A settings save completes"
 
 
 class SourceChangedError(RuntimeError):
