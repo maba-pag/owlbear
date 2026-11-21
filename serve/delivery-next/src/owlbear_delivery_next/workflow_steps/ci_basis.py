@@ -92,9 +92,7 @@ def effective(c: Change, prof: Profile) -> ProjectCiConsent | None:
             and (other.ci_basis.declared is None or _project_renewal(other))
             and other.ci_basis.required is not None
         ):
-            candidate = CiBasis(declared=(), required=tuple(sorted(set(other.ci_basis.required))))
-            if required_approved(c, q, candidate, prof):
-                basis, at = candidate, other.answer.at
+            basis, at = CiBasis(declared=(), required=tuple(sorted(set(other.ci_basis.required)))), other.answer.at
     if basis.required is None:
         return None
     return ProjectCiConsent.approved(profile.value(prof, profile.REPO), c.names.target, at, basis.required)
