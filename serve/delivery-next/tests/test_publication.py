@@ -3864,6 +3864,11 @@ def test_completed_project_yes_seeds_shared_intent_releases_a_hold_and_renews_on
     fresh.step = Step(kind=StepKind.FOLLOW)
     assert follow.declared(cx, fresh, gh.pr, StepKind.FOLLOW) == ((), None)
     assert len(fresh.questions) == 1  # Publish and inventory do not ask for the same required update twice.
+    _named_after_rules(cx, fresh, clone, rules, obsolete)
+    _profile_error_after_activity(cx, monkeypatch, whole_error)
+
+
+def _named_after_rules(cx, c, clone, rules, obsolete):
     ci_basis.settle(cx.store, Lock("c4"), obsolete, NOW)
     assert loop.open_question(obsolete) is None
     assert obsolete.questions[0].answer is None
@@ -3886,11 +3891,6 @@ def test_completed_project_yes_seeds_shared_intent_releases_a_hold_and_renews_on
     assert legacy.questions[0].answer is None
     ci_basis.settle(cx.store, Lock("c6"), unrelated, NOW)
     assert loop.open_question(unrelated) is not None
-    _named_after_rules(cx, fresh, clone, rules)
-    _profile_error_after_activity(cx, monkeypatch, whole_error)
-
-
-def _named_after_rules(cx, c, clone, rules):
     cx.gh.read_rules = lambda _r, _b: rules.model_copy(update={"strict": True})
     proposal, _ = engine.rules_changed(cx, c)
     assert proposal.question.ci_basis is None
