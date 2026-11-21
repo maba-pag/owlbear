@@ -217,11 +217,12 @@ def show_profile(
     overrides: list[tuple[Role, RoleModel]] | None = None,
 ) -> str:
     """Detect the profile, apply the owner's confirmations and role overrides to the project settings."""
-    gh = profile.provider(store.read_profile() or Profile(), repo, github_writer.of(store, repo, detecting=True))
-    prof = profile.detect(repo, gh, store.read_profile())
+    previous = store.read_profile() or Profile()
+    gh = profile.provider(previous, repo, github_writer.of(store, repo, detecting=True))
+    prof = profile.detect(repo, gh, previous)
     for key, value in confirms:
         prof = profile.confirm(prof, key, value, datetime.now(UTC))
-    store.write_profile(prof)
+    publication = store.write_profile(prof, previous=previous)
     prefs_import.run(store)
     notice = (
         store.update_config(
@@ -231,7 +232,7 @@ def show_profile(
         if overrides
         else ""
     )
-    lines = [f"profile v{prof.version}", *([f"Notice: {notice}"] if notice else [])]
+    lines = [f"profile v{prof.version}", *[f"Notice: {n}" for n in (publication, notice) if n]]
     lines += [f"  {k}: {e.state} {e.value!r} ({e.evidence})" for k, e in sorted(prof.entries.items())]
     return "\n".join([*lines, roles.table(store.settings())])
 

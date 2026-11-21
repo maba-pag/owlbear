@@ -10,7 +10,8 @@ from pathlib import Path
 import pytest
 
 from owlbear_delivery_next.change_contracts.models import Change, Names, StepKind
-from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.change_contracts.merge_records import CiBasis
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry, ProjectCiConsent
 from owlbear_delivery_next.change_flow import brief_tools, worktree
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.gh import GhProvider
@@ -190,6 +191,34 @@ def test_two_clones_repeatedly_read_their_own_facts_after_both_first_detection_m
     assert profile.PUSH not in raw["entries"]
     assert profile.HOOKS not in raw["entries"]
     assert "install:." not in raw["entries"]
+
+
+def test_project_ci_redetection_keeps_consent_across_churn_but_a_mismatch_is_only_evidence(
+    shared, tmp_path, monkeypatch
+):
+    repo = clone(tmp_path, "shop")
+    store = Store.open(repo)
+    gh = GitHub()
+    raw = profile.detect(repo, gh, None)
+    consent = ProjectCiConsent(
+        repository="acme/shop-site", target="release", at=NOW, basis=CiBasis(declared=(), required=())
+    )
+    approved = profile.confirm(raw, profile.DECLARED, "lint", NOW, consent=consent)
+    store.write_profile(approved, previous=Profile())
+    flows = repo / ".github/workflows"
+    flows.mkdir(parents=True)
+    (flows / "ci.yml").write_text("on: pull_request\njobs:\n  t:\n    uses: ./reusable.yml\n")
+    monkeypatch.setattr(profile, "provider", lambda *_a: gh)
+    fresh = profile_share.checked(store, repo)
+    assert fresh.entries[profile.DECLARED].ci_consent == consent
+    assert profile.project_ci(fresh, "release", profile.ci_entries(profile.workflows(repo))[profile.DECLARED])
+    assert profile.names(fresh, profile.DECLARED) == ("lint",)
+    assert not profile.project_ci(fresh, "main", ProfileEntry(state="unknown", value="none"))
+    gh.known = False
+    mismatch = profile.detect(repo, gh, fresh)
+    assert mismatch.entries[profile.DECLARED].ci_consent == consent
+    assert not profile.project_ci(mismatch, "release", mismatch.entries[profile.DECLARED])
+    assert json.loads((shared / "shop-site/profile.json").read_text())["entries"][profile.DECLARED]["ci_consent"]
 
 
 def test_an_old_local_profile_keeps_its_own_facts_before_any_overlay_exists(tmp_path):

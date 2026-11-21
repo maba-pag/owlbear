@@ -8,6 +8,7 @@ import os
 import shlex
 import subprocess
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from fnmatch import fnmatch
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING
@@ -15,13 +16,12 @@ from urllib.parse import urlparse
 
 import yaml
 
-from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry, ProjectCiConsent
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github import account
 from owlbear_delivery_next.github.gh import GhProvider
 
 if TYPE_CHECKING:
-    from datetime import datetime
     from pathlib import Path
 
     from owlbear_delivery_next.github.account import Writer
@@ -140,6 +140,28 @@ def lint_commands(prof: Profile) -> tuple[tuple[str, ...], ...]:
 def holds(confirmed: ProfileEntry, observed: ProfileEntry) -> bool:
     """Only a confirmation bound to this exact observation is fresh."""
     return bool(confirmed.observed) and confirmed.observed == fingerprint(observed)
+
+
+def required_names(entry: ProfileEntry | None) -> tuple[str, ...] | None:
+    """Canonical case-sensitive required names, with unreadable distinct from empty."""
+    return tuple(sorted(set(listed(entry)))) if entry and entry.state == "known" else None
+
+
+def project_ci(prof: Profile, target: str, observed: ProfileEntry) -> bool:
+    """Only readable matching requirements and an empty head inventory confer project reuse."""
+    entry = prof.entries.get(DECLARED)
+    consent = entry.ci_consent if entry else None
+    required = required_names(prof.entries.get(REQUIRED))
+    return bool(
+        consent
+        and consent.basis
+        and consent.repository == value(prof, REPO)
+        and consent.target == target
+        and consent.basis.declared == ()
+        and consent.basis.required is not None
+        and tuple(sorted(set(consent.basis.required))) == required
+        and not listed(observed)
+    )
 
 
 def unbound(prof: Profile) -> bool:
@@ -320,11 +342,27 @@ def detect(repo: Path, gh: Provider, previous: Profile | None) -> Profile:
         if is_confirmed(old) and holds(old, new):
             stamp = old.evidence.partition(OBSERVED)[0]
             entries[key] = old.model_copy(update={"evidence": f"{stamp}{OBSERVED}{new.evidence}"})
+    old = prev.entries.get(DECLARED)
+    if old and old.ci_consent:
+        consent = old.ci_consent
+        target_rules = rules if consent.target == r.default_branch else gh.read_rules(r.repository, consent.target)
+        candidate = prev.model_copy(
+            update={"entries": entries | {DECLARED: old, REQUIRED: rule_entries(target_rules)[REQUIRED]}}
+        )
+        if project_ci(candidate, consent.target, entries[DECLARED]):
+            bound = confirm(
+                prev.model_copy(update={"entries": entries}), DECLARED, old.value, consent.at, consent=consent
+            )
+            entries[DECLARED] = bound.entries[DECLARED]
+        else:
+            entries[DECLARED] = entries[DECLARED].model_copy(update={"ci_consent": consent})
     changed = shared_entries(entries) != shared_entries(prev.entries)
     return prev.model_copy(update={"entries": entries, "version": prev.version + 1 if changed else prev.version})
 
 
-def confirm(profile: Profile, key: str, value: str, now: datetime) -> Profile:
+def confirm(
+    profile: Profile, key: str, value: str, now: datetime, *, consent: ProjectCiConsent | None = None
+) -> Profile:
     """Record the owner's value independently of the complete raw observation it is confirmed against."""
     if key in SETTINGS:
         msg = f"{key} is a project preference: set it on the Settings page"
@@ -342,6 +380,18 @@ def confirm(profile: Profile, key: str, value: str, now: datetime) -> Profile:
         value=value,
         evidence=f"{CONFIRMED} {now:%Y-%m-%d}{OBSERVED}{label or old.evidence}",
         observed=old.observed or fingerprint(old),
+        ci_consent=(
+            consent
+            or ProjectCiConsent(
+                repository=profile.entries.get(REPO, _absent(REPO)).value,
+                target=old.ci_consent.target
+                if old.ci_consent
+                else profile.entries.get(DEFAULT, _absent(DEFAULT)).value,
+                at=now,
+            )
+            if key == DECLARED
+            else old.ci_consent
+        ),
     )
     entries = {**profile.entries, key: entry}
     return profile.model_copy(update={"entries": entries, "version": profile.version + 1, "confirmed_at": now})
@@ -353,6 +403,15 @@ def withdraw(profile: Profile, key: str, observed: ProfileEntry | None) -> Profi
     A later confirmation then binds to a real observation and survives a fresh detection.
     """
     entries = {k: e for k, e in profile.entries.items() if k != key} | ({key: observed} if observed else {})
+    if key == DECLARED:
+        old = profile.entries.get(key)
+        prior = old.ci_consent if old else None
+        marker = ProjectCiConsent(
+            repository=prior.repository if prior else value(profile, REPO),
+            target=prior.target if prior else value(profile, DEFAULT),
+            at=datetime.now(UTC),
+        )
+        entries[key] = (observed or _absent(key)).model_copy(update={"ci_consent": marker})
     return profile.model_copy(update={"entries": entries, "version": profile.version + 1})
 
 

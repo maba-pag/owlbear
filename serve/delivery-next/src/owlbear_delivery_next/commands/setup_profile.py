@@ -13,6 +13,7 @@ from owlbear_delivery_next.state_store.profile_errors import (
     OldProfileUnreadableError,
     SharedSyncError,
     SourceChangedError,
+    TargetChangedError,
 )
 from owlbear_delivery_next.state_store.store import RoleSourceError, StoreError
 
@@ -144,10 +145,15 @@ def detect(repo: Path, prev: Profile | None, writer: Writer) -> Profile:
 
 def keep(store: Store, prof: Profile, found: Saved, say: Callable[[str], object]) -> bool:
     """Save the confirmed *prof* over what ``saved`` found; False after saying why it was kept for the next setup."""
-    _, unreadable, source, target = found
+    previous, unreadable, source, target = found
     if source:
         return publish_repair(store, profile_repair.stage(store, prof, source, target), say, resumed=False)
-    if notice := store.write_profile(prof, replace_unreadable=unreadable):  # saved here, not yet published
+    try:
+        notice = store.write_profile(prof, replace_unreadable=unreadable, previous=previous or Profile())
+    except TargetChangedError as exc:
+        say(str(exc))
+        return False
+    if notice:
         say(notice)
         return False
     return True

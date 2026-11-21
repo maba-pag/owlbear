@@ -297,14 +297,21 @@ class Store:
         return profile_share.read(self)
 
     def write_profile(
-        self, profile: Profile, *, replace_unreadable: bool = False, basis: profile_share.Basis | None = None
+        self,
+        profile: Profile,
+        *,
+        replace_unreadable: bool = False,
+        basis: profile_share.Basis | None = None,
+        previous: Profile | None = None,
     ) -> str:
         """Write the project profile atomically, published when shared (TD-147); the publication notice.
 
         *basis* is what the owner's repair confirmed the replacement against (see ``profile_share.write``).
         """
         try:
-            return profile_share.write(self, profile, replace_unreadable=replace_unreadable, basis=basis)
+            return profile_share.write(
+                self, profile, replace_unreadable=replace_unreadable, basis=basis, previous=previous
+            )
         except data_repo.DataRepoError as exc:
             raise SharedError(failure(exc)) from exc
 

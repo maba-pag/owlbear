@@ -21,6 +21,7 @@ from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import migrations, profile
 from owlbear_delivery_next.state_store import github_writer
+from owlbear_delivery_next.state_store import profile_authority
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.layers import _parse
 from owlbear_delivery_next.state_store.pending_intents import pending_file as _pending_file
@@ -32,6 +33,7 @@ from owlbear_delivery_next.state_store.profile_errors import (
     SourceChangedError,
     TargetChangedError,
 )
+from owlbear_delivery_next.state_store.profile_authority import config_digest
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -55,7 +57,14 @@ def path(store: Store) -> Path:
     return store.shared.root / store.name / PROFILE if store.shared else store.root / PROFILE
 
 
-def write(store: Store, prof: Profile, *, replace_unreadable: bool = False, basis: Basis | None = None) -> str:
+def write(
+    store: Store,
+    prof: Profile,
+    *,
+    replace_unreadable: bool = False,
+    basis: Basis | None = None,
+    previous: Profile | None = None,
+) -> str:
     """Write the profile; in the shared folder also commit and push it: what the owner should know, else nothing.
 
     An ordinary save refuses an unreadable saved profile; only the explicit repair (*replace_unreadable*) replaces
@@ -65,7 +74,7 @@ def write(store: Store, prof: Profile, *, replace_unreadable: bool = False, basi
         if basis and basis.owned:
             basis.owned()  # a newer or missing replacement is refused before anything is pulled or written
         # the target is judged against the remote's current bytes, not a stale clone; a failed sync says nothing of them
-        if basis and store.shared:
+        if store.shared:
             try:
                 why = store.shared.pull()
             except (DataRepoError, OSError) as exc:
@@ -80,6 +89,8 @@ def write(store: Store, prof: Profile, *, replace_unreadable: bool = False, basi
             raise TargetChangedError(msg)
         try:
             current = _current_for_write(store, replace_unreadable=replace_unreadable)
+            if not replace_unreadable:
+                prof = profile_authority.keep(prof, current, previous)
             if current is not None:  # only mark() moves the legacy import marker; a snapshot never rewinds it
                 prof = prof.model_copy(
                     update={
@@ -116,14 +127,6 @@ def _publish_locked(store: Store, prof: Profile, message: str) -> str:
 
 def _digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
-
-
-def config_digest(config: Path) -> str:
-    """The digest of the project config's bytes, or ``absent``."""
-    try:
-        return _digest(config.read_bytes())
-    except FileNotFoundError:
-        return ABSENT
 
 
 def held_by_pending(store: Store, data: bytes) -> bool:

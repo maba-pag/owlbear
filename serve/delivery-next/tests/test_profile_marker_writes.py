@@ -1,16 +1,18 @@
 """An ordinary profile save keeps the legacy import marker that a dedicated transition moved (R15, FND-05)."""
 
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
-from owlbear_delivery_next.change_contracts.profile_record import Profile
+from owlbear_delivery_next.change_contracts.merge_records import CiBasis
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry, ProjectCiConsent
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
-from owlbear_delivery_next.settings import config
+from owlbear_delivery_next.settings import config, profile
 from owlbear_delivery_next.state_store import prefs_import, profile_share
-from owlbear_delivery_next.state_store.profile_errors import Basis, SharedSyncError
+from owlbear_delivery_next.state_store.profile_errors import Basis, SharedSyncError, TargetChangedError
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
 
@@ -87,6 +89,43 @@ def test_a_stale_writer_after_an_owner_clear_does_not_reopen_the_claim(shared_re
     prefs_import.run(fresh)  # the importer must not reclaim or refill after the owner's clear
     assert fresh.read_profile().prefs_import == "done"
     assert not fresh.config_path.exists()
+
+
+def test_project_ci_authority_survives_stale_saves_but_not_explicit_revocation(shared_repo, tmp_path, monkeypatch):
+    for who in ("AUTHOR", "COMMITTER"):
+        monkeypatch.setenv(f"GIT_{who}_NAME", "t")
+        monkeypatch.setenv(f"GIT_{who}_EMAIL", "t@example.com")
+    root, remote = shared_repo
+    late = shared_store(root, tmp_path, "late")
+    raw = Profile(
+        entries={
+            profile.REPO: ProfileEntry(state="known", value="o/r"),
+            profile.DEFAULT: ProfileEntry(state="known", value="main"),
+            profile.DECLARED: ProfileEntry(state="unknown", value="none", evidence="jobs"),
+            profile.REQUIRED: ProfileEntry(state="known", value="CI"),
+        }
+    )
+    late.write_profile(raw)
+    stale = late.read_profile()
+    owner, old = clone_profile(remote, tmp_path / "owner")
+    now = datetime(2026, 11, 21, tzinfo=UTC)
+    consent = ProjectCiConsent(repository="o/r", target="main", at=now, basis=CiBasis(declared=(), required=("CI",)))
+    approved = profile.confirm(old, profile.DECLARED, "none", now, consent=consent)
+    assert owner.write_profile(approved, previous=old) == ""
+    late.write_profile(profile.confirm(stale, "allow:install", "yes", now), previous=stale)
+    current = late.read_profile()
+    assert current.entries[profile.DECLARED].ci_consent == consent
+    with pytest.raises(TargetChangedError, match="current profile"):
+        late.write_profile(profile.confirm(stale, profile.DECLARED, "lint", now), previous=stale)
+    withdrawn = profile.withdraw(current, profile.DECLARED, raw.entries[profile.DECLARED])
+    late.write_profile(withdrawn, previous=current)
+    late.write_profile(approved)  # even an old writer without previous evidence cannot restore authority.
+    assert late.read_profile().entries[profile.DECLARED].ci_consent.basis is None
+    before = profile_share.path(late).read_bytes()
+    monkeypatch.setattr(DataRepo, "pull", lambda _self: "cannot fetch shared current authority")
+    with pytest.raises(SharedSyncError, match="cannot fetch"):
+        late.write_profile(withdrawn, previous=withdrawn)
+    assert profile_share.path(late).read_bytes() == before
 
 
 def test_a_second_store_cannot_publish_done_while_the_config_removal_is_unpublished(shared_repo, tmp_path, monkeypatch):
