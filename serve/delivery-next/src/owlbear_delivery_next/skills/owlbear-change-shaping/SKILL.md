@@ -22,7 +22,13 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    the observable pain, the current workaround, and which statements are evidence and which are
    assumptions. Never infer a business constraint from code. Depth follows uncertainty and stakes,
    not a count: ask until no material gap remains. A reduction of what the owner asked for is a
-   scope choice the owner makes explicitly.
+   scope choice the owner makes explicitly. An open question, one that asks the owner to describe
+   or explain (the idea when the opening brings none, the pain, the workaround, evidence), is
+   ordinary chat text with the recommendation and context in the same message, and the turn ends
+   there without the structured question tool, so he answers in the normal composer, several
+   paragraphs and a screenshot included. A choice between materially different options goes
+   through the structured question tool with the options and the recommendation; never invent
+   options to turn an open question into a form.
 3. Write acceptance criteria with a witness Delivery can produce at the claimed boundary, not just
    a test or command that exists; a criterion may state what must not happen. Check the runtime,
    authentication and isolated data that witness needs. Delivery's sessions use the installed runtime,
@@ -108,7 +114,8 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
 
 Read back a free-text or unclear answer at once, before building on it; a chosen option counts as
 confirmed and is not asked again. Ask one decision per question, paraphrased at the level of the
-owner's intent, never quoting his words, with the structured question tool when there is one; the
+owner's intent, never quoting his words, with the structured question tool when there is one, since a
+read-back is a choice, unlike the open question it may follow; the
 question shows the decision's record (its statement and origin) and what changed since:
 
 - three close variants of the recorded choice (fewer only when fewer really differ in consequence,
