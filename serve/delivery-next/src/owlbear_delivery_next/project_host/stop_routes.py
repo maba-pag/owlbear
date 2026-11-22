@@ -79,7 +79,9 @@ def _rerun(c: Change, store: Store, block: work_block.Block) -> dict[str, Any]:
         "title": task.title if task else "",
         "role": role,
         "repairer": repairer,
-        "limits": [{"role": r, "minutes": resolved[r]["minutes"] if r in resolved else None, "current": True} for r in timed],
+        "limits": [
+            {"role": r, "minutes": resolved[r]["minutes"] if r in resolved else None, "current": True} for r in timed
+        ],
     }
 
 
