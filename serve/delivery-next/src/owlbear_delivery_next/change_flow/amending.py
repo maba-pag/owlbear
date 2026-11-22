@@ -134,8 +134,8 @@ def prepared(c: Change, r: CandidateResult, policy: RoundPolicy, now: datetime) 
 def _refused(c: Change, a: Amendment, why: str, now: datetime) -> None:
     a.state, a.refused = "refused", " ".join(why.split())[:1000]
     text = (
-        f"{a.reason[:300]}\n\nTo take this, the brief's outcome or non-goals must change, which only reshaping can "
-        f"do: {a.refused}. Work on within the approved brief, reshape it, or stop the Change?\n\n"
+        f"{a.reason[:300]}\n\nThis is no amendment of the approved brief: {a.refused.rstrip('.')}. Work on within "
+        f"the approved brief, reshape it, or stop the Change?\n\n"
         f"Details: amendment {a.id}"
     )
     _ask(c, a, "decide", text, WITHIN, RESHAPE, STOP, now=now)
