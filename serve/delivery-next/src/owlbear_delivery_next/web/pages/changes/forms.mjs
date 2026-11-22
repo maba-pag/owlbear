@@ -6,6 +6,7 @@ import {
   button, external, field, choice, tick, hd, text, list, row, panel, info, refusal,
 } from "./widgets.mjs";
 import { taskRounds } from "./progress.mjs";
+import { rerunAsk, rerunWords } from "./rerun.mjs";
 
 // A worker's question (TD-461): the owner says how his answer bears on the approved brief; a clarification is his
 // intent in at most two lines, confirmed by him, which becomes a decision of this Change.
@@ -365,7 +366,7 @@ export function stopNotice(d) {
   const clear = async () => {
     const again = "If the cause is still there, it stops again with the same message.";
     const inventory = r.remedy === 1342;
-    const sure = await ask({
+    const sure = await ask(r.rerun ? rerunAsk(r.rerun, d.paused) : {
       title: r.label ? `${r.label}?` : "Run the stopped step again?",
       yes: r.label || "Run it again", no: "Keep it stopped",
       now: r.fixed || `You did what the stop asked (${action}), so the stop clears.`,
@@ -390,7 +391,8 @@ export function stopNotice(d) {
     show();
   };
   return html`<p-inline-notification class="recorded" state="error" heading="Stopped" heading-tag="h3"
-    dismiss-button="false">${kept ? text(said, { cls: "repair-reason" }) : said}${
+    dismiss-button="false">${r?.rerun ? text(rerunWords(r.rerun), { cls: "stop-text" }) : nothing}${
+      text(said, { cls: "stop-text" })}${
       held ? nothing : noteAction(r.label || "Done: run the step again", clear)}</p-inline-notification>
     ${kept ? text("The fix kept (not applied):") : nothing}${repairPatch(kept?.diff, "The retained repair patch")}`;
 }

@@ -5,8 +5,8 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
-from owlbear_delivery_next.change_contracts.failures import kind_of
-from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind
+from owlbear_delivery_next.change_contracts.failures import cause_key, kind_of
+from owlbear_delivery_next.change_contracts.models import VISUAL, ErrorKind, Exit, StepKind
 from owlbear_delivery_next.change_flow import asking, moves, plan_rounds
 from owlbear_delivery_next.local_system import codebase
 
@@ -21,6 +21,9 @@ LEGACY = {
     "91b09919eb68085ecbcbabaf3ff9604cd27d898f6697ca168296f1f4ea269c22": (1310, "v1.279"),
     "94031b7acb33968ff62c895b8d03bc83786b9eb087e0a254ec928a7ef8834d74": (1312, "v1.284"),
 }
+REPAIRER_DEADLINE = "its own step deadline ended the repair before it proved a fix"
+DEFECT = " OwlBear defect issue: "  # a stopped repair's reason ends with it once it filed a defect issue
+OWN = {StepKind.PLAN: {None}, StepKind.BUILD: {None}, StepKind.CHECK: {None}, StepKind.REVIEW: {None, "final"}}
 
 
 def stopped(c: Change) -> Repair | None:
@@ -69,6 +72,20 @@ def inventory(c: Change) -> bool:
     )
 
 
+def _gate(c: Change) -> bool:
+    """Whether another gate is open that a stop's continuation must not bypass."""
+    return bool(
+        c.finished_at
+        or c.intent.abandoned_at
+        or c.pending_child
+        or c.pending_question
+        or c.blocked
+        or c.amending
+        or c.queue
+        or any(q.answer is None for q in c.questions)
+    )
+
+
 def offered(c: Change) -> int | None:
     """One applicable fix absent from the stopped runtime; unknown legacy provenance admits nothing."""
     if (
@@ -76,19 +93,38 @@ def offered(c: Change) -> int | None:
         and inventory(c)
         and c.stop
         and MERGE_BASIS not in (c.stop.fixed_defects or [])
-        and not (
-            c.finished_at
-            or c.intent.abandoned_at
-            or c.pending_child
-            or c.pending_question
-            or c.blocked
-            or c.amending
-            or c.queue
-        )
-        and not any(q.answer is None for q in c.questions)
+        and not _gate(c)
     ):
         return MERGE_BASIS
     return _repair(c)
+
+
+def _bound(c: Change) -> list[Repair]:
+    """The finished repairs of this step's cause, on this step and task."""
+    cause = c.outcome.cause if c.outcome else None
+    return [r for r in c.repairs.done if (r.cause, r.step, r.task) == (cause, c.step.kind, c.step.task)]
+
+
+def deadline(c: Change) -> bool:
+    """Whether the step's own session deadline identifiably stopped it and one owner-confirmed rerun is open.
+
+    The stop agrees with its liveness deadline cause (a policy or credit stop replacing it never qualifies), the
+    step's mode runs that step's own role, no other gate is open and no repair of the cause was rerun already.
+    """
+    s, o, stop = c.step, c.outcome, c.stop
+    if not (stop and o and o.exit == Exit.STOP and stop.kind == ErrorKind.LIVENESS) or c.repairs.current:
+        return False
+    if o.cause != cause_key(ErrorKind.LIVENESS, s.kind, "deadline") or s.mode not in OWN.get(s.kind, ()):
+        return False
+    if (s.kind, s.task) == (StepKind.CHECK, VISUAL) or _gate(c):
+        return False
+    return all(r.recovered_at is None for r in _bound(c))
+
+
+def repairer_timed_out(c: Change) -> bool:
+    """Whether the exhausted repair of this deadline stop ended on the repairer's own deadline."""
+    r = stopped(c)
+    return bool(r and (r.stopped == REPAIRER_DEADLINE or r.stopped.startswith(f"{REPAIRER_DEADLINE}.{DEFECT}")))
 
 
 def _repair(c: Change) -> int | None:
@@ -151,12 +187,23 @@ def pending_ci(c: Change) -> Repair | None:
     )
 
 
+def _rerun(c: Change, item: Recovery) -> bool:
+    """Run a deadline-stopped step once more, keeping its work, gates and cause's count; True when it did."""
+    if not (c.stop and item.action == asking.RERUN and item.stop_at == c.stop.at and deadline(c)):
+        return False
+    for r in _bound(c):
+        r.recovered_at = item.at  # the count stays: a repeat timeout is repaired as usual
+    moves.go(c, c.step.kind, c.step.task, c.step.mode)
+    c.stop = c.outcome = None
+    return True
+
+
 def consume(c: Change, item: Recovery, *, unchanged: bool) -> None:
     """Recheck the queued stop and fix against the code actually folding the owner's action."""
     if c.stop is None or (item.stop_at is not None and item.stop_at != c.stop.at):
         return
     if item.remedy is None:
-        if unchanged and item.action == c.stop.action and not asking.inventory_stop(c):
+        if not _rerun(c, item) and unchanged and item.action == c.stop.action and not asking.inventory_stop(c):
             c.stop = c.outcome = None
         return
     remedy, r = offered(c), stopped(c)

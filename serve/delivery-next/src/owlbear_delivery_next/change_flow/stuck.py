@@ -76,6 +76,8 @@ def action(c: Change) -> str:
     """The executable way out of an exhausted repair, including stops written before this route existed."""
     if remedy := repair_recovery.offered(c):
         return repair_recovery.action(c, remedy)
+    if repair_recovery.deadline(c):
+        return RERUN
     if asking.inventory_stop(c):
         return "Pause or abandon the Change"
     if not exhausted(c):
