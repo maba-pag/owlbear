@@ -938,8 +938,10 @@ def test_a_deadline_stop_names_who_timed_out_and_its_rerun_runs_only_once_confir
         for said in (
             f"The session time limit of the builder ended {step}.",
             f"Then the time limit of the {repairer} ended Delivery's repair.",
-            f"Minutes per session: builder now {agents['builder'].minutes} minutes; {repairer} now "
-            f"{agents['repairer'].minutes} minutes.",
+            (
+                f"Minutes per session: builder now {agents['builder'].minutes} minutes; {repairer} now "
+                f"{agents['repairer'].minutes} minutes."
+            ),
             f"Run the step again runs {step} once more.",
         ):
             expect(note).to_contain_text(said)
