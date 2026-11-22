@@ -39,6 +39,7 @@ if owner is not None:
     owner.RETRY = 0.01
 calls, cancels = 0, 0
 executor_done = threading.Event()
+owned = []  # The SDK retains its tasks; asyncio's registry holds only weak references.
 
 class PrimaryError(RuntimeError):
     pass
@@ -71,6 +72,7 @@ async def fake(cfg):
         await asyncio.sleep(0)
     elif mode != "clean":
         task = asyncio.create_task(stubborn(), name="stubborn-request")
+        owned.append(task)
         await asyncio.sleep(0)
         for _ in range(2):
             task.cancel()
