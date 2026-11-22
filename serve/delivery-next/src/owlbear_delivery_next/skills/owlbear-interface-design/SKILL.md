@@ -46,7 +46,8 @@ where something becomes visible:
   obvious steps in size and weight between roles, no overflowing text at any supported width.
 - **Depth:** shadows have an offset and a soft blur; a zero-offset coloured halo is decoration.
 - **Motion:** one purposeful moment rather than effects everywhere; ease out from a visible default; respect
-  reduced motion.
+  reduced motion. Hover motion never moves a neighbour or the hovered element itself, which would slide out from
+  under the pointer: a child carries it, and the element stays the hit area.
 - **States:** hover, focus, active, disabled, loading, empty, partial (some data loaded, some missing or
   failed), error and success, with real content and working controls. Visible keyboard focus and logical tab
   order.
@@ -74,7 +75,9 @@ Use the project's accessibility target; without one, WCAG 2.2 AA. Check it for w
 - Same-size cards of icon, heading and text as the page structure; nested cards are always wrong.
 - The hero-metric template (big number, small label, supporting stats).
 - Tiny section numbers that carry no information.
-- Gradient text; glass and blur as decoration; a coloured side stripe on cards or alerts; hard offset shadows.
+- Gradient text; glass and blur as decoration; hard offset shadows; a bar down one side of a rounded box (a
+  one-sided border, inset shadow or pseudo-element), in any colour or state: use a full border, a tint, or a
+  leading icon or label.
 - Purple-to-blue or cyan-on-dark palettes by habit; glowing accents on dark mode.
 - Overused default faces (Inter, Roboto, Geist and the like) chosen by habit; a system display face as the voice
   of an own-world page.
@@ -99,6 +102,9 @@ heading carries its own weight.
 - An uneven break can carry meaning (a headline landing on one word for weight, a poster line, a pull quote): make
   it deliberate with a hard break or a wrap set on that element, and keep it rare. The detector's `straggler` and
   `unbalanced-heading` findings are advisory for this reason; say which breaks are intended.
+- To centre a control's label optically, trim the label element (`text-box: trim-both cap alphabetic` on a
+  block `<span>`), not the flex container, where the trim never reaches the text. Centred caps are not a centred
+  word: check real labels at every size the control ships.
 
 ## Colour
 
