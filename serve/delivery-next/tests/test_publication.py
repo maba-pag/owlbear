@@ -95,6 +95,7 @@ from owlbear_delivery_next.workflow_steps import (
     engine,
     follow,
     merge,
+    project_ci,
     publish,
     queue,
     review,
@@ -3962,8 +3963,14 @@ def test_project_ci_snapshot_preserves_a_required_matrix_check_name(tmp_path, cl
     assert follow.declared(cx, fresh, gh.pr, StepKind.MERGE) == ((), None)
     named = "Lint (Ruff, Biome)"
     before = cx.store.read_profile()
+    direct = profile.confirm(
+        before, profile.DECLARED, '"Lint (Ruff, Biome)"', NOW, consent=before.entries[profile.DECLARED].ci_consent
+    )
+    assert direct.entries[profile.DECLARED].ci_named == (named,)
     cx.profile = setup_profile.confirmed(before, {profile.DECLARED: '"Lint (Ruff, Biome)"'}, by="prompt")
     cx.store.write_profile(cx.profile, previous=before)
+    assert project_ci.confirm_value(cx, fresh, '"Lint (Ruff, Biome)"', explicit=True) is None
+    assert cx.store.read_profile().entries[profile.DECLARED].ci_named == (named,)
     consent = cx.profile.entries[profile.DECLARED].ci_consent
     head, _ = ci_head(clone, "${{ inputs.n }} changed again")
     gh.pr = pr(head=head)

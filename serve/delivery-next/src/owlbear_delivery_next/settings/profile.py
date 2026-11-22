@@ -374,9 +374,7 @@ def confirm(
             if key in {DECLARED, REQUIRED}
             else old.ci_checks
         ),
-        ci_named=(
-            listed(ProfileEntry(state="known", value=value)) if key == DECLARED and value != old.value else old.ci_named
-        ),
+        ci_named=(ci_consent.parse_names(value) if key == DECLARED and value != old.value else old.ci_named),
         ci_consent=(ci_consent.confirmation(profile, old, now, consent) if key == DECLARED else old.ci_consent),
     )
     entries = {**profile.entries, key: entry}

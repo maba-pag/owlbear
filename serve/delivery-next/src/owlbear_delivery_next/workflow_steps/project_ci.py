@@ -88,13 +88,7 @@ def confirm_value(ctx: Ctx, c: Change, value: str, *, explicit: bool = False) ->
     """Keep exact-digest Change-local answers effective when their profile save fails visibly."""
     before = ctx.profile
     entry = before.entries.get(profile.DECLARED)
-    pinned = (
-        profile.listed(profile.ProfileEntry(state="known", value=value))
-        if explicit
-        else entry.ci_named
-        if entry
-        else ()
-    )
+    pinned = ci_consent.parse_names(value) if explicit else entry.ci_named if entry else ()
     confirmed = ci_consent.confirm_ci(
         before,
         value,
