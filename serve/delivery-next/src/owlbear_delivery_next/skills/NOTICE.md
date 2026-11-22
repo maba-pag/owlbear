@@ -1,7 +1,7 @@
 # Notices
 
 The skills `owlbear-interface-design` and `owlbear-design-review` contain material adapted from **Impeccable** by Paul Bakaus,
-<https://github.com/pbakaus/impeccable>, tag `skill-v4.8.0` (commit `414603bf14c7a344edb466bb1f85690c77ce8b7d`),
+<https://github.com/pbakaus/impeccable>, tag `skill-v4.10.0` (commit `b49177d32788f2dc585c42831d845dacf1ebed2c`),
 licensed under the Apache License 2.0; the licence text is in `IMPECCABLE-LICENSE`.
 
 Changes made for OwlBear Delivery: selected rules from `skill/SKILL.src.md`, `reference/craft-floor.md`,
