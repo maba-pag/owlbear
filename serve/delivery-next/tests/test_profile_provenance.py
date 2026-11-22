@@ -24,7 +24,7 @@ from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import ci_consent, profile
 from owlbear_delivery_next.state_store import briefs, profile_share
 from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
-from owlbear_delivery_next.workflow_steps import engine, follow
+from owlbear_delivery_next.workflow_steps import ci_basis, engine, follow
 
 NOW = datetime(2026, 10, 24, tzinfo=UTC)
 
@@ -215,7 +215,6 @@ def test_project_ci_redetection_keeps_consent_across_churn_but_a_mismatch_is_onl
     flows = repo / ".github/workflows"
     flows.mkdir(parents=True)
     (flows / "ci.yml").write_text("on: pull_request\njobs:\n  t:\n    uses: ./reusable.yml\n")
-    monkeypatch.setattr(profile, "provider", lambda *_a: gh)
     fresh = profile_share.checked(store, repo)
     assert fresh.entries[profile.DECLARED].ci_consent == consent
     assert ci_consent.project_ci(fresh, "release", profile.ci_entries(profile.workflows(repo))[profile.DECLARED])
@@ -416,9 +415,15 @@ def _legacy_named_recheck(shared, tmp_path, monkeypatch, raw, pr):
     assert recovered.entries[profile.DECLARED].ci_named == ("lint",)
     assert recovered.entries[profile.DECLARED].ci_consent is None
     assert store.read_profile().entries[profile.DECLARED] == recovered.entries[profile.DECLARED]
+    store.write_profile(profile.confirm(saved, "allow:install", "yes", NOW), previous=saved)
+    kept = store.read_profile()
+    assert kept.entries[profile.DECLARED].ci_named == ("lint",)
+    assert kept.entries[profile.DECLARED].ci_consent is None
     fresh = Change(slug="c2", names=Names(worktree=str(repo), target="main", pr=1))
+    admitted = ci_basis.acquire(store, Lock("c2"), fresh, saved)
+    assert admitted.entries[profile.DECLARED] == kept.entries[profile.DECLARED]
     pr = pr.model_copy(update={"head_sha": git(repo, "rev-parse", "HEAD")})
-    cx = engine.Ctx(store, Lock("c2"), repo, recovered, gh, NOW)
+    cx = engine.Ctx(store, Lock("c2"), repo, admitted, gh, NOW)
     assert follow.declared(cx, fresh, pr, StepKind.FOLLOW) == (("lint",), None)
     gh.observe_checks = lambda *_a: (Check(name="CI", status="completed", conclusion="success"),)
     cx.profile.entries[profile.REQUIRED] = profile.rule_entries(
@@ -428,9 +433,18 @@ def _legacy_named_recheck(shared, tmp_path, monkeypatch, raw, pr):
     flows = repo / ".github/workflows"
     flows.mkdir(parents=True)
     (flows / "ci.yml").write_text("on: pull_request\njobs:\n  t:\n    name: suite\n")
-    changed = profile.detect(repo, gh, recovered)
+    changed = profile.detect(repo, gh, kept)
     assert not profile.holds(saved.entries[profile.DECLARED], changed.entries[profile.DECLARED])
     assert changed.entries[profile.DECLARED].ci_named == ("lint",)
+    git(repo, "add", ".github")
+    git(repo, "commit", "-qm", "workflow churn after legacy recovery")
+    pr = pr.model_copy(update={"head_sha": git(repo, "rev-parse", "HEAD")})
+    declared, held = follow.declared(cx, fresh, pr, StepKind.FOLLOW)
+    assert (declared, held) == (("lint", "suite"), None)
+    gh.observe_checks = lambda *_a: tuple(
+        Check(name=n, status="completed", conclusion="success") for n in ("CI", "suite")
+    )
+    assert follow.ci(cx, pr, declared).missing == ("lint",)
 
 
 def _legacy_exact_recheck(shared, tmp_path, monkeypatch, pr):

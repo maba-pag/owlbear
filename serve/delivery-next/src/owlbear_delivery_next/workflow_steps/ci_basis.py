@@ -89,7 +89,7 @@ def effective(c: Change, prof: Profile) -> ProjectCiConsent | None:
         if (
             requirements(other)
             and other.ci_basis
-            and (other.ci_basis.declared is None or _project_renewal(other))
+            and other.ci_basis.declared is None
             and other.ci_basis.required is not None
         ):
             basis, at = CiBasis(declared=(), required=tuple(sorted(set(other.ci_basis.required)))), other.answer.at
@@ -180,12 +180,18 @@ def _stored_consent(store: Store, prof: Profile) -> Profile:
     old = prof.entries.get(profile.DECLARED)
     if (
         entry
-        and entry.ci_consent
+        and (entry.ci_consent or entry.ci_named)
         and (
             not old
-            or not old.ci_consent
-            or entry.ci_consent.at > old.ci_consent.at
-            or (entry.ci_consent.at == old.ci_consent.at and entry != old)
+            or (not old.ci_consent and entry != old)
+            or (
+                entry.ci_consent
+                and old.ci_consent
+                and (
+                    entry.ci_consent.at > old.ci_consent.at
+                    or (entry.ci_consent.at == old.ci_consent.at and entry != old)
+                )
+            )
         )
     ):
         return prof.model_copy(
@@ -296,7 +302,7 @@ def required_approved(c: Change, q: Question, basis: CiBasis, prof: Profile) -> 
         other.ci_basis is not None
         and (other.ci_basis.declared is None or _project_renewal(other))
         and other.ci_basis.required == basis.required
-        and (other.cause or "").startswith(("gate:publish:rules-", "gate:follow:rules-", "gate:merge:rules-"))
+        and requirements(other)
         and other.answer is not None
         and other.answer.option == "yes"
         and other.answer.superseded_at is None
