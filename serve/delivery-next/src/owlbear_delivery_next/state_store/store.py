@@ -42,6 +42,7 @@ from owlbear_delivery_next.state_store.layers import (  # noqa: F401 - re-export
     read_layer_bytes,
     update_layer,
 )
+from owlbear_delivery_next.state_store.profile_errors import SharedError
 
 if TYPE_CHECKING:
     import sqlite3
@@ -70,13 +71,6 @@ class Holder(Record):
 
 
 __all__ = ["FormatTooNewError", "StoreError"]  # defined with the database, raised by every store operation
-
-
-class SharedError(StoreError):
-    """The shared settings repository could not be locked or found for a save (TD-57)."""
-
-    action = "Check the shared settings repository, then try again"
-    resume = "A settings save completes"
 
 
 class RoleSourceError(StoreError):
@@ -297,14 +291,18 @@ class Store:
         return profile_share.read(self)
 
     def write_profile(
-        self, profile: Profile, *, replace_unreadable: bool = False, basis: profile_share.Basis | None = None
+        self,
+        profile: Profile,
+        *,
+        replace_unreadable: bool = False,
+        basis: profile_share.Basis | None = None,
+        previous: Profile | None = None,
     ) -> str:
-        """Write the project profile atomically, published when shared (TD-147); the publication notice.
-
-        *basis* is what the owner's repair confirmed the replacement against (see ``profile_share.write``).
-        """
+        """Write and publish the profile against *previous* or the repair *basis* (``profile_share.write``)."""
         try:
-            return profile_share.write(self, profile, replace_unreadable=replace_unreadable, basis=basis)
+            return profile_share.write(
+                self, profile, replace_unreadable=replace_unreadable, basis=basis, previous=previous
+            )
         except data_repo.DataRepoError as exc:
             raise SharedError(failure(exc)) from exc
 

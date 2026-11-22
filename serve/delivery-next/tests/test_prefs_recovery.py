@@ -502,7 +502,7 @@ def test_setup_repair_with_a_pending_guard_keeps_the_pending_marker(
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
     monkeypatch.setattr(readiness, "check", lambda *_a: [])
-    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    monkeypatch.setattr(profile, "detect", lambda *_a: Profile(version=1))
     store = Store.open(repo)
     store.root.mkdir(parents=True, exist_ok=True)
     (store.root / "profile.json").write_text(UNREADABLE % "pending")
@@ -518,7 +518,7 @@ def test_a_confirmed_repair_of_an_unreadable_done_local_profile_keeps_the_guard(
 ) -> None:
     monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
     monkeypatch.setattr(readiness, "check", lambda *_a: [])
-    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    monkeypatch.setattr(profile, "detect", lambda *_a: Profile(version=1))
     store = Store.open(repo)
     store.root.mkdir(parents=True, exist_ok=True)
     (store.root / profile_share.PROFILE).write_text(UNREADABLE % "done")
@@ -537,7 +537,7 @@ def shared_project(repo: Path, shared_repo, monkeypatch) -> Store:
     data, _remote = shared_repo
     monkeypatch.setenv("OWLBEAR_DATA", str(data))
     monkeypatch.setattr(readiness, "check", lambda *_a: [])
-    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    monkeypatch.setattr(profile, "detect", lambda *_a: Profile(version=1))
     store = Store.open(repo)
     assert store.shared is not None
     store.root.mkdir(parents=True, exist_ok=True)
@@ -548,7 +548,7 @@ def shared_project(repo: Path, shared_repo, monkeypatch) -> Store:
 def repair_store(request, repo: Path, monkeypatch) -> Store:
     monkeypatch.setattr(config, "BASE", None)
     monkeypatch.setattr(readiness, "check", lambda *_a: [])
-    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    monkeypatch.setattr(profile, "detect", lambda *_a: Profile(version=1))
     if request.param == "shared":
         return shared_project(repo, request.getfixturevalue("shared_repo"), monkeypatch)
     store = Store.open(repo)
@@ -667,7 +667,7 @@ def test_shared_repair_success_lets_a_fresh_open_and_readiness_run_with_the_publ
     assert (store.root / profile_share.ROLES_MOVED).exists()
     assert not store.config_path.exists()
     # As the real detection, keep the previous profile and its guard.
-    monkeypatch.setattr(setup.profile, "detect", lambda _repo, _gh, prev: prev)
+    monkeypatch.setattr(profile, "detect", lambda _repo, _gh, prev: prev)
     checks = readiness.ready(fresh, repo, carry=True)
     assert len(carried_runs) == 1  # the host start's legacy import ran, and it reported no failure
     assert [check for check in checks if not check.ok] == []
@@ -684,7 +684,7 @@ def test_profile_role_write_refusal_precedes_probe_and_profile_save(
     source = store.root / profile_share.PROFILE
     raw = '{"format": 1, "roles": {"reviewer": {"model": "r-1", "effort": "max"}}}'
     source.write_text(raw)
-    monkeypatch.setattr(setup.profile, "detect", lambda *_a: pytest.fail("no probe before the role write succeeds"))
+    monkeypatch.setattr(profile, "detect", lambda *_a: pytest.fail("no probe before the role write succeeds"))
     monkeypatch.setattr(readiness, "check", lambda *_a: pytest.fail("the refusal must come before the probe"))
     monkeypatch.setattr(Store, "write_profile", lambda *_a, **_k: pytest.fail("no profile write before the roles"))
 
@@ -723,7 +723,7 @@ def probed_repair(monkeypatch) -> list[str]:
         calls.append("write")
         return ""
 
-    monkeypatch.setattr(setup.profile, "detect", detect)
+    monkeypatch.setattr(profile, "detect", detect)
     monkeypatch.setattr(Store, "write_profile", write)
     return calls
 
@@ -1187,7 +1187,7 @@ def test_an_unreadable_profile_s_whole_error_is_said_before_its_replacement_is_o
     """#971: setup names the profile read's whole error, its type and notes too, when it offers a replacement."""
     monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
     monkeypatch.setattr(readiness, "check", lambda *_a: [])
-    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    monkeypatch.setattr(profile, "detect", lambda *_a: Profile(version=1))
     store = Store.open(repo)
     store.root.mkdir(parents=True, exist_ok=True)
     (store.root / profile_share.PROFILE).write_text('{"format": 1, "models": {}}')

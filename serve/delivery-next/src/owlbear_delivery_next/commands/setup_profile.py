@@ -7,12 +7,13 @@ from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.settings import ci_consent, profile
 from owlbear_delivery_next.state_store import profile_repair, profile_share, roles_move
 from owlbear_delivery_next.state_store.profile_errors import (
     OldProfileUnreadableError,
     SharedSyncError,
     SourceChangedError,
+    TargetChangedError,
 )
 from owlbear_delivery_next.state_store.store import RoleSourceError, StoreError
 
@@ -42,7 +43,7 @@ def render(prof: Profile) -> str:
     for state in ("known", "unknown", "unsupported"):
         found = [(k, e) for k, e in sorted(prof.entries.items()) if e.state == state]
         lines += [f"  {state}:"] * bool(found)
-        lines += [f"    {k} = {e.value!r} ({e.evidence})" for k, e in found]
+        lines += [f"    {k} = {profile.value(prof, k)!r} ({e.evidence})" for k, e in found]
     return "\n".join(lines)
 
 
@@ -56,7 +57,7 @@ def confirm(prof: Profile, ask: Ask, *, yes: bool) -> tuple[Profile, list[str]]:
             and not yes
             and (value := ask(f"{key} is unknown ({e.evidence}). Value you confirm: "))
         ):
-            prof = profile.confirm(prof, key, value, now)
+            prof = ci_consent.confirm_explicit(prof, key, value, now)
     unknown = [k for k, e in prof.entries.items() if e.state == "unknown" and k not in profile.SETTINGS]
     if not (yes or ask("Confirm this profile? [y/N] ").lower().startswith("y")):
         return prof.model_copy(update={"confirmed_at": None}), unknown
@@ -67,7 +68,7 @@ def confirmed(prof: Profile, values: dict[str, str], *, by: str) -> Profile:
     """*prof* with the owner's *values* for unknown entries and his confirmation, recorded as given *by*."""
     now = datetime.now(UTC)
     for key, value in sorted(values.items()):
-        prof = profile.confirm(prof, key, value, now)
+        prof = ci_consent.confirm_explicit(prof, key, value, now)
     mark = ProfileEntry(state="known", value=by, evidence=f"owner confirmed {now:%Y-%m-%d}")
     entries = {**prof.entries, "setup:confirmed-by": mark}
     return prof.model_copy(update={"entries": entries, "confirmed_at": now, "version": prof.version + 1})
@@ -144,10 +145,15 @@ def detect(repo: Path, prev: Profile | None, writer: Writer) -> Profile:
 
 def keep(store: Store, prof: Profile, found: Saved, say: Callable[[str], object]) -> bool:
     """Save the confirmed *prof* over what ``saved`` found; False after saying why it was kept for the next setup."""
-    _, unreadable, source, target = found
+    previous, unreadable, source, target = found
     if source:
         return publish_repair(store, profile_repair.stage(store, prof, source, target), say, resumed=False)
-    if notice := store.write_profile(prof, replace_unreadable=unreadable):  # saved here, not yet published
+    try:
+        notice = store.write_profile(prof, replace_unreadable=unreadable, previous=previous or Profile())
+    except TargetChangedError as exc:
+        say(str(exc))
+        return False
+    if notice:
         say(notice)
         return False
     return True
