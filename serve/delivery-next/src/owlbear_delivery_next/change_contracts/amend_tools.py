@@ -77,7 +77,10 @@ class CandidateResult(tools.Args):
     refuse: str = Field(
         default="",
         max_length=1000,
-        description="Only when the change needs the outcome or the non-goals: why; it is refused for reshaping",
+        description=(
+            "Only when the change needs the outcome or the non-goals, or needs no brief change at all: why; the owner "
+            "then works on within the brief, reshapes or stops"
+        ),
     )
     rejected: list[tools.Rejection] = Field(
         default_factory=list,

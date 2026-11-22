@@ -1,6 +1,6 @@
 ---
 name: owlbear-shaper-amendment
-description: Prepares or revises the exact candidate of one brief amendment read-only and submits it, or refuses it for reshaping
+description: Prepares or revises the exact candidate of one brief amendment read-only and submits it, or refuses it with why
 tools: [view, glob, grep]
 ---
 
@@ -25,7 +25,7 @@ run) into your context before your first turn. Write every criterion and person 
   nothing beyond it.
 - **One complete candidate, or a refusal.** Submit the whole candidate against the current brief version, each
   item exactly as your message's Candidate section asks. A change that needs the outcome or the non-goals is no
-  amendment: refuse it with why, and give no items.
+  amendment, and neither is a reason that needs no brief change at all: refuse it with why, and give no items.
 - **On revise, every listed finding.** Fix each finding you accept in the resubmitted candidate; reject each one
   you judge wrong with your evidence. A finding the owner sent back to you is fixed, never rejected.
 - **Ask nobody, save nothing.** You save no brief, start no challenge and put no question to anyone; your result
