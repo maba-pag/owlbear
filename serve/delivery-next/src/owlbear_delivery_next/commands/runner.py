@@ -111,20 +111,26 @@ _out = sessions.out
 _kept = held.kept_session
 
 
+def _integrated(store: Store, lock: Lock, change: Change, path: Path, now: datetime) -> bool:
+    """Apply the integration start gate, then finish a no-op through the completed Builder task's exit."""
+    task = next((t for t in change.plan.tasks if t.id == change.step.task), None) if change.plan else None
+    if (finished := overlap.starting(change, task) or engine.completed_integration(change, path)) is None:
+        return False
+    store.write(lock, loop.apply(change, finished, now))
+    return True
+
+
 def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noqa: C901, PLR0915 - session lifecycle
     now, s, slug = datetime.now(UTC), change.step, change.slug
     if held.settled(store, lock, change) or (profile := project_checks.profile_for(store, lock, change, repo)) is None:
         return  # its result is recorded already (RUN-04), or the owner settles the project's checks first (#968)
     path = worktree.ensure(repo, git_common_dir(repo), slug, change.names.branch, change.names.target)
     change.names.worktree = str(path)
-    if worker_questions.continued(store, lock, change, path):
+    if worker_questions.continued(store, lock, change, path) or _integrated(store, lock, change, path, now):
         return
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     curated = change.tests is not None and s.kind == StepKind.BUILD and s.task == CURATE  # the curator's (TD-339)
     role = roles.chosen(settings := store.settings(), session := curation_build.LABEL if curated else s.kind)
-    if stopped := overlap.starting(change, task):
-        store.write(lock, loop.apply(change, stopped, now))
-        return
     look_limit = watched.needed(
         settings
     )  # before anything is recorded: an unset Spotter setting asks, leaving no open span

@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.repair_records import Repair
 
 CI_LOG, AMENDMENT_EXIT, MERGE_BASIS, PLAN_CUT = 1310, 1312, 1342, 1361
+INTEGRATION_DONE = 1373
 LENGTH_REJECTION = 1374
 CHECK_SUSPICION = 1376
 # Travels with actual fixes, never inferred from version order.
@@ -24,6 +25,7 @@ FIXED = (
     AMENDMENT_EXIT,
     MERGE_BASIS,
     PLAN_CUT,
+    INTEGRATION_DONE,
     LENGTH_REJECTION,
     CHECK_SUSPICION,
 )
@@ -131,7 +133,13 @@ def _repair(c: Change) -> int | None:
         )
         plan = issue == PLAN_CUT and c.step.kind == StepKind.PLAN and c.step.mode == plan_rounds.CHALLENGE
         length = issue == LENGTH_REJECTION and r.cause.startswith("result:")
-        if amendment or ci or (plan and not c.amending) or length:
+        integration = (
+            issue == INTEGRATION_DONE
+            and c.step.kind == StepKind.PLAN
+            and c.plan
+            and any(t.origin == "integration" and not t.done for t in c.plan.tasks)
+        )
+        if amendment or ci or (plan and not c.amending) or length or integration:
             return issue
     return None
 
@@ -162,6 +170,8 @@ def action(c: Change, remedy: int) -> str:
         return f"Run the {c.step.kind} step again"
     if remedy == PLAN_CUT:
         return "Challenge the whole plan again"
+    if remedy == INTEGRATION_DONE:
+        return "Finish the merge task and continue"
     return "Refresh CI evidence and run the build again"
 
 
@@ -183,7 +193,7 @@ def pending_ci(c: Change) -> Repair | None:
 
 
 def consume(c: Change, item: Recovery, *, unchanged: bool) -> None:
-    """Recheck the queued stop and fix against the code actually folding the owner's action."""
+    """Recheck the queued remedy; an already-contained integration resumes its retained plan, not planning."""
     if c.stop is None or (item.stop_at is not None and item.stop_at != c.stop.at):
         return
     if item.remedy is None:
@@ -207,8 +217,12 @@ def consume(c: Change, item: Recovery, *, unchanged: bool) -> None:
         r.phase, r.stopped = "running", ""
         c.stop = None
         c.outcome = Outcome(exit=Exit.RETRY, cause=r.cause, reason="judging the kept fix again", at=item.at)
+        return
+    r.recovered_plan = c.plan.version if c.plan else None
+    c.budgets.causes.pop(r.cause, None)
+    if remedy == INTEGRATION_DONE:
+        task = next(t for t in c.plan.tasks if t.origin == "integration" and not t.done)
+        moves.go(c, StepKind.BUILD, task.id)
     else:
-        r.recovered_plan = c.plan.version if c.plan else None
-        c.budgets.causes.pop(r.cause, None)
         moves.go(c, c.step.kind, c.step.task, c.step.mode)
-        c.stop = c.outcome = None
+    c.stop = c.outcome = None

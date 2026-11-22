@@ -41,7 +41,16 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_contracts.round_records import LeftOpen, RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_flow import asking, budgets, delivery_target, loop, round_flow, stuck, worktree
+from owlbear_delivery_next.change_flow import (
+    asking,
+    budgets,
+    delivery_target,
+    loop,
+    repair_recovery,
+    round_flow,
+    stuck,
+    worktree,
+)
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner, setup_profile
 from owlbear_delivery_next.git import access as git_access
@@ -4166,3 +4175,52 @@ def _profile_error_after_activity(cx, monkeypatch, whole_error):
         api.create_app(cx.store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
     )
     assert client.get("/api/next/changes/c1").json()["diagnostics"][0]["reason"] == whole_error
+
+
+def test_an_already_contained_integration_finishes_cleanly_without_a_build_commit(clone, monkeypatch):
+    c = change(StepKind.BUILD, worktree=str(clone))
+    c.step.task = "t1"
+    built = tools.BuildResult(summary="nothing to merge", checks=[])
+    assert engine.completed_integration(c, clone) is None
+    assert any("no commit" in error for error in tools.check_build(built, worktree.observe(clone, "main", A), []))
+    c.plan.tasks[0].done = True
+    c = loop.apply(c, engine.integrate(c, StepKind.BUILD, "origin/main"), NOW)
+    task = c.plan.tasks[-1]
+    git(clone, "update-ref", "refs/remotes/origin/main", "HEAD")
+    (clone / "untracked").write_text("unfinished work")
+    assert engine.completed_integration(c, clone) is None
+    (clone / "untracked").unlink()
+    git(clone, "commit", "-q", "--allow-empty", "-m", "target work")
+    target = git(clone, "rev-parse", "HEAD")
+    git(clone, "update-ref", "refs/remotes/origin/main", target)
+    git(clone, "reset", "-q", "--hard", A)
+    assert engine.completed_integration(c, clone) is None
+    git(clone, "merge", "-q", "--ff-only", "origin/main")
+    other = loop.apply(c, engine.integrate(c, StepKind.BUILD, "origin/owlbear/c1"), NOW)
+    git(clone, "commit", "-q", "--allow-empty", "-m", "remote Change branch work")
+    git(clone, "update-ref", "refs/remotes/origin/owlbear/c1", "HEAD")
+    git(clone, "reset", "-q", "--hard", target)
+    assert engine.completed_integration(other, clone) is None
+    assert engine.completed_integration(c, clone).exit == Exit.DONE
+    c.step.session = "unsettled-merge-report"
+    assert engine.completed_integration(c, clone) is None
+    c.step = Step(kind=StepKind.PLAN)
+    stuck.start(c, "project-env:plan:setup", "no valid build task", NOW)
+    c.repairs.current.defect = "filed https://github.com/maba-pag/owlbear/issues/1373"
+    stuck.stopped(c, "nothing to fix", NOW)
+    c.stop.runtime, c.stop.fixed_defects = "v1.311", [1310, 1312, 1342, 1361]
+    monkeypatch.setattr(repair_recovery.codebase, "release", lambda: "v1.312")
+    remedy = repair_recovery.offered(c)
+    assert remedy == repair_recovery.INTEGRATION_DONE
+    label = repair_recovery.action(c, remedy)
+    c = loop.fold(c, [Recovery(at=NOW, stop_at=c.stop.at, action=label, remedy=remedy)], NOW)
+    assert (c.step.kind, c.step.task, c.stop, c.outcome) == (StepKind.BUILD, task.id, None, None)
+    task = c.plan.tasks[-1]
+    task.base = target
+    result = engine.completed_integration(c, clone)
+    assert result.exit == Exit.DONE
+    finished = loop.apply(c, result, NOW)
+    assert all(t.done for t in finished.plan.tasks)
+    assert (finished.step.kind, finished.step.task, finished.step.mode) == (StepKind.REVIEW, None, "final")
+    assert git(clone, "rev-parse", "HEAD") == target
+    assert any("no commit" in error for error in tools.check_build(built, worktree.observe(clone, "main", target), []))
