@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 import uvicorn
 from fastapi.testclient import TestClient
+from playwright.sync_api import expect
 
 from owlbear_decisions import Decision, Origin, Scope, State, new_id, write
 from owlbear_delivery_next.change_contracts import models as m
@@ -135,8 +136,6 @@ STAGES = ["Shape", "Plan", "Build", "Final review", "Publish", "Visual check", "
 
 def agreed(brief: Any) -> None:
     """The outcome comes first; the owner's decisions, the shaper's choices and what is out fold under their counts."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     expect(brief.locator(":scope > *").first).to_have_text("Visitors flip the hero image with one button.")
     folds = brief.locator(":scope > section > details > summary")
     expect(folds).to_have_text(  # the decisions picked fold too, shown with the details
@@ -162,8 +161,6 @@ def agreed(brief: Any) -> None:
 
 @pytest.mark.browser
 def test_the_agreement_keeps_details_collapsed_and_the_approved_brief_lists_the_owners_additions(page_url, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     with opened(base, "flip", pds, details=True) as page:  # the decisions picked show with the details
         expect(page.locator("ol.stepper > li > span > span:first-child")).to_have_text(STAGES)
@@ -243,8 +240,6 @@ def shared_url(tmp_path: Path, shared_repo) -> Iterator[tuple[str, dict[str, Dec
 
 @pytest.mark.browser
 def test_picked_decisions_group_by_scope_and_link(shared_url, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     base, rules = shared_url
     with opened(base, "flip", pds) as page:
         expect(page.get_by_text("This version follows 5 decisions.")).to_be_visible()  # details off: one line
@@ -300,8 +295,6 @@ def test_an_unavailable_decision_list_is_said(c1, monkeypatch, case: str) -> Non
 
 @pytest.mark.browser
 def test_a_planned_change_folds_its_plan_with_the_current_task_outside(page_url, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     built = change().model_copy(update={"step": m.Step(kind=m.StepKind.BUILD)})
     built.brief = built.brief.model_copy(update={"approved_version": 2, "approved_at": NOW})
@@ -348,8 +341,6 @@ def test_a_planned_change_folds_its_plan_with_the_current_task_outside(page_url,
 
 @pytest.mark.browser
 def test_an_unreviewed_last_revision_is_approved_only_once_the_owner_ticks_that_he_accepts_it(page_url, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     tail = change().model_copy(update={"slug": "tail"})
     said = "AC-2: the empty state has no check, so a list that renders nothing at all would pass every check we run"
@@ -380,8 +371,6 @@ def test_an_unreviewed_last_revision_is_approved_only_once_the_owner_ticks_that_
 
 @pytest.mark.browser
 def test_the_changes_tool_calls_show_under_its_spend_most_called_first(page_url, pds) -> None:  # C-28 T8
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     stored = ToolUse().plus({"ask_question": {"calls": 99}})  # the page reads the ledger, never the stored tally
     store.write(Lock("used"), change().model_copy(update={"slug": "used", "tool_use": stored}))
@@ -448,8 +437,6 @@ def asking() -> m.Change:
 @pytest.mark.browser
 def test_an_answer_being_typed_survives_polls_that_bring_new_activity_and_is_sent(page_url, pds) -> None:
     """TD-264: the answer's draft lives in page state; a poll with new data renders the detail again around it."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     store.write(Lock("greet"), asking())
     with opened(base, "greet", pds, details=True) as page:
@@ -475,8 +462,6 @@ def test_an_answer_being_typed_survives_polls_that_bring_new_activity_and_is_sen
 @pytest.mark.browser
 def test_a_clarification_is_sent_only_with_the_owners_confirmed_statement(page_url, pds) -> None:
     """TD-461: the owner classes his answer; a clarification carries his intent in two lines, which he confirms."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     store.write(Lock("greet"), asking())
     with opened(base, "greet", pds) as page:
@@ -503,8 +488,6 @@ def test_a_clarification_is_sent_only_with_the_owners_confirmed_statement(page_u
 @pytest.mark.browser
 def test_a_second_answer_while_one_waits_is_refused_beside_the_form(page_url, pds) -> None:
     """#791: the page keeps the form while an answer waits for the runner; a second one is refused where it was sent."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     store.write(Lock("greet"), asking())
     store.put_inbox("greet", AnswerItem(at=NOW, question="q1", option="de", classed="event"))
@@ -520,8 +503,6 @@ def test_a_second_answer_while_one_waits_is_refused_beside_the_form(page_url, pd
 @pytest.mark.browser
 def test_an_answer_the_change_no_longer_waits_on_is_refused_and_the_reason_stays(page_url, pds) -> None:
     """#914: the page still showed the question when the Change moved on; the refusal outlives its form."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     store.write(Lock("greet"), asking())
     stale: dict[str, str] = {}
@@ -569,8 +550,6 @@ def test_an_answer_the_change_no_longer_waits_on_is_refused_and_the_reason_stays
 @pytest.mark.browser
 def test_an_option_the_question_no_longer_offers_is_not_sent(page_url, left, pds) -> None:
     """Sol, TD-264: a choice dropped from the question by a later poll leaves the draft too, even with none left."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     store.write(Lock("greet"), asking())
     with opened(base, "greet", pds) as page:
@@ -608,8 +587,6 @@ def test_a_bare_pick_of_the_workers_own_option_is_sent_as_an_event(page_url, pds
 @pytest.mark.browser
 def test_a_card_names_the_files_its_activity_touches_without_their_paths(page_url, pds) -> None:
     """The card is a summary: a tool's path shows as its file's name; the detail keeps the whole path."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     _, base = page_url
 
     now = {"now": "", "progress": None, "outcome": None}
@@ -651,8 +628,6 @@ def test_a_shaping_rows_next_action_says_whether_the_owner_approves_or_the_shapi
 ) -> None:
     """The card says the next action and reads by its title, the slug standing in while it has none; choosing another
     Change and going back keeps the address and the list."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     waits = m.Outcome(exit=m.Exit.PENDING, waiting=m.Waiting.CHAT, who="you", reason="approve brief v2", at=NOW)
     store.write(Lock("flip"), change().model_copy(update={"outcome": waits}))  # v2 challenged: the owner approves it
@@ -690,8 +665,6 @@ def test_a_shaping_rows_next_action_says_whether_the_owner_approves_or_the_shapi
 @pytest.mark.browser
 def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_counted(page_url, pds, whole_error) -> None:
     """C4: the display only; the activity file keeps every event as recorded. A force-stop reason shows whole (#951)."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     stopped = f"runtime stop failed: RuntimeError: {whole_error}"
     events = [
@@ -799,8 +772,6 @@ def launched(base: str, pds: Any) -> Iterator[Any]:
 def test_the_owner_reruns_a_stopped_step_after_confirming_what_follows(page_url, pds, case, monkeypatch) -> None:
     """#754: the Stopped notice offers "Done: run the step again" unless a liveness check holds the stop or a setting
     is unset (D-01M61SBWK4VE4MNTD35TR0VPS8)."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     if case.startswith("inventory-"):
         inventory_recovery_browser(page_url, pds, case, monkeypatch, expect)
@@ -925,8 +896,6 @@ def inventory_recovery_browser(page_url, pds, case, monkeypatch, expect):
 def test_a_deadline_stop_names_who_timed_out_and_its_rerun_runs_only_once_confirmed(page_url, pds) -> None:
     """The c8 shape: the builder's and then the repairer's own time limit, each with its limit as set now; opening
     and cancelling the confirmation keeps the Change stopped and sends nothing, confirming sends one recovery."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     c = deadline_stopped("flip")
     store.write(Lock("flip"), c)
@@ -978,8 +947,6 @@ def test_a_deadline_stop_names_who_timed_out_and_its_rerun_runs_only_once_confir
 
 @pytest.mark.browser
 def test_a_stop_that_changed_since_the_page_showed_it_is_not_cleared(page_url, pds) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     store, base = page_url
     store.write(Lock("flip"), stopped("stopped"))
     with launched(base, pds) as page:
@@ -998,8 +965,6 @@ def test_a_stop_that_changed_since_the_page_showed_it_is_not_cleared(page_url, p
 
 @pytest.mark.browser
 def test_a_refused_approval_shows_its_whole_reason(page_url, pds, monkeypatch, whole_error) -> None:
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     def unavailable(*_args, **_kwargs):
         error = decision_store.DecisionsUnavailable(whole_error)
         error.add_note("NOTE-MARK")
