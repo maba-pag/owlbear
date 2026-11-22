@@ -158,21 +158,21 @@ def _kept_fix(r: Repair) -> bool:
     )
 
 
+LABELS = {
+    CHECK_SUSPICION: "Judge the kept fix again",
+    MERGE_BASIS: "Recheck merge checks and continue",
+    PLAN_CUT: "Challenge the whole plan again",
+    INTEGRATION_DONE: "Finish the merge task and continue",
+}
+
+
 def action(c: Change, remedy: int) -> str:
     """The continuation the page can execute, not a generic parent-step rerun."""
-    if remedy == CHECK_SUSPICION:
-        return "Judge the kept fix again"
-    if remedy == MERGE_BASIS:
-        return "Recheck merge checks and continue"
     if remedy == AMENDMENT_EXIT and c.amending:
         return f"Continue amendment {c.amending.id}"
     if remedy == LENGTH_REJECTION:
         return f"Run the {c.step.kind} step again"
-    if remedy == PLAN_CUT:
-        return "Challenge the whole plan again"
-    if remedy == INTEGRATION_DONE:
-        return "Finish the merge task and continue"
-    return "Refresh CI evidence and run the build again"
+    return LABELS.get(remedy, "Refresh CI evidence and run the build again")
 
 
 def pending_ci(c: Change) -> Repair | None:
@@ -217,12 +217,12 @@ def consume(c: Change, item: Recovery, *, unchanged: bool) -> None:
         r.phase, r.stopped = "running", ""
         c.stop = None
         c.outcome = Outcome(exit=Exit.RETRY, cause=r.cause, reason="judging the kept fix again", at=item.at)
-        return
-    r.recovered_plan = c.plan.version if c.plan else None
-    c.budgets.causes.pop(r.cause, None)
-    if remedy == INTEGRATION_DONE:
-        task = next(t for t in c.plan.tasks if t.origin == "integration" and not t.done)
-        moves.go(c, StepKind.BUILD, task.id)
     else:
-        moves.go(c, c.step.kind, c.step.task, c.step.mode)
-    c.stop = c.outcome = None
+        r.recovered_plan = c.plan.version if c.plan else None
+        c.budgets.causes.pop(r.cause, None)
+        if remedy == INTEGRATION_DONE:
+            task = next(t for t in c.plan.tasks if t.origin == "integration" and not t.done)
+            moves.go(c, StepKind.BUILD, task.id)
+        else:
+            moves.go(c, c.step.kind, c.step.task, c.step.mode)
+        c.stop = c.outcome = None
