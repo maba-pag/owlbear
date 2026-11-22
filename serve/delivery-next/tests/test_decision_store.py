@@ -384,10 +384,7 @@ def require_current_revisions(shared, second, draft, old, remote):
     assert git(second.root, "status", "--porcelain", "--untracked-files=all") == ""
 
 
-@pytest.mark.parametrize("race", [False, True])
-def test_two_checkouts_require_current_revisions_and_owner_resolution(
-    shared_repo, shared, tmp_path, monkeypatch, race
-) -> None:
+def test_two_checkouts_require_current_revisions(shared_repo, shared, tmp_path) -> None:
     remote = shared_repo[1]
     draft = make(state=State.DRAFT)
     receipt = save(shared, draft, expected_revision=None, message="decisions: a draft")
@@ -405,6 +402,12 @@ def test_two_checkouts_require_current_revisions_and_owner_resolution(
     assert receipt.commit == git(shared.root, "rev-parse", "HEAD") == git(remote, "rev-parse", "main")
     second = checkout(tmp_path / "owlbear data", remote)
     require_current_revisions(shared, second, draft, old, remote)
+
+
+@pytest.mark.parametrize("race", [False, True])
+def test_two_checkouts_conflict_until_the_owner_resolves_it(shared_repo, shared, tmp_path, monkeypatch, race) -> None:
+    remote = shared_repo[1]
+    old, second = held(shared, remote, tmp_path / "owlbear data")
     one, two = replacing(old, title="Notes in one table"), replacing(old, title="Notes in two tables")
 
     first_said = save(shared, one, expected_revision=None, message="decisions: one")
