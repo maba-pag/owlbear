@@ -16,7 +16,15 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.repair_records import Repair
 
 CI_LOG, AMENDMENT_EXIT, MERGE_BASIS, PLAN_CUT = 1310, 1312, 1342, 1361
-FIXED = (CI_LOG, AMENDMENT_EXIT, MERGE_BASIS, PLAN_CUT)  # travels with actual fixes, never inferred from version order
+LENGTH_REJECTION = 1374
+# Travels with actual fixes, never inferred from version order.
+FIXED = (
+    CI_LOG,
+    AMENDMENT_EXIT,
+    MERGE_BASIS,
+    PLAN_CUT,
+    LENGTH_REJECTION,
+)
 LEGACY = {
     "91b09919eb68085ecbcbabaf3ff9604cd27d898f6697ca168296f1f4ea269c22": (1310, "v1.279"),
     "94031b7acb33968ff62c895b8d03bc83786b9eb087e0a254ec928a7ef8834d74": (1312, "v1.284"),
@@ -118,7 +126,8 @@ def _repair(c: Change) -> int | None:
             and not task.done
         )
         plan = issue == PLAN_CUT and c.step.kind == StepKind.PLAN and c.step.mode == plan_rounds.CHALLENGE
-        if amendment or ci or (plan and not c.amending):
+        length = issue == LENGTH_REJECTION and r.cause.startswith("result:")
+        if amendment or ci or (plan and not c.amending) or length:
             return issue
     return None
 
@@ -129,6 +138,8 @@ def action(c: Change, remedy: int) -> str:
         return "Recheck merge checks and continue"
     if remedy == AMENDMENT_EXIT and c.amending:
         return f"Continue amendment {c.amending.id}"
+    if remedy == LENGTH_REJECTION:
+        return f"Run the {c.step.kind} step again"
     if remedy == PLAN_CUT:
         return "Challenge the whole plan again"
     return "Refresh CI evidence and run the build again"

@@ -37,7 +37,9 @@ def test_each_recorded_oversized_goal_now_passes_or_says_what_to_cut(session, le
         assert then == 1000
     else:
         assert result is None
-        assert errors == [f"tasks[0].goal: {length} characters, at most 3000 - {GOAL}"]
+        assert errors == [
+            f"tasks[0].goal: {length} characters, at most 3000 - cut at least {length - 3000 + 300}: {GOAL}"
+        ]
 
 
 @pytest.mark.parametrize(
@@ -47,8 +49,8 @@ def test_each_recorded_oversized_goal_now_passes_or_says_what_to_cut(session, le
             tools.BuildResult,
             {"summary": "s" * 2412, "checks": []},
             (
-                "summary: 2412 characters, at most 2000 - say what changed and why in a few sentences; the "
-                "commit shows the rest"
+                "summary: 2412 characters, at most 2000 - cut at least 612: say what changed and why in a few "
+                "sentences; the commit shows the rest"
             ),
         ),
         (
@@ -59,12 +61,12 @@ def test_each_recorded_oversized_goal_now_passes_or_says_what_to_cut(session, le
         (
             tools.BuildResult,
             {"summary": "s", "checks": [{"command": "x" * 16001, "exit_code": 0}]},
-            "checks[0].command: 16001 characters, at most 16000 - shorten it",
+            "checks[0].command: 16001 characters, at most 16000 - cut at least 1601: shorten it",
         ),
         (
             tools.BuildResult,
             {"summary": "s", "checks": [], "response": {"how": "answered", "text": "y" * 3001}},
-            "response.text: 3001 characters, at most 3000 - shorten it",
+            "response.text: 3001 characters, at most 3000 - cut at least 301: shorten it",
         ),
         (
             tools.PlanResult,
@@ -84,7 +86,7 @@ def test_each_recorded_oversized_goal_now_passes_or_says_what_to_cut(session, le
         (
             tools.ReviewResult,
             {"verdict": "fix", "findings": [{"place": "p", "problem": "x", "fix": "f"}, {"place": "p" * 301}]},
-            "findings[1].place: 301 characters, at most 300 - shorten it",
+            "findings[1].place: 301 characters, at most 300 - cut at least 31: shorten it",
         ),
         (
             tools.WrongPremise,
