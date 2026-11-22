@@ -155,8 +155,10 @@ def completed_integration(c: Change, path: Path) -> StepResult | None:
         return None
     ref = task.title.partition(" into this branch ")[0].removeprefix("Merge ")
     expected = f"Merge {ref} into this branch with `git merge {ref}`, resolve any conflicts, run the checks, commit"
-    if task.title != expected:
-        return None  # only the engine's merge instruction binds the ref, including persisted pre-fix tasks
+    if task.title != expected or (task.base is not None and task.base != head(path)):
+        # only the engine's merge instruction binds the ref, including persisted pre-fix tasks; a commit made since
+        # the task began is its own session's merge, whose report still has to be judged
+        return None
     target = worktree.git(path, "rev-parse", f"{ref}^{{commit}}").strip()
     if not contains(path, target) or worktree.git(path, "status", "--porcelain", "--untracked-files=all").strip():
         return None

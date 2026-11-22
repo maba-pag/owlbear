@@ -4216,6 +4216,8 @@ def test_an_already_contained_integration_finishes_cleanly_without_a_build_commi
     c = loop.fold(c, [Recovery(at=NOW, stop_at=c.stop.at, action=label, remedy=remedy)], NOW)
     assert (c.step.kind, c.step.task, c.stop, c.outcome) == (StepKind.BUILD, task.id, None, None)
     task = c.plan.tasks[-1]
+    task.base = A  # a merge its own session committed keeps the report gate
+    assert engine.completed_integration(c, clone) is None
     task.base = target
     result = engine.completed_integration(c, clone)
     assert result.exit == Exit.DONE
