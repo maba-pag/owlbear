@@ -140,12 +140,13 @@ def _kept_fix(r: Repair) -> bool:
     """An old pattern-only refusal with a kept patch, not a concrete weakening or another stop."""
     prefix = "its fix weakens a check, which Delivery never applies: "
     suffix = " (removes an assertion or test)"
+    said = r.stopped.removesuffix(f". OwlBear defect issue: {r.defect}") if r.defect else r.stopped
     return bool(
         r.fix == "patch"
         and r.phase == "stopped"
         and r.commit
-        and r.stopped.startswith(prefix)
-        and all(p.endswith(suffix) and p.removesuffix(suffix) for p in r.stopped[len(prefix) :].split(", "))
+        and said.startswith(prefix)
+        and all(p.endswith(suffix) and p.removesuffix(suffix) for p in said[len(prefix) :].split(", "))
     )
 
 

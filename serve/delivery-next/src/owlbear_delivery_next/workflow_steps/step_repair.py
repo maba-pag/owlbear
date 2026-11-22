@@ -13,29 +13,17 @@ an issue (``defect_issue``).
 
 from __future__ import annotations
 
-import tomllib
 from datetime import UTC, datetime
-from traceback import format_exception_only
 from typing import TYPE_CHECKING
 
 from owlbear_quality.inspect import protected, suppressions
 
-from owlbear_delivery_next.change_contracts import check_hint, repair_tools, tools
+from owlbear_delivery_next.change_contracts import repair_tools, tools
 from owlbear_delivery_next.change_contracts.failures import ENVIRONMENT, WRONG_MODEL, kind_of
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Outcome, StepKind, Stop
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.repair_records import KEPT, Tried, Witness
-from owlbear_delivery_next.change_flow import (
-    amending,
-    budgets,
-    curation_flow,
-    loop,
-    quality,
-    rebuilds,
-    repair_recovery,
-    stuck,
-    worktree,
-)
+from owlbear_delivery_next.change_flow import amending, budgets, loop, quality, repair_recovery, stuck, worktree
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.settings import profile, roles
@@ -55,6 +43,8 @@ from owlbear_delivery_next.workflow_steps import (
 )
 from owlbear_delivery_next.workflow_steps.repair_scope import hold as _check_hold
 from owlbear_delivery_next.workflow_steps.repair_scope import in_scope as _in_scope
+from owlbear_delivery_next.workflow_steps.repair_witness import commands as _witness
+from owlbear_delivery_next.workflow_steps.repair_witness import installs as _installs
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -297,6 +287,9 @@ def _judge(
         msg = f"cannot judge a fix for {change.slug}: no current repair"
         raise repair_copy.RepairError(msg)
     changed = repair_copy.changed(at, r.base)
+    if repair_copy.git(at, ["write-tree"]) != repair_copy.git(at, ["rev-parse", f"{r.commit}^{{tree}}"]):
+        _stopped(store, lock, change, "its copy holds edits besides the kept fix, so nothing proves that fix")
+        return
     r.paths = [p for p, _ in changed]
     found = {p: check_weakening.weakened(repair_copy.git, at, r.base, p, how) for p, how in changed}
     weak = [f"{p} ({found[p][0]})" for p in r.paths if found[p][0] and found[p][0] != check_weakening.REMOVED_CHECK]
@@ -400,54 +393,6 @@ def _stopped(store: Store, lock: Lock, change: Change, why: str) -> None:
     _log(store, lock, change, f"stopped: {said}")
     stuck.stopped(change, said, datetime.now(UTC))
     store.write(lock, change)
-
-
-def _witness(change: Change, prof: Profile, source: Path) -> tuple[str, ...]:
-    """The commands that must pass: the task's resolved checks, else the confirmed checks of the brief's packages."""
-    try:
-        return _resolved_witness(change, prof, source)
-    except (OSError, tomllib.TOMLDecodeError) as error:
-        r = change.repairs.current
-        if r is None:
-            raise
-        detail = "".join(format_exception_only(error)).strip()
-        r.evidence += f"\nUnchanged runner ownership in {source}/serve/tools/pyproject.toml: {detail}"
-        if change.tests is not None and r.task == curation_flow.CURATE:
-            msg = f"cannot resolve the curator's unchanged measurement in {source}: {detail}"
-            raise repair_copy.RepairError(msg) from error
-        task = next((t for t in change.plan.tasks if t.id == r.task), None) if change.plan else None
-        pairs = worktree.checks(profile.vouched(prof))
-        selected = (
-            check_hint.resolve(task.checks, pairs)
-            if task and task.checks
-            else [check_hint.qualified(p, c) for p, c in pairs if _in_scope(change, p)]
-        )
-        target = worktree.git(
-            source, "rev-parse", f"{worktree.tracking(source, change.names.target)}^{{commit}}"
-        ).strip()
-        base = task.base if task and task.base is not None else r.base
-        return tuple(check_hint.task_command(command, base, target) for command in selected)
-
-
-def _resolved_witness(change: Change, prof: Profile, source: Path) -> tuple[str, ...]:
-    tasks = change.plan.tasks if change.plan else []
-    r = change.repairs.current
-    task = next((t for t in tasks if r and t.id == r.task), None)
-    if task:
-        rebuilds.refresh(change, task)
-    pairs = worktree.checks(profile.vouched(prof))
-    if task and r is not None and (task.checks or (change.tests is not None and r.task == curation_flow.CURATE)):
-        bound = task if task.base is not None else task.model_copy(update={"base": r.base})
-        return tuple(worktree.build_checks(profile.vouched(prof), change, bound, source))
-    selected = [check_hint.qualified(p, c) for p, c in pairs if _in_scope(change, p)]
-    if r is None or not worktree.owns_changed_runner(source):
-        return tuple(selected)
-    target = worktree.git(source, "rev-parse", f"{worktree.tracking(source, change.names.target)}^{{commit}}").strip()
-    return tuple(check_hint.task_command(command, r.base, target) for command in selected)
-
-
-def _installs(change: Change, prof: Profile) -> tuple[str, ...]:
-    return tuple(check_hint.qualified(p, c) for p, c in worktree.installs(prof, change.brief.scope or ["."]))
 
 
 def _ran(at: Path, commands: tuple[str, ...], within: float, store: Store, lock: Lock) -> Witness:

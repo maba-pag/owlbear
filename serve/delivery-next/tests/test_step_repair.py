@@ -163,13 +163,14 @@ def test_a_kept_fix_is_judged_again_only_on_its_original_step_state(
     r.diff = repair_copy.git(repo, ["diff", "--binary", r.base, r.commit])
     repair_copy.drop(repo, at)
     refusal = "its fix weakens a check, which Delivery never applies: tests/test_a.py (removes an assertion or test)"
-    stuck.stopped(c, refusal, NOW)
+    r.defect = "filed https://github.com/maba-pag/owlbear/issues/1"  # its trailer follows the refusal, as recorded
+    stuck.stopped(c, f"{refusal}. OwlBear defect issue: {r.defect}", NOW)
     c.stop.runtime, c.stop.fixed_defects = "v1.311", [1310, 1312, 1342, 1361]
     monkeypatch.setattr(codebase, "release", lambda: "v1.312")
     assert repair_recovery.offered(c) == repair_recovery.CHECK_SUSPICION
-    r.stopped += ", tests/test_b.py (adds a skip or xfail)"
+    r.stopped = r.stopped.replace(refusal, f"{refusal}, tests/test_b.py (adds a skip or xfail)")
     assert repair_recovery.offered(c) is None
-    r.stopped = refusal
+    r.stopped = f"{refusal}. OwlBear defect issue: {r.defect}"
     item = Recovery(
         at=NOW,
         stop_at=c.stop.at,
