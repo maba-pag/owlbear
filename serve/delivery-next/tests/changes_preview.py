@@ -13,10 +13,10 @@ directory ``serve/delivery-next``, command ``uv run python tests/changes_preview
 whose store holds ``deadline_stopped`` as Change ``c1``, under complete settings so no unset-settings block hides the
 rerun. It never reads the owner's data or live c8: ``main`` replaces HOME with a fresh temporary folder
 (``metrics_preview._isolate``), keeps Git off GitHub and puts a ``gh`` that only fails first on PATH
-(``backlog_preview._offline``). No confirmation starts a session or spends credits: the host's runner launch and
-spawn are replaced, so a Change the owner lets run again prints ``LAUNCH`` with its slug once and stays queued. The
-machine starts unpaused, so that replaced launch is what holds it; automatic curation, Retro and updates are off, and
-the GitHub account is chosen offline.
+(``backlog_preview._offline``). No confirmation starts a session or spends credits: the host's runner and
+environment launches are held by ``launch_gate.blocked``, which prints ``LAUNCH`` once and starts nothing, and its
+spawn is never reached. The machine starts unpaused, so that held launch, not Delivery's pause, keeps a Change the owner
+lets run again queued; automatic curation, Retro and updates are off, and the GitHub account is chosen offline.
 """
 
 from __future__ import annotations
@@ -26,6 +26,8 @@ import shutil
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+
+import uvicorn
 
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import (
@@ -41,13 +43,26 @@ from owlbear_delivery_next.change_contracts.models import (
 )
 from owlbear_delivery_next.change_flow import repair_recovery, stuck
 from owlbear_delivery_next.change_flow.loop import StepResult, apply
+from owlbear_delivery_next.git.access import Access
+from owlbear_delivery_next.github import account
+from owlbear_delivery_next.github.provider import MergeMethod
+from owlbear_delivery_next.local_system import codebase
+from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.machine_host import app
+from owlbear_delivery_next.machine_host.machine import Machine
+from owlbear_delivery_next.project_host import launch_gate, pages
+from owlbear_delivery_next.project_host.host import Host, HostRecord
+from owlbear_delivery_next.runtimes import readiness
+from owlbear_delivery_next.settings import carried, config
+from owlbear_delivery_next.state_store import machine_settings, registry
+from owlbear_delivery_next.state_store.store import Store
 
 __all__ = ["CAUSE", "CLONE", "LAUNCH", "NOW", "credit_stopped", "deadline_stopped"]
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
 CAUSE = cause_key(ErrorKind.LIVENESS, StepKind.BUILD, "deadline")
 CLONE = ("preview-shop", "https://github.com/preview/preview-shop.git")
-LAUNCH = "Changes preview: no runner starts for"  # then the slug the host would have started a runner for
+LAUNCH = "Changes preview: a runner would start now; none starts"
 
 
 def _timed_out(slug: str, worktree: str) -> Change:
@@ -81,14 +96,15 @@ def credit_stopped(slug: str = "c1", worktree: str = "") -> Change:
 
 def _settings() -> None:
     """Complete settings under Global, with the automatic sessions of curation, Retro and updates off."""
-    from conftest import IMPROVEMENT_MACHINE, complete_layer  # noqa: PLC0415 - the tests' complete values
+    from conftest import IMPROVEMENT_MACHINE, complete_layer  # noqa: PLC0415 - the tests' complete values, beside this script
 
-    from owlbear_delivery_next.github.provider import MergeMethod  # noqa: PLC0415
-    from owlbear_delivery_next.settings import carried, config  # noqa: PLC0415
-    from owlbear_delivery_next.state_store import machine_settings  # noqa: PLC0415
-
-    prefs = config.Prefs(merge_method=MergeMethod.SQUASH, delete_remote_branch=False, ci_poll_seconds=20,
-                         ci_start_window_seconds=300, ask_before_merge=False)  # fmt: skip
+    prefs = config.Prefs(
+        merge_method=MergeMethod.SQUASH,
+        delete_remote_branch=False,
+        ci_poll_seconds=20,
+        ci_start_window_seconds=300,
+        ask_before_merge=False,
+    )
     config.BASE = complete_layer().model_copy(update={"prefs": prefs})
     off = {"update_when_idle": False, "update_while_paused": False} | dict.fromkeys(
         ("curate_after_merge", "curate_when_idle", "retro_after_change", "retro_when_idle"), "off"
@@ -97,44 +113,38 @@ def _settings() -> None:
 
 
 def _no_runner() -> None:
-    """The host's launch says which Change it would start and starts nothing; its spawn is never reached."""
-    from owlbear_delivery_next.project_host.host import Host  # noqa: PLC0415
+    """Every runner and environment launch is held and says so once; the runner's spawn is never reached."""
+    said: list[str] = []
 
-    said: set[str] = set()
-
-    def launch(_host: Host, slug: str) -> bool:
-        if slug not in said:
-            said.add(slug)
-            print(f"{LAUNCH} {slug}", flush=True)  # noqa: T201 - what the test and the owner see instead of a run
-        return False
+    def held(_host: Host) -> bool:
+        if not said:
+            said.append(LAUNCH)
+            sys.stdout.write(f"{LAUNCH}\n")
+            sys.stdout.flush()
+        return True
 
     def spawn(_host: Host, slug: str) -> None:
         msg = f"the Changes preview never spawns a runner ({slug})"
         raise AssertionError(msg)
 
-    Host._launch, Host._spawn = launch, spawn  # noqa: SLF001 - the seams a real launch would cross
+    launch_gate.blocked = held
+    Host._spawn = spawn  # noqa: SLF001 - the process seam a held launch must never reach
+
+
+def _offline_account(setting: str, origin: account.Origin, *, until: float | None = None) -> Access:
+    del until
+    if origin == account.Origin.LOCAL:
+        return Access.LOCAL
+    login = account.FALLBACK if setting == account.REPOSITORY_OWNER else setting
+    return Access(login, "chosen offline in the preview", origin.host, f"preview-{login}", "gh")
 
 
 def seed(home: Path) -> None:
     """The shared data checkout and the registered clone, whose store holds the c8-shaped stop as ``c1``."""
-    from backlog_preview import DATA, _checkout, _offline  # noqa: PLC0415 - the Backlog preview's offline setup
-
-    from owlbear_delivery_next.git.access import Access  # noqa: PLC0415
-    from owlbear_delivery_next.github import account  # noqa: PLC0415
-    from owlbear_delivery_next.local_system.data_repo import DataRepo  # noqa: PLC0415
-    from owlbear_delivery_next.runtimes import readiness  # noqa: PLC0415
-    from owlbear_delivery_next.state_store import registry  # noqa: PLC0415
-    from owlbear_delivery_next.state_store.store import Store  # noqa: PLC0415
-
-    def offline(setting: str, origin: account.Origin, *, until: float | None = None) -> Access:
-        del until
-        if origin == account.Origin.LOCAL:
-            return Access.LOCAL
-        login = account.FALLBACK if setting == account.REPOSITORY_OWNER else setting
-        return Access(login, "chosen offline in the preview", origin.host, f"preview-{login}", "gh")
+    from backlog_preview import DATA, _checkout, _offline  # noqa: PLC0415 - the Backlog preview's offline setup, beside this script
 
     _offline(home)
-    account.resolve = offline
+    account.resolve = _offline_account
     readiness.ready = lambda _store, _repo, **_kwargs: []  # its checks ask GitHub
     DataRepo(_checkout(home / ".owlbear" / "data", DATA, home / "remotes" / "owlbear-data.git"))
     name, origin = CLONE
@@ -147,33 +157,27 @@ def seed(home: Path) -> None:
 
 
 def main() -> None:
-    port = int(sys.argv[1])
     from metrics_preview import TOKEN, _isolate, seed_pages  # noqa: PLC0415 - beside this script
 
+    port = int(sys.argv[1])
     home = _isolate()
 
     def gone() -> None:
         shutil.rmtree(home, ignore_errors=True)
 
     try:
-        import uvicorn  # noqa: PLC0415
-
-        from owlbear_delivery_next.local_system import codebase  # noqa: PLC0415
-        from owlbear_delivery_next.machine_host import app  # noqa: PLC0415
-        from owlbear_delivery_next.machine_host.machine import Machine  # noqa: PLC0415
-        from owlbear_delivery_next.project_host import pages  # noqa: PLC0415
-        from owlbear_delivery_next.project_host.host import HostRecord  # noqa: PLC0415
-
         _settings()
         _no_runner()
         seed(home)
         seed_pages(pages)
         base = f"http://127.0.0.1:{port}"
-        now = datetime.now(UTC)
-        machine = Machine(HostRecord(url=f"{base}/", token=TOKEN, pid=os.getpid(), started_at=now,
-                                     code=codebase.CURRENT), paused=False)  # fmt: skip
+        record = HostRecord(
+            url=f"{base}/", token=TOKEN, pid=os.getpid(), started_at=datetime.now(UTC), code=codebase.CURRENT
+        )
+        machine = Machine(record, paused=False)
         machine.load_all()
-        print(f"Changes preview: {base}/#token={TOKEN}", flush=True)  # noqa: T201 - the recipe's address
+        sys.stdout.write(f"Changes preview: {base}/#token={TOKEN}\n")
+        sys.stdout.flush()
         try:
             uvicorn.run(app.create(machine, gone), host="127.0.0.1", port=port, log_level="warning")
         finally:
