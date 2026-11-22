@@ -215,7 +215,6 @@ def test_project_ci_redetection_keeps_consent_across_churn_but_a_mismatch_is_onl
     flows = repo / ".github/workflows"
     flows.mkdir(parents=True)
     (flows / "ci.yml").write_text("on: pull_request\njobs:\n  t:\n    uses: ./reusable.yml\n")
-    monkeypatch.setattr(profile, "provider", lambda *_a: gh)
     fresh = profile_share.checked(store, repo)
     assert fresh.entries[profile.DECLARED].ci_consent == consent
     assert ci_consent.project_ci(fresh, "release", profile.ci_entries(profile.workflows(repo))[profile.DECLARED])
