@@ -205,7 +205,7 @@ def consume(c: Change, item: Recovery, *, unchanged: bool) -> None:
         c.repairs.current = r
         r.phase, r.stopped = "running", ""
         c.stop = None
-        c.outcome = Outcome(exit=Exit.RETRY, cause=r.cause, reason=f"repairing: {r.evidence}", at=item.at)
+        c.outcome = Outcome(exit=Exit.RETRY, cause=r.cause, reason="judging the kept fix again", at=item.at)
     else:
         r.recovered_plan = c.plan.version if c.plan else None
         c.budgets.causes.pop(r.cause, None)
