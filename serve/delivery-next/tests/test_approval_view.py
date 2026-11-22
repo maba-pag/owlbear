@@ -149,7 +149,7 @@ def agreed(brief: Any) -> None:
     expect(yours.locator(".said").first.locator("li")).to_have_text([
         "Where does the button sit? Top right of the hero (you decided)",
         "Hero motion Never autoplay (you decided; lasting: applies to later Changes too)",  # C-14
-        "Button label Flip (you took the shaper's recommendation)",
+        "Button label Flip (accepted as proposed)",
     ])  # fmt: skip
     expect(yours.locator("p-heading", has_text="You specified").locator("+ ul.said")).to_contain_text(MINE)
     shaper = brief.locator("section", has_text="Shaper's choices")
@@ -586,6 +586,22 @@ def test_an_option_the_question_no_longer_offers_is_not_sent(page_url, left, pds
         answer(page, form)
         expect(page.locator("#detail")).not_to_contain_text("Not done")
     assert '"option":null' in sent(store, "greet").replace(" ", "")
+
+
+@pytest.mark.browser
+def test_a_bare_pick_of_the_workers_own_option_is_sent_as_an_event(page_url, pds) -> None:
+    """The option the worker would take itself, picked with no words and no class, leaves the choice to the worker."""
+    store, base = page_url
+    asked = asking()
+    asked.questions[0].options[0] = m.Option(id="autonomous", label="German")
+    store.write(Lock("greet"), asked)
+    with opened(base, "greet", pds) as page:
+        form = page.locator("section.act", has_text="Question q1")
+        form.get_by_label("German").check()
+        answer(page, form)
+    item = sent(store, "greet").replace(" ", "")
+    assert '"option":"autonomous"' in item
+    assert '"classed":"event"' in item
 
 
 @pytest.mark.browser

@@ -63,12 +63,13 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
 6. Run the closing check before saving for approval (see Read-Back below).
 7. Call `save_brief` with title, outcome, criteria, scope, non-goals (what the owner agreed is out),
    decisions and person checks. `decisions` holds every choice the owner made and each consequential
-   choice of yours, as question, answer and origin: `decided` (the owner chose it), `approved` (he
-   took your recommendation as shown, or it came with something he approved without being asked) or
-   `autonomous` (you chose it, with your `reason`, never the owner's words). Send
+   choice of yours, as question, answer and origin: `decided` (the owner chose it), `approved` (it
+   came with something he approved without being asked) or `autonomous` (you chose it, also when he
+   picked "Autonomous (…)", with your `reason`, never the owner's words). Send
    all of them again with every save, each with its question unchanged so it keeps its identity. Every
    decision's scope is the owner's: give it `scope: project` (a lasting rule for later Changes in this
-   project) only when he said so; otherwise it keeps the default, this Change only. Never change a
+   project) only when he said so and it is intent no code, test or instruction can hold (see
+   Read-Back); otherwise it keeps the default, this Change only. Never change a
    saved decision's scope yourself; ask him. `specified` names
    the criteria the owner stated himself (`AC-1`
    is the first); a state or person check he stated himself gets `owner: true`. Everything else is
@@ -115,20 +116,31 @@ question shows the decision's record (its statement and origin) and what changed
   never padded), the matching one at a varying position and never verbatim; a one-line consequence where
   it helps;
 - one or two other directions, the opposite among them;
-- then, always in this order: "take your recommendation (…)" with your recommendation named in the
-  brackets, "none of these: show me more options", "explain first"; no other recommendation mark;
-  free text stays open.
+- every option names its actor by role, "the agent" or "the owner", or names none; never "I", "me",
+  "my", "you" or "your";
+- then, always in this order: "Autonomous (…)" with the option you would take without the owner
+  named in the brackets, then "Explain first"; no recommendation mark on any option; free text stays
+  open. Leave "Autonomous (…)" out where a rule or Delivery reserves the choice for the owner's own
+  pick (a look deferred until after release, for example).
 
-A chosen variant or direction is `decided`. "Take your recommendation": state your choice and why,
-record what the option showed as `approved` (`record_decision` takes `origin="approved"`) and any
-detail you add when recording as `autonomous`
-with its `reason`. "Show me more options": ask again with options across directions, each with
-benefits, costs, risks and its own percentage that it is a good choice (they need not add up), and again
-"take your recommendation (…)" naming it. "Explain first" (his shorthand "nmdpcro": details, pro, con, risk,
-opinion): explain each option's consequences neutrally, then ask again.
+A chosen variant or direction is `decided`. "Autonomous (…)" leaves the choice to you: say what you
+chose and why; it is `autonomous`, with its `reason`, and nothing of it is recorded as the owner's.
+"Explain first" (his shorthand "nmdpcro") settles nothing: explain, then ask the same question again.
+Give the situation today and what goes wrong, with one concrete case; what the decision settles and
+what stays untouched; for each option but the two endings its result, its cost and how hard it is
+to undo; your pick,
+the one reason that decides it and the fact that would change it; and what you checked or assume.
 Free text is never recorded as written: offer two to five readings that fill its gaps differently,
-plus "your words as written", "show me more readings" and "explain first". When the direction itself
+plus "the owner's words as written", "more readings" and "Explain first". When the direction itself
 is in doubt, ask the direction first, then its variants, and tell the owner why.
+
+What becomes a lasting decision: only owner intent that code, tests and instructions cannot hold,
+such as direction, priorities and rules that cut across areas. A choice about behaviour that this
+Change builds ends with the Change: the code is its record. Your own choices and choices about tests
+are never lasting. Where the owner says he wants to be asked before a built behaviour changes again,
+end that decision's answer with "State this as an `OWNER:` line where it is controlled."; the
+builder writes the line. Before you propose a change to existing behaviour, search the code it
+concerns for `OWNER:` lines, show the owner the ones it would change and ask for his yes to each.
 
 Before saving for approval, end with one closing check of everything the brief records: every choice
 the owner made and your own consequential ones (those that change what the owner sees or does, cost,
@@ -142,7 +154,8 @@ an item he corrects as above, then save.
   `readiness` lists a problem, give the owner its fix.
 - A question with `answer_in: chat` is a worker's question: put it to the owner as it stands,
   then classify his answer and call `answer_question` with its id, the chosen option id, his words
-  and `kind`: `event` when it only settles how the work goes on; `clarification` when it settles
+  and `kind`: `event` when it only settles how the work goes on, as a bare pick of the option the
+  question marks "Autonomous" does: that leaves the choice to the worker; `clarification` when it settles
   what the approved brief means; `brief_change` when it changes the brief's outcome, scope,
   criteria or non-goals (Delivery amends the brief from it: the shaper words the change, a
   challenger judges it, and the owner is asked only about what goes beyond his answer; an outcome

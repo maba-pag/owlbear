@@ -286,21 +286,26 @@ def record_decision(  # noqa: PLR0913 - the decision's fields
         bool,
         Field(
             description="True only when the owner confirmed this statement in this chat after you read it back to "
-            "him; it is then his decision, in force at once. False: your own choice, a draft he activates. Never "
+            "him; it is then his decision, in force at once. False: a draft of intent you believe he holds, which he "
+            "activates; never your own choice. Never "
             "pass his words."
         ),
     ] = False,
     origin: Annotated[
         Literal["decided", "approved"],
         Field(
-            description="With confirmed=true: decided when he chose or stated it himself; approved when he took your "
-            "recommendation as shown, never for details it did not show"
+            description="With confirmed=true: decided when he chose or stated it himself; approved only for an "
+            "answer given before the Autonomous option existed. A pick of Autonomous is your choice: record nothing"
         ),
     ] = "decided",
     replaces: Annotated[brief_tools.Replacement | None, Field(description="The decision it replaces, if any")] = None,
 ) -> dict[str, Any]:
-    """Record a decision the owner confirmed (in force at once), or propose your own as a draft.
+    """Record a decision the owner confirmed (in force at once), or draft one for him to activate.
 
+    In a chat about this project, record lasting owner intent when he states or picks it; never your own choices.
+
+    Record only owner intent that code, tests and instruction files cannot hold: direction, priorities, rules across
+    areas. A built behaviour's record is its code; a rule about how agents work goes into its instruction file.
     Keep implementation-only details in work evidence; do not record an unchanged rule again merely because it was used.
     Preserve the owner's scope and mixed intent unless he confirms separation; if full binding cannot fit, ask.
     Continuing intent does not expire on implementation or merge.

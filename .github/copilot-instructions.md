@@ -42,9 +42,15 @@ the [shaping skill's Read-Back](../serve/delivery-next/src/owlbear_delivery_next
 Before asking, challenge the proposal against his intent: what it lacks and what it overdoes, not only
 what is wrong (TD-150). In OwlBear also:
 
-- Record each answer with `record_decision`: his confirmed intent, never his words (TD-449); a changed
-  decision names the one it replaces. "Take your recommendation" records what the option showed as
-  `approved` (`confirmed=true`, `origin="approved"`); details you add stay `autonomous` with their reason.
+- Record with `record_decision` only owner intent that code, tests and instruction files cannot hold (direction,
+  priorities, rules that cut across areas): his confirmed intent, never his words (TD-449); a changed decision
+  names the one it replaces. A choice about behaviour that gets built ends there: the code is its record. A rule
+  about how agents work goes into the instruction or skill file that governs that work.
+- A pick of "Autonomous (…)" leaves the choice to you: it is yours and is not recorded. Neither are your other
+  choices or choices about tests.
+- Where he wants to be asked before a built behaviour changes again, state it at the code as a comment line
+  starting `OWNER:`: the behaviour, at most one fresh line of reason, no decision ID and no history. Ask him before
+  changing behaviour under such a line.
 - Before recording, distinguish new owner intent from implementation/work evidence; do not record an unchanged rule
   again merely because it was used. Keep a finite instruction's explicit bound in its confirmed binding statement,
   not just its rationale. Preserve continuing intent and the owner's scope; implementation or merge implies no expiry.

@@ -26,8 +26,8 @@ applyTo: "**"
   decision goes to the user. Classify unlabelled records best-effort: a user-decision label, an
   answered question or request, or the user's own wording means `decided`; content of an approved
   collection means `approved`; anything else is `autonomous`. Choices inside one task chain or
-  implementation are not recorded decisions, except choices the owner would notice on a page, which
-  are recorded as `autonomous` (TD-418).
+  implementation are not recorded decisions. A lasting decision is recorded only for owner intent
+  that code, tests and instructions cannot hold; a built behaviour's record is its code.
 - **Minimum necessary change.** Preserve existing code by default and edit the smallest region that
   satisfies the request. Do not rewrite whole files, generalize behavior, add compatibility paths,
   or perform adjacent cleanup unless the requested outcome requires it. Stop when the requested

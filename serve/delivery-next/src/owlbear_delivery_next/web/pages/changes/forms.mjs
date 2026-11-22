@@ -18,6 +18,9 @@ const CLASSES = [
 
 function classed(q, mine) {
   if (!q.ordinary) return {};
+  // The option the worker would take itself, picked with no words and no class: the choice stays the worker's.
+  const bare = mine.option === "autonomous" && !(mine.text ?? "").trim();
+  if (!mine.kind && bare) return { kind: "event" };
   if (!mine.kind) return notify("Choose how your answer bears on the brief.");
   if (mine.kind !== "clarification") return { kind: mine.kind };
   const statement = (mine.statement ?? "").trim();
