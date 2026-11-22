@@ -136,7 +136,7 @@ def back(kind: ErrorKind, step: StepKind, subject: str, reason: str, fix: Task) 
 
 
 def integrate(c: Change, _step: StepKind, ref: str, detail: str = "") -> StepResult:
-    """Integration runs as a Builder task (DR3): merge *ref* into the branch before publishing or merging."""
+    """Merge *ref* before publishing or merging; an already-contained target on a clean tree needs no Builder."""
     title = f"Merge {ref} into this branch with `git merge {ref}`, resolve any conflicts, run the checks, commit"
     return StepResult(
         exit=Exit.BACK,
@@ -144,6 +144,27 @@ def integrate(c: Change, _step: StepKind, ref: str, detail: str = "") -> StepRes
         reason=f"updating with {ref}",
         fix_task=task(c, title, "integration", detail),
     )
+
+
+def completed_integration(c: Change, path: Path) -> StepResult | None:
+    """Finish a clean, already-contained integration before a session; resumed merges keep their report gate."""
+    if c.step.kind != StepKind.BUILD or c.plan is None or c.step.session or c.step.started_at:
+        return None
+    task = next((t for t in c.plan.tasks if t.id == c.step.task), None)
+    if task is None or task.origin != "integration" or task.done:
+        return None
+    ref = task.title.partition(" into this branch ")[0].removeprefix("Merge ")
+    expected = f"Merge {ref} into this branch with `git merge {ref}`, resolve any conflicts, run the checks, commit"
+    if task.title != expected or (task.base is not None and task.base != head(path)):
+        # only the engine's merge instruction binds the ref, including persisted pre-fix tasks; a commit made since
+        # the task began is its own session's merge, whose report still has to be judged
+        return None
+    target = worktree.git(path, "rev-parse", f"{ref}^{{commit}}").strip()
+    if not contains(path, target) or worktree.git(path, "status", "--porcelain", "--untracked-files=all").strip():
+        return None
+    if git_ok(path, "rev-parse", "--verify", "--quiet", "MERGE_HEAD"):
+        return None
+    return StepResult(exit=Exit.DONE, head=head(path), reason=f"The clean branch already contains {ref} ({target})")
 
 
 def needs_target(c: Change, path: Path, reason: str, now: datetime, writer: Writer) -> StepResult:

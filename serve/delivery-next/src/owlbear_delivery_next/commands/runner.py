@@ -122,7 +122,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
     task = next((t for t in change.plan.tasks if t.id == s.task), None) if change.plan else None
     curated = change.tests is not None and s.kind == StepKind.BUILD and s.task == CURATE  # the curator's (TD-339)
     role = roles.chosen(settings := store.settings(), session := curation_build.LABEL if curated else s.kind)
-    if stopped := overlap.starting(change, task):
+    if stopped := overlap.starting(change, task) or engine.completed_integration(change, path):
         store.write(lock, loop.apply(change, stopped, now))
         return
     look_limit = watched.needed(
