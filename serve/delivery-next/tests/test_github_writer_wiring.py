@@ -94,7 +94,7 @@ def _detect(_repo, gh, _prev):
 def _setup(tmp_path, monkeypatch):
     repo = _clone(tmp_path / "tools", "https://github.com/boecht/tools.git")
     monkeypatch.setattr(readiness, "check", lambda *_a: [])
-    monkeypatch.setattr(setup.profile, "detect", _detect)
+    monkeypatch.setattr(profile, "detect", _detect)
     setup.run(repo, [], yes=True, local_files="no")
 
 

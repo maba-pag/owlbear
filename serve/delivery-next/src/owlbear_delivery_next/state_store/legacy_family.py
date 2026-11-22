@@ -76,7 +76,7 @@ IMPORTS = (
     ("state_store/project_home.py", "c79464a6139fe571efd600903aa848dc67c9673f016d12c093d7d6b94b74a681"),
     ("state_store/store.py", "a3da565feeee931b40d4907f17c46372c000e573e1add938ae3679d175e75de4"),
 )
-CURRENT_FAMILY_AGGREGATE = "79bd9011af062228a79a6d04b33391bcc345fd52bca93deaab2e26743f91233c"
+CURRENT_FAMILY_AGGREGATE = "a7d2a1cabd4f6ffbd55ac63b774c488ccca67e60d0de5d506d6707ecbf4ea3c5"
 CURRENT_FUNCTIONS = (
     ("commands/chat_client.py:Chat.call", "a3dae79af4df3874c83c2466621b379fc3e9fc3e670045c20a8e8fca44113250"),
     ("commands/chat_client.py:workspace", "72a7a921743b6103fb5f5d78e5d52d238def17b341910e8348a1d702e449fb60"),
@@ -85,7 +85,7 @@ CURRENT_FUNCTIONS = (
     ("commands/dispatch.py:main", "8c4117358586bafde31333d442b1c03a1c628b77941bbe9e1f6e95f71a577729"),
     ("commands/mcp_server.py:main", "bdc71ecbecd215000ee24b98cdecb8f6e9a29a1c46ce5dbf940956c0d279585c"),
     ("commands/runner.py:main", "d363a73d59e7b22adee6f1eabf38059dc205877a174cc14e24ce8b0b2f0acf3b"),
-    ("commands/setup.py:run", "9edaec805e441de09c8a636690fe92527a0c29bf02223c50b3344046fa3422ac"),
+    ("commands/setup.py:run", "708b506e460ecdd992a5ed8b8bf10a57775303783b3583f4bed417b5843ec4e3"),
     ("machine_host/app.py:Dispatcher.__call__", "75b1fe7604dac66a5c9d336abed0293ddcfaf379a65ed64bc8f48941cb024299"),
     ("machine_host/command.py:forward", "5b6327596aa3036314e5e279f4b7a444152e7555a29059797bf2b6f0e82cca69"),
     ("machine_host/command.py:main", "027daaf564131a2bd0d995a35156f8bcf884ac1ce32d7fc6ab5a2dca81af9546"),
@@ -128,7 +128,7 @@ CURRENT_IMPORTS = (
     ("commands/dispatch.py", "326c281057f28ebdb70e9ddfb43e62ad0693957ce5cf2305201d67e7d4cba0e4"),
     ("commands/mcp_server.py", "a9c65527a1870f03a9fc9719b527642633456fab1e361be2e7516934d4f785f9"),
     ("commands/runner.py", "0eabef7a935161a8006c365a2a50914115931a6fdac5bf7ebc1df0c67912e9d5"),
-    ("commands/setup.py", "0ab35425da1b72b8fc98bb51a003e023a324ede750c5bc6d19bf288ed6cdd231"),
+    ("commands/setup.py", "8c6040e05427726da1a0f3fe570ffd3966b720424a4b74a32233c2c03199f390"),
     ("machine_host/app.py", "35c286944230060af35803e560d0fd1aaa3ba3a0560a10b8304b4ec157c0908b"),
     ("machine_host/command.py", "577ce56b1140fdf075a0e005468cb52ae5ccbab25c6519efa162e2bff05cb714"),
     ("machine_host/install.py", "3b7444f683775dce115b5dc6001570c54833c2d2f17866f6abbd56ae3d3a0e5f"),

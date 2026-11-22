@@ -14,11 +14,13 @@ from owlbear_delivery_next.change_contracts.merge_records import CiBasis
 from owlbear_delivery_next.change_contracts.models import Change, Names, StepKind
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry, ProjectCiConsent
 from owlbear_delivery_next.change_flow import brief_tools, worktree
+from owlbear_delivery_next.commands import setup
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.merge_offer import Block, decide
 from owlbear_delivery_next.github.provider import Check, CiState, MergeMethod, PullRequest, Repository, Rules
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
+from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import ci_consent, profile
 from owlbear_delivery_next.state_store import briefs, profile_share
 from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
@@ -206,6 +208,10 @@ def test_project_ci_redetection_keeps_consent_across_churn_but_a_mismatch_is_onl
     )
     approved = profile.confirm(raw, profile.DECLARED, "lint", NOW, consent=consent)
     store.write_profile(approved, previous=Profile())
+    monkeypatch.setattr(profile, "provider", lambda *_a: gh)
+    monkeypatch.setattr(readiness, "check", lambda *_a: [])
+    assert setup.run(repo, [(profile.DECLARED, "lint")], yes=True, local_files="no") == 0
+    assert store.read_profile().entries[profile.DECLARED].ci_consent == consent
     flows = repo / ".github/workflows"
     flows.mkdir(parents=True)
     (flows / "ci.yml").write_text("on: pull_request\njobs:\n  t:\n    uses: ./reusable.yml\n")

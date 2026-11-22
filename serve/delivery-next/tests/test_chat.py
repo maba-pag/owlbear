@@ -43,7 +43,7 @@ from owlbear_delivery_next.project_host import answers, api, brief_routes, launc
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import ahp, copilot_cli, readiness, step_input, vscode_adapter
 from owlbear_delivery_next.runtimes.vscode_contract import Outcome as Outcome_
-from owlbear_delivery_next.settings import carried
+from owlbear_delivery_next.settings import carried, profile
 from owlbear_delivery_next.settings.config import Agent, Layer
 from owlbear_delivery_next.state_store import briefs, work_block
 from owlbear_delivery_next.state_store.database import StoreError, put_record
@@ -863,7 +863,7 @@ def test_yes_confirms_only_the_profile_and_local_files_need_their_own_consent(
     home = tmp_path_factory.mktemp("home")
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setattr(readiness, "check", lambda *_a: [])
-    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    monkeypatch.setattr(profile, "detect", lambda *_a: Profile(version=1))
     written = [repo / ".mcp.json", repo / ".vscode" / "settings.json"]
     asked = []
     assert setup.run(repo, [], yes=True, ask=lambda q: asked.append(q) or "") == 0
@@ -896,7 +896,7 @@ def test_setup_in_a_shared_repo_replaces_an_unreadable_root_profile_the_owner_co
     root, _remote = shared_repo
     monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
     monkeypatch.setattr(readiness, "check", lambda *_a: [])
-    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    monkeypatch.setattr(profile, "detect", lambda *_a: Profile(version=1))
     store = Store.open(root)
     store.root.mkdir(parents=True, exist_ok=True)
     (store.root / "profile.json").write_text('{"format": 1, "models": {}}')
@@ -908,7 +908,7 @@ def test_setup_in_a_shared_repo_replaces_an_unreadable_root_profile_the_owner_co
 def test_setup_replaces_a_saved_profile_it_cannot_read(repo, tmp_path_factory, monkeypatch, capsys):
     monkeypatch.setenv("HOME", str(tmp_path_factory.mktemp("home")))
     monkeypatch.setattr(readiness, "check", lambda *_a: [])
-    monkeypatch.setattr(setup.profile, "detect", lambda *_a: Profile(version=1))
+    monkeypatch.setattr(profile, "detect", lambda *_a: Profile(version=1))
     store = Store.open(repo)
     store.root.mkdir(parents=True, exist_ok=True)
     (store.root / "profile.json").write_text('{"format": 1, "models": {}}')
