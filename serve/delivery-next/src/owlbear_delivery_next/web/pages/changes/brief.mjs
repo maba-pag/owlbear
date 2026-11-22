@@ -29,7 +29,7 @@ function part(title, ...children) {
   return html`<section>${hd(4, title, "sm")}${children}</section>`;
 }
 
-const ORIGINS = { decided: "you decided", approved: "you took the shaper's recommendation" };
+const ORIGINS = { decided: "you decided", approved: "accepted as proposed" };
 
 // Who made the decision, then whether it stays in force for later Changes once approved (C-14, TD-426).
 function said(x) {

@@ -54,7 +54,8 @@ INSTRUCTION = (
     "recommendations, explain how the actual capabilities and current work support the proposed choice. "
     "When a promise's mapping is uncertain, mark executable false and name what cannot be carried out. "
     "The brief is approved, so the owner is asked only a product question (it changes what he gets: scope, look, "
-    "behaviour, risk) or a reserved one (lint, format, CI or hook configuration, security, project setup: one "
+    "behaviour, risk) or a reserved one (lint, format, CI or hook configuration, security, project setup, or a "
+    "change of behaviour that an `OWNER:` comment line states: one "
     "concrete proposal he answers yes or no, its consequence in the effect). Any other question, such as how to get a "
     "tool, test run or check working, is internal: Delivery repairs it without him. He cannot judge logs, test or "
     "function names, commands or tool internals: mark plain false when the question or an effect needs them, though "
@@ -395,6 +396,8 @@ def _worded(verdict: pick_tools.QuestionJudgment, proposed: tools.AskQuestion) -
     actions = sorted(o.action or "" for o in proposed.options)
     if verdict.subject == "reserved" and actions not in (["continue", "pause"], ["abandon", "continue"]):
         errors.append("options: a reserved question is one proposal, yes (continue) or no (pause or abandon)")
+    if verdict.subject == "reserved" and proposed.recommended is not None:
+        errors.append("recommended: a reserved question is the owner's own choice - mark no option")
     return errors
 
 
@@ -434,7 +437,8 @@ def admitted(
                 f"`{proof.command}` at {proof.head}: exit {proof.exit_code}, "
                 f"{proof.elapsed_seconds:.3f} s. {proof.admission}"
             )
-        text += f"\nRecommended: {proposed.options[proposed.recommended].label}."
+        # the option the worker would take itself: a bare pick of it leaves the choice to the worker
+        text += f"\nAutonomous: {proposed.options[proposed.recommended].label}."
         details.append(f"Checked before offering: {evidence}")
     text += "\n\nDetails: " + " ".join(details)  # the plain question first; what the owner needn't judge after it
     question = Question(

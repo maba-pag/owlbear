@@ -149,7 +149,7 @@ def agreed(brief: Any) -> None:
     expect(yours.locator(".said").first.locator("li")).to_have_text([
         "Where does the button sit? Top right of the hero (you decided)",
         "Hero motion Never autoplay (you decided; lasting: applies to later Changes too)",  # C-14
-        "Button label Flip (you took the shaper's recommendation)",
+        "Button label Flip (accepted as proposed)",
     ])  # fmt: skip
     expect(yours.locator("p-heading", has_text="You specified").locator("+ ul.said")).to_contain_text(MINE)
     shaper = brief.locator("section", has_text="Shaper's choices")

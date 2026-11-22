@@ -151,7 +151,8 @@ class AskQuestion(Args):
     recommended: int | None = Field(
         default=None,
         ge=0,
-        description="The zero-based index of the recommended option, if any; checked before it is offered",
+        description="The zero-based index of the option you would take yourself, if any; shown to the owner as "
+        "Autonomous and checked before it is offered; none on a reserved proposal",
         examples=[0],
     )
 
@@ -357,9 +358,11 @@ MERGED = Spec("submit_result", f"{SUBMIT.description} This task merges another b
 ASK = Spec(
     "ask_question",
     "Propose one owner question with exact executable actions: a product choice (what he gets), or one proposal "
-    "a decision reserves for him (lint, CI or hook configuration, security, project setup) as yes or no, in plain "
+    "a decision reserves for him (lint, CI or hook configuration, security, project setup, a change of behaviour an "
+    "`OWNER:` line states) as yes or no, in plain "
     "words. Delivery admits it before asking; a refusal returns field errors to you, and a question about getting a "
-    "tool or check working goes to Delivery's repair instead. Mark the recommended index; a check recommendation "
+    "tool or check working goes to Delivery's repair instead. Mark the index of the option you would take yourself, "
+    "none on a reserved proposal; a check recommendation "
     "names its exact declared check for a measured trial. Your step ends; it resumes with the refusal or answer.",
     AskQuestion,
     "ask",
