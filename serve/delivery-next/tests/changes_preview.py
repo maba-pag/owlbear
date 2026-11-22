@@ -26,6 +26,7 @@ import shutil
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import uvicorn
 
@@ -48,10 +49,10 @@ from owlbear_delivery_next.github import account
 from owlbear_delivery_next.github.provider import MergeMethod
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.data_repo import DataRepo
-from owlbear_delivery_next.machine_host import app
+from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import launch_gate, pages
-from owlbear_delivery_next.project_host.host import Host, HostRecord
+from owlbear_delivery_next.project_host.host import Host, HostRecord, RunnerRecord
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.settings import carried, config
 from owlbear_delivery_next.state_store import machine_settings, registry
@@ -123,12 +124,16 @@ def _no_runner() -> None:
             sys.stdout.flush()
         return True
 
-    def spawn(_host: Host, slug: str) -> None:
+    def spawn(slug: str) -> RunnerRecord:
         msg = f"the Changes preview never spawns a runner ({slug})"
         raise AssertionError(msg)
 
+    class PreviewHost(Host):
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            super().__init__(*args, **kwargs, spawn=spawn)
+
     launch_gate.blocked = held
-    Host._spawn = spawn  # noqa: SLF001 - the process seam a held launch must never reach
+    project.Host = PreviewHost
 
 
 def _offline_account(setting: str, origin: account.Origin, *, until: float | None = None) -> Access:
