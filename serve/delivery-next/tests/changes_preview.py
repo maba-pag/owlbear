@@ -51,7 +51,11 @@ def credit_stopped(slug: str = "c1", worktree: str = "") -> Change:
     """Builder deadline twice, then the repairer's credit limit replaced the stop; the deadline cause stays."""
     c = _timed_out(slug, worktree)
     stuck.stopped(c, "its session's result was voided: credit limit reached: 5.00 of 5", NOW)
-    c.stop = Stop(kind=ErrorKind.POLICY, reason="credit limit reached: 5.00 of 5",
-                  action="Raise the step's credit limit, or run it without one",
-                  resume="The step's credit limit allows it to finish", at=NOW)  # fmt: skip
+    c.stop = Stop(
+        kind=ErrorKind.POLICY,
+        reason="credit limit reached: 5.00 of 5",
+        action="Raise the step's credit limit, or run it without one",
+        resume="The step's credit limit allows it to finish",
+        at=NOW,
+    )
     return c
