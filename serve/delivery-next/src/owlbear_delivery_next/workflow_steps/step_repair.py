@@ -291,6 +291,7 @@ def _judge(
         _stopped(store, lock, change, "its copy holds edits besides the kept fix, so nothing proves that fix")
         return
     r.paths = [p for p, _ in changed]
+    r.diff = repair_copy.git(path, ["diff", "--binary", r.base, r.commit, "--", *r.paths])
     found = {p: check_weakening.weakened(repair_copy.git, at, r.base, p, how) for p, how in changed}
     weak = [f"{p} ({found[p][0]})" for p in r.paths if found[p][0] and found[p][0] != check_weakening.REMOVED_CHECK]
     if weak:
