@@ -1525,7 +1525,8 @@ def test_a_deadline_stop_shows_its_current_limits_and_reruns_its_original_step_o
     stale = api_.post("/api/next/changes/c1/recovery", json=RERUN_SHOWN | {"at": "2026-10-10T11:00:00Z"})
     assert (stale.status_code, queued(store)) == (409, [])
     assert api_.post("/api/next/changes/c1/recovery", json=RERUN_SHOWN).status_code == 200
-    store.put_inbox("c1", Recovery(at=NOW, action="Run the step again", stop_at=NOW))  # a repeated confirmation
+    assert api_.post("/api/next/changes/c1/recovery", json=RERUN_SHOWN).status_code == 409  # repeated before the fold
+    assert len(queued(store)) == 1
     with store.lock("c1") as lock:
         after = store.fold(lock, "c1", NOW)[0]
     assert loop.next_step(after, NOW) == Step(kind=StepKind.BUILD, task="t1")

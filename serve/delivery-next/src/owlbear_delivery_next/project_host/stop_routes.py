@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from owlbear_delivery_next.change_contracts.inbox import Recovery
+from owlbear_delivery_next.change_contracts.inbox import Recovery, parse_rows
 from owlbear_delivery_next.change_contracts.models import Exit, Record
 from owlbear_delivery_next.change_flow import asking, delivery_target, repair_recovery, stuck
 from owlbear_delivery_next.local_system import codebase
@@ -144,6 +144,13 @@ def retained(c: Change) -> dict[str, str] | None:
     return {"reason": c.stop.reason.removesuffix(f"\n\nThe fix kept (not applied):\n{r.diff}"), "diff": r.diff}
 
 
+def _queued(store: Store, slug: str, action: str, at: datetime) -> bool:
+    """Whether a confirmation of this stop's *action* already waits in the inbox; read under the Change lock."""
+    with store.db.read() as db:
+        waiting, _ = parse_rows(db.execute("SELECT id, item FROM inbox WHERE slug = ?", (slug,)).fetchall())
+    return any(isinstance(i, Recovery) and (i.action, i.stop_at) == (action, at) for i in waiting)
+
+
 def _owner(request: Request) -> None:
     if request.headers.get("x-owlbear-use", "").lower() == "chat":
         raise HTTPException(403, "Only the owner clears a stop, on the Changes page")
@@ -171,6 +178,8 @@ def router(store: Store, read: Callable[[str], Change], wake: Callable[[], None]
                 )
                 if (action, c.stop.at, remedy) != (body.action, body.at, body.remedy):
                     raise HTTPException(409, "The stop changed since the page showed it; reload")
+                if action == stuck.RERUN and _queued(store, slug, action, c.stop.at):
+                    raise HTTPException(409, "This rerun is already confirmed and waits to start")
                 store.put_inbox(slug, Recovery(at=datetime.now(UTC), action=action, stop_at=c.stop.at, remedy=remedy))
         except (LockHeldError, StoreError) as exc:
             raise HTTPException(409, f"change: {exc}; try again") from exc
