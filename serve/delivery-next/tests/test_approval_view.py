@@ -589,6 +589,22 @@ def test_an_option_the_question_no_longer_offers_is_not_sent(page_url, left, pds
 
 
 @pytest.mark.browser
+def test_a_bare_pick_of_the_workers_own_option_is_sent_as_an_event(page_url, pds) -> None:
+    """The option the worker would take itself, picked with no words and no class, leaves the choice to the worker."""
+    store, base = page_url
+    asked = asking()
+    asked.questions[0].options[0] = m.Option(id="autonomous", label="German")
+    store.write(Lock("greet"), asked)
+    with opened(base, "greet", pds) as page:
+        form = page.locator("section.act", has_text="Question q1")
+        form.get_by_label("German").check()
+        answer(page, form)
+    item = sent(store, "greet").replace(" ", "")
+    assert '"option":"autonomous"' in item
+    assert '"classed":"event"' in item
+
+
+@pytest.mark.browser
 def test_a_card_names_the_files_its_activity_touches_without_their_paths(page_url, pds) -> None:
     """The card is a summary: a tool's path shows as its file's name; the detail keeps the whole path."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
