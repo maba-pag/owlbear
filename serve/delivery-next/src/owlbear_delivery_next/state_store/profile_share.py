@@ -20,15 +20,16 @@ from owlbear_delivery_next.impeccable.detector import DetectorError
 from owlbear_delivery_next.local_system.data_repo import DataRepoError
 from owlbear_delivery_next.local_system.storage_io import atomic_write, open_lock
 from owlbear_delivery_next.settings import migrations, profile
-from owlbear_delivery_next.state_store import github_writer
+from owlbear_delivery_next.state_store import github_writer, profile_authority
 from owlbear_delivery_next.state_store.database import StoreError
 from owlbear_delivery_next.state_store.layers import _parse
 from owlbear_delivery_next.state_store.pending_intents import pending_file as _pending_file
 from owlbear_delivery_next.state_store.pending_intents import pending_intents
 from owlbear_delivery_next.state_store.pending_intents import shared_pending as _shared_pending
+from owlbear_delivery_next.state_store.profile_authority import config_digest
 from owlbear_delivery_next.state_store.profile_errors import (
     Basis,
-    SharedSyncError,
+    SharedError,
     SourceChangedError,
     TargetChangedError,
 )
@@ -46,7 +47,7 @@ LOCAL = "profile.local.json"
 DETECTED = "profile.detected"  # a new marker forces the old unbound observations to be checked once
 ROLES_MOVED = "roles-moved"  # marks that a format-1 profile's role overrides were merged into the settings
 UNPUBLISHED = "prefs-import.unpublished"  # the legacy import is done here but its completion was not published yet
-ABSENT = "absent"
+ABSENT = profile_authority.ABSENT
 CONFIG_WAITING = "the project settings change is not published yet; the legacy preference import completes after it"
 
 
@@ -55,7 +56,14 @@ def path(store: Store) -> Path:
     return store.shared.root / store.name / PROFILE if store.shared else store.root / PROFILE
 
 
-def write(store: Store, prof: Profile, *, replace_unreadable: bool = False, basis: Basis | None = None) -> str:
+def write(
+    store: Store,
+    prof: Profile,
+    *,
+    replace_unreadable: bool = False,
+    basis: Basis | None = None,
+    previous: Profile | None = None,
+) -> str:
     """Write the profile; in the shared folder also commit and push it: what the owner should know, else nothing.
 
     An ordinary save refuses an unreadable saved profile; only the explicit repair (*replace_unreadable*) replaces
@@ -64,14 +72,21 @@ def write(store: Store, prof: Profile, *, replace_unreadable: bool = False, basi
     with _writer(store):
         if basis and basis.owned:
             basis.owned()  # a newer or missing replacement is refused before anything is pulled or written
+        current = _current_for_write(store, replace_unreadable=replace_unreadable)
+        authority = any(
+            entry and entry.ci_consent
+            for profiled in (prof, current, previous)
+            if profiled is not None
+            for entry in (profiled.entries.get(profile.DECLARED),)
+        )
+        if basis is None and previous == prof and _read_unlocked(store) == prof:
+            notice = _publish_locked(store, prof, f"settings: {store.name}: project profile")
+            if authority:
+                profile_authority.sync(store, notice)
+            return notice
         # the target is judged against the remote's current bytes, not a stale clone; a failed sync says nothing of them
-        if basis and store.shared:
-            try:
-                why = store.shared.pull()
-            except (DataRepoError, OSError) as exc:
-                why = failure(exc)
-            if why:
-                raise SharedSyncError(why)
+        if basis or authority:
+            profile_authority.sync(store)
         if basis and basis.source and config_digest(store.root / PROFILE) != basis.source:
             msg = "The old profile changed while you answered; nothing was saved. Run setup again to review it."
             raise SourceChangedError(msg)
@@ -80,6 +95,7 @@ def write(store: Store, prof: Profile, *, replace_unreadable: bool = False, basi
             raise TargetChangedError(msg)
         try:
             current = _current_for_write(store, replace_unreadable=replace_unreadable)
+            prof = prof if replace_unreadable else profile_authority.keep(prof, current, previous)
             if current is not None:  # only mark() moves the legacy import marker; a snapshot never rewinds it
                 prof = prof.model_copy(
                     update={
@@ -114,21 +130,9 @@ def _publish_locked(store: Store, prof: Profile, message: str) -> str:
     return notice
 
 
-def _digest(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-def config_digest(config: Path) -> str:
-    """The digest of the project config's bytes, or ``absent``."""
-    try:
-        return _digest(config.read_bytes())
-    except FileNotFoundError:
-        return ABSENT
-
-
 def held_by_pending(store: Store, data: bytes) -> bool:
     """Whether an automatic config write of *data* would replace another clone's different pending intent."""
-    digest = _digest(data)
+    digest = hashlib.sha256(data).hexdigest()
     return any(pending != digest for pending in pending_intents(store))
 
 
@@ -202,8 +206,6 @@ def publish_layer(store: Store, path: Path, message: str, until: float, *, owner
     A raised project config refusal is recorded as pending before it propagates, as a returned refusal is, so another
     clone cannot publish a completed import over it. The raised error is re-raised with that record in its message.
     """
-    from owlbear_delivery_next.state_store.store import SharedError  # noqa: PLC0415 - the store imports this module
-
     try:
         notice = store.shared.publish(path, message, until)
     except DataRepoError as exc:
@@ -248,8 +250,6 @@ def _settle_claim(store: Store, notice: str, claim: str) -> bool:
 
 
 def _publish_mark(store: Store, prof: Profile, message: str, *, claimed: bool) -> str:
-    from owlbear_delivery_next.state_store.store import SharedError  # noqa: PLC0415 - the store imports this module
-
     try:
         return _publish_locked(store, prof, message)
     except DataRepoError as exc:
@@ -418,6 +418,7 @@ def _local(store: Store) -> dict[str, ProfileEntry]:
 
 
 def _stage(store: Store, prof: Profile) -> Path:
+    prof = _parse(prof.model_dump_json(), "profile", Profile, PROFILE_FORMAT, migrations.PROFILE)
     target = path(store)
     target.parent.mkdir(parents=True, exist_ok=True)
     atomic_write(target, _shared_part(prof).model_dump_json(indent=1))

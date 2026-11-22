@@ -23,7 +23,7 @@ from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.local_system import data_repo, git_files, local_home, preload, text_files
 from owlbear_delivery_next.runtimes import readiness, window_files
-from owlbear_delivery_next.settings import profile, roles
+from owlbear_delivery_next.settings import ci_consent, roles
 from owlbear_delivery_next.state_store import github_writer, prefs_import, profile_repair
 from owlbear_delivery_next.state_store.store import Store
 
@@ -303,7 +303,7 @@ def run(
         return 1
     prof = detect(repo, prev, writer)
     for key, value in confirms:
-        prof = profile.confirm(prof, key, value, datetime.now(UTC))
+        prof = ci_consent.confirm_explicit(prof, key, value, datetime.now(UTC))
     say(render(prof))
     say(roles.table(store.settings()))
     say(pack_files.status())

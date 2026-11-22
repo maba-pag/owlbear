@@ -1,6 +1,7 @@
 """Observation-bound confirmations and clone-local facts, using synthetic repositories and GitHub observations."""
 
 import contextlib
+import hashlib
 import json
 import subprocess
 import threading
@@ -9,15 +10,18 @@ from pathlib import Path
 
 import pytest
 
+from owlbear_delivery_next.change_contracts.merge_records import CiBasis
 from owlbear_delivery_next.change_contracts.models import Change, Names, StepKind
-from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
+from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry, ProjectCiConsent
 from owlbear_delivery_next.change_flow import brief_tools, worktree
+from owlbear_delivery_next.commands import setup
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.gh import GhProvider
 from owlbear_delivery_next.github.merge_offer import Block, decide
-from owlbear_delivery_next.github.provider import CiState, MergeMethod, PullRequest, Repository, Rules
+from owlbear_delivery_next.github.provider import Check, CiState, MergeMethod, PullRequest, Repository, Rules
 from owlbear_delivery_next.local_system.data_repo import DataRepo, DataRepoError
-from owlbear_delivery_next.settings import profile
+from owlbear_delivery_next.runtimes import readiness
+from owlbear_delivery_next.settings import ci_consent, profile
 from owlbear_delivery_next.state_store import briefs, profile_share
 from owlbear_delivery_next.state_store.store import Lock, Store, StoreError
 from owlbear_delivery_next.workflow_steps import engine, follow
@@ -192,6 +196,43 @@ def test_two_clones_repeatedly_read_their_own_facts_after_both_first_detection_m
     assert "install:." not in raw["entries"]
 
 
+def test_project_ci_redetection_keeps_consent_across_churn_but_a_mismatch_is_only_evidence(
+    shared, tmp_path, monkeypatch
+):
+    repo = clone(tmp_path, "shop")
+    store = Store.open(repo)
+    gh = GitHub()
+    raw = profile.detect(repo, gh, None)
+    consent = ProjectCiConsent(
+        repository="acme/shop-site", target="release", at=NOW, basis=CiBasis(declared=(), required=())
+    )
+    approved = profile.confirm(raw, profile.DECLARED, "lint", NOW, consent=consent)
+    store.write_profile(approved, previous=Profile())
+    monkeypatch.setattr(profile, "provider", lambda *_a: gh)
+    monkeypatch.setattr(readiness, "check", lambda *_a: [])
+    assert setup.run(repo, [(profile.DECLARED, "lint")], yes=True, local_files="no") == 0
+    assert store.read_profile().entries[profile.DECLARED].ci_consent == consent
+    flows = repo / ".github/workflows"
+    flows.mkdir(parents=True)
+    (flows / "ci.yml").write_text("on: pull_request\njobs:\n  t:\n    uses: ./reusable.yml\n")
+    monkeypatch.setattr(profile, "provider", lambda *_a: gh)
+    fresh = profile_share.checked(store, repo)
+    assert fresh.entries[profile.DECLARED].ci_consent == consent
+    assert ci_consent.project_ci(fresh, "release", profile.ci_entries(profile.workflows(repo))[profile.DECLARED])
+    assert profile.names(fresh, profile.DECLARED) == ("lint",)
+    assert not ci_consent.project_ci(fresh, "main", ProfileEntry(state="unknown", value="none"))
+    (flows / "ci.yml").write_text("on: pull_request\njobs:\n  t:\n    name: new suite\n")
+    named = profile.detect(repo, gh, fresh)
+    assert profile.names(named, profile.DECLARED) == ("lint", "new suite")
+    assert named.entries[profile.DECLARED].ci_named == ("lint",)
+    assert not ci_consent.project_ci(named, "release", profile.ci_entries(profile.workflows(repo))[profile.DECLARED])
+    gh.known = False
+    mismatch = profile.detect(repo, gh, fresh)
+    assert mismatch.entries[profile.DECLARED].ci_consent == consent
+    assert not ci_consent.project_ci(mismatch, "release", mismatch.entries[profile.DECLARED])
+    assert json.loads((shared / "shop-site/profile.json").read_text())["entries"][profile.DECLARED]["ci_consent"]
+
+
 def test_an_old_local_profile_keeps_its_own_facts_before_any_overlay_exists(tmp_path):
     store = Store(tmp_path)
     raw = Profile(version=1, entries={profile.PUSH: ProfileEntry(state="known", value="yes")})
@@ -317,7 +358,7 @@ def test_detection_publication_failure_preserves_local_progress_and_retries_with
     assert calls == ["failed"]
 
 
-def test_owner_selected_ci_checks_keep_their_workflow_digest_through_confirmation(tmp_path):
+def test_owner_selected_ci_checks_keep_their_workflow_digest_through_confirmation(shared, tmp_path, monkeypatch):
     repo = clone(tmp_path, "shop")
     raw = profile.detect(repo, GitHub(), None)
     chosen = profile.confirm(raw, profile.DECLARED, "lint", NOW)
@@ -342,6 +383,124 @@ def test_owner_selected_ci_checks_keep_their_workflow_digest_through_confirmatio
     assert declared == ("lint",)
     assert profile.digest_of(chosen.entries[profile.DECLARED]) == profile.digest_of(raw.entries[profile.DECLARED])
     assert chosen.entries[profile.DECLARED].evidence.count("observed:") == 1
+    _legacy_named_recheck(shared, tmp_path, monkeypatch, raw, pr)
+    _legacy_exact_recheck(shared, tmp_path, monkeypatch, pr)
+
+
+def _legacy_named_recheck(shared, tmp_path, monkeypatch, raw, pr):
+    observed = raw.entries[profile.DECLARED]
+    binding = hashlib.sha256(json.dumps([observed.state, observed.value, observed.evidence]).encode()).hexdigest()
+    payload = raw.model_dump(mode="json")
+    payload["format"] = 5
+    payload["entries"][profile.DECLARED] = {
+        "state": "known",
+        "value": "lint",
+        "evidence": f"{profile.CONFIRMED} 2026-10-24{profile.OBSERVED}{observed.evidence}",
+        "observed": binding,
+    }
+    target = shared / "shop-site" / profile_share.PROFILE
+    target.parent.mkdir()
+    target.write_text(json.dumps(payload))
+    assert DataRepo(shared).publish(target, "fixture format-5 profile") == ""
+    repo = clone(tmp_path, "fresh-shop")
+    store = Store.open(repo)
+    saved = store.read_profile()
+    assert saved.format == 6
+    assert saved.entries[profile.DECLARED].ci_checks is None
+    assert saved.entries[profile.DECLARED].ci_named == ()
+    assert saved.entries[profile.DECLARED].ci_consent is None
+    gh = GitHub()
+    monkeypatch.setattr(profile, "provider", lambda *_a: gh)
+    recovered = profile_share.checked(store, repo)
+    assert profile.names(recovered, profile.DECLARED) == ("lint",)
+    assert recovered.entries[profile.DECLARED].ci_named == ("lint",)
+    assert recovered.entries[profile.DECLARED].ci_consent is None
+    assert store.read_profile().entries[profile.DECLARED] == recovered.entries[profile.DECLARED]
+    fresh = Change(slug="c2", names=Names(worktree=str(repo), target="main", pr=1))
+    pr = pr.model_copy(update={"head_sha": git(repo, "rev-parse", "HEAD")})
+    cx = engine.Ctx(store, Lock("c2"), repo, recovered, gh, NOW)
+    assert follow.declared(cx, fresh, pr, StepKind.FOLLOW) == (("lint",), None)
+    gh.observe_checks = lambda *_a: (Check(name="CI", status="completed", conclusion="success"),)
+    cx.profile.entries[profile.REQUIRED] = profile.rule_entries(
+        Rules(state="known", evidence="rules", required_checks=("CI",))
+    )[profile.REQUIRED]
+    assert follow.ci(cx, pr, ("lint",)).missing == ("lint",)
+    flows = repo / ".github/workflows"
+    flows.mkdir(parents=True)
+    (flows / "ci.yml").write_text("on: pull_request\njobs:\n  t:\n    name: suite\n")
+    changed = profile.detect(repo, gh, recovered)
+    assert not profile.holds(saved.entries[profile.DECLARED], changed.entries[profile.DECLARED])
+    assert changed.entries[profile.DECLARED].ci_named == ("lint",)
+
+
+def _legacy_exact_recheck(shared, tmp_path, monkeypatch, pr):
+    exact = "Tests (Python 3.14, macOS)"
+    rules = Rules(state="known", evidence="rules", required_checks=(exact,))
+    gh = GitHub()
+    gh.read_rules = lambda *_a: rules
+    repo = clone(tmp_path, "exact-shop")
+    flows = repo / ".github/workflows"
+    flows.mkdir(parents=True)
+    (flows / "ci.yml").write_text(f'on: pull_request\njobs:\n  t:\n    name: "{exact}"\n    runs-on: ubuntu-latest\n')
+    (flows / "reusable.yml").write_text("on: pull_request\njobs:\n  reusable:\n    uses: ./shared.yml\n")
+    git(repo, "add", ".github")
+    git(repo, "commit", "-qm", "exact workflow name")
+    raw = profile.detect(repo, gh, None)
+    assert raw.entries[profile.DECLARED].ci_checks == (exact,)
+    payload = raw.model_dump(mode="json")
+    payload["format"] = 5
+    for key in (profile.DECLARED, profile.REQUIRED):
+        observed = raw.entries[key]
+        legacy = ", ".join(observed.ci_checks) or "none"
+        payload["entries"][key] = {
+            "state": "known",
+            "value": legacy,
+            "evidence": f"{profile.CONFIRMED} 2026-10-24{profile.OBSERVED}{observed.evidence}",
+            "observed": hashlib.sha256(json.dumps([observed.state, legacy, observed.evidence]).encode()).hexdigest(),
+        }
+    target = shared / "shop-site" / profile_share.PROFILE
+    target.write_text(json.dumps(payload))
+    assert DataRepo(shared).publish(target, "fixture matching format-5 names") == ""
+    fresh_repo = tmp_path / "exact-fresh"
+    git(tmp_path, "clone", "-q", str(repo), str(fresh_repo))
+    git(fresh_repo, "remote", "set-url", "origin", "git@github.com:acme/shop-site.git")
+    store = Store.open(fresh_repo)
+    monkeypatch.setattr(profile, "provider", lambda *_a: gh)
+    recovered = profile_share.checked(store, fresh_repo)
+    again = profile.detect(fresh_repo, gh, recovered)
+    for key in (profile.DECLARED, profile.REQUIRED):
+        kept = store.read_profile().entries[key]
+        assert kept.ci_checks == (exact,)
+        assert kept.ci_named == ()
+        assert kept.ci_consent is None
+        assert profile.holds(kept, raw.entries[key])
+        assert again.entries[key] == kept
+    _legacy_exact_merge_gate(store, fresh_repo, gh, pr, exact)
+
+
+def _legacy_exact_merge_gate(store, repo, gh, pr, exact):
+    pr = pr.model_copy(update={"head_sha": git(repo, "rev-parse", "HEAD"), "mergeable": True, "merge_state": "clean"})
+    fresh = Change(slug="c3", names=Names(worktree=str(repo), target="main", pr=1))
+    cx = engine.Ctx(store, Lock("c3"), repo, store.read_profile(), gh, NOW)
+    declared, held = follow.declared(cx, fresh, pr, StepKind.MERGE)
+    assert (declared, held) == ((exact,), None)
+    gh.observe_checks = lambda *_a: (Check(name=exact, status="completed", conclusion="success"),)
+    ci = follow.ci(cx, pr, declared)
+    assert ci.missing == ()
+    assert ci.expected == 1
+    assert (
+        decide(
+            pr,
+            target="main",
+            ci=ci,
+            rules=gh.read_rules(cx.repository, "main"),
+            rules_confirmed=True,
+            method=MergeMethod.MERGE,
+            methods=(MergeMethod.MERGE,),
+            can_push=True,
+        ).action
+        == "merge"
+    )
 
 
 def _pair(default, push):
