@@ -74,7 +74,7 @@ def write(
             basis.owned()  # a newer or missing replacement is refused before anything is pulled or written
         current = _current_for_write(store, replace_unreadable=replace_unreadable)
         authority = any(
-            entry and entry.ci_consent
+            entry and (entry.ci_consent or entry.ci_named)
             for profiled in (prof, current, previous)
             if profiled is not None
             for entry in (profiled.entries.get(profile.DECLARED),)
