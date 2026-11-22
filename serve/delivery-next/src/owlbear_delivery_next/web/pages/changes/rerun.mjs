@@ -25,7 +25,8 @@ export function rerunAsk(x, paused) {
       + "so far, its open gates and the count of its timeouts stay.",
     then: `Delivery starts it on its next pass${paused ? ", once you resume this Change" : ""} and goes on as usual. `
       + "It uses more AI credits and may time out again: a repeated timeout is repaired as usual, and if that repair "
-      + "fails the Change stops again.",
+      + "fails the Change stops again. While Delivery is paused only cleanups and brief challenges you asked for "
+      + "run; other steps wait for Resume.",
     after: "You can pause afterwards: that takes effect once the running step ends and doesn't undo what it did.",
     instead: "The Change stays stopped. You can pause or abandon it instead.",
   };

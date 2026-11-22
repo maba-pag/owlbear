@@ -1509,13 +1509,20 @@ def test_a_deadline_stop_shows_its_current_limits_and_reruns_its_original_step_o
     """The c8 shape: the builder timed out twice, then the repairer; the owner's confirmation reruns build t1."""
     fake = Fake(store, tmp_path)
     c = changes_preview.deadline_stopped(worktree=fake.worktree)
+    r = c.repairs.done[-1]
+    r.stopped = "its session's result was voided: the session's log was unreadable"
     save(store, c)
     api_ = client(store, fake)
+    assert api_.get("/api/next/changes/c1").json()["recovery"]["rerun"]["repairer"] is False
+    issue = "https://github.com/maba-pag/owlbear/issues/1"  # the reason step_repair records once it filed a defect
+    r.stopped = f"{repair_recovery.REPAIRER_DEADLINE}. OwlBear defect issue: {issue}"
+    save(store, c)
     builder = store.settings().agents["builder"].minutes
     rerun = api_.get("/api/next/changes/c1").json()["recovery"]["rerun"]
     assert (rerun["step"], rerun["task"], rerun["role"], rerun["repairer"]) == ("build", "t1", "builder", True)
     assert rerun["limits"][0] == {"role": "builder", "minutes": builder, "current": True}
-    assert rerun["limits"][1]["role"] == "repairer"
+    repairer = store.settings().agents["repairer"].minutes
+    assert rerun["limits"][1] == {"role": "repairer", "minutes": repairer, "current": True}
     got = api_.get("/api/next/config").json()
     layer = got["project"] | {"agents": {"builder": {"minutes": builder + 20}}}
     assert api_.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": layer}).status_code == 200

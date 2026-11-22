@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, cast
 from owlbear_delivery_next.change_contracts import permissions, repair_tools, tools
 from owlbear_delivery_next.change_contracts.models import StepKind
 from owlbear_delivery_next.change_contracts.repair_records import Tried
-from owlbear_delivery_next.change_flow import stuck
+from owlbear_delivery_next.change_flow import repair_recovery, stuck
 from owlbear_delivery_next.runtimes import amendments, sdk_adapter, step_input
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.workflow_steps import (
@@ -112,7 +112,7 @@ def session(
 
 def defect(r: Repair | None) -> str:
     """The public defect issue's outcome, or why publication failed."""
-    return f" OwlBear defect issue: {r.defect}" if r and r.defect else ""
+    return f"{repair_recovery.DEFECT}{r.defect}" if r and r.defect else ""
 
 
 def question(r: Repair) -> str:

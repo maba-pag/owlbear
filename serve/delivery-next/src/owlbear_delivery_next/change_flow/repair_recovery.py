@@ -22,6 +22,7 @@ LEGACY = {
     "94031b7acb33968ff62c895b8d03bc83786b9eb087e0a254ec928a7ef8834d74": (1312, "v1.284"),
 }
 REPAIRER_DEADLINE = "its own step deadline ended the repair before it proved a fix"
+DEFECT = " OwlBear defect issue: "  # a stopped repair's reason ends with it once it filed a defect issue
 OWN = {StepKind.PLAN: {None}, StepKind.BUILD: {None}, StepKind.CHECK: {None}, StepKind.REVIEW: {None, "final"}}
 
 
@@ -123,7 +124,7 @@ def deadline(c: Change) -> bool:
 def repairer_timed_out(c: Change) -> bool:
     """Whether the exhausted repair of this deadline stop ended on the repairer's own deadline."""
     r = stopped(c)
-    return bool(r and r.stopped == REPAIRER_DEADLINE)
+    return bool(r and (r.stopped == REPAIRER_DEADLINE or r.stopped.startswith(f"{REPAIRER_DEADLINE}.{DEFECT}")))
 
 
 def _repair(c: Change) -> int | None:
