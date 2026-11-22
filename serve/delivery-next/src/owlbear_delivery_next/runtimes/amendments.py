@@ -130,7 +130,8 @@ CANDIDATE_RULES = (
     "the owner's intent and every item you do not need. A change against a project decision the Change follows is a "
     "new Change-scoped decision (field decision, empty key, its question and answer) recording the exception; the "
     "project decision stays. A change that needs the outcome or the non-goals is not an amendment: set `refuse` with "
-    "why, and no items. "
+    "why, and no items. A reason that needs no brief change at all (for example: go on with the work as approved) is "
+    "no amendment either: set `refuse` saying so, and no items. "
     f"{owner_look.INSTRUCTIONS}"
 )
 
