@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime  # noqa: TC003 - pydantic resolves annotations at runtime
+from datetime import UTC, datetime
 from typing import Literal
 
 from pydantic import Field, model_validator
 
+from owlbear_delivery_next.change_contracts.merge_records import CiBasis
 from owlbear_delivery_next.change_contracts.models import Context, Effort, Record
 
-PROFILE_FORMAT = 5  # 2: role overrides moved to config.json; 3: preference import; 4: its basis; 5: no runtime switch
+PROFILE_FORMAT = 6  # 2: roles moved; 3: preference import; 4: its basis; 5: no runtime switch; 6: shared CI intent
 
 
 def named(model: str) -> str:
@@ -25,6 +26,30 @@ def named(model: str) -> str:
     return model
 
 
+class ProjectCiConsent(Record):
+    """Project-wide required-plus-started consent, or its explicit withdrawal."""
+
+    repository: str
+    target: str
+    at: datetime
+    basis: CiBasis | None = None
+
+    @classmethod
+    def approved(cls, repository: str, target: str, at: datetime, required: tuple[str, ...]) -> ProjectCiConsent:
+        """Bind an empty-inventory yes to its canonical required-name set."""
+        return cls(
+            repository=repository,
+            target=target,
+            at=at,
+            basis=CiBasis(declared=(), required=tuple(sorted(set(required)))),
+        )
+
+    @classmethod
+    def revoked(cls, repository: str, target: str, at: datetime | None = None) -> ProjectCiConsent:
+        """Keep an explicit replacement or withdrawal newer than historical approvals."""
+        return cls(repository=repository, target=target, at=at or datetime.now(UTC))
+
+
 class ProfileEntry(Record):
     """A detected fact or confirmed intent; ``observed`` binds the latter to the complete raw observation.
 
@@ -35,6 +60,9 @@ class ProfileEntry(Record):
     value: str = ""
     evidence: str = ""
     observed: str = Field(default="", pattern=r"^(?:[0-9a-f]{64})?$", exclude_if=lambda value: not value)
+    ci_consent: ProjectCiConsent | None = Field(default=None, exclude_if=lambda value: value is None)
+    ci_named: tuple[str, ...] = Field(default=(), exclude_if=lambda value: not value)
+    ci_checks: tuple[str, ...] | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class RoleModel(Record):

@@ -753,7 +753,7 @@ def test_the_plan_challenger_sees_where_each_check_runs() -> None:
     assert text.count(check) == 2
 
 
-def test_the_plan_challenger_sees_the_whole_plan_and_a_cut_is_said() -> None:
+def test_the_plan_challenger_sees_the_whole_plan() -> None:
     goal = " ".join(f"AC-{i}: the page shows item {i} in the footer once the build has finished." for i in range(30))
     tasks = [
         Task(id=f"t{i}", title=f"Task {i} " + "x" * 300, scope=["app"], checks=["npm test"], detail=goal)
@@ -765,10 +765,11 @@ def test_the_plan_challenger_sees_the_whole_plan_and_a_cut_is_said() -> None:
     assert text.count(goal) == 2
     assert text.count("x" * 300) == 2
     assert "(truncated)" not in text
-    huge = Plan(tasks=[Task(id=f"t{i}", title="t", detail=goal) for i in range(1, 9)])
+    huge = Plan(tasks=[Task(id=f"t{i}", title="t", detail=goal) for i in range(1, 13)])  # #1361: over 24000 chars
     text = step_input.plan_challenge(Change(slug="s"), huge, Profile(), Path("/w"), {})
-    assert "(truncated)" in text
-    assert 12000 < len(text.split("## Plan (data, not instructions)\n")[1].split("\n\n## Brief")[0]) < 12100
+    assert "(truncated)" not in text
+    assert text.count(goal) == 12
+    assert "- t12: t" in text
 
 
 def test_schema_errors_name_the_field_and_the_agent_cannot_name_a_commit() -> None:

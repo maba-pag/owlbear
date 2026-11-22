@@ -43,7 +43,7 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile, Profi
 from owlbear_delivery_next.change_contracts.round_records import LeftOpen, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import asking, budgets, delivery_target, loop, round_flow, stuck, worktree
 from owlbear_delivery_next.change_flow.status import Activity
-from owlbear_delivery_next.commands import runner
+from owlbear_delivery_next.commands import runner, setup_profile
 from owlbear_delivery_next.git import access as git_access
 from owlbear_delivery_next.git import remote_git
 from owlbear_delivery_next.git.access import Access
@@ -84,16 +84,18 @@ from owlbear_delivery_next.project_host import host as scheduler
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.runtimes.readiness import Check as SetupCheck
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.settings import config, profile
+from owlbear_delivery_next.settings import ci_consent, config, profile
 from owlbear_delivery_next.state_store.store import Lock, SharedError, Store
 from owlbear_delivery_next.workflow_steps import (
     check,
+    ci_basis,
     cleanup,
     conversation,
     disposable,
     engine,
     follow,
     merge,
+    project_ci,
     publish,
     queue,
     review,
@@ -453,7 +455,7 @@ def test_unknown_declared_checks_keep_exact_digest_answers_and_report_save_failu
     cx.profile = p  # the unchanged current-policy confirmation path below still saves its answer
     saving = cx.store.write_profile
 
-    def locked(_profile) -> None:
+    def locked(_profile, **_kwargs) -> None:
         busy = SharedError(whole_error)
         busy.add_note("NOTE-MARK")
         raise busy
@@ -652,6 +654,7 @@ def test_empty_inventory_consent_keeps_the_current_profiles_confirmed_named_chec
     c = loop.apply(c, proposal, NOW)
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
     c.questions[-1].ci_basis = None
+    cx.profile.entries[profile.DEFAULT] = ProfileEntry(state="known", value="main")
     cx.profile = profile.confirm(cx.profile, profile.DECLARED, "lint", NOW)
     head, entries = ci_head(clone, "${{ inputs.n }} updated")
     gh.pr = pr(head=head)
@@ -659,11 +662,117 @@ def test_empty_inventory_consent_keeps_the_current_profiles_confirmed_named_chec
     cause = f"{asking.DECLARED}{profile.digest_of(entries[profile.DECLARED])}"
     c.questions.append(c.questions[-1].model_copy(update={"id": "q5", "cause": cause, "ci_observation": None}))
     assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == (("lint",), None)
+    c.questions[-1].ci_basis = CiBasis(declared=(), required=("CI",))
+    cx.profile = profile.confirm(cx.profile, profile.DECLARED, "lint", NOW + timedelta(seconds=1))
+    head, _ = ci_head(clone, "${{ inputs.n }} revised")
+    gh.pr = pr(head=head)
+    assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == (("lint",), None)
+    c, head = _global_named_then_detected(cx, clone, head)
     c.step = Step(kind=StepKind.MERGE)
     c.reviews = [Review(commit=head, inputs=Inputs(), verdict="pass")]
     gh.checks = (Check(name="CI", status="completed", conclusion="success"),)
     c, held = merge.run(cx, c)
     assert (held.exit, gh.merges) == (Exit.PENDING, [])  # a confirmed but never-started lint check still gates.
+    head, _ = ci_head(clone, "suite")
+    gh.pr, gh.can_push = pr(head=head), True
+    cx.profile = profile.confirm(cx.profile, profile.DECLARED, "lint", NOW + timedelta(seconds=10))
+    cx.profile = profile.detect(clone, gh, cx.profile)
+    fresh = change(StepKind.MERGE, worktree=str(clone), head=head)
+    fresh.names.target = "release"
+    gh.pr = gh.pr.model_copy(update={"base_branch": "release"})
+    git(clone, "branch", "release", "origin/main")
+    git(clone, "push", "-q", "origin", "release")
+    assert not fresh.questions
+    assert follow.declared(cx, fresh, gh.pr, StepKind.MERGE) == (("lint", "suite"), None)
+    gh.checks = tuple(Check(name=n, status="completed", conclusion="success") for n in ("CI", "suite"))
+    _, held = merge.run(cx, fresh)
+    assert held.exit == Exit.PENDING
+    assert gh.merges == []
+    _partial_named_after(cx, clone)
+
+
+def _partial_named_after(cx, clone):
+    gh = cx.gh
+    head = _commit_workflow(clone, "unresolved.yml", "on: pull_request\njobs:\n  t: {uses: './shared.yml'}\n")
+    gh.pr = gh.pr.model_copy(update={"head_sha": head})
+    fresh = change(StepKind.FOLLOW, worktree=str(clone), head=head)
+    fresh.names.target = "release"
+    _, proposal = follow.declared(cx, fresh, gh.pr, StepKind.FOLLOW)
+    fresh = loop.apply(fresh, proposal, NOW)
+    fresh, _ = loop.schedule(fresh, [AnswerItem(at=NOW, question=fresh.outcome.question, option="yes")], NOW)
+    assert follow.declared(cx, fresh, gh.pr, StepKind.FOLLOW) == (("lint", "suite"), None)
+    _persisted_partial_returns_empty(cx, clone)
+
+
+def _persisted_partial_returns_empty(cx, clone):
+    gh = cx.gh
+    before = cx.store.read_profile()
+    cx.profile = profile.detect(clone, gh, before)
+    cx.store.write_profile(cx.profile, previous=before)
+    consent = cx.profile.entries[profile.DECLARED].ci_consent
+    assert consent.basis == CiBasis(declared=(), required=("CI",))
+    gh.pr = gh.pr.model_copy(update={"base_branch": consent.target})
+    c = change(StepKind.FOLLOW, worktree=str(clone), head=gh.pr.head_sha)
+    cx.lock = Lock(c.slug)
+    c.names.target = consent.target
+    cx.now = NOW + timedelta(seconds=20)
+    _, proposal = follow.declared(cx, c, gh.pr, StepKind.FOLLOW)
+    c = loop.apply(c, proposal, cx.now)
+    c, _ = loop.schedule(c, [AnswerItem(at=cx.now, question=c.outcome.question, option="yes")], cx.now)
+    assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == (("lint", "suite"), None)
+    saved = cx.store.read_profile().entries[profile.DECLARED]
+    assert saved.ci_checks == ("suite",)
+    assert saved.ci_named == ("lint",)
+    assert saved.ci_consent == consent
+    head, _ = ci_head(clone, "${{ inputs.n }} returned to empty")
+    gh.pr = gh.pr.model_copy(update={"head_sha": head})
+    _, changed = follow.declared(cx, c, gh.pr, StepKind.FOLLOW)
+    assert changed.exit == Exit.ASK
+    assert "Detected checks changed from suite to none." in changed.question.text
+    redetected = profile.detect(clone, gh, cx.profile)
+    assert profile.names(redetected, profile.DECLARED) == ("lint",)
+    assert redetected.entries[profile.DECLARED].ci_consent == consent
+    cx.now += timedelta(seconds=1)
+    c = loop.apply(c, changed, cx.now)
+    c, _ = loop.schedule(c, [AnswerItem(at=cx.now, question=c.outcome.question, option="yes")], cx.now)
+    assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == (("lint",), None)
+    assert len(c.questions) == 2
+    assert [q.ci_basis.declared for q in c.questions] == [("suite",), ()]
+    assert cx.store.read_profile().entries[profile.DECLARED].ci_named == ("lint",)
+    c.step = Step(kind=StepKind.MERGE)
+    c.reviews = [Review(commit=head, inputs=Inputs(), verdict="pass")]
+    gh.checks = tuple(Check(name=n, status="completed", conclusion="success") for n in ("CI", "lint", "matrix run"))
+    merged(gh)
+    _, result = merge.run(cx, c)
+    assert result.exit == Exit.DONE
+    assert [request.expected_head_sha for request in gh.merges] == [head]
+
+
+def _global_named_then_detected(cx, clone, head):
+    cx.store.write_profile(cx.profile, previous=cx.store.read_profile())
+    c = change(StepKind.FOLLOW, worktree=str(clone)).model_copy(update={"slug": "fresh"})
+    c.brief.approved_version = 1
+    c.names.branch, cx.lock = "owlbear/fresh", Lock("fresh")
+    cx.gh.pr = pr(head=head, head_branch=c.names.branch)
+    _, proposed = follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW)
+    c = loop.apply(c, proposed, NOW + timedelta(seconds=2))
+    c, _ = loop.schedule(
+        c,
+        [AnswerItem(at=NOW + timedelta(seconds=2), question=c.outcome.question, option="yes")],
+        NOW + timedelta(seconds=2),
+    )
+    assert follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW) == (("lint",), None)
+    head, _ = ci_head(clone, "new suite")
+    cx.gh.pr = pr(head=head, head_branch=c.names.branch)
+    _, proposed = follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW)
+    c = loop.apply(c, proposed, NOW + timedelta(seconds=3))
+    c, _ = loop.schedule(
+        c,
+        [AnswerItem(at=NOW + timedelta(seconds=3), question=c.outcome.question, option="yes")],
+        NOW + timedelta(seconds=3),
+    )
+    assert follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW) == (("lint", "new suite"), None)
+    return c, head
 
 
 def test_a_persisted_duplicate_inventory_hold_settles_before_normal_host_scheduling(tmp_path, clone, capsys):
@@ -3720,6 +3829,7 @@ def test_required_basis_approval_covers_only_the_delta_the_rules_question_showed
     rules = Rules(state="known", evidence="rules", required_checks=("ci",))
     cx = ctx(tmp_path, gh, prof(**(entries | profile.rule_entries(rules))))
     c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
+    c.brief.approved_version = 1
     _, inventory = follow.declared(cx, c, gh.pr, StepKind.FOLLOW)
     c = loop.apply(c, inventory, NOW)
     c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
@@ -3747,13 +3857,312 @@ def test_required_basis_approval_covers_only_the_delta_the_rules_question_showed
     stricter = refreshed.model_copy(update={"strict": True})
     gh.read_rules = lambda _r, _b: stricter
     strict, _ = engine.rules_changed(cx, c)
-    assert strict.question.ci_basis is None  # this yes must not vouch for unseen changed requirements.
-    c = loop.apply(c, strict, NOW)
-    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
-    assert engine.rules_changed(cx, c)[0] is None
+    assert strict.question.ci_basis == CiBasis(required=("ci", "lint", "scan"))
+    assert "Added: scan." in strict.question.text  # observed requirements are now shown for project renewal.
+    spent = loop.apply(c, strict, NOW)
+    assert spent.stop is not None  # project renewal does not reset the shared inventory question allowance.
+    newer = loop.apply(change(StepKind.FOLLOW, worktree=str(clone)), strict, NOW)
+    newer, _ = loop.schedule(
+        newer,
+        [AnswerItem(at=NOW + timedelta(seconds=1), question=newer.outcome.question, option="yes")],
+        NOW + timedelta(seconds=1),
+    )
+    strict, _ = engine.rules_changed(cx, newer)
+    assert strict.question.ci_basis is None  # the remaining strictness proposal grants no unseen CI authority.
+    newer = loop.apply(newer, strict, NOW)
+    newer, _ = loop.schedule(newer, [AnswerItem(at=NOW, question=newer.outcome.question, option="yes")], NOW)
+    assert engine.rules_changed(cx, newer)[0] is None
+    assert follow.declared(cx, newer, gh.pr, StepKind.FOLLOW) == ((), None)
+    # The pre-project within-Change path still refuses an unshown required snapshot.
+    c.questions[0].ci_observation, c.questions[0].ci_basis, c.questions[1].cause = (
+        c.questions[0].ci_basis,
+        None,
+        "gate:publish:rules-legacy",
+    )
+    cx.store, cx.profile.entries[profile.DECLARED].ci_consent = Store(tmp_path / "legacy-store"), None
     _, inventory = follow.declared(cx, c, gh.pr, StepKind.FOLLOW)
     assert inventory.exit == Exit.ASK
     assert "Required checks were ci; now ci, lint, scan." in inventory.question.text
-    c.questions[0].ci_basis = CiBasis(declared=())
+    c.questions = [c.questions[0].model_copy(update={"ci_basis": CiBasis(declared=())})]
     _, unreadable = follow.declared(cx, c, gh.pr, StepKind.FOLLOW)
     assert "Required checks were not readable; now ci, lint, scan." in unreadable.question.text
+
+
+def test_completed_project_yes_seeds_shared_intent_releases_a_hold_and_renews_once(
+    tmp_path, clone, shared_repo, monkeypatch, whole_error
+):
+    head, entries = ci_head(clone, "${{ inputs.n }}")
+    rules = Rules(state="known", evidence="rules", required_checks=("CI",))
+    gh = FakeGh(pr(head=head))
+    gh.read_rules = lambda _r, _b: rules
+    cx = ctx(tmp_path, gh, prof(**(entries | profile.rule_entries(rules))))
+    cx.store = Store(tmp_path / "store", DataRepo(shared_repo[0]), "shop-site")
+    cx.store.write_profile(cx.profile)
+    c, held = _completed_and_held(cx, clone, head)
+    stale = cx.profile
+    consent = _seed_completed_consent(cx, c, monkeypatch, whole_error)
+    head, _ = ci_head(clone, "${{ inputs.n }} updated")
+    gh.pr = pr(head=head)
+    fresh = change(StepKind.FOLLOW, worktree=str(clone)).model_copy(update={"slug": "c3"})
+    cx.lock = Lock("c3")
+    cx.profile = stale
+    assert follow.declared(cx, fresh, gh.pr, StepKind.FOLLOW) == ((), None)
+    version = cx.profile.version
+    assert follow.declared(cx, fresh, gh.pr, StepKind.FOLLOW) == ((), None)
+    assert cx.profile.version == version
+    obsolete = held.model_copy(deep=True, update={"slug": "c4"})
+    ci_basis.settle(cx.store, Lock("c2"), held, NOW)
+    assert held.questions[0].answer is None
+    assert held.questions[0].effect_observed_at == NOW
+    assert loop.open_question(held) is None
+    assert len(held.questions) == 1
+    cx.store.write(Lock("c2"), held)
+    refused_change = held.model_copy(deep=True)
+    refused_change.questions[0].answer = Answer(option="pause", at=NOW)
+    refused_change.intent.paused_at = NOW
+    ci_basis.settle(cx.store, Lock("c2"), refused_change, NOW)
+    assert refused_change.intent.paused_at == NOW
+    assert not ci_basis.compatible(refused_change, consent)
+
+    rules = rules.model_copy(update={"required_checks": ("CI", "scan")})
+    fresh.step = Step(kind=StepKind.PUBLISH)
+    renewal, _ = engine.rules_changed(cx, fresh)
+    assert renewal.question.ci_basis == CiBasis(required=("CI", "scan"))
+    assert "Added: scan." in renewal.question.text
+    fresh = loop.apply(fresh, renewal, NOW + timedelta(seconds=2))
+    fresh, _ = loop.schedule(
+        fresh,
+        [AnswerItem(at=NOW + timedelta(seconds=2), question=fresh.outcome.question, option="yes")],
+        NOW + timedelta(seconds=2),
+    )
+    assert engine.rules_changed(cx, fresh)[0] is None
+    fresh.step = Step(kind=StepKind.FOLLOW)
+    assert follow.declared(cx, fresh, gh.pr, StepKind.FOLLOW) == ((), None)
+    assert len(fresh.questions) == 1  # Publish and inventory do not ask for the same required update twice.
+    _named_after_rules(cx, fresh, clone, rules, obsolete)
+    _profile_error_after_activity(cx, monkeypatch, whole_error)
+
+
+def test_project_ci_snapshot_preserves_a_required_matrix_check_name(tmp_path, clone):
+    head, entries = ci_head(clone, "${{ inputs.n }}")
+    required = "Tests (Python 3.14, macOS)"
+    rules = Rules(state="known", evidence="rules", required_checks=(required,))
+    gh = FakeGh(pr(head=head))
+    gh.read_rules = lambda _r, _b: rules
+    cx = ctx(tmp_path, gh, prof(**(entries | profile.rule_entries(rules))))
+    c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
+    _, proposal = follow.run(cx, c)
+    assert proposal.question.ci_basis == CiBasis(declared=(), required=(required,))
+    c = loop.apply(c, proposal, NOW)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
+    assert follow.declared(cx, c, gh.pr, StepKind.FOLLOW) == ((), None)
+    head, _ = ci_head(clone, "${{ inputs.n }} updated")
+    gh.pr = pr(head=head)
+    fresh = change(StepKind.MERGE, worktree=str(clone), head=head)
+    cx.profile = cx.store.read_profile()
+    assert follow.declared(cx, fresh, gh.pr, StepKind.MERGE) == ((), None)
+    named = "Lint (Ruff, Biome)"
+    before = cx.store.read_profile()
+    direct = profile.confirm(
+        before, profile.DECLARED, '"Lint (Ruff, Biome)"', NOW, consent=before.entries[profile.DECLARED].ci_consent
+    )
+    assert direct.entries[profile.DECLARED].ci_named == (named,)
+    cx.profile = setup_profile.confirmed(before, {profile.DECLARED: '"Lint (Ruff, Biome)"'}, by="prompt")
+    cx.store.write_profile(cx.profile, previous=before)
+    assert project_ci.confirm_value(cx, fresh, '"Lint (Ruff, Biome)"', explicit=True) is None
+    assert cx.store.read_profile().entries[profile.DECLARED].ci_named == (named,)
+    consent = cx.profile.entries[profile.DECLARED].ci_consent
+    head, _ = ci_head(clone, "${{ inputs.n }} changed again")
+    gh.pr = pr(head=head)
+    fresh = change(StepKind.MERGE, worktree=str(clone), head=head)
+    assert follow.declared(cx, fresh, gh.pr, StepKind.MERGE) == ((named,), None)
+    assert cx.store.read_profile().entries[profile.DECLARED].ci_checks == (named,)
+    assert cx.profile.entries[profile.DECLARED].ci_consent == consent
+    fresh, added = _renew_exact_ci_names(cx, fresh, required, named)
+    gh.checks = tuple(Check(name=n, status="completed", conclusion="success") for n in (required, added))
+    _, held = merge.run(cx, fresh)
+    assert held.exit == Exit.PENDING
+    assert gh.merges == []
+    gh.checks += (Check(name=named, status="completed", conclusion="success"),)
+    merged(gh)
+    _, result = merge.run(cx, fresh)
+    assert result.exit == Exit.DONE
+    assert [request.expected_head_sha for request in gh.merges] == [head]
+
+
+def _renew_exact_ci_names(cx, fresh, required, named):
+    before = cx.profile
+    cx.profile = before.model_copy(
+        update={"entries": before.entries | {profile.REQUIRED: ProfileEntry(state="known", value="none")}}
+    )
+    cx.store.write_profile(cx.profile, previous=before)
+    assert engine.rules_changed(cx, fresh)[0] is None
+    assert profile.names(cx.store.read_profile(), profile.REQUIRED) == (required,)
+    added = "Audit (uv, deps)"
+    rules = cx.gh.read_rules(cx.repository, fresh.names.target).model_copy(
+        update={"required_checks": (required, added)}
+    )
+    cx.gh.read_rules = lambda _r, _b: rules
+    proposal, _ = engine.rules_changed(cx, fresh)
+    assert proposal.question.ci_basis.required == tuple(sorted((required, added)))
+    fresh = loop.apply(fresh, proposal, NOW)
+    fresh, _ = loop.schedule(fresh, [AnswerItem(at=NOW, question=fresh.outcome.question, option="yes")], NOW)
+    assert engine.rules_changed(cx, fresh)[0] is None
+    assert cx.store.read_profile().entries[profile.DECLARED].ci_checks == (named,)
+    assert follow.declared(cx, fresh, cx.gh.pr, StepKind.MERGE) == ((named,), None)
+    assert len(fresh.questions) == 1
+    return fresh, added
+
+
+def _named_after_rules(cx, c, clone, rules, obsolete):
+    ci_basis.settle(cx.store, Lock("c4"), obsolete, NOW)
+    assert loop.open_question(obsolete) is None
+    assert obsolete.questions[0].answer is None
+    legacy = loop.apply(
+        change(StepKind.FOLLOW, worktree=str(clone)).model_copy(update={"slug": "c5"}),
+        engine.ask(
+            StepKind.FOLLOW,
+            "The merge rules of main on GitHub differ from what Delivery recorded for this project: "
+            "checks GitHub requires before merging: was old-ci, now CI. Go on under the rules as they are now?",
+            "gate:follow:rules-legacy",
+            subject="reserved",
+        ),
+        NOW,
+    )
+    legacy.questions[0].ci_basis = CiBasis(required=("CI",))
+    unrelated = legacy.model_copy(deep=True, update={"slug": "c6"})
+    unrelated.questions[0].text += " the branch must be up to date before merging: was no, now yes"
+    ci_basis.settle(cx.store, Lock("c5"), legacy, NOW)
+    assert loop.open_question(legacy) is None
+    assert legacy.questions[0].answer is None
+    ci_basis.settle(cx.store, Lock("c6"), unrelated, NOW)
+    assert loop.open_question(unrelated) is not None
+    cx.gh.read_rules = lambda _r, _b: rules.model_copy(update={"strict": True})
+    proposal, _ = engine.rules_changed(cx, c)
+    assert proposal.question.ci_basis is None
+    c = loop.apply(c, proposal, NOW + timedelta(seconds=3))
+    c, _ = loop.schedule(
+        c,
+        [AnswerItem(at=NOW + timedelta(seconds=3), question=c.outcome.question, option="yes")],
+        NOW + timedelta(seconds=3),
+    )
+    assert engine.rules_changed(cx, c)[0] is None
+    assert follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW) == ((), None)
+    head, _ = ci_head(clone, "lint")
+    head = _commit_workflow(clone, "dynamic.yml", "on: pull_request\njobs:\n  t: {name: '${{ inputs.n }}'}\n")
+    cx.gh.pr = pr(head=head)
+    _, named = follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW)
+    assert named.question.ci_basis == CiBasis(declared=("lint",), required=("CI", "scan"))
+    c = loop.apply(c, named, NOW + timedelta(seconds=4))
+    c, _ = loop.schedule(
+        c,
+        [AnswerItem(at=NOW + timedelta(seconds=4), question=c.outcome.question, option="yes")],
+        NOW + timedelta(seconds=4),
+    )
+    assert follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW) == (("lint",), None)
+    c.step = Step(kind=StepKind.MERGE)
+    c.reviews = [Review(commit=head, inputs=Inputs(), verdict="pass")]
+    cx.gh.checks = tuple(Check(name=n, status="completed", conclusion="success") for n in rules.required_checks)
+    _, missing = merge.run(cx, c)
+    assert missing.exit == Exit.PENDING
+    assert cx.gh.merges == []
+
+
+def _seed_completed_consent(cx, c, monkeypatch, whole_error):
+    clone = Path(c.names.worktree)
+    publish_profile = DataRepo.publish
+
+    def refused(self, path, message, until=None):
+        if path.name == "profile.json":
+            return whole_error
+        return publish_profile(self, path, message, until)
+
+    monkeypatch.setattr(DataRepo, "publish", refused)
+    ci_basis.settle(cx.store, cx.lock, c, NOW)
+    saved = cx.store.read_profile()
+    consent = saved.entries[profile.DECLARED].ci_consent
+    assert consent.basis == CiBasis(declared=(), required=("old-ci",))
+    assert not ci_consent.project_ci(saved, "main", saved.entries[profile.DECLARED])
+    assert cx.store.read("c1").questions == c.questions  # no fabricated historical answer or effect.
+    cx.profile = saved
+    _, mismatch = follow.declared(cx, change(StepKind.FOLLOW, worktree=str(clone)), cx.gh.pr, StepKind.FOLLOW)
+    assert "Required checks were old-ci; now CI." in mismatch.question.text
+    monkeypatch.setattr(DataRepo, "publish", publish_profile)
+    c.questions.append(
+        Question(
+            id="q2",
+            step=StepKind.FOLLOW,
+            text="Merge on required plus started checks?",
+            cause="gate:follow:declared-later",
+            ci_basis=CiBasis(declared=()),
+            answer=Answer(option="yes", at=NOW + timedelta(milliseconds=500)),
+        )
+    )
+    c.questions.append(
+        Question(
+            id="q3",
+            step=StepKind.PUBLISH,
+            text="Require CI?",
+            cause="gate:publish:rules-fixture",
+            ci_basis=CiBasis(required=("CI",)),
+            answer=Answer(option="yes", at=NOW + timedelta(seconds=1)),
+        )
+    )
+    c.questions.append(
+        Question(
+            id="q4",
+            step=StepKind.FOLLOW,
+            text="Also wait for lint on this Change?",
+            cause="gate:follow:declared-named",
+            ci_basis=CiBasis(declared=("lint",), required=("CI",)),
+            answer=Answer(option="yes", at=NOW + timedelta(milliseconds=1500)),
+        )
+    )
+    cx.store.write(cx.lock, c)
+    ci_basis.settle(cx.store, cx.lock, c, NOW)
+    cx.profile = cx.store.read_profile()
+    consent = cx.profile.entries[profile.DECLARED].ci_consent
+    assert consent.basis == CiBasis(declared=(), required=("CI",))
+    assert consent.at == NOW + timedelta(seconds=1)
+    proposal = Question(
+        id="q1",
+        step=StepKind.PUBLISH,
+        text="Required plus started for all project Changes?",
+        cause="gate:publish:rules-ci-saved",
+        ci_basis=CiBasis(required=("CI",)),
+        answer=Answer(option="yes", at=NOW + timedelta(milliseconds=1700)),
+    )
+    named = c.questions[-1].model_copy(deep=True)
+    named.answer.at = NOW + timedelta(milliseconds=1800)
+    renewed = c.model_copy(deep=True, update={"slug": "completed-renewal", "questions": [proposal, named]})
+    with cx.store.lock(renewed.slug) as lock:
+        cx.store.write(lock, renewed)
+        ci_basis.settle(cx.store, lock, renewed, NOW)
+    cx.profile = cx.store.read_profile()
+    consent = cx.profile.entries[profile.DECLARED].ci_consent
+    assert consent.at == proposal.answer.at
+    return consent
+
+
+def _completed_and_held(cx, clone, head):
+    c = change(StepKind.FOLLOW, worktree=str(clone), head=head)
+    _, first = follow.declared(cx, c, cx.gh.pr, StepKind.FOLLOW)
+    c = loop.apply(c, first, NOW)
+    c, _ = loop.schedule(c, [AnswerItem(at=NOW, question=c.outcome.question, option="yes")], NOW)
+    c.questions[0].ci_basis = CiBasis(declared=(), required=("old-ci",))
+    c.step, c.finished_at = Step(kind=StepKind.CLEANUP), NOW + timedelta(seconds=2)
+    cx.store.write(cx.lock, c)
+    held = loop.apply(change(StepKind.FOLLOW, worktree=str(clone)).model_copy(update={"slug": "c2"}), first, NOW)
+    cx.store.write(Lock("c2"), held)
+    return c, held
+
+
+def _profile_error_after_activity(cx, monkeypatch, whole_error):
+    """Diagnostics survive successful retry and later activity on the existing API."""
+    monkeypatch.setattr("owlbear_delivery_next.state_store.store.ACTIVITY_LIMIT", 1)
+    for i in range(3):
+        cx.store.log(Lock("c1"), "c1", {"event": "ci", "passed": [str(i)]})
+    client = TestClient(
+        api.create_app(cx.store, "t", Host()), base_url="http://127.0.0.1", headers={"authorization": "Bearer t"}
+    )
+    assert client.get("/api/next/changes/c1").json()["diagnostics"][0]["reason"] == whole_error

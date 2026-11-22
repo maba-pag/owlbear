@@ -35,6 +35,11 @@ def prefs_basis_added(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def project_ci_added(data: dict[str, Any]) -> dict[str, Any]:
+    """Profile 5 to 6: shared CI intent; old records supply no invented approval or explicit names."""
+    return data
+
+
 def with_roles(layer: Layer, found: dict[Role, RoleModel]) -> Layer:
     """The layer with old role overrides filling only the model and effort fields it leaves empty."""
     agents = dict(layer.agents)
@@ -371,7 +376,13 @@ CHANGE: Migrations = {
     7: held_records_added,
     8: shaping_chat_added,
 }
-PROFILE: Migrations = {1: roles_moved, 2: prefs_import_added, 3: prefs_basis_added, 4: runtime_switch_dropped}
+PROFILE: Migrations = {
+    1: roles_moved,
+    2: prefs_import_added,
+    3: prefs_basis_added,
+    4: runtime_switch_dropped,
+    5: project_ci_added,
+}
 CONFIG: Migrations = {
     1: seed_dropped,
     2: judge_renamed,
