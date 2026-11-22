@@ -1,6 +1,7 @@
 """A worker tool's JSON schema and its argument parsing, whose errors name the field with an example (T5).
 
 A value over a field's limit is refused with its length, the limit and what to cut (C-28); nothing is truncated.
+String cuts include a margin of 10% of the limit.
 """
 
 from __future__ import annotations
@@ -93,7 +94,8 @@ def _error(model: type[BaseModel], err: ErrorDetails) -> str:
     where, (key, info, depth) = _loc(err["loc"]), _field(model, err["loc"])
     limit, given, advice = (err.get("ctx") or {}).get("max_length"), err.get("input"), SHORTEN.get(key, "")
     if err["type"] == "string_too_long" and isinstance(given, str):
-        return f"{where}: {len(given)} characters, at most {limit} - {advice or TEXT}"
+        cut = len(given) - limit + limit // 10
+        return f"{where}: {len(given)} characters, at most {limit} - cut at least {cut}: {advice or TEXT}"
     if err["type"] == "too_long" and isinstance(given, list):
         return f"{where}: {len(given)} items, at most {limit} - {advice or ITEMS}"
     return f"{where}: {err['msg']}{_example(info, depth)}"
