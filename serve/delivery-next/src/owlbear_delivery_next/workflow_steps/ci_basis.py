@@ -302,7 +302,7 @@ def required_approved(c: Change, q: Question, basis: CiBasis, prof: Profile) -> 
         other.ci_basis is not None
         and (other.ci_basis.declared is None or _project_renewal(other))
         and other.ci_basis.required == basis.required
-        and (other.cause or "").startswith(("gate:publish:rules-", "gate:follow:rules-", "gate:merge:rules-"))
+        and requirements(other)
         and other.answer is not None
         and other.answer.option == "yes"
         and other.answer.superseded_at is None
