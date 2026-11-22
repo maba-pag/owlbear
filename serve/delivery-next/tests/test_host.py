@@ -1505,7 +1505,9 @@ def changes_preview(monkeypatch):
     return changes_preview
 
 
-def test_a_deadline_stop_shows_its_current_limits_and_reruns_its_original_step_once(store, tmp_path, changes_preview):
+def test_a_deadline_stop_shows_its_current_limits_and_reruns_its_original_step_once(
+    store, tmp_path, changes_preview, monkeypatch
+):
     """The c8 shape: the builder timed out twice, then the repairer; the owner's confirmation reruns build t1."""
     fake = Fake(store, tmp_path)
     c = changes_preview.deadline_stopped(worktree=fake.worktree)
@@ -1523,6 +1525,12 @@ def test_a_deadline_stop_shows_its_current_limits_and_reruns_its_original_step_o
     assert rerun["limits"][0] == {"role": "builder", "minutes": builder, "current": True}
     repairer = store.settings().agents["repairer"].minutes
     assert rerun["limits"][1] == {"role": "repairer", "minutes": repairer, "current": True}
+    base = config.BASE.agents["repairer"]
+    monkeypatch.setattr(base, "subagents", None)  # the repairer leaves Settings.agents; its minutes still resolve
+    assert api_.get("/api/next/changes/c1").json()["recovery"]["rerun"]["limits"][1]["minutes"] == repairer
+    monkeypatch.setattr(base, "minutes", None)
+    assert api_.get("/api/next/changes/c1").json()["recovery"]["rerun"]["limits"][1]["minutes"] is None
+    monkeypatch.setattr(base, "minutes", repairer)
     got = api_.get("/api/next/config").json()
     layer = got["project"] | {"agents": {"builder": {"minutes": builder + 20}}}
     assert api_.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": layer}).status_code == 200

@@ -69,9 +69,9 @@ def _rerun(c: Change, store: Store, block: work_block.Block) -> dict[str, Any]:
     role, repairer = roles.SESSIONS[c.step.kind], repair_recovery.repairer_timed_out(c)
     timed = [role, *([roles.SESSIONS["step-repair"]] if repairer else [])]
     try:
-        agents = {} if block.reason else store.settings().agents
+        resolved = {} if block.reason else store.settings().roles
     except StoreError:
-        agents = {}
+        resolved = {}
     task = next((t for t in c.plan.tasks if t.id == c.step.task), None) if c.plan and c.step.task else None
     return {
         "step": str(c.step.kind),
@@ -79,7 +79,7 @@ def _rerun(c: Change, store: Store, block: work_block.Block) -> dict[str, Any]:
         "title": task.title if task else "",
         "role": role,
         "repairer": repairer,
-        "limits": [{"role": r, "minutes": agents[r].minutes if r in agents else None, "current": True} for r in timed],
+        "limits": [{"role": r, "minutes": resolved[r]["minutes"] if r in resolved else None, "current": True} for r in timed],
     }
 
 
