@@ -2,7 +2,8 @@
 
 A Repairer session (D-01M6SY11CY5SN5ZKYJNM0K6BDM) works in a throwaway copy of the step worktree's whole state. Delivery
 then reruns the step's own checks there itself, with the confirmed install commands first: only exit 0 is proof. A
-fix that weakens a test is never applied; a new suppression needs the owner. One inside the brief's scope that touches
+deleted test, added skip or xfail, or disabled test is never applied. A suspected removed check needs the owner
+after the witness passes, as does a new suppression. One inside the brief's scope that touches
 no configuration reserved for the owner (lint, format, CI, hooks, security) is applied and the step runs again; any
 other proven fix, and every new project check, is his yes or no with the proof and the diff. Unchanged checks
 independently verified rerun the real step; a failed diagnosis keeps repairing. Exhausted remedies stop listing their
@@ -12,19 +13,17 @@ an issue (``defect_issue``).
 
 from __future__ import annotations
 
-import tomllib
 from datetime import UTC, datetime
-from traceback import format_exception_only
 from typing import TYPE_CHECKING
 
 from owlbear_quality.inspect import protected, suppressions
 
-from owlbear_delivery_next.change_contracts import check_hint, repair_tools, tools
+from owlbear_delivery_next.change_contracts import repair_tools, tools
 from owlbear_delivery_next.change_contracts.failures import ENVIRONMENT, WRONG_MODEL, kind_of
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Outcome, StepKind, Stop
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.repair_records import KEPT, Tried, Witness
-from owlbear_delivery_next.change_flow import amending, budgets, curation_flow, loop, quality, rebuilds, stuck, worktree
+from owlbear_delivery_next.change_flow import amending, budgets, loop, quality, repair_recovery, stuck, worktree
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.settings import profile, roles
@@ -44,6 +43,8 @@ from owlbear_delivery_next.workflow_steps import (
 )
 from owlbear_delivery_next.workflow_steps.repair_scope import hold as _check_hold
 from owlbear_delivery_next.workflow_steps.repair_scope import in_scope as _in_scope
+from owlbear_delivery_next.workflow_steps.repair_witness import commands as _witness
+from owlbear_delivery_next.workflow_steps.repair_witness import installs as _installs
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -69,6 +70,8 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     try:
         if r.phase == "approved":
             _apply(store, lock, change, path, prof)
+        elif r.recovered_with == repair_recovery.CHECK_SUSPICION and r.commit and r.phase == "running":
+            _judge_kept(store, lock, change, path, (settings, prof))
         else:
             _repair(store, lock, change, path, (settings, prof))
     except preparation_repair.CleanupPending as exc:
@@ -147,6 +150,28 @@ def _repair(store: Store, lock: Lock, change: Change, path: Path, given: tuple[S
             repair_copy.drop(path, at)
         else:  # its processes may still use it: the next repair's copy replaces it
             _log(store, lock, change, f"kept its copy {at}: its session's processes are not confirmed gone")
+
+
+def _judge_kept(store: Store, lock: Lock, change: Change, path: Path, given: tuple[Settings, Profile]) -> None:
+    """Judge the kept patch on the same step state, without another agent session."""
+    settings, prof = given
+    r = change.repairs.current
+    if r is None:
+        msg = f"cannot judge a kept fix for {change.slug}: no current repair"
+        raise repair_copy.RepairError(msg)
+    at = store.root / "runs" / f"{change.slug}-repair-{len(change.repairs.done) + 1}"
+    base = repair_copy.copy(path, at)
+    try:
+        if repair_copy.git(at, ["rev-parse", f"{base}^{{tree}}"]) != repair_copy.git(
+            at, ["rev-parse", f"{r.base}^{{tree}}"]
+        ):
+            _stopped(store, lock, change, "the step's state changed since the fix was kept; nothing was applied")
+            return
+        repair_copy.git(at, ["checkout", "--quiet", "--detach", r.commit])
+        witness = _witness(change, prof, path)
+        _judge(store, lock, change, (path, at), (witness, roles.limit(settings, LABEL), prof))
+    finally:
+        repair_copy.drop(path, at)
 
 
 def _unfixed(store: Store, lock: Lock, change: Change, at: Path, prof: Profile) -> None:
@@ -244,9 +269,31 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
     repair_copy.git(path, ["update-ref", f"{KEPT}{change.slug}", r.commit])
     r.diff = repair_copy.git(path, ["diff", "--binary", r.base, r.commit, "--", *r.paths])
     store.write(lock, change)
-    repair_copy.git(at, ["reset", "--quiet", "--soft", r.base])
+    _judge(store, lock, change, trees, (witness, within, prof))
+
+
+def _judge(
+    store: Store,
+    lock: Lock,
+    change: Change,
+    trees: tuple[Path, Path],
+    given: tuple[tuple[str, ...], float, Profile],
+) -> None:
+    """Stage and judge a kept commit, whether freshly repaired or recovered."""
+    path, at = trees
+    witness, within, prof = given
+    r = change.repairs.current
+    if r is None:
+        msg = f"cannot judge a fix for {change.slug}: no current repair"
+        raise repair_copy.RepairError(msg)
+    changed = repair_copy.changed(at, r.base)
+    if repair_copy.git(at, ["write-tree"]) != repair_copy.git(at, ["rev-parse", f"{r.commit}^{{tree}}"]):
+        _stopped(store, lock, change, "its copy holds edits besides the kept fix, so nothing proves that fix")
+        return
+    r.paths = [p for p, _ in changed]
+    r.diff = repair_copy.git(path, ["diff", "--binary", r.base, r.commit, "--", *r.paths])
     found = {p: check_weakening.weakened(repair_copy.git, at, r.base, p, how) for p, how in changed}
-    weak = [f"{p} ({found[p][0]})" for p in r.paths if found[p][0]]
+    weak = [f"{p} ({found[p][0]})" for p in r.paths if found[p][0] and found[p][0] != check_weakening.REMOVED_CHECK]
     if weak:
         _stopped(store, lock, change, f"its fix weakens a check, which Delivery never applies: {', '.join(weak)}")
         return
@@ -265,6 +312,11 @@ def _proven(  # noqa: PLR0913, PLR0917 - the Change, its two trees, the proof an
         f"adds or broadens a suppression that is yours to approve: {line}"
         for p in r.paths
         for line in suppressions(repair_copy.git, at, r.base, p)
+    ]
+    r.held += [
+        f"may remove a check in {p}; Delivery's pattern check cannot tell whether a check is lost, so compare the patch"
+        for p in r.paths
+        if found[p][0] == check_weakening.REMOVED_CHECK
     ]
     r.held += [f"{found[p][1]} the test {p}" for p in r.paths if found[p][1]]
     r.held += [reason for p in r.paths if (reason := _check_hold(p, witness, path))]
@@ -342,54 +394,6 @@ def _stopped(store: Store, lock: Lock, change: Change, why: str) -> None:
     _log(store, lock, change, f"stopped: {said}")
     stuck.stopped(change, said, datetime.now(UTC))
     store.write(lock, change)
-
-
-def _witness(change: Change, prof: Profile, source: Path) -> tuple[str, ...]:
-    """The commands that must pass: the task's resolved checks, else the confirmed checks of the brief's packages."""
-    try:
-        return _resolved_witness(change, prof, source)
-    except (OSError, tomllib.TOMLDecodeError) as error:
-        r = change.repairs.current
-        if r is None:
-            raise
-        detail = "".join(format_exception_only(error)).strip()
-        r.evidence += f"\nUnchanged runner ownership in {source}/serve/tools/pyproject.toml: {detail}"
-        if change.tests is not None and r.task == curation_flow.CURATE:
-            msg = f"cannot resolve the curator's unchanged measurement in {source}: {detail}"
-            raise repair_copy.RepairError(msg) from error
-        task = next((t for t in change.plan.tasks if t.id == r.task), None) if change.plan else None
-        pairs = worktree.checks(profile.vouched(prof))
-        selected = (
-            check_hint.resolve(task.checks, pairs)
-            if task and task.checks
-            else [check_hint.qualified(p, c) for p, c in pairs if _in_scope(change, p)]
-        )
-        target = worktree.git(
-            source, "rev-parse", f"{worktree.tracking(source, change.names.target)}^{{commit}}"
-        ).strip()
-        base = task.base if task and task.base is not None else r.base
-        return tuple(check_hint.task_command(command, base, target) for command in selected)
-
-
-def _resolved_witness(change: Change, prof: Profile, source: Path) -> tuple[str, ...]:
-    tasks = change.plan.tasks if change.plan else []
-    r = change.repairs.current
-    task = next((t for t in tasks if r and t.id == r.task), None)
-    if task:
-        rebuilds.refresh(change, task)
-    pairs = worktree.checks(profile.vouched(prof))
-    if task and r is not None and (task.checks or (change.tests is not None and r.task == curation_flow.CURATE)):
-        bound = task if task.base is not None else task.model_copy(update={"base": r.base})
-        return tuple(worktree.build_checks(profile.vouched(prof), change, bound, source))
-    selected = [check_hint.qualified(p, c) for p, c in pairs if _in_scope(change, p)]
-    if r is None or not worktree.owns_changed_runner(source):
-        return tuple(selected)
-    target = worktree.git(source, "rev-parse", f"{worktree.tracking(source, change.names.target)}^{{commit}}").strip()
-    return tuple(check_hint.task_command(command, r.base, target) for command in selected)
-
-
-def _installs(change: Change, prof: Profile) -> tuple[str, ...]:
-    return tuple(check_hint.qualified(p, c) for p, c in worktree.installs(prof, change.brief.scope or ["."]))
 
 
 def _ran(at: Path, commands: tuple[str, ...], within: float, store: Store, lock: Lock) -> Witness:

@@ -6,7 +6,7 @@ import hashlib
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts.failures import kind_of
-from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepKind
+from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Outcome, StepKind
 from owlbear_delivery_next.change_flow import asking, moves, plan_rounds
 from owlbear_delivery_next.local_system import codebase
 
@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 CI_LOG, AMENDMENT_EXIT, MERGE_BASIS, PLAN_CUT = 1310, 1312, 1342, 1361
 LENGTH_REJECTION = 1374
+CHECK_SUSPICION = 1376
 # Travels with actual fixes, never inferred from version order.
 FIXED = (
     CI_LOG,
@@ -24,6 +25,7 @@ FIXED = (
     MERGE_BASIS,
     PLAN_CUT,
     LENGTH_REJECTION,
+    CHECK_SUSPICION,
 )
 LEGACY = {
     "91b09919eb68085ecbcbabaf3ff9604cd27d898f6697ca168296f1f4ea269c22": (1310, "v1.279"),
@@ -113,6 +115,8 @@ def _repair(c: Change) -> int | None:
     for issue in FIXED:
         if issue in (stop.fixed_defects or []):
             continue
+        if issue == CHECK_SUSPICION and stop.fixed_defects is not None and _kept_fix(r):
+            return issue
         url = f"https://github.com/maba-pag/owlbear/issues/{issue}"
         if url not in r.defect.split() and (old is None or old[0] != issue):
             continue
@@ -132,8 +136,24 @@ def _repair(c: Change) -> int | None:
     return None
 
 
+def _kept_fix(r: Repair) -> bool:
+    """An old pattern-only refusal with a kept patch, not a concrete weakening or another stop."""
+    prefix = "its fix weakens a check, which Delivery never applies: "
+    suffix = " (removes an assertion or test)"
+    said = r.stopped.removesuffix(f". OwlBear defect issue: {r.defect}") if r.defect else r.stopped
+    return bool(
+        r.fix == "patch"
+        and r.phase == "stopped"
+        and r.commit
+        and said.startswith(prefix)
+        and all(p.endswith(suffix) and p.removesuffix(suffix) for p in said[len(prefix) :].split(", "))
+    )
+
+
 def action(c: Change, remedy: int) -> str:
     """The continuation the page can execute, not a generic parent-step rerun."""
+    if remedy == CHECK_SUSPICION:
+        return "Judge the kept fix again"
     if remedy == MERGE_BASIS:
         return "Recheck merge checks and continue"
     if remedy == AMENDMENT_EXIT and c.amending:
@@ -181,7 +201,14 @@ def consume(c: Change, item: Recovery, *, unchanged: bool) -> None:
     if r is None:
         return
     r.recovered_with, r.recovered_at = remedy, item.at
-    r.recovered_plan = c.plan.version if c.plan else None
-    c.budgets.causes.pop(r.cause, None)
-    moves.go(c, c.step.kind, c.step.task, c.step.mode)
-    c.stop = c.outcome = None
+    if remedy == CHECK_SUSPICION:
+        c.repairs.done.remove(r)
+        c.repairs.current = r
+        r.phase, r.stopped = "running", ""
+        c.stop = None
+        c.outcome = Outcome(exit=Exit.RETRY, cause=r.cause, reason="judging the kept fix again", at=item.at)
+    else:
+        r.recovered_plan = c.plan.version if c.plan else None
+        c.budgets.causes.pop(r.cause, None)
+        moves.go(c, c.step.kind, c.step.task, c.step.mode)
+        c.stop = c.outcome = None
