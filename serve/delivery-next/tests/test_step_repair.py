@@ -27,8 +27,9 @@ from owlbear_delivery_next.change_contracts.preparation import DataPermissions, 
 from owlbear_delivery_next.change_contracts.profile_record import Profile, ProfileEntry
 from owlbear_delivery_next.change_contracts.repair_records import KEPT, PreparationProposal, Witness
 from owlbear_delivery_next.change_contracts.repair_tools import Defect
-from owlbear_delivery_next.change_flow import loop, stuck, worktree
+from owlbear_delivery_next.change_flow import loop, repair_recovery, stuck, worktree
 from owlbear_delivery_next.github.account import Origin
+from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import stop_routes
@@ -37,6 +38,7 @@ from owlbear_delivery_next.settings.config import Layer
 from owlbear_delivery_next.state_store import prepared
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import check, defect_issue, prepare, repair_copy, sessions, step_repair
+from owlbear_delivery_next.workflow_steps.step_repair import _proven as prove_repair
 
 NOW = datetime(2026, 11, 7, 12, tzinfo=UTC)
 SYNTHETIC_METRICS = """import json, os, shutil, sys
@@ -120,6 +122,92 @@ def test_a_fix_that_weakens_a_test_is_never_applied(repo, tmp_path) -> None:
     worktree.git(replay, "apply", "--binary", str(patch))
     assert (replay / "asset.bin").read_bytes() == asset
     repair_copy.drop(repo, replay)
+
+
+def test_a_renamed_test_is_asked_only_after_delivery_proves_it(repo, tmp_path) -> None:
+    c, at = stuck_change(), tmp_path / "copy"
+    r = c.repairs.current
+    r.base, r.fix = repair_copy.copy(repo, at), "patch"
+    (at / "tests/test_a.py").write_text("def test_renamed():\n    assert 1\n")
+    head = worktree.git(repo, "rev-parse", "HEAD")
+    witness = shlex.join([sys.executable, "-c", "import runpy; runpy.run_path('tests/test_a.py')['test_renamed']()"])
+    store = SimpleNamespace(log=lambda *_: None, write=lambda *_: None)
+    try:
+        prove_repair(store, Lock(c.slug), c, (repo, at), (witness,), 60.0, Profile())
+        assert c.stop is None, c.stop.reason if c.stop else ""
+        assert c.outcome.exit == Exit.ASK
+        assert r.phase == "asked"
+        assert r.witness.exit == 0
+        assert "tests/test_a.py" in c.questions[-1].text
+        assert "pattern check cannot tell whether a check is lost, so compare the patch" in c.questions[-1].text
+        assert r.diff in c.questions[-1].text
+        assert worktree.git(repo, "rev-parse", "HEAD") == head
+        assert (repo / "tests/test_a.py").read_text() == "def test_a():\n    assert 1\n"
+    finally:
+        repair_copy.drop(repo, at)
+
+
+@pytest.mark.usefixtures("user_on")
+@pytest.mark.parametrize(("changed_state", "check_passes"), [(False, True), (True, True), (False, False)])
+def test_a_kept_fix_is_judged_again_only_on_its_original_step_state(
+    repo, tmp_path, monkeypatch, changed_state, check_passes
+) -> None:
+    c, at, store = stuck_change(), tmp_path / "copy", Store(tmp_path / "store")
+    c.names.branch, c.names.target = "c1", "c1"
+    r = c.repairs.current
+    r.base, r.fix = repair_copy.copy(repo, at), "patch"
+    (at / "tests/test_a.py").write_text("def test_renamed():\n    assert 1\n")
+    r.paths = [p for p, _ in repair_copy.changed(at, r.base)]
+    r.commit = repair_copy.commit(at, "kept renamed test")
+    worktree.git(repo, "update-ref", f"{KEPT}c1", r.commit)
+    r.diff = repair_copy.git(repo, ["diff", "--binary", r.base, r.commit])
+    repair_copy.drop(repo, at)
+    refusal = "its fix weakens a check, which Delivery never applies: tests/test_a.py (removes an assertion or test)"
+    stuck.stopped(c, refusal, NOW)
+    c.stop.runtime, c.stop.fixed_defects = "v1.311", [1310, 1312, 1342, 1361]
+    monkeypatch.setattr(codebase, "release", lambda: "v1.312")
+    assert repair_recovery.offered(c) == repair_recovery.CHECK_SUSPICION
+    r.stopped += ", tests/test_b.py (adds a skip or xfail)"
+    assert repair_recovery.offered(c) is None
+    r.stopped = refusal
+    item = Recovery(
+        at=NOW,
+        stop_at=c.stop.at,
+        remedy=repair_recovery.CHECK_SUSPICION,
+        action=repair_recovery.action(c, repair_recovery.CHECK_SUSPICION),
+    )
+    c = loop.fold(c, [item], NOW)
+    r = c.repairs.current
+    assert stuck.bound(c)
+    assert r not in c.repairs.done
+    assert not r.stopped
+    if changed_state:
+        (repo / "a.txt").write_text("step changed\n")
+    head = worktree.git(repo, "rev-parse", "HEAD")
+    command = shlex.join([sys.executable, "-c", "import runpy; runpy.run_path('tests/test_a.py')['test_renamed']()"])
+    if not check_passes:
+        command = "false"
+    store.write_profile(
+        Profile(entries={"check:.": ProfileEntry(state="known", value=command, evidence="owner confirmed")})
+    )
+    monkeypatch.setattr(worktree, "ensure", lambda *_: repo)
+    monkeypatch.setattr(sessions, "run", lambda *_: pytest.fail("judging a kept fix must not run an agent"))
+    step_repair.run(store, Lock(c.slug), c, repo)
+    if changed_state:
+        assert "step's state changed since the fix was kept; nothing was applied" in c.stop.reason
+        assert repair_recovery.CHECK_SUSPICION in c.stop.fixed_defects
+        assert repair_recovery.offered(c) is None
+    elif not check_passes:
+        assert "with the fix failed" in c.stop.reason
+        assert repair_recovery.offered(c) is None
+    else:
+        assert c.stop is None, c.stop.reason if c.stop else ""
+        assert c.outcome.exit == Exit.ASK
+        assert r.witness.exit == 0
+        assert "tests/test_a.py" in c.questions[-1].text
+        assert r.diff in c.questions[-1].text
+    assert worktree.git(repo, "rev-parse", "HEAD") == head
+    assert not (store.root / "runs" / "c1-repair-1").exists()
 
 
 @pytest.mark.usefixtures("user_on")

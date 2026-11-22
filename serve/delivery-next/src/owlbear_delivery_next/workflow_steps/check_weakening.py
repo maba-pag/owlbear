@@ -2,7 +2,9 @@
 
 Shared by the design-pack CI repair (``impeccable_runs.pack_repair_edits``) and a stuck step's repair (#1066). The
 weakening patterns (a deleted test, an added skip or early return, a removed assertion or test) are a quick filter,
-not a proof. New suppressions and configuration (lint, format, CI workflow, hook or security) need the owner.
+not a proof. Step repair asks the owner about a removed assertion or test after its witness passes; the other
+weakening reasons stop it. Design-pack repair keeps treating all weakening reasons as refusals. New suppressions
+and configuration (lint, format, CI workflow, hook or security) need the owner.
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ CONFIG_FILES = frozenset({
     "test_linter_formatter_policy.py",
 })  # fmt: skip
 WEAKENING = re.compile(r"pytest\.mark\.(skip|xfail)|pytest\.(skip|xfail)\(|unittest\.skip")
+REMOVED_CHECK = "removes an assertion or test"
 REMOVED = re.compile(r"\bassert|\bexpect\(|\bdef test|^\s*(it|test|describe)(\.\w+)?\(")  # a check it took out
 DISABLING = re.compile(  # an added line that turns a test off without a suppression's words
     r"\b(it|test|describe)\.(skip|todo|only)\b|\bx(it|test|describe)\(|SkipTest|importorskip|__test__\s*=\s*False"
@@ -67,7 +70,8 @@ def _hunks(lines: list[str]) -> Iterator[str]:
 def weakened(run: Git, at: Path, head: str, path: str, how: str) -> tuple[str, str]:
     """How the staged edit of *path* (``how``: its new mode and status) weakens a check, and how it edits a test.
 
-    The first is never applied; the second, an edit of an existing test that weakens nothing visible, is for review.
+    The first flags weakening patterns; callers decide whether to refuse or ask about a suspected removed check.
+    The second, an edit of an existing test that weakens nothing visible, is for review.
     Both are empty for any other edit.
     """
     if how.endswith("D"):
@@ -83,7 +87,7 @@ def weakened(run: Git, at: Path, head: str, path: str, how: str) -> tuple[str, s
     if edited and (any(DISABLING.search(x) for x in added) or _returns_early(at / path, lines)):
         return "disables a test", ""
     if cut and not same:
-        return "removes an assertion or test", ""
+        return REMOVED_CHECK, ""
     if edited:
         return "", "reformats" if same else "removes lines from" if removed else "changes"
     return "", ""
