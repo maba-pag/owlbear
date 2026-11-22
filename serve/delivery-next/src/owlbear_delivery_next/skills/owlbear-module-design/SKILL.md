@@ -9,6 +9,15 @@ user-invocable: false
 Use this vocabulary when designing or judging code. A module is scale-agnostic: a function, class,
 package, service, or tier-spanning slice can all be modules.
 
+## Owner Lines
+
+A comment line that starts with `OWNER:` states a choice the owner wants to be asked about before it
+changes. Write one where the brief's decision says "State this as an `OWNER:` line": at the place that
+controls the behaviour, the behaviour in one or two lines and at most one line of reason, written
+fresh, with no decision ID and no history. Write none for any other choice. Before changing behaviour
+that such a line states, take it to the owner: with `ask_question` as a yes or no proposal, or in your
+report when your role has no question tool. A change he approved updates or removes the line.
+
 ## Module Quality Vocabulary
 
 | Concept | Definition | Diagnostic |

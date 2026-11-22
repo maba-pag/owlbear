@@ -148,7 +148,7 @@ Ask, read back and record the user's choices in the format of the
 variants and other directions, the closing options, readings of free text, and one closing check of everything you
 record. List your own consequential choices in that check too, each with a one-line consequence. The closing check
 is the one exception to Core Method rules 2 and 3: it may batch up to eight questions per `askQuestions` round and
-names its recommendation only in the "take your recommendation (…)" option. It never replaces asking an important
+names the option it would take only in the "Autonomous (…)" option. It never replaces asking an important
 decision when it arises.
 
 ## Refined Idea Summary
