@@ -37,6 +37,7 @@ from owlbear_delivery_next.state_store import decision_store, machine_settings, 
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import decision_publication
 
+from .changes_preview import deadline_stopped
 from .test_host import inventory_stopped
 from .test_machine_pages import page_at
 
@@ -918,6 +919,59 @@ def inventory_recovery_browser(page_url, pds, case, monkeypatch, expect):
             ).click()
         assert reply.value.status == 200
         assert '"remedy":1342' in sent(store, "flip").replace(" ", "")
+
+
+@pytest.mark.browser
+def test_a_deadline_stop_names_who_timed_out_and_its_rerun_runs_only_once_confirmed(page_url, pds) -> None:
+    """The c8 shape: the builder's and then the repairer's own time limit, each with its limit as set now; opening
+    and cancelling the confirmation keeps the Change stopped and sends nothing, confirming sends one recovery."""
+    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
+
+    store, base = page_url
+    c = deadline_stopped("flip")
+    store.write(Lock("flip"), c)
+    agents = store.settings().agents
+    step = "the build step of task t1 (Show the stopped step's rerun)"
+    repairer = "repairer (the builder's while its model, effort and context are unset)"
+    with launched(base, pds) as page:
+        note = page.locator("p-inline-notification[heading='Stopped']")
+        for said in (
+            f"The session time limit of the builder ended {step}.",
+            f"Then the time limit of the {repairer} ended Delivery's repair.",
+            f"Minutes per session: builder now {agents['builder'].minutes} minutes; {repairer} now "
+            f"{agents['repairer'].minutes} minutes.",
+            f"Run the step again runs {step} once more.",
+        ):
+            expect(note).to_contain_text(said)
+        posts = []
+        page.on("request", lambda r: posts.append(r.post_data_json) if r.url.endswith("/recovery") else None)
+        again = page.get_by_role("button", name="Run the step again")
+        big(again)
+        dialog = page.locator("p-modal.ask")
+        for close in ("Escape", "Keep it stopped"):
+            again.click()
+            expect(dialog.get_by_role("heading", name=f"Run {step} again?")).to_be_visible()
+            for said in ("once more with the current settings", "more AI credits", "may time out again",
+                         "on its next pass", "The Change stays stopped", "pause or abandon"):  # fmt: skip
+                expect(dialog).to_contain_text(said)
+            pds.settled(page)
+            expect(dialog.get_by_role("button", name="Keep it stopped")).not_to_be_focused()
+            for control in dialog.get_by_role("button").all():
+                big(control)
+            for _ in range(6):
+                page.keyboard.press("Tab")
+                assert page.evaluate(pds.INSIDE)
+            if close == "Escape":
+                page.keyboard.press("Escape")
+            else:
+                dialog.get_by_role("button", name=close).click()
+            expect(dialog).to_have_count(0)
+            assert (posts, store.read("flip").stop) == ([], c.stop)
+        again.click()
+        with replied(page, "/recovery") as reply:
+            dialog.get_by_role("button", name="Run the step again").click()
+        assert (reply.value.status, posts) == (200, [{"action": "Run the step again", "at": "2026-10-10T12:00:00Z"}])
+        assert '"kind":"recovery"' in sent(store, "flip").replace(" ", "")
 
 
 @pytest.mark.browser
