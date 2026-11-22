@@ -41,6 +41,7 @@ from owlbear_delivery_next.workflow_steps import decision_publication
 from .changes_preview import deadline_stopped
 from .test_host import inventory_stopped
 from .test_machine_pages import page_at
+from .test_settings_page import LONGEST_LINE
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -914,6 +915,12 @@ def test_a_deadline_stop_names_who_timed_out_and_its_rerun_runs_only_once_confir
             f"Run the step again runs {step} once more.",
         ):
             expect(note).to_contain_text(said)
+        page.set_viewport_size({"width": 1440, "height": 900})
+        running = note.locator("p-text")
+        expect(running).to_have_count(2)
+        for text in running.all():
+            assert 65 <= text.evaluate(LONGEST_LINE) <= 80
+            assert note.bounding_box()["width"] > text.bounding_box()["width"] + 100
         posts = []
         page.on("request", lambda r: posts.append(r.post_data_json) if r.url.endswith("/recovery") else None)
         again = page.get_by_role("button", name="Run the step again")

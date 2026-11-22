@@ -391,8 +391,8 @@ export function stopNotice(d) {
     show();
   };
   return html`<p-inline-notification class="recorded" state="error" heading="Stopped" heading-tag="h3"
-    dismiss-button="false">${r?.rerun ? text(rerunWords(r.rerun)) : nothing}${
-      kept ? text(said, { cls: "repair-reason" }) : said}${
+    dismiss-button="false">${r?.rerun ? text(rerunWords(r.rerun), { cls: "stop-text" }) : nothing}${
+      text(said, { cls: "stop-text" })}${
       held ? nothing : noteAction(r.label || "Done: run the step again", clear)}</p-inline-notification>
     ${kept ? text("The fix kept (not applied):") : nothing}${repairPatch(kept?.diff, "The retained repair patch")}`;
 }
