@@ -15,8 +15,9 @@ A comment line that starts with `OWNER:` states a choice the owner wants to be a
 changes. Write one where the brief's decision says "State this as an `OWNER:` line": at the place that
 controls the behaviour, the behaviour in one or two lines and at most one line of reason, written
 fresh, with no decision ID and no history. Write none for any other choice. Before changing behaviour
-that such a line states, take it to the owner: with `ask_question` as a yes or no proposal, or in your
-report when your role has no question tool. A change he approved updates or removes the line.
+that such a line states, unless the brief's decisions hold his yes to that change, take it to the
+owner with `ask_question` as a yes or no proposal; when your role has no question tool, leave the
+behaviour as it is and say so in your result. A change he approved updates or removes the line.
 
 ## Module Quality Vocabulary
 

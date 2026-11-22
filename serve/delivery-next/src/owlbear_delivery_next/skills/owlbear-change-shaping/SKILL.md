@@ -127,7 +127,8 @@ A chosen variant or direction is `decided`. "Autonomous (…)" leaves the choice
 chose and why; it is `autonomous`, with its `reason`, and nothing of it is recorded as the owner's.
 "Explain first" (his shorthand "nmdpcro") settles nothing: explain, then ask the same question again.
 Give the situation today and what goes wrong, with one concrete case; what the decision settles and
-what stays untouched; for each option its result, its cost and how hard it is to undo; your pick,
+what stays untouched; for each option but the two endings its result, its cost and how hard it is
+to undo; your pick,
 the one reason that decides it and the fact that would change it; and what you checked or assume.
 Free text is never recorded as written: offer two to five readings that fill its gaps differently,
 plus "the owner's words as written", "more readings" and "Explain first". When the direction itself

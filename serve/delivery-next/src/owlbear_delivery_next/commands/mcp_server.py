@@ -286,7 +286,8 @@ def record_decision(  # noqa: PLR0913 - the decision's fields
         bool,
         Field(
             description="True only when the owner confirmed this statement in this chat after you read it back to "
-            "him; it is then his decision, in force at once. False: your own choice, a draft he activates. Never "
+            "him; it is then his decision, in force at once. False: a draft of intent you believe he holds, which he "
+            "activates; never your own choice. Never "
             "pass his words."
         ),
     ] = False,
@@ -299,7 +300,9 @@ def record_decision(  # noqa: PLR0913 - the decision's fields
     ] = "decided",
     replaces: Annotated[brief_tools.Replacement | None, Field(description="The decision it replaces, if any")] = None,
 ) -> dict[str, Any]:
-    """Record a decision the owner confirmed (in force at once), or propose your own as a draft.
+    """Record a decision the owner confirmed (in force at once), or draft one for him to activate.
+
+    In a chat about this project, record lasting owner intent when he states or picks it; never your own choices.
 
     Record only owner intent that code, tests and instruction files cannot hold: direction, priorities, rules across
     areas. A built behaviour's record is its code; a rule about how agents work goes into its instruction file.

@@ -92,12 +92,7 @@ def shown(q: Question, events: list[dict[str, Any]]) -> dict[str, object]:
     """
     said = [e for e in events if e.get("event") in {"answer", "answer-not-applied"} and e.get("question") == q.id]
     dropped = said[-1] if said and said[-1]["event"] == "answer-not-applied" else None
-    return {
-        "ordinary": loop.ordinary(q),
-        "dropped": dropped,
-        "amendment": bool(amending.owned(q)),
-        "autonomous": q.recommended,  # the option the worker would take itself: a bare pick of it is an event
-    }
+    return {"ordinary": loop.ordinary(q), "dropped": dropped, "amendment": bool(amending.owned(q))}
 
 
 def answer_item(store: Store, c: Change, body: AnswerBody) -> AnswerItem | tuple[int, str]:
