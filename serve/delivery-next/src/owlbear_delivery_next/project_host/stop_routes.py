@@ -12,6 +12,7 @@ from owlbear_delivery_next.change_contracts.models import Exit, Record
 from owlbear_delivery_next.change_flow import asking, delivery_target, repair_recovery, stuck
 from owlbear_delivery_next.local_system import codebase
 from owlbear_delivery_next.project_host import runner_end
+from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.state_store import work_block
 from owlbear_delivery_next.state_store.store import LockHeldError, StoreError
 
@@ -40,7 +41,11 @@ def clearable(c: Change) -> str | None:
         return "This stop ends only when you abandon or pause the Change; answer its question"
     if runner_end.unverified(c):
         return "This stop clears itself once the host sees none of the step's processes"
-    if (asking.inventory_stop(c) or stuck.exhausted(c)) and repair_recovery.offered(c) is None:
+    if (
+        (asking.inventory_stop(c) or stuck.exhausted(c))
+        and repair_recovery.offered(c) is None
+        and not repair_recovery.deadline(c)
+    ):
         return (
             "No repair ran for this step; an unchanged rerun cannot resolve it. Pause or abandon the Change"
             if asking.inventory_stop(c)
@@ -57,6 +62,25 @@ def _wait(block: work_block.Block) -> str | None:
         more = " and others" if missing[1:] else ""
         return f"Settings unset: {missing[0]}{more}; fill them in on the Settings page to run the step again"
     return None
+
+
+def _rerun(c: Change, store: Store, block: work_block.Block) -> dict[str, Any]:
+    """Which step runs again, whose session timed out and each such role's current limit, never the historical one."""
+    role, repairer = roles.SESSIONS[c.step.kind], repair_recovery.repairer_timed_out(c)
+    timed = [role, *([roles.SESSIONS["step-repair"]] if repairer else [])]
+    try:
+        agents = {} if block.reason else store.settings().agents
+    except StoreError:
+        agents = {}
+    task = next((t for t in c.plan.tasks if t.id == c.step.task), None) if c.plan and c.step.task else None
+    return {
+        "step": str(c.step.kind),
+        "task": c.step.task,
+        "title": task.title if task else "",
+        "role": role,
+        "repairer": repairer,
+        "limits": [{"role": r, "minutes": agents[r].minutes if r in agents else None, "current": True} for r in timed],
+    }
 
 
 def unset(store: Store) -> str | None:
@@ -91,6 +115,8 @@ def shown(c: Change, store: Store) -> dict[str, Any] | None:
     }
     if remedy:
         recovery |= {"action": continuation, "remedy": remedy, "label": continuation, "fixed": fixed}
+    elif repair_recovery.deadline(c):
+        recovery |= {"action": stuck.RERUN, "label": stuck.RERUN, "rerun": _rerun(c, store, block)}
     return recovery
 
 
@@ -136,7 +162,13 @@ def router(store: Store, read: Callable[[str], Change], wake: Callable[[], None]
                 if why := clearable(c) or unset(store):
                     raise HTTPException(409, why)
                 remedy = repair_recovery.offered(c)
-                action = repair_recovery.action(c, remedy) if remedy else c.stop.action
+                action = (
+                    repair_recovery.action(c, remedy)
+                    if remedy
+                    else stuck.RERUN
+                    if repair_recovery.deadline(c)
+                    else c.stop.action
+                )
                 if (action, c.stop.at, remedy) != (body.action, body.at, body.remedy):
                     raise HTTPException(409, "The stop changed since the page showed it; reload")
                 store.put_inbox(slug, Recovery(at=datetime.now(UTC), action=action, stop_at=c.stop.at, remedy=remedy))

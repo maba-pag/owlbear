@@ -24,7 +24,17 @@ from owlbear_delivery_next.change_contracts.failures import ENVIRONMENT, WRONG_M
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Outcome, StepKind, Stop
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.repair_records import KEPT, Tried, Witness
-from owlbear_delivery_next.change_flow import amending, budgets, curation_flow, loop, quality, rebuilds, stuck, worktree
+from owlbear_delivery_next.change_flow import (
+    amending,
+    budgets,
+    curation_flow,
+    loop,
+    quality,
+    rebuilds,
+    repair_recovery,
+    stuck,
+    worktree,
+)
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.settings import profile, roles
@@ -420,7 +430,7 @@ def _gated(store: Store, lock: Lock, change: Change, done: Run) -> bool:
     wrong = (seen.cause or "").endswith(f":{WRONG_MODEL}")
     if seen.exit == Exit.STOP or (wrong and r.rerun):
         why = (
-            "its own step deadline ended the repair before it proved a fix"
+            repair_recovery.REPAIRER_DEADLINE
             if done.ending == "deadline"
             else (f"its session's result was voided: {seen.reason}")
         )
@@ -443,7 +453,7 @@ def _gated(store: Store, lock: Lock, change: Change, done: Run) -> bool:
         store.write(lock, change)
         return True
     if done.ending == "deadline" and done.detail == "step deadline":
-        _stopped(store, lock, change, "its own step deadline ended the repair before it proved a fix")
+        _stopped(store, lock, change, repair_recovery.REPAIRER_DEADLINE)
         return True
     p = done.payload
     if done.ending == "premise" and isinstance(p, tools.WrongPremise) and p.stage == "brief" and not change.tests:

@@ -1494,6 +1494,65 @@ def test_a_chat_cannot_clear_a_stop(store, tmp_path):
     assert (answer.status_code, answer.json()["detail"], queued(store)) == (403, refused, [])
 
 
+RERUN_SHOWN = {"action": "Run the step again", "at": "2026-10-10T12:00:00Z"}
+
+
+@pytest.fixture
+def changes_preview(monkeypatch):
+    monkeypatch.syspath_prepend(str(Path(__file__).parent))  # a script beside the tests, not a package module
+    import changes_preview  # noqa: PLC0415 - importing it changes nothing
+
+    return changes_preview
+
+
+def test_a_deadline_stop_shows_its_current_limits_and_reruns_its_original_step_once(store, tmp_path, changes_preview):
+    """The c8 shape: the builder timed out twice, then the repairer; the owner's confirmation reruns build t1."""
+    fake = Fake(store, tmp_path)
+    c = changes_preview.deadline_stopped(worktree=fake.worktree)
+    save(store, c)
+    api_ = client(store, fake)
+    builder = store.settings().agents["builder"].minutes
+    rerun = api_.get("/api/next/changes/c1").json()["recovery"]["rerun"]
+    assert (rerun["step"], rerun["task"], rerun["role"], rerun["repairer"]) == ("build", "t1", "builder", True)
+    assert rerun["limits"][0] == {"role": "builder", "minutes": builder, "current": True}
+    assert rerun["limits"][1]["role"] == "repairer"
+    got = api_.get("/api/next/config").json()
+    layer = got["project"] | {"agents": {"builder": {"minutes": builder + 20}}}
+    assert api_.put("/api/next/config/project", json={"rev": got["project_rev"], "layer": layer}).status_code == 200
+    detail = api_.get("/api/next/changes/c1").json()["recovery"]
+    assert (detail["action"], detail["rerun"]["limits"][0]["minutes"]) == ("Run the step again", builder + 20)
+    assert (fake.host.tick(NOW), fake.host.runner("c1")) == ([], None)  # a settings save starts nothing
+    stale = api_.post("/api/next/changes/c1/recovery", json=RERUN_SHOWN | {"at": "2026-10-10T11:00:00Z"})
+    assert (stale.status_code, queued(store)) == (409, [])
+    assert api_.post("/api/next/changes/c1/recovery", json=RERUN_SHOWN).status_code == 200
+    store.put_inbox("c1", Recovery(at=NOW, action="Run the step again", stop_at=NOW))  # a repeated confirmation
+    with store.lock("c1") as lock:
+        after = store.fold(lock, "c1", NOW)[0]
+    assert loop.next_step(after, NOW) == Step(kind=StepKind.BUILD, task="t1")
+    assert (after.budgets, after.plan) == (c.budgets, c.plan)  # the cause's count and the work stay
+    assert [r.recovered_at is not None for r in after.repairs.done] == [True]
+    assert api_.post("/api/next/changes/c1/recovery", json=RERUN_SHOWN).status_code == 409
+    assert fake.host.tick(NOW) == ["c1"]
+
+
+@pytest.mark.parametrize("case", ["credit", "question"])
+def test_a_deadline_stop_with_another_gate_or_a_credit_stop_offers_no_rerun(store, tmp_path, case, changes_preview):
+    fake = Fake(store, tmp_path)
+    if case == "credit":
+        c = changes_preview.credit_stopped(worktree=fake.worktree)
+    else:
+        c = changes_preview.deadline_stopped(worktree=fake.worktree)
+        c.questions.append(Question(id="q9", step=StepKind.BUILD, text="language?"))
+    save(store, c)
+    api_ = client(store, fake)
+    recovery = api_.get("/api/next/changes/c1").json()["recovery"] or {}
+    assert ("rerun" in recovery, recovery.get("action") == "Run the step again") == (False, False)
+    assert api_.post("/api/next/changes/c1/recovery", json=RERUN_SHOWN).status_code == 409
+    store.put_inbox("c1", Recovery(at=NOW, action="Run the step again", stop_at=NOW))
+    with store.lock("c1") as lock:
+        assert store.fold(lock, "c1", NOW)[0].stop == c.stop
+
+
 def test_a_running_steps_stage_reaches_the_status_and_owlbear_status_from_the_store(store):
     """#718: events the runner's sessions log in the store reach the shared status through host.activity."""
     started = datetime.now(UTC) - timedelta(minutes=2)
