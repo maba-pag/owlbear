@@ -180,12 +180,18 @@ def _stored_consent(store: Store, prof: Profile) -> Profile:
     old = prof.entries.get(profile.DECLARED)
     if (
         entry
-        and entry.ci_consent
+        and (entry.ci_consent or entry.ci_named)
         and (
             not old
-            or not old.ci_consent
-            or entry.ci_consent.at > old.ci_consent.at
-            or (entry.ci_consent.at == old.ci_consent.at and entry != old)
+            or (not old.ci_consent and entry != old)
+            or (
+                entry.ci_consent
+                and old.ci_consent
+                and (
+                    entry.ci_consent.at > old.ci_consent.at
+                    or (entry.ci_consent.at == old.ci_consent.at and entry != old)
+                )
+            )
         )
     ):
         return prof.model_copy(
