@@ -5,16 +5,30 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import tools
-from owlbear_delivery_next.change_contracts.models import Exit
-from owlbear_delivery_next.change_contracts.round_records import PLAN, ReviewerVerdict
+from owlbear_delivery_next.change_contracts.models import Exit, StepKind
+from owlbear_delivery_next.change_contracts.round_records import BRIEF, PLAN, ReviewerVerdict
 
 if TYPE_CHECKING:
-    from owlbear_delivery_next.change_contracts.models import Change
+    from owlbear_delivery_next.change_contracts.models import Change, Step
     from owlbear_delivery_next.change_contracts.round_records import RoundLoop
     from owlbear_delivery_next.change_flow.loop import StepResult
 
 ORDER = ("need", "build", "lean", "pipeline")
 type Findings = tuple[list[str], dict[str, tuple[bool, str]]]
+
+
+def at_once(c: Change, step: Step) -> int:
+    """The sessions *step*'s runner may use at once: round one's reviewers when it runs them, else one.
+
+    A planner's challenge follows in the planner's own runner, so planning before the plan's first verdict counts.
+    """
+    subject = {StepKind.SHAPE: BRIEF, StepKind.PLAN: PLAN}.get(step.kind)
+    if subject is None:
+        return 1
+    planning = subject == PLAN and step.mode is None
+    if (lp := c.loops.get(subject)) is None:
+        return len(ORDER) if planning else 1
+    return len(ORDER) if first(lp, "challenge" if planning else step.mode) else 1
 
 
 def first(lp: RoundLoop, mode: str | None) -> bool:

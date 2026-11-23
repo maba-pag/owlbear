@@ -167,9 +167,9 @@ def _first(
         raise
     sessions.count_unread(store, lock, change, [run for _, run in ran], LABEL)  # a sibling's stop took their gate
     named = [(challenge_reviewers.failed(r, name), run) for name, (r, run) in zip(reviewers, ran, strict=True)]
-    if stops := [(r, run) for r, run in named if r.exit == Exit.STOP]:
+    if stops := [(r, d) for r, d in named if r.exit == Exit.STOP or not (d.termination and d.termination.confirmed)]:
         return sessions.first_failure(stops)
-    for name, (verdict, run) in zip(reviewers, ran, strict=True):
+    for verdict, run in ran:  # a brief that must change voids the round, whatever a sibling's session did
         if (
             isinstance(p := run.payload, tools.WrongPremise)
             and p.stage == "brief"
@@ -178,6 +178,7 @@ def _first(
         ):
             amending.premised(change, p, run.session_id, datetime.now(UTC))
             return verdict
+    for name, (verdict, run) in zip(reviewers, ran, strict=True):
         if challenge_reviewers.findings(verdict, run.payload) is None:
             return challenge_reviewers.failed(verdict, name)
     return _counted(change, challenge_reviewers.merged(change.loops[PLAN]), {})
@@ -187,7 +188,7 @@ def _kept(store: Store, lock: Lock, change: Change, reviewers: list[str], runs: 
     """Commit the batch's verdicts with their accounting before announcing any of its step events."""
     steps, paid = [], []
     for name, run in zip(reviewers, runs, strict=True):
-        if not sessions.deferrable(run):
+        if not sessions.deferrable(run) or run.detail == sessions.NOT_RUN:  # a session never started is not paid
             continue
         verdict = session_result.to_result(run, StepKind.REVIEW, datetime.now(UTC), change.step.kind)
         steps.append(sessions.account(change, run, {"kind": LABEL, "exit": verdict.exit}))

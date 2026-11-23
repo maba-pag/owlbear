@@ -3,9 +3,10 @@
 A step's agent sessions are reserved before its runner launches and given back once its processes are confirmed
 gone. A step reserves none when it never starts an agent session (publish, follow, merge, cleanup) and one once its
 decision pick waits for a session; up to the project's limit for a visual check that captures and judges (its judges
-run in waves of the grant), else one. The grant is written with the runner's record, so a restarted machine host
-counts it again before granting anything. An Impeccable update and a PDS audit take one slot for each of their
-sessions while they run.
+run in waves of the grant); up to four for a step that runs round one of a brief's or a plan's challenge, whose four
+reviewers run in waves of the grant too; else one. The grant is written with the runner's record, so a restarted
+machine host counts it again before granting anything. An Impeccable update and a PDS audit take one slot for each of
+their sessions while they run.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.audit_runs import job as audit_job
 from owlbear_delivery_next.change_contracts.failures import cause_key
 from owlbear_delivery_next.change_contracts.models import ErrorKind, StepKind
-from owlbear_delivery_next.change_flow import shaping_capture
+from owlbear_delivery_next.change_flow import challenge_reviewers, shaping_capture
 from owlbear_delivery_next.impeccable import pack_files
 from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay, pack_run, pack_state
 from owlbear_delivery_next.local_system.slots import PACK
@@ -55,7 +56,8 @@ WHO: dict[Kind, str] = {"pack": "Impeccable", "pds": "PDS", "audit": "the audit"
 def wanted(c: Change, step: Step | None) -> int:
     """The sessions a runner for *step* may run at once: 0 without an agent, all its judges may use, else 1.
 
-    A step without an agent whose decision pick waits for a session (`decisions_gate`) gets one for it.
+    A step without an agent whose decision pick waits for a session (`decisions_gate`) gets one for it. A step that
+    runs round one of a brief's or a plan's challenge gets one for each of its four reviewers.
     """
     if step is None:
         return 0
@@ -66,7 +68,7 @@ def wanted(c: Change, step: Step | None) -> int:
     if step.kind in NO_AGENT:
         o = c.outcome
         return int(o is not None and o.cause == cause_key(ErrorKind.NETWORK, step.kind, pick.LABEL))
-    return ALL if check.capturing(c) or step.kind == StepKind.TESTS else 1
+    return ALL if check.capturing(c) or step.kind == StepKind.TESTS else challenge_reviewers.at_once(c, step)
 
 
 def project(host: Host) -> str:
