@@ -23,7 +23,7 @@ from owlbear_delivery_next.change_flow import brief_rounds, loop
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import session_slots
-from owlbear_delivery_next.runtimes import step_decisions, step_input
+from owlbear_delivery_next.runtimes import challenge_input, step_decisions, step_input
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.workflow_steps import decisions_gate, pick, plan_round, reconsider, sessions
@@ -92,11 +92,12 @@ def test_every_role_gets_exactly_the_picked_set_and_the_changes_own_and_challeng
     picking.save()
     assert picking.ask(1).status_code == 200
     picking.picks.append(picked(rule.id, general.id))
-    picking.verdicts.append(tools.ReviewResult(verdict="pass"))
+    picking.verdicts.extend([tools.ReviewResult(verdict="pass")] * 4)
     picking.step()
     assert picking.approve(1).status_code == 200
     held = recording(picking, monkeypatch)
-    _, judge = picking.told
+    _, need, build, lean, judge = picking.told
+    assert all(step_decisions.COMPLETE not in cfg.message for cfg in (need, build, lean))
     said = judge.message  # the brief challenger: the pick, then the complete list (TD-452)
     assert said.index(line(rule)) < said.index(step_decisions.COMPLETE) < said.index(line(other))
     own = make(scope=Scope.CHANGE, change=f"{picking.change().brief.approved_at:%Y%m%d-%H%M%S}-{picking.slug}",
@@ -116,7 +117,7 @@ def test_every_role_gets_exactly_the_picked_set_and_the_changes_own_and_challeng
     assert (c.decisions_baseline.picked, set(c.decisions_baseline.said)) == (True, {rule.id, general.id, own.id})
     with step_decisions.using(worker, challenger[len(worker) :]):
         planned = Plan(tasks=[Task(id="t1", title="Add", scope=["packages/app"], checks=["true"])])
-        plan = step_input.plan_challenge(c, planned, Profile(), Path(), {})
+        plan = challenge_input.plan_challenge(c.model_copy(update={"plan": planned}), Profile(), Path(), {})
         tree = SimpleNamespace(base="a" * 40, head="b" * 40, changed=())
         review = step_input.review(c, None, Path(), tree)
         build = step_input.build(c, c.plan.tasks[0], Path(), [])
@@ -384,7 +385,14 @@ def test_a_brief_reconsideration_reads_the_pick_beside_the_complete_list(picking
     picking.ask(1)
     clarified = [{"finding": "F1", "verdict": "clarified", "text": "AC-1: name the exact text", "reason": "r"}]
     picking.picks.append(picked(rule.id))
-    picking.verdicts += [verdict("AC-1"), verdict(upheld={"F1": True}), ReconsiderResult(reconsidered=clarified)]
+    picking.verdicts += [
+        verdict("AC-1"),
+        verdict(),
+        verdict(),
+        verdict(),
+        verdict(upheld={"F1": True}),
+        ReconsiderResult(reconsidered=clarified),
+    ]
     picking.step()
     picking.ask(1, {"F1": "no"})
     q = loop.open_question(picking.step())

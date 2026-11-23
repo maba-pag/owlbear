@@ -378,7 +378,7 @@ def test_an_approval_refuses_a_saved_pick_of_an_unreadable_rule_before_its_basel
     picking.save()
     assert picking.ask(1).status_code == 200
     picking.picks.append(pick_tools.PickResult(picked=[{"id": rule.id, "note": "it governs the page"}]))
-    picking.verdicts.append(tools.ReviewResult(verdict="pass"))
+    picking.verdicts.extend([tools.ReviewResult(verdict="pass")] * 4)
     picking.step()
     # The same rule now carries a pre-upgrade legacy rationale; its statement and origin are unchanged.
     legacy = legacy_ambiguous().model_copy(update={"id": rule.id})
@@ -399,7 +399,7 @@ def test_an_unreadable_rule_recorded_after_the_pick_passes_approval_and_stops_th
     picking.save()
     assert picking.ask(1).status_code == 200
     picking.picks.append(pick_tools.PickResult(picked=[{"id": rule.id, "note": "it governs the page"}]))
-    picking.verdicts.append(tools.ReviewResult(verdict="pass"))
+    picking.verdicts.extend([tools.ReviewResult(verdict="pass")] * 4)
     picking.step()
     bad = picking.put(legacy_ambiguous())
 

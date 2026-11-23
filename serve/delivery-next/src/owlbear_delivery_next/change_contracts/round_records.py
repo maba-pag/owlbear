@@ -112,6 +112,15 @@ class Completion(_Record):
     criteria: dict[str, int] = Field(default_factory=dict)  # the brief's criterion versions then
 
 
+class ReviewerVerdict(_Record):
+    """One first-round reviewer's complete findings, bound to the versions and round it judged."""
+
+    brief: int
+    plan: int | None = None
+    round: int
+    findings: list[str]
+
+
 class RoundLoop(_Record):
     """One subject's challenge loop: a root plan task, the final review, a plan, a pack update or a brief."""
 
@@ -134,6 +143,7 @@ class RoundLoop(_Record):
     rebuild: list[str] = Field(default_factory=list)  # the plan tasks the owner ticked, until their undo is done
     undo: str = ""  # the head an undo of this loop's work started from, recorded before anything is promoted
     history: list[RoundLoop] = Field(default_factory=list)  # the attempts a retry or restart replaced
+    reviewers: dict[str, ReviewerVerdict] = Field(default_factory=dict)
     verdicts: list[Verdict] = Field(default_factory=list)  # each verdict's version, for subjects with versions
 
     def raise_findings(self, texts: Sequence[str], tasks: Sequence[Sequence[str]] = ()) -> list[RoundFinding]:

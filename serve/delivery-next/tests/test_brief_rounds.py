@@ -33,7 +33,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import step_input
+from owlbear_delivery_next.runtimes import challenge_input
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import briefs
 from owlbear_delivery_next.state_store.store import Lock, Store
@@ -76,6 +76,8 @@ class Shaping:
     async def run(self, cfg):
         self.told.append(cfg)
         payload = self.verdicts.pop(0)
+        if payload is None:
+            return Run(cfg.session_id, "error", detail="boom", termination=Termination(confirmed=True))
         if isinstance(payload, Termination):  # a session whose processes are not confirmed gone
             return Run(cfg.session_id, "result", None, termination=payload)
         return Run(cfg.session_id, "result", payload, termination=Termination(confirmed=True))
@@ -121,6 +123,11 @@ def verdict(*places: str, upheld: dict[str, bool] | None = None) -> tools.Review
     return tools.ReviewResult(verdict="fix" if places else "pass", findings=found, rechecked=judged)
 
 
+def first_round(result: tools.ReviewResult) -> list[tools.ReviewResult]:
+    """The first reviewer raises the fixture's findings; its three peers pass independently."""
+    return [result, verdict(), verdict(), verdict()]
+
+
 def action(c: Change) -> str | None:
     """The next action the Change's row shows."""
     return status.status(c, Activity(host_up=True), NOW).action
@@ -135,7 +142,7 @@ def test_the_shaper_asks_rejects_and_revises_until_the_owner_may_approve_the_ver
     assert loop.next_step(shaping.change(), NOW).kind == K.SHAPE  # runnable: the host starts the challenger
     assert shaping.ask_challenge(1).status_code == 409  # it runs already
     assert shaping.save(title="Add a farewell")["errors"] == ["change: its challenge runs; save the revision after it"]
-    shaping.verdicts += [verdict("AC-1", "scope"), verdict(upheld={"F2": True})]
+    shaping.verdicts += [*first_round(verdict("AC-1", "scope")), verdict(upheld={"F2": True})]
     c = shaping.step()
     assert ([f.id for f in c.loops[BRIEF].findings], c.outcome.waiting) == (["F1", "F2"], Waiting.CHAT)
     assert c.loops[BRIEF].verdicts == [Verdict(round=1, version=1)]
@@ -175,7 +182,7 @@ def test_a_save_after_the_loop_ended_needs_one_more_round_on_the_changes(shaping
     assert not brief_starts.waiting(shaping.change())
     shaping.ask_challenge(1)
     assert not brief_starts.waiting(shaping.change())
-    shaping.verdicts += [verdict(), verdict()]
+    shaping.verdicts += [*first_round(verdict()), verdict()]
     assert shaping.step().brief.challenged == 1
     assert not brief_starts.waiting(shaping.change())
     assert "challenged already" in shaping.ask_challenge(1).json()["detail"]
@@ -218,7 +225,7 @@ def test_the_last_allowed_round_with_many_findings_asks_the_owner(shaping):
         c.loops[BRIEF] = RoundLoop(subject=BRIEF, policy=few)
         shaping.store.write(lock, c)
     shaping.ask_challenge(1)
-    shaping.verdicts += [verdict("AC-1")]
+    shaping.verdicts += [*first_round(verdict("AC-1"))]
     shaping.step()
     shaping.save(title="Add a farewell")
     assert shaping.ask_challenge(2).status_code == 200
@@ -243,7 +250,7 @@ def test_the_last_allowed_round_with_many_findings_asks_the_owner(shaping):
 def test_the_chat_tool_waits_for_the_verdict_and_returns_the_findings_by_id(shaping, monkeypatch, chat_replied):
     shaping.save()
     shaping.host.paused = lambda: True  # TD-287: the challenge the owner's chat asks for runs while paused
-    shaping.verdicts += [verdict("AC-1")]
+    shaping.verdicts += [*first_round(verdict("AC-1"))]
     chat, _ = chat_of(shaping, chat_replied)
     monkeypatch.setattr(chat_client, "POLL", 0)
     monkeypatch.setattr(chat_client, "_pause", lambda _s: shaping.step())  # the host runs meanwhile
@@ -270,7 +277,7 @@ def test_a_challenge_asked_before_a_stop_when_idle_is_recorded_and_the_chat_retu
 def test_an_upheld_rejection_whose_question_a_stop_replaced_is_asked_again(shaping):
     shaping.save()
     shaping.ask_challenge(1)
-    shaping.verdicts += [verdict("AC-1"), verdict(upheld={"F1": True})]
+    shaping.verdicts += [*first_round(verdict("AC-1")), verdict(upheld={"F1": True})]
     shaping.step()
     shaping.ask_challenge(1, {"F1": "no"})
     c = shaping.step()
@@ -278,7 +285,7 @@ def test_an_upheld_rejection_whose_question_a_stop_replaced_is_asked_again(shapi
         c.outcome = None
         shaping.store.write(lock, c)
     c = shaping.step()
-    assert (c.outcome.exit, len(shaping.told)) == (Exit.ASK, 2)
+    assert (c.outcome.exit, len(shaping.told)) == (Exit.ASK, 5)
 
 
 @pytest.mark.parametrize("disputed", [False, True])
@@ -290,11 +297,11 @@ def test_legacy_approval_is_challenged_before_planning(shaping, disputed):
         c.outcome = None
         shaping.store.write(lock, c)
     if not disputed:
-        shaping.verdicts += [verdict()]
+        shaping.verdicts += first_round(verdict())
         c = shaping.step()
         assert (c.step.kind, c.brief.challenged) == (K.PLAN, 1)
         return
-    shaping.verdicts += [verdict("AC-1"), verdict(upheld={"F1": True})]
+    shaping.verdicts += [*first_round(verdict("AC-1")), verdict(upheld={"F1": True})]
     shaping.step()
     assert shaping.ask_challenge(1, {"F1": "it is checkable"}).status_code == 200
     shaping.step()
@@ -314,7 +321,11 @@ def test_a_clarified_reconsideration_hands_the_finding_to_the_shaper_who_may_sav
     shaping.save()
     shaping.ask_challenge(1)
     clarified = [{"finding": "F1", "verdict": "clarified", "text": "AC-1: name the exact text", "reason": "r"}]
-    shaping.verdicts += [verdict("AC-1"), verdict(upheld={"F1": True}), ReconsiderResult(reconsidered=clarified)]
+    shaping.verdicts += [
+        *first_round(verdict("AC-1")),
+        verdict(upheld={"F1": True}),
+        ReconsiderResult(reconsidered=clarified),
+    ]
     shaping.step()
     shaping.ask_challenge(1, {"F1": "no"})
     shaping.step()
@@ -339,7 +350,7 @@ def test_a_return_to_shaping_after_approval_waits_for_the_revision_and_never_pla
 def test_a_reconsideration_that_cannot_confirm_its_end_stops_the_change_for_the_owner(shaping):
     shaping.save()
     shaping.ask_challenge(1)
-    shaping.verdicts += [verdict("AC-1"), verdict(upheld={"F1": True}), Termination(confirmed=False)]
+    shaping.verdicts += [*first_round(verdict("AC-1")), verdict(upheld={"F1": True}), Termination(confirmed=False)]
     shaping.step()
     shaping.ask_challenge(1, {"F1": "no"})
     shaping.step()
@@ -356,7 +367,7 @@ def test_an_unchanged_version_at_the_round_limit_needs_no_tick(shaping):
         c.loops[BRIEF] = RoundLoop(subject=BRIEF, policy=one)
         shaping.store.write(lock, c)
     shaping.ask_challenge(1)
-    shaping.verdicts += [verdict("AC-1"), verdict(upheld={"F1": False})]
+    shaping.verdicts += [*first_round(verdict("AC-1")), verdict(upheld={"F1": False})]
     shaping.step()
     assert shaping.ask_challenge(1, {"F1": "it is checkable"}).status_code == 200
     assert shaping.change().step.mode == RECHECK  # TD-330: the last round's rejection is judged, outside the count
@@ -429,7 +440,7 @@ def test_the_brief_challenger_never_sees_the_owners_brief_decisions():
     q = brief_rounds.question(lp, f).model_copy(update={"id": "q1"})
     q.answer = Answer(option="fix", text="do it", at=NOW)
     c.questions.append(q)
-    assert "secret finding" not in step_input.brief_challenge(c, Path("/w"))
+    assert "secret finding" not in challenge_input.brief_challenge(c, Path("/w"))
 
 
 def chat_of(shaping, chat_replied, after=None) -> tuple[chat_client.Chat, list[tuple[str, str]]]:
@@ -458,7 +469,7 @@ def test_the_wait_for_a_challenge_asked_for_earlier_returns_its_findings_and_ask
     shaping, monkeypatch, chat_replied, landed_first
 ):
     shaping.save()
-    shaping.verdicts += [verdict("AC-1")]
+    shaping.verdicts += [*first_round(verdict("AC-1"))]
     chat, sent = chat_of(shaping, chat_replied)
     assert shaping.ask_challenge(1).status_code == 200  # what challenge_brief sent, when its wait was cut short
     if landed_first:
@@ -501,7 +512,7 @@ def test_an_abandoned_recheck_of_the_same_draft_is_told_as_no_longer_shaped_not_
     shaping, monkeypatch, chat_replied, tool
 ):
     shaping.save()
-    shaping.verdicts += [verdict("AC-1")]
+    shaping.verdicts += [*first_round(verdict("AC-1"))]
     shaping.ask_challenge(1)
     shaping.step()  # round 1 found F1
 
@@ -549,3 +560,25 @@ def test_a_challenge_asked_for_by_the_tool_ends_with_who_must_act_when_the_chang
         assert (row["actor"], row["action"] is not None) == ("you", True)
         told = {"owner_action": "Resume" if ending == "paused" else row["action"]}
     assert out == {"requested": True, "running": False, "line": row["line"]} | told
+
+
+def test_three_brief_reviewers_pass_and_an_operational_failure_keeps_their_results(shaping):
+    shaping.save()
+    shaping.ask_challenge(1)
+    shaping.verdicts += [verdict(), verdict(), verdict(), None, verdict()]
+    c = shaping.step()
+    lp = c.loops[BRIEF]
+    assert (lp.round, lp.verdicts, c.brief.challenged, c.brief.approved_version) == (0, [], None, None)
+    assert list(lp.reviewers) == ["need", "build", "lean"]
+    assert "pipeline" in c.outcome.reason
+    assert c.step.mode == brief_rounds.CHALLENGE
+    c = shaping.step()
+    assert (c.loops[BRIEF].round, c.brief.challenged, c.loops[BRIEF].reviewers) == (1, 1, {})
+    assert len(shaping.told) == 5
+    assert [cfg.message.split("Your question: ")[1].split(".")[0].split(",")[0] for cfg in shaping.told] == [
+        "need",
+        "build",
+        "lean",
+        "pipeline",
+        "pipeline",
+    ]

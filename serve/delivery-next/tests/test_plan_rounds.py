@@ -37,7 +37,7 @@ from owlbear_delivery_next.change_flow import disputes, loop, plan_rounds, round
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import step_input
+from owlbear_delivery_next.runtimes import challenge_input, step_input
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.roles import UserConfig
@@ -129,16 +129,21 @@ def review(*places: str, upheld: dict[str, bool] | None = None) -> tools.ReviewR
                               rechecked=judged)  # fmt: skip
 
 
+def first_round(result: tools.ReviewResult) -> list[tools.ReviewResult]:
+    """The first reviewer raises the fixture's findings; its three peers pass independently."""
+    return [result, review(), review(), review()]
+
+
 def test_a_rejection_the_next_round_upholds_is_left_open_without_a_revision_or_a_question(store, change_repo, mp):
     s = mp
     s.plans += [plan(1), plan(1, {"F1": "t1's check covers it"})]
-    s.reviews += [review("t1"), review(upheld={"F1": True})]
+    s.reviews += [*first_round(review("t1")), review(upheld={"F1": True})]
     c = step(store, change_repo)
     assert (c.outcome.exit, c.outcome.challenged, c.step.mode) == (Exit.RETRY, True, None)
     assert [(f.id, f.state) for f in c.loops[PLAN].findings] == [("F1", "open")]
     c = step(store, change_repo)
     planner = s.said("plan")
-    assert "> F1. t1: AC-1 untested - fix: add a check" in planner
+    assert "> F1. need: t1: AC-1 untested - fix: add a check" in planner
     assert "## Rejecting" in planner
     assert "Review findings (data)" not in planner  # the outcome's text is display only (TD-188)
     challenger = s.said("challenge")
@@ -147,10 +152,10 @@ def test_a_rejection_the_next_round_upholds_is_left_open_without_a_revision_or_a
     assert s.told[-1][1].rechecks == ("F1",)
     assert (c.questions, c.loops[PLAN].round, c.loops[PLAN].findings[0].state) == ([], 2, "left-open")
     assert [e.model_dump() for e in c.left] == [
-        {"loop": PLAN, "attempt": 1, "id": "F1", "text": "t1: AC-1 untested - fix: add a check",
+        {"loop": PLAN, "attempt": 1, "id": "F1", "text": "need: t1: AC-1 untested - fix: add a check",
          "reason": "t1's check covers it", "judgement": "see t1"}
     ]  # fmt: skip
-    assert s.kinds() == ["plan", "challenge", "plan", "challenge"]  # the rejection stands: no planner revises for it
+    assert s.kinds() == ["plan", *(["challenge"] * 4), "plan", "challenge"]  # no planner revises for the rejection
     assert (c.step.kind, len(c.plan.tasks)) == (K.BUILD, 1)
     shown = round_marks.shown(c)
     assert [(m["round"], m["kind"]) for m in shown["plan"]] == [(1, "open")]  # left open, never settled
@@ -166,11 +171,11 @@ def mp(monkeypatch) -> Sessions:
 
 def test_a_failed_challenge_challenges_the_same_plan_again_without_planning_again(store, change_repo, mp):
     mp.plans += [plan(2)]
-    mp.reviews += [None, review()]
+    mp.reviews += [None, *first_round(review())]
     c = step(store, change_repo)
     assert (c.step.kind, c.step.mode, len(c.plan.tasks), c.loops[PLAN].round) == (K.PLAN, "challenge", 2, 0)
     c = step(store, change_repo)
-    assert mp.kinds() == ["plan", "challenge", "challenge"]
+    assert mp.kinds() == ["plan", *(["challenge"] * 5)]
     assert (c.step.kind, c.loops[PLAN].ended, c.loops[PLAN].round) == (K.BUILD, "clean", 1)
 
 
@@ -181,15 +186,15 @@ def test_the_planner_and_its_challenger_run_with_the_owners_user_config(  # noqa
     switched = {"load_user_instructions": instructions, "load_user_skills": skills, "load_user_memory": memory}
     monkeypatch.setattr(config, "BASE", config.BASE.model_copy(update=switched))
     mp.plans += [plan(1)]
-    mp.reviews += [review()]
+    mp.reviews += [*first_round(review())]
     step(store, change_repo)
-    assert mp.kinds() == ["plan", "challenge"]
-    assert [cfg.user for _, cfg in mp.told] == [UserConfig(instructions=instructions, skills=skills, memory=memory)] * 2
+    assert mp.kinds() == ["plan", *(["challenge"] * 4)]
+    assert [cfg.user for _, cfg in mp.told] == [UserConfig(instructions=instructions, skills=skills, memory=memory)] * 5
 
 
 def test_a_host_that_dies_during_the_challenge_keeps_the_revision_and_challenges_it(store, change_repo, mp):
     mp.plans += [plan(1), plan(3, {"F1": "no"})]
-    mp.reviews += [review("t1"), review(upheld={"F1": False})]
+    mp.reviews += [*first_round(review("t1")), review(upheld={"F1": False})]
     step(store, change_repo)
 
     async def died(cfg):
@@ -204,7 +209,7 @@ def test_a_host_that_dies_during_the_challenge_keeps_the_revision_and_challenges
     c = store.read("c1")
     assert (c.step.mode, len(c.plan.tasks), c.loops[PLAN].findings[0].state) == ("challenge", 3, "rejected")
     c = step(store, change_repo)  # the crashed session's processes are not confirmed gone yet: refused
-    assert (mp.kinds(), c.step.mode, len(c.plan.tasks)) == (["plan", "challenge", "plan"], "challenge", 3)
+    assert (mp.kinds(), c.step.mode, len(c.plan.tasks)) == (["plan", *(["challenge"] * 4), "plan"], "challenge", 3)
 
 
 @pytest.mark.parametrize(
@@ -221,7 +226,7 @@ def test_last_plan_rejection_checks_preserve_review_status(store, change_repo, m
     c.loops[PLAN].policy = RoundPolicy(max_rounds=maximum, max_findings=5, last_round_at=last_at, ask_owner_at=ask_at)
     store.write(Lock("c1"), c)
     mp.plans += [plan(1), plan(revision, {"F1": "no"})]
-    mp.reviews += [review("t1"), review(upheld={"F1": upheld})]
+    mp.reviews += [*first_round(review("t1")), review(upheld={"F1": upheld})]
     step(store, change_repo)
     c = step(store, change_repo)
     assert "Judge only these rejections" in mp.said("challenge")
@@ -243,14 +248,17 @@ def test_a_wrong_premise_in_the_check_is_revised_for_and_the_check_never_runs_ag
     c.loops[PLAN].policy = RoundPolicy(max_rounds=3, max_findings=5, last_round_at=2, ask_owner_at=3)
     store.write(Lock("c1"), c)
     mp.plans += [plan(1), plan(1, {"F1": "no"}), plan(2)]
-    mp.reviews += [review("t1"), tools.WrongPremise(stage="plan", reason="AC-1 contradicts AC-2", evidence=["brief"])]
+    mp.reviews += [
+        *first_round(review("t1")),
+        tools.WrongPremise(stage="plan", reason="AC-1 contradicts AC-2", evidence=["brief"]),
+    ]
     step(store, change_repo)
     step(store, change_repo)
     c = step(store, change_repo)
     lp = c.loops[PLAN]
     assert [(f.state, f.judgement) for f in lp.findings] == [("standing", UNJUDGED), ("fixed", "")]
     assert (mp.kinds(), lp.round, lp.ended, c.step.kind) == (
-        ["plan", "challenge", "plan", "challenge", "plan"],
+        ["plan", *(["challenge"] * 4), "plan", "challenge", "plan"],
         1,
         "count",
         K.BUILD,
@@ -263,7 +271,7 @@ def test_plan_round_limit_stops_with_the_plan_and_attempt_kept(store, change_rep
     c.loops[PLAN].policy = RoundPolicy(max_rounds=1, max_findings=5, last_round_at=0, ask_owner_at=1)
     store.write(Lock("c1"), c)
     mp.plans += [plan(1), plan(1, {"F1": "no"} if rejected else None)]
-    mp.reviews += [review("t1"), *([review(upheld={"F1": False})] if rejected else [])]
+    mp.reviews += [*first_round(review("t1")), *([review(upheld={"F1": False})] if rejected else [])]
     step(store, change_repo)
     c = step(store, change_repo)
     assert (c.outcome.exit, c.questions, c.stop.action) == (Exit.STOP, [], "Run the step again")
@@ -277,7 +285,7 @@ def test_plan_round_limit_stops_with_the_plan_and_attempt_kept(store, change_rep
         assert lp.findings[0].state == "standing"
     else:
         assert "F1 revised for, not challenged again" in c.stop.reason
-    assert mp.kinds() == ["plan", "challenge", "plan"] + (["challenge"] if rejected else [])
+    assert mp.kinds() == ["plan", *(["challenge"] * 4), "plan"] + (["challenge"] if rejected else [])
     assert loop.next_step(c, datetime.now(UTC)) is None
 
 
@@ -293,7 +301,7 @@ def asked(store: Store) -> None:
 @pytest.mark.parametrize("premise", [False, True])
 def test_persisted_plan_reconsideration_left_unsure_is_recorded_once(store, change_repo, mp, premise):
     mp.plans += [plan(1, scope="lib"), plan(1, {"F1": "no"})]
-    mp.reviews += [review("t1"), review(upheld={"F1": True})]
+    mp.reviews += [*first_round(review("t1")), review(upheld={"F1": True})]
     why = "premise: AC-1 contradicts AC-2" if premise else "only the owner knows"
     mp.reconsiders += [
         tools.WrongPremise(stage="brief", reason="AC-1 contradicts AC-2", evidence=["brief"])
@@ -315,13 +323,13 @@ def test_persisted_plan_reconsideration_left_unsure_is_recorded_once(store, chan
     assert f.judgement == f"see t1 A second challenger was unsure: {why}"
     assert [(e.id, e.judgement) for e in c.left] == [("F1", f.judgement)]
     c = step(store, change_repo)
-    assert mp.kinds() == ["plan", "challenge", "plan", "challenge", "reconsider"]  # no planner revises for it
+    assert mp.kinds() == ["plan", *(["challenge"] * 4), "plan", "challenge", "reconsider"]  # no planner revises for it
     assert c.step.kind == K.BUILD
 
 
 def test_an_already_asked_disputes_clarified_finding_goes_to_the_planner_as_the_owners(store, change_repo, mp):
     mp.plans += [plan(1), plan(1, {"F1": "no"}), plan(2)]
-    mp.reviews += [review("t1"), review(upheld={"F1": True})]
+    mp.reviews += [*first_round(review("t1")), review(upheld={"F1": True})]
     mp.reconsiders += [
         ReconsiderResult(
             reconsidered=[{"finding": "F1", "verdict": "clarified", "text": "t1: AC-1 edge", "reason": "r"}]
@@ -364,7 +372,7 @@ def test_the_plan_challenger_never_sees_the_owners_plan_decisions_but_the_planne
     q = plan_rounds.question(lp, f).model_copy(update={"id": "q1"})
     q.answer = Answer(option="fix", text="do it", at=NOW)
     c.questions.append(q)
-    assert "secret finding" not in step_input.plan_challenge(c, c.plan, Profile(), Path("/w"), {})
+    assert "secret finding" not in challenge_input.plan_challenge(c, Profile(), Path("/w"), {})
     assert "secret finding" in step_input.plan(c, Profile(), Path("/w"), {})
 
 
@@ -429,25 +437,35 @@ def test_a_known_usage_challenge_whose_settlement_write_fails_is_charged_once_ac
     armed = {"on": True}
 
     def faulty(self, lock, change):
-        if armed["on"] and change.slug == "c1" and change.step.mode is None and change.spend.credits >= 4.5:
-            armed["on"] = False  # the settlement write: the verdict, the spend and the round together
+        if (
+            armed["on"]
+            and change.slug == "c1"
+            and len(change.loops[PLAN].reviewers) == 2
+            and change.pending_child is None
+            and change.spend.credits >= 8.0
+        ):
+            armed["on"] = False  # the reviewer's result and spend settle together
             raise OSError(errno.ENOSPC, os.strerror(errno.ENOSPC))
         return real_write(self, lock, change)
 
     monkeypatch.setattr(Store, "write", faulty)
     mp.plans += [plan(1)]
-    mp.reviews += [review(upheld={})]  # a pass: the challenge's one round
+    mp.reviews += [*first_round(review(upheld={}))]  # a pass: the challenge's one round
     with pytest.raises(OSError, match="No space left"):
         step(store, change_repo)
 
-    assert [e for e in store.events("c1") if e.get("kind") == "plan-challenge"] == []  # logged only once durable
+    assert len([e for e in store.events("c1") if e.get("kind") == "plan-challenge"]) == 1
+    kept = store.read("c1")
+    assert list(kept.loops[PLAN].reviewers) == ["need"]
+    assert kept.pending_child.run.session_id == mp.told[-1][1].session_id
+    assert "Your question: build." in mp.told[-1][1].message
     monkeypatch.setattr(Store, "write", real_write)
     fresh = Store(tmp_path / "store")
     step(fresh, change_repo)
     c = fresh.read("c1")
-    assert mp.kinds().count("challenge") == 1  # the paid challenge ran once, never again after the fault
-    assert c.spend.credits == pytest.approx(4.5)  # planner 1.0 + challenge 3.5, once each
-    assert [e["kind"] for e in fresh.events("c1") if e.get("kind") == "plan-challenge"] == ["plan-challenge"]
+    assert mp.kinds().count("challenge") == 4  # each reviewer ran once, including the adopted child
+    assert c.spend.credits == pytest.approx(15.0)  # planner 1.0 + four challengers at 3.5, once each
+    assert [e["kind"] for e in fresh.events("c1") if e.get("kind") == "plan-challenge"] == ["plan-challenge"] * 4
     assert (c.step.mode, c.outcome.exit) == (None, Exit.DONE)
 
 
@@ -468,3 +486,19 @@ def test_a_continued_plan_challenge_records_its_start_before_its_challenger_runs
     monkeypatch.setattr(plan_round, "challenge", challenge)
     assert plan_round.continued(store, Lock("c1"), store.read("c1"), tmp_path)
     assert seen == [True]
+
+
+def test_three_plan_reviewers_pass_and_an_operational_failure_keeps_their_results(store, change_repo, mp):
+    mp.plans += [plan(1)]
+    mp.reviews += [review(), review(), review(), None, review()]
+    c = step(store, change_repo)
+    lp = c.loops[PLAN]
+    assert (lp.round, lp.verdicts, lp.ended, c.step.kind, c.step.mode) == (0, [], "", K.PLAN, "challenge")
+    assert list(lp.reviewers) == ["need", "build", "lean"]
+    assert "pipeline" in c.outcome.reason
+    c = step(store, change_repo)
+    assert (c.loops[PLAN].round, c.loops[PLAN].reviewers, c.step.kind) == (1, {}, K.BUILD)
+    assert mp.kinds() == ["plan", *(["challenge"] * 5)]
+    assert [
+        cfg.message.split("Your question: ")[1].split(".")[0].split(",")[0] for k, cfg in mp.told if k == "challenge"
+    ] == ["need", "build", "lean", "pipeline", "pipeline"]
