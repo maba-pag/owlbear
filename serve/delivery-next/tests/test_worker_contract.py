@@ -36,6 +36,7 @@ from owlbear_delivery_next.change_flow import loop, repairs
 from owlbear_delivery_next.local_system import processes
 from owlbear_delivery_next.local_system.processes import Termination, verdict
 from owlbear_delivery_next.runtimes import (
+    challenge_input,
     lessons,
     sdk_adapter,
     sdk_teardown,
@@ -748,7 +749,7 @@ def test_the_plan_challenger_sees_where_each_check_runs() -> None:
     profile = Profile(entries={"check:packages/app": entry})
     check = "cd ./packages/app && {\nnpm test\n}"
     plan = Plan(tasks=[Task(id="t1", title="Add sign", scope=["packages/app"], checks=[check])])
-    text = step_input.plan_challenge(Change(slug="s"), plan, profile, Path("/w"), {})
+    text = challenge_input.plan_challenge(Change(slug="s", plan=plan), profile, Path("/w"), {})
     assert f"- `packages/app`: install `none`, check `{check}`" in text
     assert text.count(check) == 2
 
@@ -761,12 +762,12 @@ def test_the_plan_challenger_sees_the_whole_plan() -> None:
     ]
     plan = Plan(tasks=tasks)
     assert len(goal) > 1500
-    text = step_input.plan_challenge(Change(slug="s"), plan, Profile(), Path("/w"), {})
+    text = challenge_input.plan_challenge(Change(slug="s", plan=plan), Profile(), Path("/w"), {})
     assert text.count(goal) == 2
     assert text.count("x" * 300) == 2
     assert "(truncated)" not in text
     huge = Plan(tasks=[Task(id=f"t{i}", title="t", detail=goal) for i in range(1, 13)])  # #1361: over 24000 chars
-    text = step_input.plan_challenge(Change(slug="s"), huge, Profile(), Path("/w"), {})
+    text = challenge_input.plan_challenge(Change(slug="s", plan=huge), Profile(), Path("/w"), {})
     assert "(truncated)" not in text
     assert text.count(goal) == 12
     assert "- t12: t" in text

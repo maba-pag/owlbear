@@ -33,7 +33,7 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import step_input
+from owlbear_delivery_next.runtimes import challenge_input
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import briefs
 from owlbear_delivery_next.state_store.store import Lock, Store
@@ -429,7 +429,7 @@ def test_the_brief_challenger_never_sees_the_owners_brief_decisions():
     q = brief_rounds.question(lp, f).model_copy(update={"id": "q1"})
     q.answer = Answer(option="fix", text="do it", at=NOW)
     c.questions.append(q)
-    assert "secret finding" not in step_input.brief_challenge(c, Path("/w"))
+    assert "secret finding" not in challenge_input.brief_challenge(c, Path("/w"))
 
 
 def chat_of(shaping, chat_replied, after=None) -> tuple[chat_client.Chat, list[tuple[str, str]]]:

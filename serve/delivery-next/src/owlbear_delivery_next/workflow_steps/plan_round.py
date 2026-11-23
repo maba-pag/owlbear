@@ -19,7 +19,7 @@ from owlbear_delivery_next.change_contracts.round_records import PLAN, RECHECK
 from owlbear_delivery_next.change_flow import amending, asking, loop, plan_rounds, worktree
 from owlbear_delivery_next.change_flow.moves import carry_integrations
 from owlbear_delivery_next.local_system.git_files import git_common_dir
-from owlbear_delivery_next.runtimes import amendments, sdk_adapter, step_input
+from owlbear_delivery_next.runtimes import challenge_input, amendments, sdk_adapter, step_input
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.settings.profile import vouched
 from owlbear_delivery_next.workflow_steps import engine, held_writes, overlap, pending_child, sessions
@@ -108,7 +108,7 @@ def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
             kind=StepKind.REVIEW,
             worktree=at,
             session_id="",
-            message=step_input.plan_challenge(change, plan, profile, at, others),
+            message=challenge_input.plan_challenge(change, profile, at, others),
             resume=False,
             policy=Policy(at, write=False),
             observe=lambda: worktree.observe(at, change.names.target),

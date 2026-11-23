@@ -42,7 +42,7 @@ from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.project_host import api, environment
 from owlbear_delivery_next.project_host.host import Host
-from owlbear_delivery_next.runtimes import sdk_adapter, step_answers, step_decisions, step_input
+from owlbear_delivery_next.runtimes import challenge_input, sdk_adapter, step_answers, step_decisions, step_input
 from owlbear_delivery_next.state_store import decision_archive, decision_store, read_backs
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import check, curation, decisions_gate, prepare
@@ -248,7 +248,7 @@ def test_large_set_reaches_consumers_whole(tmp_path):
     c = change()
     with step_decisions.using(lines, []):
         build = step_input.build(c, c.plan.tasks[0], tmp_path, [])
-        planned = step_input.plan_challenge(c, c.plan, Profile(), tmp_path, {})
+        planned = challenge_input.plan_challenge(c, Profile(), tmp_path, {})
         tree = SimpleNamespace(base="a" * 40, head="b" * 40, changed=())
         review = step_input.review(c, None, tmp_path, tree)
     assert all(line in message for line in lines for message in (build, planned, review))

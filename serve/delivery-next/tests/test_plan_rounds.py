@@ -37,7 +37,7 @@ from owlbear_delivery_next.change_flow import disputes, loop, plan_rounds, round
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.runtimes import step_input
+from owlbear_delivery_next.runtimes import challenge_input, step_input
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.roles import UserConfig
@@ -364,7 +364,7 @@ def test_the_plan_challenger_never_sees_the_owners_plan_decisions_but_the_planne
     q = plan_rounds.question(lp, f).model_copy(update={"id": "q1"})
     q.answer = Answer(option="fix", text="do it", at=NOW)
     c.questions.append(q)
-    assert "secret finding" not in step_input.plan_challenge(c, c.plan, Profile(), Path("/w"), {})
+    assert "secret finding" not in challenge_input.plan_challenge(c, Profile(), Path("/w"), {})
     assert "secret finding" in step_input.plan(c, Profile(), Path("/w"), {})
 
 

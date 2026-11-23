@@ -16,7 +16,7 @@ from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK
 from owlbear_delivery_next.change_flow import brief_rounds, loop, picks, worktree
 from owlbear_delivery_next.change_flow.moves import ask
 from owlbear_delivery_next.local_system.git_files import git_common_dir
-from owlbear_delivery_next.runtimes import sdk_adapter, step_decisions, step_input
+from owlbear_delivery_next.runtimes import challenge_input, sdk_adapter, step_decisions, step_input
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.workflow_steps import decisions_gate, pick, sessions
 
@@ -102,7 +102,7 @@ def _made(store: Store, lock: Lock, change: Change, keys: tuple[str, ...], cap: 
             kind=StepKind.REVIEW,
             worktree=at,
             session_id="",
-            message=step_input.brief_challenge(change, at),
+            message=challenge_input.brief_challenge(change, at),
             resume=False,
             policy=Policy(at, write=False),
             observe=lambda: worktree.observe(at, change.names.target),

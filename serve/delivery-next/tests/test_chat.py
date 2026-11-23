@@ -41,7 +41,7 @@ from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import answers, api, brief_routes, launches, pages
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import ahp, copilot_cli, readiness, step_input, vscode_adapter
+from owlbear_delivery_next.runtimes import challenge_input, ahp, copilot_cli, readiness, step_input, vscode_adapter
 from owlbear_delivery_next.runtimes.vscode_contract import Outcome as Outcome_
 from owlbear_delivery_next.settings import carried, profile
 from owlbear_delivery_next.settings.config import Agent, Layer
@@ -172,7 +172,7 @@ def test_decisions_and_non_goals_stay_on_the_brief_version_reach_the_workers_and
     brief = change.brief
     assert (brief.version, brief.non_goals) == (2, ["No translations"])
     assert [d.model_dump(include={"question", "answer", "origin", "reason"}) for d in brief.decisions] == DECIDED
-    shown = [step_input.plan(change, Profile(), Path("/w"), {}), step_input.brief_challenge(change, Path("/w"))]
+    shown = [step_input.plan(change, Profile(), Path("/w"), {}), challenge_input.brief_challenge(change, Path("/w"))]
     for text in [*shown, "\n".join(step_input.brief(change))]:  # planner, challenger, reviewers
         assert "Non-goals:\n- No translations" in text
         assert "- Which wording? -> 'Bye, Ada!' (decided)\n- Where does it live?" in text
@@ -216,7 +216,7 @@ def test_a_saved_brief_reaches_the_workers_whole(repo):
 
     for text in (step_input.plan(change, Profile(), Path("/w"), {}), "\n".join(step_input.brief(change))):
         assert f"- {' '.join(question.split())} -> {answer} (decided)" in text
-    challenge = step_input.brief_challenge(change, Path("/w"))
+    challenge = challenge_input.brief_challenge(change, Path("/w"))
     assert f"> {outcome}" in challenge
     assert f"- AC-1: {criterion}" in challenge
     assert f"- {non_goal}" in challenge
@@ -231,7 +231,7 @@ def test_a_saved_brief_reaches_the_workers_whole(repo):
         "plan": step_input.plan(change, Profile(), Path("/w"), {}),
         "check": step_input.check(change, change.checks[0], Path("/w"), []),
         "visual": step_input.visual(change, [("home", 1280, "a.png")]),
-        "challenge": step_input.brief_challenge(change, Path("/w")),
+        "challenge": challenge_input.brief_challenge(change, Path("/w")),
     }
     wanted = {"plan": [expect], "check": [expect, f"> {step}"], "visual": [state], "challenge": [expect, step, state]}
     assert {k: [w for w in wanted[k] if w not in v] for k, v in shown.items()} == {k: [] for k in shown}

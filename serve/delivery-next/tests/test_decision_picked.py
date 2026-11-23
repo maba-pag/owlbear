@@ -23,7 +23,7 @@ from owlbear_delivery_next.change_flow import brief_rounds, loop
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import session_slots
-from owlbear_delivery_next.runtimes import step_decisions, step_input
+from owlbear_delivery_next.runtimes import challenge_input, step_decisions, step_input
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock
 from owlbear_delivery_next.workflow_steps import decisions_gate, pick, plan_round, reconsider, sessions
@@ -116,7 +116,7 @@ def test_every_role_gets_exactly_the_picked_set_and_the_changes_own_and_challeng
     assert (c.decisions_baseline.picked, set(c.decisions_baseline.said)) == (True, {rule.id, general.id, own.id})
     with step_decisions.using(worker, challenger[len(worker) :]):
         planned = Plan(tasks=[Task(id="t1", title="Add", scope=["packages/app"], checks=["true"])])
-        plan = step_input.plan_challenge(c, planned, Profile(), Path(), {})
+        plan = challenge_input.plan_challenge(c.model_copy(update={"plan": planned}), Profile(), Path(), {})
         tree = SimpleNamespace(base="a" * 40, head="b" * 40, changed=())
         review = step_input.review(c, None, Path(), tree)
         build = step_input.build(c, c.plan.tasks[0], Path(), [])
