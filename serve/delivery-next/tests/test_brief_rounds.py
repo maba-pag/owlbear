@@ -544,7 +544,7 @@ def test_a_challenge_asked_for_by_the_tool_ends_with_who_must_act_when_the_chang
 ):
     shaping.save()
     if ending == "stopped":
-        shaping.verdicts += [Termination(confirmed=False)]  # the challenger's end is not confirmed
+        shaping.verdicts += [Termination(confirmed=False), verdict(), verdict(), verdict()]  # one end is unconfirmed
     acts = {
         "abandoned": lambda: (owner_does(shaping, "abandon"), shaping.step()),
         "stopped": shaping.step,

@@ -1,5 +1,6 @@
 """The planner's challenge rounds (TD-190, TD-208): findings by ID, rejections judged, the owner, the end."""
 
+import asyncio
 import errno
 import os
 from dataclasses import replace
@@ -33,7 +34,7 @@ from owlbear_delivery_next.change_contracts.round_records import (
     Verdict,
 )
 from owlbear_delivery_next.change_contracts.tools import Worktree
-from owlbear_delivery_next.change_flow import disputes, loop, plan_rounds, round_flow, round_marks
+from owlbear_delivery_next.change_flow import challenge_reviewers, disputes, loop, plan_rounds, round_flow, round_marks
 from owlbear_delivery_next.change_flow.loop import StepResult
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
@@ -42,7 +43,7 @@ from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.roles import UserConfig
 from owlbear_delivery_next.state_store.store import Lock, Store
-from owlbear_delivery_next.workflow_steps import plan_round
+from owlbear_delivery_next.workflow_steps import plan_round, sessions
 
 NOW = datetime(2026, 10, 18, 3, tzinfo=UTC)
 K = StepKind
@@ -421,6 +422,13 @@ def test_many_plan_rounds_never_reach_the_old_plan_gate():
     assert (c.step.kind, c.outcome.exit, c.questions) == (K.PLAN, Exit.RETRY, [])
 
 
+@pytest.fixture
+def single_child(monkeypatch) -> None:
+    """The settlement test protects one child's custody; round one's four reviewers are covered in the round tests."""
+    monkeypatch.setattr(challenge_reviewers, "first", lambda *_: False)
+
+
+@pytest.mark.usefixtures("single_child")
 def test_a_known_usage_challenge_whose_settlement_write_fails_is_charged_once_across_a_fresh_reload(
     store, change_repo, mp, tmp_path, monkeypatch
 ):
@@ -437,35 +445,25 @@ def test_a_known_usage_challenge_whose_settlement_write_fails_is_charged_once_ac
     armed = {"on": True}
 
     def faulty(self, lock, change):
-        if (
-            armed["on"]
-            and change.slug == "c1"
-            and len(change.loops[PLAN].reviewers) == 2
-            and change.pending_child is None
-            and change.spend.credits >= 8.0
-        ):
-            armed["on"] = False  # the reviewer's result and spend settle together
+        if armed["on"] and change.slug == "c1" and change.step.mode is None and change.spend.credits >= 4.5:
+            armed["on"] = False  # the settlement write: the verdict, the spend and the round together
             raise OSError(errno.ENOSPC, os.strerror(errno.ENOSPC))
         return real_write(self, lock, change)
 
     monkeypatch.setattr(Store, "write", faulty)
     mp.plans += [plan(1)]
-    mp.reviews += [*first_round(review(upheld={}))]  # a pass: the challenge's one round
+    mp.reviews += [review(upheld={})]  # a pass: the challenge's one round
     with pytest.raises(OSError, match="No space left"):
         step(store, change_repo)
 
-    assert len([e for e in store.events("c1") if e.get("kind") == "plan-challenge"]) == 1
-    kept = store.read("c1")
-    assert list(kept.loops[PLAN].reviewers) == ["need"]
-    assert kept.pending_child.run.session_id == mp.told[-1][1].session_id
-    assert "Your question: build." in mp.told[-1][1].message
+    assert [e for e in store.events("c1") if e.get("kind") == "plan-challenge"] == []  # logged only once durable
     monkeypatch.setattr(Store, "write", real_write)
     fresh = Store(tmp_path / "store")
     step(fresh, change_repo)
     c = fresh.read("c1")
-    assert mp.kinds().count("challenge") == 4  # each reviewer ran once, including the adopted child
-    assert c.spend.credits == pytest.approx(15.0)  # planner 1.0 + four challengers at 3.5, once each
-    assert [e["kind"] for e in fresh.events("c1") if e.get("kind") == "plan-challenge"] == ["plan-challenge"] * 4
+    assert mp.kinds().count("challenge") == 1  # the paid challenge ran once, never again after the fault
+    assert c.spend.credits == pytest.approx(4.5)  # planner 1.0 + challenge 3.5, once each
+    assert [e["kind"] for e in fresh.events("c1") if e.get("kind") == "plan-challenge"] == ["plan-challenge"]
     assert (c.step.mode, c.outcome.exit) == (None, Exit.DONE)
 
 
@@ -486,6 +484,48 @@ def test_a_continued_plan_challenge_records_its_start_before_its_challenger_runs
     monkeypatch.setattr(plan_round, "challenge", challenge)
     assert plan_round.continued(store, Lock("c1"), store.read("c1"), tmp_path)
     assert seen == [True]
+
+
+def test_plan_round_one_starts_four_sessions_together_and_writes_their_results_with_their_spend_once(
+    store, change_repo, mp, monkeypatch
+):
+    monkeypatch.setattr(sessions, "GRANT", 4)
+    mp.plans += [plan(1)]
+    mp.reviews += first_round(review())
+    ready, starts, order, written = asyncio.Event(), [], [], []
+    real_run, real_write = mp.run, Store.write
+
+    async def together(cfg):
+        if cfg.job != plan_round.LABEL:
+            return await real_run(cfg)
+        starts.append(cfg.session_id)
+        order.append("start")
+        done = await real_run(cfg)
+        if len(starts) == 4:
+            ready.set()
+        await ready.wait()
+        order.append("end")
+        return replace(done, usage={"credits": 3.5})
+
+    def write(self, lock, change):
+        if change.slug == "c1" and change.loops[PLAN].reviewers:
+            written.append(change.model_copy(deep=True))
+        return real_write(self, lock, change)
+
+    monkeypatch.setattr(runner.sdk_adapter, "run", together)
+    monkeypatch.setattr(Store, "write", write)
+    c = step(store, change_repo)
+    assert order == ["start"] * 4 + ["end"] * 4
+    assert mp.kinds() == ["plan", *(["challenge"] * 4)]
+    assert len(written) == 1
+    (batch,) = written
+    assert list(batch.loops[PLAN].reviewers) == list(challenge_reviewers.ORDER)
+    assert all(kept.findings == [] for kept in batch.loops[PLAN].reviewers.values())
+    assert (batch.loops[PLAN].round, batch.counted_children) == (0, starts)
+    assert {s: batch.spend.last[s].credits for s in starts} == dict.fromkeys(starts, 3.5)
+    assert (batch.spend.credits, c.spend.credits, c.loops[PLAN].round, c.step.kind) == (14.0, 14.0, 1, K.BUILD)
+    assert c.pending_child is None
+    assert list((store.root / "changes" / "c1").glob("child-*.json")) == []
 
 
 def test_three_plan_reviewers_pass_and_an_operational_failure_keeps_their_results(store, change_repo, mp):
