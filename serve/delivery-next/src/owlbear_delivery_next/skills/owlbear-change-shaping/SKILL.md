@@ -13,7 +13,7 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
 
 1. Read the repository parts the idea touches before asking anything. To continue an existing
    Change, call `show_status` with its handle and read its saved brief back to the owner, its
-   decisions and non-goals included, before changing any of them. If the read-back lists
+   problem, decisions and non-goals included, before changing any of them. If the read-back lists
    `proposed_wording`, show each with the challenger's verdict and let the owner decide whether to
    adopt it; an adopted one goes into the next `save_brief` like any other change.
 2. Ask the owner one question at a time, with the answer you recommend and why, and only what the
@@ -23,9 +23,35 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    assumptions. Never infer a business constraint from code. Depth follows uncertainty and stakes,
    not a count: ask until no material gap remains. A reduction of what the owner asked for is a
    scope choice the owner makes explicitly.
-3. Write acceptance criteria with a witness Delivery can produce at the claimed boundary, not just
-   a test or command that exists; a criterion may state what must not happen. Check the runtime,
-   authentication and isolated data that witness needs. Delivery's sessions use the installed runtime,
+   Summarise the problem he brought as `problem`: the pain, and each example he gave with what is
+   wrong in it. It is your summary of his intent, never his words. Every planner, builder,
+   challenger and reviewer reads it before the outcome, so it must let them tell a result that
+   solves his problem from one that only meets the criteria.
+3. Establish how far the request reaches before you write a criterion. The owner's examples are
+   cases of something wider: one unreadable error message stands for every message of its kind.
+   Find the whole set in the code: a closed list (an enum, a table, a registry) with its path, or,
+   where the code has none, the cases by name. The planner must not have to discover it. When the
+   set is larger than his examples, propose slices in his terms: what he can do after each, and
+   what waits for a later Change. The number of cases is your evidence, never his question. He
+   chooses the slice. An idea that is more than one reviewable pull request is more than one
+   Change: propose the split.
+4. Write acceptance criteria with a witness Delivery can produce at the claimed boundary, not just
+   a test or command that exists; a criterion may state what must not happen. Each criterion
+   states:
+   - what the owner observes at one boundary (a command, an endpoint, a page, a stored record),
+     for a concrete input; a second boundary gets its own criterion;
+   - the exact cases it applies to: the closed list from step 3, cited, or the cases by name.
+     "Each", "every" or a kind of thing without its set is not a criterion;
+   - where those cases differ in what he sees, the shared rule and each exception, or the source
+     that decides it;
+   - where what he sees must come from somewhere, that source: the stored field or the function
+     that holds it today, or "created by this Change".
+
+   Ask the owner to narrow only when the Change is too large, never because a criterion grew
+   long. A fact you found in the code is not a decision; never save it as one.
+
+   Check the runtime, authentication and isolated data the witness needs. Delivery's sessions use
+   the installed runtime,
    not the Change's branch; workers get no owner token, and checks never use the live `HOME` or stores.
    A real Delivery session on changed branch code is therefore not a proof a later Delivery step can
    promise. Propose a person check or a look after release, and settle the criterion and its timing
@@ -37,7 +63,7 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    choice, not from your guess. A check only a person can perform becomes a person check with steps,
    what to expect and the criteria it `covers` (empty for all), so changing one criterion later
    redoes only its checks.
-4. For a UI change ask which page states must render: each visual state has a `name`, a `path`
+5. For a UI change ask which page states must render: each visual state has a `name`, a `path`
    under the preview root and what to `expect`. Write each expectation as what a screenshot shows
    ("the Dark mode button is filled and darker than in light mode"), not as a state only the code
    knows ("the button is pressed"); ask the owner what should be visible when that is unclear.
@@ -59,10 +85,9 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    preview, passing `{port}` to the server (Delivery picks the port), the `directory` it runs in, and the
    `ready_url` with `{port}` that answers once it is up. Name the `preparation` when the project declares
    several. The states' first expectations may be provisional: you write them against the pictures.
-5. Propose a split when the idea is more than one reviewable pull request.
 6. Run the closing check before saving for approval (see Read-Back below).
-7. Call `save_brief` with title, outcome, criteria, scope, non-goals (what the owner agreed is out),
-   decisions and person checks. `decisions` holds every choice the owner made and each consequential
+7. Call `save_brief` with title, outcome, problem, criteria, scope, non-goals (what the owner agreed is out),
+   decisions and person checks. A save without `problem` keeps the saved one. `decisions` holds every choice the owner made and each consequential
    choice of yours, as question, answer and origin: `decided` (the owner chose it), `approved` (it
    came with something he approved without being asked) or `autonomous` (you chose it, also when he
    picked "Autonomous (…)", with your `reason`, never the owner's words). Send
@@ -142,7 +167,8 @@ end that decision's answer with "State this as an `OWNER:` line where it is cont
 builder writes the line. Before you propose a change to existing behaviour, search the code it
 concerns for `OWNER:` lines, show the owner the ones it would change and ask for his yes to each.
 
-Before saving for approval, end with one closing check of everything the brief records: every choice
+Before saving for approval, end with one closing check of everything the brief records: the problem
+as you summarised it, every choice
 the owner made and your own consequential ones (those that change what the owner sees or does, cost,
 safety or reversibility, each with a one-line consequence), listed together and asked once. Read back
 an item he corrects as above, then save.

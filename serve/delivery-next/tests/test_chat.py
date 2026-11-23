@@ -163,7 +163,8 @@ DECIDED = [
 def test_decisions_and_non_goals_stay_on_the_brief_version_reach_the_workers_and_are_read_back(repo, chat_replied):
     store = Store.open(repo)
     c = client(store)
-    body = {**BRIEF, "non_goals": ["No translations"], "decisions": DECIDED}
+    problem = "Leaving the app shows nothing.\nHis example: after `quit` the prompt just returns."
+    body = {**BRIEF, "problem": problem, "non_goals": ["No translations"], "decisions": DECIDED}
     assert c.post("/api/next/briefs", json=body).status_code == 200
     states = [{"name": "home", "path": "/", "expect": "Bye"}]
     assert c.post("/api/next/briefs/visual", json={"change": "c1", "ui": True, "states": states}).status_code == 200
@@ -175,9 +176,12 @@ def test_decisions_and_non_goals_stay_on_the_brief_version_reach_the_workers_and
     for text in [*shown, "\n".join(step_input.brief(change))]:  # planner, challenger, reviewers
         assert "Non-goals:\n- No translations" in text
         assert "- Which wording? -> 'Bye, Ada!' (decided)\n- Where does it live?" in text
+        assert "> Leaving the app shows nothing.\n> His example: after `quit` the prompt just returns.\n>" in text
+        assert text.index("> Leaving the app") < text.index("> farewell(name) says goodbye")  # the problem comes first
     read_back = hosted(store, chat_replied).show_status("c1")["brief"]
     assert read_back["decisions"] == [{**d, "scope": "change"} for d in DECIDED]  # what the shaper sends again
     assert (read_back["non_goals"], read_back["version"]) == (["No translations"], 2)
+    assert read_back["problem"] == problem  # the visual save sent none and kept it
     bad = {**body, "decisions": [{"question": "Which?", "answer": "this", "origin": "guessed"}]}
     assert c.post("/api/next/briefs", json=bad).json()["errors"][0].startswith("decisions")
     unreasoned = {**body, "decisions": [{**DECIDED[1], "reason": " "}]}

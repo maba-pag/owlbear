@@ -66,6 +66,7 @@ def drafted(old: Change | None, d: brief_tools.BriefDraft, slug: str, handle: st
         "version": v,
         "title": d.title,
         "outcome": d.outcome,
+        "problem": d.problem or c.brief.problem,  # a save without it (the visual check, an earlier chat) keeps it
         "scope": d.scope,
         "criteria": criteria,
         "saving_chat": None,

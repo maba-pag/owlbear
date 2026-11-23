@@ -161,6 +161,7 @@ class Brief(Record):
     approve_if_clean: int | None = None  # the version the owner approves once its challenge raises nothing (#986)
     title: str = ""
     outcome: str = ""
+    problem: str = ""  # the problem the owner brought, as the shaper summarised it and he confirmed
     scope: list[str] = Field(default_factory=list)
     non_goals: list[str] = Field(default_factory=list)
     decisions: list[BriefDecision] = Field(default_factory=list)

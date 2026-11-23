@@ -264,7 +264,8 @@ def test_a_finished_change_leaves_its_record_in_the_shared_folder_once(shared, r
     store, at = Store.open(repo), datetime(2026, 10, 15, 9, tzinfo=UTC)
     decided = BriefDecision(question="Limit the notes?", answer="yes", origin="decided")
     state = VisualState(name="full", path="/notes", expect="a counter shows 800")
-    approved = Brief(version=2, title="Notes", outcome="Owners keep notes", decisions=[decided], visual=[state])
+    brief = {"version": 2, "title": "Notes", "outcome": "Owners keep notes", "problem": "Notes get lost"}
+    approved = Brief(**brief, decisions=[decided], visual=[state])
     c = Change(slug="notes", handle="c4", brief=Brief(version=2, approved_at=at, approved=[approved]))
     c.decisions.append(Decision(text="keep 800 characters", origin="decided", at=at))
     c.spend = c.spend.plus({"credits": 3.5}, "s1")
@@ -281,6 +282,7 @@ def test_a_finished_change_leaves_its_record_in_the_shared_folder_once(shared, r
     assert (record["outcome"], record["pr"]["number"], record["brief"]["title"]) == ("merged", 7, "Notes")
     assert (record["brief"]["decisions"][0]["answer"], record["decisions"][0]["text"]) == ("yes", "keep 800 characters")
     assert (record["brief"]["visual"][0]["expect"], record["spend"]["credits"]) == ("a counter shows 800", 3.5)
+    assert (record["brief"]["problem"], record["versions"][0]["problem"]) == ("Notes get lost", "Notes get lost")
     assert record["tool_use"] == c.tool_use.model_dump(mode="json")
     assert pushed(remote, "shop-site/changes/20261015-090000-notes.json").splitlines()[-1] == (
         "changes: shop-site: notes merged"

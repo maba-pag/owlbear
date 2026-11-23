@@ -81,6 +81,7 @@ def lines(b: Brief, checks: list[PersonCheck]) -> list[str]:
     out += [f"check:{p.id}: {p.expect} (steps: {'; '.join(p.steps)}; covers {', '.join(p.criteria)}"
             f"{'; judged by look' if p.visual else ''})" for p in checks]  # fmt: skip
     out += [f"decision:{d.id} [{d.scope}]: {d.question} -> {d.answer}" for d in b.decisions]
+    out += [f"problem: {b.problem}"] if b.problem else []  # read, never amended: what the candidate must still solve
     out += [f"outcome: {b.outcome}", *(f"non-goal: {n}" for n in b.non_goals)]
     return [f"{x}{' (the owner specified it)' if _ref(x) in b.specified else ''}" for x in out]
 

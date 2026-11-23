@@ -150,6 +150,13 @@ class BriefDraft(Args):
     )
     title: str = bounded(100, "Short title of the Change", "Add a farewell function")
     outcome: str = bounded(2000, "What the owner has when it is done, in a few sentences", "farewell(name) exists", 20)
+    problem: str = Field(
+        default="",
+        max_length=2000,
+        description="The problem the owner brought, as you summarised it and he confirmed: the pain, and each example "
+        "he gave with what is wrong in it; never his words. Every worker reads it first; empty keeps the saved one",
+        examples=["Leaving the app shows no goodbye. His example: after `quit` the prompt just returns."],
+    )
     criteria: list[Criterion] = bounded(
         10, "Acceptance criteria, each checkable by a test or command", ["farewell('Ada') returns 'Bye, Ada!'"]
     )

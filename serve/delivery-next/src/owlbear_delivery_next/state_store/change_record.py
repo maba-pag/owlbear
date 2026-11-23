@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.github.provider import PullRequest
     from owlbear_delivery_next.state_store.store import Store
 
-BRIEF = {"version", "title", "outcome", "scope", "non_goals", "decisions", "criteria", "ui", "visual"}
+BRIEF = {"version", "title", "outcome", "problem", "scope", "non_goals", "decisions", "criteria", "ui", "visual"}
 
 
 def save(

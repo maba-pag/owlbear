@@ -16,7 +16,8 @@ WEB = SRC / "web"
 VENDORED = (WEB / "vendor", WEB / "pds")  # third-party releases, not the package's own code
 LIMIT = 500
 FIELDS = 6  # T5: about six fields per object
-WIDER = {"save_brief": 9}  # decisions and non_goals (reuse study v2, Sol finding 6); specified (TD-179 rule 1)
+WIDER = {"save_brief": 10}  # decisions and non_goals (reuse study v2, Sol finding 6); specified (TD-179 rule 1);
+# problem: the owner decided the brief saves the shaper's summary of his problem, which every worker reads first
 WIDER |= {"record_decision": 8}  # scope, the replacement it makes (TD-450), origin (D-01M5WAFJ99912ER7V0YEPJP2G5)
 OWNED = [  # C-28: pages, scripts and styles count like modules
     p
