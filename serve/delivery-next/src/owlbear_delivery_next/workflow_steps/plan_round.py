@@ -163,16 +163,12 @@ def _first(
     try:
         ran = sessions.judges(store, lock, change, path, made, keep=keep) if reviewers else []
     except sessions.UsageUnreadError as exc:
-        steps = [
-            sessions.account(change, run, {"kind": change.step.kind, "exit": Exit.ASK, "label": LABEL})
-            for run in exc.runs
-            if sessions.unread(run) and run is not exc.run
-        ]
-        store.write(lock, change)
-        sessions.announce_all(store, lock, change.slug, steps)
+        sessions.count_unread(store, lock, change, [r for r in exc.runs if r is not exc.run], LABEL)
         raise
-    if stopped := next(((name, r) for name, (r, _) in zip(reviewers, ran, strict=True) if r.exit == Exit.STOP), None):
-        return challenge_reviewers.failed(stopped[1], stopped[0])
+    sessions.count_unread(store, lock, change, [run for _, run in ran], LABEL)  # a sibling's stop took their gate
+    named = [(challenge_reviewers.failed(r, name), run) for name, (r, run) in zip(reviewers, ran, strict=True)]
+    if stops := [(r, run) for r, run in named if r.exit == Exit.STOP]:
+        return sessions.first_failure(stops)
     for name, (verdict, run) in zip(reviewers, ran, strict=True):
         if (
             isinstance(p := run.payload, tools.WrongPremise)

@@ -114,28 +114,26 @@ def _first(store: Store, lock: Lock, change: Change, path: Path) -> loop.StepRes
         try:
             ran = sessions.judges(store, lock, change, path, made) if reviewers else []
         except sessions.UsageUnreadError as exc:
-            steps = []
             for name, run in zip(reviewers, exc.runs, strict=True):
                 if not sessions.unread(run):
                     verdict = session_result.to_result(run, StepKind.REVIEW, datetime.now(UTC), change.step.kind)
                     if (said := challenge_reviewers.findings(verdict, run.payload, brief=True)) is not None:
                         challenge_reviewers.keep(change, BRIEF, name, said[0])
-                elif run is not exc.run:
-                    steps.append(
-                        sessions.account(change, run, {"kind": change.step.kind, "exit": Exit.ASK, "label": LABEL})
-                    )
             store.write(lock, change)
-            sessions.announce_all(store, lock, change.slug, steps)
+            sessions.count_unread(store, lock, change, [r for r in exc.runs if r is not exc.run], LABEL)
             raise
     failed = []
     for name, (verdict, done) in zip(reviewers, ran, strict=True):
+        if sessions.unread(done):  # its gate gave way to a sibling's unconfirmed end: counted below, never kept
+            continue
         if (said := challenge_reviewers.findings(verdict, done.payload, brief=True)) is not None:
             challenge_reviewers.keep(change, BRIEF, name, said[0])
         else:
-            failed.append(challenge_reviewers.failed(verdict, name))
+            failed.append((challenge_reviewers.failed(verdict, name), done))
     store.write(lock, change)
+    sessions.count_unread(store, lock, change, [done for _, done in ran], LABEL)
     if failed:
-        return next((r for r in failed if r.exit == Exit.STOP), failed[0])
+        return sessions.first_failure(failed)
     return _counted(change, challenge_reviewers.merged(change.loops[BRIEF]), {}, datetime.now(UTC))
 
 

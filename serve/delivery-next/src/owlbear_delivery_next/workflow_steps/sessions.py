@@ -22,7 +22,7 @@ from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.workflow_steps import disposable, lookup, ro_installs, watched
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.models import Change
@@ -155,6 +155,20 @@ def announce_all(store: Store, lock: Lock, slug: str, steps: list[dict[str, obje
 def deferrable(done: session_result.Run) -> bool:
     """A run confirmed gone with its usage read: a child may keep it to count it with its settlement (pending_child)."""
     return bool(done.termination and done.termination.confirmed) and not unread(done)
+
+
+def first_failure(failed: Sequence[tuple[Result, session_result.Run]]) -> Result:
+    """The failure a round of several judges ends on: an unconfirmed end first, then another stop, else the first."""
+    left = [r for r, run in failed if not (run.termination and run.termination.confirmed)]
+    return (left or [r for r, _ in failed if r.exit == Exit.STOP] or [r for r, _ in failed])[0]
+
+
+def count_unread(store: Store, lock: Lock, change: Change, runs: Sequence[session_result.Run], label: str) -> None:
+    """Count those of a round's *runs* that are unread and that no gate counts (TD-54); none is kept as a verdict."""
+    fields = {"kind": change.step.kind, "exit": Exit.ASK, "label": label}
+    if steps := [account(change, run, fields) for run in runs if unread(run)]:
+        store.write(lock, change)
+        announce_all(store, lock, change.slug, steps)
 
 
 def account(change: Change, done: session_result.Run, fields: dict[str, object]) -> dict[str, object]:
