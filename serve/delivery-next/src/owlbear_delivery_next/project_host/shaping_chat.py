@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 _log = logging.getLogger(__name__)
 _LISTS = ("criteria", "scope", "non_goals", "decisions", "person_checks", "specified")
-_BRIEF = ("title", "outcome", "change", *_LISTS)
+_BRIEF = ("title", "outcome", "problem", "change", *_LISTS)
 
 
 def normalized(tool: str, body: object) -> dict[str, Any]:

@@ -28,9 +28,9 @@ INLINE = 4 * 1024 * 1024  # bytes of one picture the chat gets inline; a larger 
 
 
 def brief(change: Change) -> dict[str, Any]:
-    """The Change's current brief as the chat saved it, decisions and non-goals included, to read back."""
+    """The Change's current brief as the chat saved it, problem, decisions and non-goals included, to read back."""
     b = change.brief
-    out = b.model_dump(mode="json", include={"version", "title", "outcome", "scope", "non_goals"})
+    out = b.model_dump(mode="json", include={"version", "title", "outcome", "problem", "scope", "non_goals"})
     out["decisions"] = [d.model_dump(mode="json", exclude={"id", "replaces"}) for d in b.decisions]  # as drafted
     owner, placed = set(b.specified), briefs.positions(b)  # sent back as saved: a resave keeps who stated what
     states = [{"name": s.name, "owner": f"screen:{s.name}" in owner} for s in b.visual]

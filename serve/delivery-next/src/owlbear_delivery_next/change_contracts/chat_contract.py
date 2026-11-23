@@ -47,6 +47,10 @@ advice on proposed suppressions, with ``await_exceptions(run_id)`` to read it (`
 ``GET /chat/exceptions/{run_id}``, ``tests/fixtures/chat_contract_8.json``). Earlier chats retain their routes;
 a newer chat refuses an older host through the existing contract check before starting any work.
 
+Contract 9: contract 8, and ``save_brief`` takes ``problem``, the shaper's summary of the problem the owner brought,
+which a brief read (``GET /chat/brief/{slug}``) returns (``tests/fixtures/chat_contract_9.json``). A save without it,
+as a chat of an earlier contract and ``save_visual_check`` send, keeps the saved one.
+
 A host whose contract answer has ``"admit_by": true`` refuses a ``/decisions/propose`` save that starts after the
 time in the request's ``X-OwlBear-Admit-By`` header (#846); a chat whose host lacks it never takes a lost answer as
 not saved.
@@ -60,8 +64,8 @@ from pydantic import BaseModel, ConfigDict
 
 from owlbear_delivery_next.local_system import codebase
 
-CHAT = 8  # the contract this code's chat server speaks
-SUPPORTED = frozenset({1, 2, 3, 4, 5, 6, 7, 8})  # the contracts this code's host serves
+CHAT = 9  # the contract this code's chat server speaks
+SUPPORTED = frozenset({1, 2, 3, 4, 5, 6, 7, 8, 9})  # the contracts this code's host serves
 CAPTURES = 7  # from this contract a chat sends a UI brief's render recipe, and its draft's pages are captured
 HEADER = "X-OwlBear-Chat"
 CAPABILITY = "/api/next/chat/contract"  # a host that has none predates the contract
