@@ -59,4 +59,5 @@ def test_a_kept_plan_records_overlaps_after_its_challenge(store, change_repo, mo
     c = store.read("c1")
     assert (c.outcome.exit, c.step.kind, c.overlaps) == expected
     if verdict == "fix":
-        assert [f.id for f in c.loops["plan"].findings] == ["F1"]  # the planner answers it by its ID (TD-190)
+        # The planner answers every finding by ID (TD-190).
+        assert [f.id for f in c.loops["plan"].findings] == ["F1", "F2", "F3", "F4"]

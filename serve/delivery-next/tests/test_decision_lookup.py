@@ -65,7 +65,7 @@ def building(picking, *chosen: Decision, **draft) -> None:
     picking.save(**draft)
     assert picking.ask(1).status_code == 200
     picking.picks.append(picked(*(d.id for d in chosen)))
-    picking.verdicts.append(tools.ReviewResult(verdict="pass"))
+    picking.verdicts.extend([tools.ReviewResult(verdict="pass")] * 4)
     picking.step()
     assert picking.approve(1).status_code == 200
     c = picking.approved()

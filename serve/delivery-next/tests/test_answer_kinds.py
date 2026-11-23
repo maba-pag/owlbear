@@ -73,7 +73,7 @@ class Asking:
         picking.save(**draft)
         assert picking.ask(1).status_code == 200
         picking.picks.append(pick_tools.PickResult(picked=[{"id": first.id}]))
-        picking.verdicts.append(tools.ReviewResult(verdict="pass"))
+        picking.verdicts.extend([tools.ReviewResult(verdict="pass")] * 4)
         picking.step()
         assert picking.approve(1).status_code == 200
         c = picking.approved()

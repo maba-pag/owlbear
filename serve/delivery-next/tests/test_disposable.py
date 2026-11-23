@@ -333,9 +333,11 @@ def test_the_planner_and_its_challenge_each_judge_a_clean_head_in_the_read_only_
     change = store.read("c1")
     runner._step(store, Lock("c1"), change, change.step, change_repo)  # noqa: SLF001
     assert store.read("c1").outcome.exit == Exit.DONE
-    (planner, said, dirty), (challenger, challenged, clean) = seen
-    assert (planner, challenger) == (disposable.path(change_repo, "c1"),) * 2
-    assert (str(planner) in said, str(challenger) in challenged, dirty, clean) == (True, True, "", "")
+    (planner, said, dirty), *challengers = seen
+    assert len(challengers) == 4
+    for challenger, challenged, clean in challengers:
+        assert (planner, challenger) == (disposable.path(change_repo, "c1"),) * 2
+        assert (str(planner) in said, str(challenger) in challenged, dirty, clean) == (True, True, "", "")
 
 
 @pytest.fixture

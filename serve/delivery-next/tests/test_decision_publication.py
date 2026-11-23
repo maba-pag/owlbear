@@ -78,7 +78,8 @@ def shape(picking, version: int = 1, *decisions: dict) -> Change:
     assert picking.save(decisions=list(decisions))["version"] == version
     assert picking.ask(version).status_code == 200
     picking.picks.append(pick_tools.PickResult(picked=[]))
-    picking.verdicts.append(tools.ReviewResult(verdict="pass", findings=[]))
+    count = 4 if version == 1 else 1
+    picking.verdicts.extend([tools.ReviewResult(verdict="pass", findings=[])] * count)
     picking.step()
     picking.picks.clear()  # the list held none but the Change's own: nothing to pick, no session
     return picking.change()
