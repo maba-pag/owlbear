@@ -16,10 +16,10 @@ from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepK
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import PLAN, RECHECK
-from owlbear_delivery_next.change_flow import amending, asking, loop, plan_rounds, worktree
+from owlbear_delivery_next.change_flow import amending, asking, challenge_reviewers, loop, plan_rounds, worktree
 from owlbear_delivery_next.change_flow.moves import carry_integrations
 from owlbear_delivery_next.local_system.git_files import git_common_dir
-from owlbear_delivery_next.runtimes import challenge_input, amendments, sdk_adapter, step_input
+from owlbear_delivery_next.runtimes import amendments, challenge_input, sdk_adapter, step_input
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.settings.profile import vouched
 from owlbear_delivery_next.workflow_steps import engine, held_writes, overlap, pending_child, sessions
@@ -102,13 +102,18 @@ def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
     lp = plan_rounds.loop(change, rounds.pinned(change, PLAN, store.settings(), "planner"), datetime.now(UTC))
     keys, cap = tuple(f.id for f in plan_rounds.pending(lp)), 0 if change.step.mode == RECHECK else None
     plan = change.plan
+    multiple = challenge_reviewers.first(lp, change.step.mode)
+    reviewers = challenge_reviewers.remaining(change, PLAN) if multiple else [""]
+    if not multiple:
+        lp.reviewers.clear()
+    reviewer = ""
 
     def made(at: Path) -> sdk_adapter.Session:
         return sdk_adapter.Session(
             kind=StepKind.REVIEW,
             worktree=at,
             session_id="",
-            message=challenge_input.plan_challenge(change, profile, at, others),
+            message=challenge_input.plan_challenge(change, profile, at, others, reviewer=reviewer),
             resume=False,
             policy=Policy(at, write=False),
             observe=lambda: worktree.observe(at, change.names.target),
@@ -123,29 +128,40 @@ def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
     def start(keep: sessions.Keep) -> pending_child.Judged:
         return sessions.review_run(store, lock, change, path, made, LABEL, keep=keep)
 
-    verdict, run = pending_child.child(store, lock, change, (LABEL, str(plan.version) if plan else ""), start)
-    if (step := pending_child.booked(change, run, {"exit": verdict.exit})) is not None:
-        events.append(step)  # counted here; the caller's one write commits it with the verdict and its round
-    if (
-        isinstance(p := run.payload, tools.WrongPremise)
-        and p.stage == "brief"
-        and verdict.exit == Exit.BACK
-        and not verdict.operational
-    ):
-        amending.premised(change, p, run.session_id, datetime.now(UTC))
-        return verdict
-    return judged(change, verdict, run.payload)
+    for reviewer in reviewers:
+        verdict, run = pending_child.child(store, lock, change, (LABEL, str(plan.version) if plan else ""), start)
+        event = pending_child.booked(change, run, {"exit": verdict.exit})
+        if (
+            isinstance(p := run.payload, tools.WrongPremise)
+            and p.stage == "brief"
+            and verdict.exit == Exit.BACK
+            and not verdict.operational
+        ):
+            amending.premised(change, p, run.session_id, datetime.now(UTC))
+            if event is not None:
+                events.append(event)
+            return verdict
+        said = challenge_reviewers.findings(verdict, run.payload)
+        if reviewer and said is not None:
+            challenge_reviewers.keep(change, PLAN, reviewer, said[0])
+            store.write(lock, change)  # its result and booked child settle together before another session starts
+            if event is not None:
+                sessions.announce(store, lock, change.slug, event)
+            continue
+        if event is not None:
+            events.append(event)  # its caller logs this once the verdict's settlement is durable
+        return challenge_reviewers.failed(verdict, reviewer) if reviewer else judged(change, verdict, run.payload)
+    return _counted(change, challenge_reviewers.merged(lp), {})
 
 
 def judged(change: Change, verdict: Result, payload: object) -> Result:
     """A complete verdict counts one round: the planner's revision, the last round's stop, or the plan accepted."""
-    if isinstance(payload, tools.ReviewResult) and verdict.cause is None and verdict.exit in {Exit.DONE, Exit.RETRY}:
-        found = [" ".join(f"{f.place}: {f.problem} - fix: {f.fix}".split()) for f in payload.findings]
-        upheld = {r.finding: (bool(r.upheld), r.reason) for r in payload.rechecked}
-    elif isinstance(payload, tools.WrongPremise) and verdict.exit == Exit.BACK and not verdict.operational:
-        found, upheld = [" ".join(f"premise: {payload.reason} ({'; '.join(payload.evidence)})".split())], {}
-    else:
-        return verdict  # the session failed or stopped: the mode stays, so the same plan is challenged again
+    if (said := challenge_reviewers.findings(verdict, payload)) is None:
+        return verdict  # failed: the mode stays and the same plan is challenged again
+    return _counted(change, *said)
+
+
+def _counted(change: Change, found: list[str], upheld: dict[str, tuple[bool, str]]) -> Result:
     then = plan_rounds.counted(change, found, upheld)
     change.step.mode = None
     if then == "ask":

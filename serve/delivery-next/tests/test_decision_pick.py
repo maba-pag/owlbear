@@ -50,9 +50,10 @@ def test_the_first_challenge_request_picks_from_the_complete_list_and_approval_p
     assert picking.ask(1).status_code == 200
     assert picking.change().brief.picked.status == "owed"
     picking.picks.append(picked(rule.id, general.id, "D-NOTONTHELIST"))
-    picking.verdicts.append(verdict())
+    picking.verdicts.extend([verdict(), verdict(), verdict(), verdict()])
     c = picking.step()
-    first, judge = picking.told
+    first, judge, *peers = picking.told
+    assert [cfg.role for cfg in peers] == ["challenger"] * 3
     assert (first.role, judge.role, first.model, first.effort) == ("picker", "challenger", "gpt-6.1-sol", "medium")
     assert (first.user, judge.user) == (user_on, user_on)
     said = first.message
@@ -80,7 +81,7 @@ def test_a_repeated_request_keeps_the_pick_and_a_new_version_picks_again(picking
     picking.save()
     picking.ask(1)
     picking.picks.append(picked(rule.id))
-    picking.verdicts.append(verdict("AC-1"))
+    picking.verdicts.extend([verdict("AC-1"), verdict(), verdict(), verdict()])
     picking.step()
     assert picking.ask(1, {"F1": "AC-1 names the output"}).status_code == 200  # the same version again
     picking.verdicts.append(tools.ReviewResult(verdict="pass", rechecked=[{"finding": "F1", "upheld": False,
@@ -100,7 +101,7 @@ def test_a_failed_pick_blocks_approval_until_a_retry_that_uses_no_round(picking)
     picking.save()
     picking.ask(1)
     picking.picks.append("error")
-    picking.verdicts.append(verdict())
+    picking.verdicts.extend([verdict(), verdict(), verdict(), verdict()])
     c = picking.step()
     assert (c.brief.picked.status, c.brief.challenged) == ("failed", 1)  # the challenge still ran
     assert "the runtime did not start" in c.brief.picked.reason
@@ -121,7 +122,7 @@ def test_a_failed_pick_blocks_approval_until_a_retry_that_uses_no_round(picking)
     assert loop.next_step(picking.change(), AT).kind == StepKind.SHAPE  # runnable: the runner picks
     picking.picks.append(picked(rule.id))
     c = picking.step()
-    assert (c.brief.picked.status, c.loops[BRIEF].round, len(picking.told)) == ("ok", rounds, 3)  # no challenger
+    assert (c.brief.picked.status, c.loops[BRIEF].round, len(picking.told)) == ("ok", rounds, 6)  # no challenger
     assert (c.outcome.exit, c.outcome.waiting, c.outcome.reason) == (Exit.PENDING, Waiting.CHAT, "approve brief v1")
     picking.put(make(title="Pages load in 1 s", statement="Every page loads in under a second."))
     assert picking.approve(1).status_code == 200  # a decision since the pick waits for the next step's picker
@@ -137,7 +138,7 @@ def test_an_unreviewed_last_revision_is_picked_and_pinned_without_a_challenger(p
         picking.store.write(lock, c)
     picking.ask(1)
     picking.picks.append(picked(rule.id))
-    picking.verdicts.append(verdict("AC-1"))
+    picking.verdicts.extend([verdict("AC-1"), verdict(), verdict(), verdict()])
     picking.step()
     assert picking.save(criteria=["farewell('Ada') returns exactly 'Bye, Ada!'"])["version"] == 2
     assert picking.ask(2).status_code == 200
@@ -146,7 +147,7 @@ def test_an_unreviewed_last_revision_is_picked_and_pinned_without_a_challenger(p
     assert "picks the decisions" in picking.approve(2, unreviewed=True).json()["detail"]
     picking.picks.append(picked(rule.id))
     c = picking.step()
-    assert (c.brief.picked.version, c.outcome.reason, len(picking.told)) == (2, "approve brief v2", 3)
+    assert (c.brief.picked.version, c.outcome.reason, len(picking.told)) == (2, "approve brief v2", 6)
     assert picking.approve(2, unreviewed=True).status_code == 200
     assert picking.approved().brief.approved[-1].picked.version == 2
 
@@ -247,7 +248,7 @@ def test_approval_checks_the_pick_and_pins_the_baseline_from_one_read(picking, m
     picking.save()
     picking.ask(1)
     picking.picks.append(picked(rule.id))
-    picking.verdicts.append(verdict())
+    picking.verdicts.extend([verdict(), verdict(), verdict(), verdict()])
     picking.step()
     real, reads = decision_store.load, []
 
@@ -270,7 +271,7 @@ def test_a_pick_retried_while_the_shaper_revises_runs_and_leaves_that_wait(picki
     picking.save()
     picking.ask(1)
     picking.picks.append("error")
-    picking.verdicts.append(verdict("AC-1"))
+    picking.verdicts.extend([verdict("AC-1"), verdict(), verdict(), verdict()])
     c = picking.step()
     waited = c.outcome
     assert (c.brief.picked.status, waited.waiting) == ("failed", Waiting.CHAT)
@@ -284,7 +285,7 @@ def test_a_pick_retried_while_the_shaper_revises_runs_and_leaves_that_wait(picki
     assert (loop.next_step(paused, AT), loop.next_step(asked, AT)) == (None, None)
     picking.picks.append(picked(rule.id))
     c = picking.step()
-    assert (c.brief.picked.status, len(picking.told), c.outcome) == ("ok", 3, waited)  # no challenger; the same wait
+    assert (c.brief.picked.status, len(picking.told), c.outcome) == ("ok", 6, waited)  # no challenger; the same wait
     assert loop.next_step(c, AT) is None
 
 
@@ -310,7 +311,7 @@ def test_an_interrupted_pick_resumes_its_recorded_session_so_its_spend_counts(pi
     assert picking.change().brief.picked.session == first.session_id  # recorded before the runtime started
     monkeypatch.setattr(sdk_adapter, "run", picking.run)
     picking.picks.append(picked(rule.id))  # its runtime reports the session's whole usage, before the kill too
-    picking.verdicts.append(verdict())
+    picking.verdicts.extend([verdict(), verdict(), verdict(), verdict()])
     c = picking.step()
     again = picking.pickers()[0]
     assert (again.session_id, again.resume, again.fresh) == (first.session_id, True, first.message)
@@ -322,7 +323,7 @@ def test_a_correction_log_that_is_not_utf8_fails_the_pick_with_its_reason(pickin
     (picking.shared.root / pick.LOG).write_bytes(b"- Missed \xff\xfe rules\n")
     picking.save()
     picking.ask(1)
-    picking.verdicts.append(verdict())
+    picking.verdicts.extend([verdict(), verdict(), verdict(), verdict()])
     c = picking.step()
     assert (c.brief.picked.status, picking.pickers()) == ("failed", [])
     assert "utf-8" in c.brief.picked.reason
@@ -343,7 +344,7 @@ def test_a_brief_records_its_steps_start_before_its_decision_pick_runs(picking, 
     picking.save()
     picking.ask(1)
     picking.picks.append(picked(rule.id))
-    picking.verdicts.append(verdict())
+    picking.verdicts.extend([verdict(), verdict(), verdict(), verdict()])
     seen, real = [], picking.run
 
     async def run(cfg):
@@ -352,7 +353,7 @@ def test_a_brief_records_its_steps_start_before_its_decision_pick_runs(picking, 
 
     monkeypatch.setattr(sdk_adapter, "run", run)
     picking.step()
-    assert seen == [("picker", True), ("challenger", True)]
+    assert seen == [("picker", True), *([("challenger", True)] * 4)]
 
 
 @pytest.mark.parametrize("case", ["ending", "usage"])
@@ -361,7 +362,7 @@ def test_an_unverified_session_end_says_its_problems_whole(picking, monkeypatch,
     picking.put(make())
     picking.save()
     picking.ask(1)
-    picking.verdicts.append(verdict())
+    picking.verdicts.extend([verdict(), verdict(), verdict(), verdict()])
     real = picking.run
 
     async def run(cfg):

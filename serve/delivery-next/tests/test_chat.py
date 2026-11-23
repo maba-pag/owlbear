@@ -41,7 +41,7 @@ from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.project_host import answers, api, brief_routes, launches, pages
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import challenge_input, ahp, copilot_cli, readiness, step_input, vscode_adapter
+from owlbear_delivery_next.runtimes import ahp, challenge_input, copilot_cli, readiness, step_input, vscode_adapter
 from owlbear_delivery_next.runtimes.vscode_contract import Outcome as Outcome_
 from owlbear_delivery_next.settings import carried, profile
 from owlbear_delivery_next.settings.config import Agent, Layer

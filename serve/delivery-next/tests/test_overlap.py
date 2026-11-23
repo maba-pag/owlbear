@@ -275,7 +275,7 @@ def test_a_committed_merge_survives_replanning_until_its_report_is_accepted(
         [
             (tools.MERGED, "premise", premise),
             (tools.PLAN, "result", revised),
-            (tools.REVIEW, "result", reviewed),
+            *([(tools.REVIEW, "result", reviewed)] * 4),
             (tools.SUBMIT, "result", tools.BuildResult(summary="premise fixed", checks=[])),
             (tools.REVIEW, "result", reviewed),
             (tools.MERGED, "result", told()),

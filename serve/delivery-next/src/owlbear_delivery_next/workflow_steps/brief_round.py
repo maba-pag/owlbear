@@ -13,7 +13,7 @@ from owlbear_delivery_next.change_contracts import dispute_tools, tools
 from owlbear_delivery_next.change_contracts.models import Exit, StepKind
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK
-from owlbear_delivery_next.change_flow import brief_rounds, loop, picks, worktree
+from owlbear_delivery_next.change_flow import brief_rounds, challenge_reviewers, loop, picks, worktree
 from owlbear_delivery_next.change_flow.moves import ask
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import challenge_input, sdk_adapter, step_decisions, step_input
@@ -88,21 +88,42 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     if change.step.mode not in {brief_rounds.CHALLENGE, RECHECK}:
         store.write(lock, change)  # the request settled it without a session
         return
-    keys = tuple(f.id for f in brief_rounds.pending(change.loops[BRIEF]))
-    cap = 0 if change.step.mode == RECHECK else change.loops[BRIEF].policy.max_findings
-    with step_decisions.using(*decisions_gate.shaping(store, change)):  # the pick beside the complete list (TD-452)
-        verdict, done = sessions.review_run(store, lock, change, path, _made(store, lock, change, keys, cap), LABEL)
-    result = judged(change, verdict, done.payload, datetime.now(UTC))
+    _challenge(store, lock, change, path)
+
+
+def _challenge(store: Store, lock: Lock, change: Change, path: Path) -> None:
+    lp = change.loops[BRIEF]
+    multiple = challenge_reviewers.first(lp, change.step.mode)
+    reviewers = challenge_reviewers.remaining(change, BRIEF) if multiple else [""]
+    if not multiple:
+        lp.reviewers.clear()
+    for reviewer in reviewers:
+        with step_decisions.using(*decisions_gate.shaping(store, change)):
+            verdict, done = sessions.review_run(store, lock, change, path, _made(store, lock, change, reviewer), LABEL)
+        if not reviewer:
+            result = judged(change, verdict, done.payload, datetime.now(UTC))
+        elif (said := challenge_reviewers.findings(verdict, done.payload, brief=True)) is None:
+            result = challenge_reviewers.failed(verdict, reviewer)
+        else:
+            challenge_reviewers.keep(change, BRIEF, reviewer, said[0])
+            store.write(lock, change)
+            continue
+        store.write(lock, change if result is None else loop.apply(change, result, datetime.now(UTC)))
+        return
+    result = _counted(change, challenge_reviewers.merged(lp), {}, datetime.now(UTC))
     store.write(lock, change if result is None else loop.apply(change, result, datetime.now(UTC)))
 
 
-def _made(store: Store, lock: Lock, change: Change, keys: tuple[str, ...], cap: int):  # noqa: ANN202 - a session maker
+def _made(store: Store, lock: Lock, change: Change, reviewer: str):  # noqa: ANN202 - a session maker
+    keys = tuple(f.id for f in brief_rounds.pending(change.loops[BRIEF]))
+    cap = 0 if change.step.mode == RECHECK else change.loops[BRIEF].policy.max_findings
+
     def made(at: Path) -> sdk_adapter.Session:
         return sdk_adapter.Session(
             kind=StepKind.REVIEW,
             worktree=at,
             session_id="",
-            message=challenge_input.brief_challenge(change, at),
+            message=challenge_input.brief_challenge(change, at, reviewer=reviewer),
             resume=False,
             policy=Policy(at, write=False),
             observe=lambda: worktree.observe(at, change.names.target),
@@ -122,15 +143,14 @@ def judged(change: Change, verdict: loop.StepResult, payload: object, now: datet
     Returns:
         The result to apply: a failure, or planning for a version the old flow approved; None once recorded.
     """
-    if isinstance(payload, tools.ReviewResult) and verdict.cause is None and verdict.exit in {Exit.DONE, Exit.RETRY}:
-        found = [" ".join(f"{f.place}: {f.problem} - fix: {f.fix}".split()) for f in payload.findings]
-        upheld = {r.finding: (bool(r.upheld), r.reason) for r in payload.rechecked}
-    elif isinstance(payload, tools.WrongPremise) and verdict.exit == Exit.BACK:
-        found, upheld = [" ".join(f"premise: {payload.reason} ({'; '.join(payload.evidence)})".split())], {}
-    elif verdict.exit == Exit.BACK:  # a tool no runtime here provides: the brief changes in chat (TD-36)
-        found, upheld = [" ".join(f"the brief {verdict.reason}".split())], {}
-    else:
+    if (said := challenge_reviewers.findings(verdict, payload, brief=True)) is None:
         return verdict  # failed: the mode stays and it runs again
+    return _counted(change, *said, now)
+
+
+def _counted(
+    change: Change, found: list[str], upheld: dict[str, tuple[bool, str]], now: datetime
+) -> loop.StepResult | None:
     brief_rounds.counted(change, found, upheld, now)
     b = change.brief
     planned = change.step.mode == brief_rounds.PLANNED
