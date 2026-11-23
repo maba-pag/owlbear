@@ -101,7 +101,10 @@ class Owned:
             return await judge(the_card, ctx, meter)
         finally:
             spotter_look.UNENDED.reset(token)
-            lease = await asyncio.shield(begun)  # one that could not be written raises here: there is none to end
+            while not begun.done():  # cancelled while its lease is written: wait for the write, whatever cancels again
+                with contextlib.suppress(asyncio.CancelledError):
+                    await asyncio.shield(begun)
+            lease = begun.result()  # one that could not be written raises here: there is none to end
             problems = (f"the end of a Spotter chat look's session was not confirmed: {', '.join(unended)}",)
             ended = _Ended(processes.Termination(not unended, problems=problems if unended else ()))
             if unended:
