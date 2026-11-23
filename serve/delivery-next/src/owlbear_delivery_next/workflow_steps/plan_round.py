@@ -19,13 +19,14 @@ from owlbear_delivery_next.change_contracts.round_records import PLAN, RECHECK
 from owlbear_delivery_next.change_flow import amending, asking, challenge_reviewers, loop, plan_rounds, worktree
 from owlbear_delivery_next.change_flow.moves import carry_integrations
 from owlbear_delivery_next.local_system.git_files import git_common_dir
-from owlbear_delivery_next.runtimes import amendments, challenge_input, sdk_adapter, step_input
+from owlbear_delivery_next.runtimes import amendments, challenge_input, sdk_adapter, session_result, step_input
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.settings.profile import vouched
+from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import engine, held_writes, overlap, pending_child, sessions
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
     from pathlib import Path
 
     from owlbear_delivery_next.change_contracts.models import Change
@@ -103,12 +104,10 @@ def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
     keys, cap = tuple(f.id for f in plan_rounds.pending(lp)), 0 if change.step.mode == RECHECK else None
     plan = change.plan
     multiple = challenge_reviewers.first(lp, change.step.mode)
-    reviewers = challenge_reviewers.remaining(change, PLAN) if multiple else [""]
     if not multiple:
         lp.reviewers.clear()
-    reviewer = ""
 
-    def made(at: Path) -> sdk_adapter.Session:
+    def made(at: Path, reviewer: str = "") -> sdk_adapter.Session:
         return sdk_adapter.Session(
             kind=StepKind.REVIEW,
             worktree=at,
@@ -118,6 +117,7 @@ def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
             policy=Policy(at, write=False),
             observe=lambda: worktree.observe(at, change.names.target),
             checks=(),
+            submit=tools.REVIEW,
             rechecks=keys,
             cap=lp.policy.max_findings if cap is None else cap,
             amendable=amendments.amendable(change),
@@ -125,12 +125,55 @@ def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
             memory=sessions.memory(store),
         )
 
+    if multiple:
+        return _first(store, lock, change, path, made)
+
     def start(keep: sessions.Keep) -> pending_child.Judged:
         return sessions.review_run(store, lock, change, path, made, LABEL, keep=keep)
 
-    for reviewer in reviewers:
-        verdict, run = pending_child.child(store, lock, change, (LABEL, str(plan.version) if plan else ""), start)
-        event = pending_child.booked(change, run, {"exit": verdict.exit})
+    verdict, run = pending_child.child(store, lock, change, (LABEL, str(plan.version) if plan else ""), start)
+    event = pending_child.booked(change, run, {"exit": verdict.exit})
+    if (
+        isinstance(p := run.payload, tools.WrongPremise)
+        and p.stage == "brief"
+        and verdict.exit == Exit.BACK
+        and not verdict.operational
+    ):
+        amending.premised(change, p, run.session_id, datetime.now(UTC))
+        if event is not None:
+            events.append(event)
+        return verdict
+    if event is not None:
+        events.append(event)  # its caller logs this once the verdict's settlement is durable
+    return judged(change, verdict, run.payload)
+
+
+def _first(
+    store: Store, lock: Lock, change: Change, path: Path, session: Callable[[Path, str], sdk_adapter.Session]
+) -> Result:
+    """Keep round one's results with their spend in one write, before the judges' cleanup can fail."""
+    reviewers = challenge_reviewers.remaining(change, PLAN)
+
+    def made(at: Path) -> list[tuple[str, sdk_adapter.Session]]:
+        return [(LABEL, session(at, name)) for name in reviewers]
+
+    def keep(runs: list[session_result.Run]) -> None:
+        _kept(store, lock, change, reviewers, runs)
+
+    try:
+        ran = sessions.judges(store, lock, change, path, made, keep=keep) if reviewers else []
+    except sessions.UsageUnreadError as exc:
+        steps = [
+            sessions.account(change, run, {"kind": change.step.kind, "exit": Exit.ASK, "label": LABEL})
+            for run in exc.runs
+            if sessions.unread(run) and run is not exc.run
+        ]
+        store.write(lock, change)
+        sessions.announce_all(store, lock, change.slug, steps)
+        raise
+    if stopped := next(((name, r) for name, (r, _) in zip(reviewers, ran, strict=True) if r.exit == Exit.STOP), None):
+        return challenge_reviewers.failed(stopped[1], stopped[0])
+    for name, (verdict, run) in zip(reviewers, ran, strict=True):
         if (
             isinstance(p := run.payload, tools.WrongPremise)
             and p.stage == "brief"
@@ -138,20 +181,31 @@ def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
             and not verdict.operational
         ):
             amending.premised(change, p, run.session_id, datetime.now(UTC))
-            if event is not None:
-                events.append(event)
             return verdict
-        said = challenge_reviewers.findings(verdict, run.payload)
-        if reviewer and said is not None:
-            challenge_reviewers.keep(change, PLAN, reviewer, said[0])
-            store.write(lock, change)  # its result and booked child settle together before another session starts
-            if event is not None:
-                sessions.announce(store, lock, change.slug, event)
+        if challenge_reviewers.findings(verdict, run.payload) is None:
+            return challenge_reviewers.failed(verdict, name)
+    return _counted(change, challenge_reviewers.merged(change.loops[PLAN]), {})
+
+
+def _kept(store: Store, lock: Lock, change: Change, reviewers: list[str], runs: list[session_result.Run]) -> None:
+    """Commit the batch's verdicts with their accounting before announcing any of its step events."""
+    steps, paid = [], []
+    for name, run in zip(reviewers, runs, strict=True):
+        if not sessions.deferrable(run):
             continue
-        if event is not None:
-            events.append(event)  # its caller logs this once the verdict's settlement is durable
-        return challenge_reviewers.failed(verdict, reviewer) if reviewer else judged(change, verdict, run.payload)
-    return _counted(change, challenge_reviewers.merged(lp), {})
+        verdict = session_result.to_result(run, StepKind.REVIEW, datetime.now(UTC), change.step.kind)
+        steps.append(sessions.account(change, run, {"kind": LABEL, "exit": verdict.exit}))
+        change.counted_children.append(run.session_id)
+        paid.append(run.session_id)
+        premise = isinstance(run.payload, tools.WrongPremise) and run.payload.stage == "brief"
+        if not premise and (said := challenge_reviewers.findings(verdict, run.payload)) is not None:
+            challenge_reviewers.keep(change, PLAN, name, said[0])
+    try:
+        store.write(lock, change)
+    except (OSError, StoreError) as exc:
+        exc.add_note(f"the paid sessions' results were not saved: {', '.join(paid)}")
+        raise
+    sessions.announce_all(store, lock, change.slug, steps)
 
 
 def judged(change: Change, verdict: Result, payload: object) -> Result:

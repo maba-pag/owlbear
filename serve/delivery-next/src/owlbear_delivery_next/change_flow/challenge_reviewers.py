@@ -1,4 +1,4 @@
-"""Sequential first-round reviewers: kept verdicts, one shared allowance and an exact round-one gate."""
+"""First-round reviewers: kept verdicts, one shared allowance and an exact round-one gate."""
 
 from __future__ import annotations
 
