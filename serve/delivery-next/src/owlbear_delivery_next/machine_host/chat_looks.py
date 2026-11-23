@@ -16,13 +16,14 @@ at all (``retired``).
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.improvement import assumptions, spotter
+from owlbear_delivery_next.improvement import assumptions, spotter, spotter_store
 from owlbear_delivery_next.local_system import maintenance, processes
 from owlbear_delivery_next.runtimes import spotter_look
 
@@ -85,15 +86,25 @@ class Owned:
         return held
 
     async def judged(self, judge: spotter.Judge, the_card: dict[str, Any], ctx: spotter.Context, meter: Meter) -> str:
-        """*judge*'s look under a lease begun before its session and ended with what its teardown confirmed."""
+        """*judge*'s look under a lease begun before its session and ended with what its teardown confirmed.
+
+        A look cancelled while its lease is written still ends that lease: a hand-off look takes a slot by cancelling
+        its look at any moment, and a lease nothing ends keeps every later look and every update out (#1387).
+        """
         key = f"look-{meter.id}"
-        lease = await spotter.offload(self.ownership.begin, PROJECT, key, KIND, "")  # durable before any session
+        writing = spotter_store.WORK.submit(self.ownership.begin, PROJECT, key, KIND, "")
+        begun = asyncio.wrap_future(writing)  # never cancelled
         unended: list[str] = []
         token = spotter_look.UNENDED.set(unended)  # its teardown runs within it, whatever cancels the look
         try:
+            await asyncio.shield(begun)  # durable before any session
             return await judge(the_card, ctx, meter)
         finally:
             spotter_look.UNENDED.reset(token)
+            while not begun.done():  # cancelled while its lease is written: wait for the write, whatever cancels again
+                with contextlib.suppress(asyncio.CancelledError):
+                    await asyncio.shield(begun)
+            lease = begun.result()  # one that could not be written raises here: there is none to end
             problems = (f"the end of a Spotter chat look's session was not confirmed: {', '.join(unended)}",)
             ended = _Ended(processes.Termination(not unended, problems=problems if unended else ()))
             if unended:
