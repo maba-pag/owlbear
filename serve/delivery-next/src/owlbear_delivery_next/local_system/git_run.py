@@ -6,21 +6,29 @@ A command that reaches a remote runs as TD-402's account on the repository it re
 
 from __future__ import annotations
 
+import errno
 import os
+import shutil
 import subprocess
 import time
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TypedDict, Unpack
 
 from owlbear_delivery_next.git.access import Access
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.git.remote_git import RemoteGitError
 from owlbear_delivery_next.github.account import AccountMissing, Origin, Writer
 
-if TYPE_CHECKING:
-    from pathlib import Path
-
 EXPIRED = "the deadline passed before git could run"
 REMOTE = frozenset({"push", "fetch", "pull", "ls-remote", "clone"})
+_STDERR_FD = 2
+
+
+class _RunOptions(TypedDict):
+    env: dict[str, str]
+    capture_output: bool
+    text: bool
+    timeout: float
 
 
 def _decoded(output: bytes | None) -> str | None:
@@ -44,37 +52,107 @@ def run(
     failed command with its reason. When *show*, Git writes to the terminal and only the exit code is returned.
     *lossless* preserves UTF-8 bytes and line endings for callers that classify separate records in one output.
     """
+    remote = _remote(args)
+    local_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"} if not remote else None
+    executable = _spawn_executable(cwd, local_env) if local_env is not None else None
     seconds = cap if until is None else min(cap, until - time.monotonic())
     deadline = time.monotonic() + seconds
+    if not remote and until is not None:
+        deadline = min(deadline, until)
     if seconds <= 0:
         return subprocess.CompletedProcess(["git", *args], 128, "", EXPIRED)
     try:
         access = _access(cwd, args, deadline)
-        seconds = _left(deadline) if _remote(args) else seconds
+        seconds = _left(deadline) if remote else seconds
     except (AccountMissing, RemoteGitError, TimeoutError, subprocess.TimeoutExpired) as exc:
         said = failure(exc)
         if isinstance(exc, subprocess.TimeoutExpired):  # `_left`'s own TimeoutError already says EXPIRED
             said = f"{EXPIRED}: {said}"
         return subprocess.CompletedProcess(["git", *args], 128, "", said)
     command = ["git", *access.options(), *args]
+    environment = local_env if local_env is not None else access.environment({**os.environ, "GIT_TERMINAL_PROMPT": "0"})
     try:
-        # Shared-data and pack callers own Git verbs/argv; access adds account options, operands stay separate.
-        done = subprocess.run(  # noqa: S603 - code-owned Git vectors with per-launch account environment, no shell
+        done = _launch(
+            cwd,
             command,
-            cwd=cwd,
-            env=access.environment({**os.environ, "GIT_TERMINAL_PROMPT": "0"}),
-            stdin=subprocess.DEVNULL,
+            executable,
+            deadline,
+            env=environment,
             capture_output=not show,
             text=not lossless,
             timeout=seconds,
-            check=False,
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except subprocess.TimeoutExpired as exc:
+        exc.cmd = command
+        return subprocess.CompletedProcess(command, 128, "", failure(exc))
+    except OSError as exc:
         # Exit 1 can mean no match or a difference; failure to run Git cannot answer either probe.
         return subprocess.CompletedProcess(command, 128, "", failure(exc))
     if lossless:
         return subprocess.CompletedProcess(done.args, done.returncode, _decoded(done.stdout), _decoded(done.stderr))
     return done
+
+
+def _launch(
+    cwd: Path,
+    command: list[str],
+    executable: str | None,
+    deadline: float,
+    **options: Unpack[_RunOptions],
+) -> subprocess.CompletedProcess:
+    """Launch with the chosen executable, or let native lookup give its own result and error."""
+    while True:
+        argv = ["git", "-C", str(cwd), *command[1:]] if executable else command
+        try:
+            # Shared-data and pack callers own Git verbs/argv; access adds account options, operands stay separate.
+            done = subprocess.run(  # noqa: S603 - code-owned Git vectors with per-launch account environment, no shell
+                argv,
+                **({"executable": executable, "close_fds": False} if executable else {"cwd": cwd}),
+                stdin=subprocess.DEVNULL,
+                check=False,
+                **options,
+            )
+        except OSError as exc:
+            # Only an exec failure allows a retry: the first command must not have started.
+            if not executable or exc.filename != executable:
+                raise
+            executable = None
+            seconds = deadline - time.monotonic()
+            if seconds <= 0:
+                return (
+                    subprocess.CompletedProcess(command, 128, "", EXPIRED)
+                    if options["text"]
+                    else subprocess.CompletedProcess(command, 128, b"", EXPIRED.encode())
+                )
+            options["timeout"] = seconds
+        else:
+            if executable:
+                done.args = command
+            return done
+
+
+def _spawn_executable(cwd: Path, environment: dict[str, str]) -> str | None:
+    """Resolve git only when the child has the same search path and no extra inheritable descriptors."""
+    path = environment.get("PATH", "")
+    if not all(Path(entry).is_absolute() for entry in path.split(os.pathsep)):
+        return None
+    # Keep the native launch error when Python would be unable to enter the directory.
+    if not cwd.is_dir() or not os.access(cwd, os.X_OK):
+        return None
+    try:
+        for entry in Path("/dev/fd").iterdir():
+            if not entry.name.isdecimal() or (fd := int(entry.name)) <= _STDERR_FD:
+                continue
+            try:
+                if os.get_inheritable(fd):
+                    return None
+            except OSError as exc:
+                # The descriptor used for the listing can already be closed.
+                if exc.errno != errno.EBADF:
+                    raise
+    except OSError:
+        return None
+    return shutil.which("git", path=path)
 
 
 def _access(cwd: Path, args: tuple[str, ...], deadline: float) -> Access:

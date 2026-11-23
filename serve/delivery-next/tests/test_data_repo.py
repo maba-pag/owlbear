@@ -912,7 +912,8 @@ def test_a_timed_out_git_says_its_type_and_what_it_printed(shared, monkeypatch, 
     real = subprocess.run
 
     def run(argv, *a, **kw):
-        if "commit" in argv[1:4]:
+        args = argv[3:] if kw.get("executable") else argv[1:]
+        if "commit" in args[:3]:
             raise subprocess.TimeoutExpired(argv, 10, output=OUT.encode(), stderr=whole_error.encode())
         return real(argv, *a, **kw)
 
