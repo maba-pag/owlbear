@@ -20,13 +20,14 @@ type Findings = tuple[list[str], dict[str, tuple[bool, str]]]
 def at_once(c: Change, step: Step) -> int:
     """The sessions *step*'s runner may use at once: round one's reviewers when it runs them, else one.
 
-    A planner's challenge follows in the planner's own runner, so planning before the plan's first verdict counts.
+    A planner's challenge follows in the planner's own runner, so planning before the plan's first verdict counts,
+    and so does a plan step whose loop ended: its next challenge starts a new attempt at round one.
     """
     subject = {StepKind.SHAPE: BRIEF, StepKind.PLAN: PLAN}.get(step.kind)
     if subject is None:
         return 1
-    planning = subject == PLAN and step.mode is None
-    if (lp := c.loops.get(subject)) is None:
+    planning = subject == PLAN and step.mode in {None, "challenge"}
+    if (lp := c.loops.get(subject)) is None or (planning and lp.ended):
         return len(ORDER) if planning else 1
     return len(ORDER) if first(lp, "challenge" if planning else step.mode) else 1
 

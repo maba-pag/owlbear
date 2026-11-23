@@ -190,10 +190,11 @@ def test_a_step_without_an_agent_reserves_nothing_and_a_visual_check_asks_for_th
         (Step(kind=StepKind.PLAN, mode="challenge"), {PLAN: fresh}),
         (Step(kind=StepKind.SHAPE, mode="challenge"), {BRIEF: fresh.model_copy(update={"subject": BRIEF})}),
         (Step(kind=StepKind.PLAN), {PLAN: later}),  # a revision: its challenge is one session
+        (Step(kind=StepKind.PLAN), {PLAN: later.model_copy(update={"ended": "replanned"})}),  # a new attempt
         (Step(kind=StepKind.PLAN, mode="recheck"), {PLAN: fresh}),
         (Step(kind=StepKind.SHAPE), {}),
     ]
-    assert [session_slots.wanted(Change(slug="c1", step=s, loops=lp), s) for s, lp in wants] == [4, 4, 4, 1, 1, 1]
+    assert [session_slots.wanted(Change(slug="c1", step=s, loops=lp), s) for s, lp in wants] == [4, 4, 4, 1, 4, 1, 1]
     fake.host.wants["m1"] = 0
     assert fake.host.slots.take("q", "q1", 1, 1) == 1  # the machine is full
     assert session_slots.reserve(fake.host, "m1") == 0  # a merge still runs
