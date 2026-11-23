@@ -324,7 +324,8 @@ def test_the_planner_and_its_challenge_each_judge_a_clean_head_in_the_read_only_
 
     async def fake(cfg):
         seen.append((cfg.worktree, cfg.message, git(cfg.worktree, "status", "--porcelain")))
-        (cfg.worktree / "scratch.txt").write_text("the planner's note\n")
+        if cfg.submit is tools.PLAN:
+            (cfg.worktree / "scratch.txt").write_text("the planner's note\n")
         task = {"title": "one", "goal": "AC-1", "scope": ["a.txt"], "checks": ["true"]}
         payload = tools.PlanResult(tasks=[task]) if cfg.submit is tools.PLAN else tools.ReviewResult(verdict="pass")
         return Run(cfg.session_id, "result", payload, termination=Termination(confirmed=True))

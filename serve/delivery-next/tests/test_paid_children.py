@@ -26,7 +26,7 @@ from owlbear_delivery_next.change_contracts.models import (
     Task,
 )
 from owlbear_delivery_next.change_contracts.round_records import PLAN, RoundLoop, RoundPolicy
-from owlbear_delivery_next.change_flow import loop
+from owlbear_delivery_next.change_flow import challenge_reviewers, loop
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system.processes import Termination
@@ -93,6 +93,12 @@ def task(n: int) -> dict:
 
 
 @pytest.fixture(autouse=True)
+def _single_child(monkeypatch) -> None:
+    """These tests protect one child's custody; round one's four reviewers are covered in the round tests."""
+    monkeypatch.setattr(challenge_reviewers, "first", lambda *_: False)
+
+
+@pytest.fixture(autouse=True)
 def _checks_settled(tmp_path, checks_settled) -> None:
     checks_settled(Store(tmp_path / "store"))
 
@@ -122,7 +128,7 @@ def held_and_accepted(tmp_path: Path, repo: Path, paid: Paid) -> Store:
     """The parent's session returned with its usage unread: held, counted at its gate, then accepted in the inbox."""
     store = Store(tmp_path / "store")
     store.write(Lock("c1"), made(repo))
-    paid.verdicts = [passing()] * 4
+    paid.verdicts = [passing()]
     restart(tmp_path, repo)
     gated = store.read("c1")
     q = loop.open_question(gated)
@@ -154,13 +160,13 @@ def child_steps(store: Store, label: str) -> list[dict]:
 def assert_settled_once(store: Store, usage: str, paid: Paid) -> Change:
     """The parent applied once, its child run and counted once, each count and record exactly once."""
     c = store.read("c1")
-    assert (len(paid.parents), len(paid.children), len(paid.next)) == (1, 4, 1)
+    assert (len(paid.parents), len(paid.children), len(paid.next)) == (1, 1, 1)
     assert c.pending_child is None
-    assert c.spend.credits == pytest.approx(PARENT[usage][2] + 4 * CHILD["credits"])
+    assert c.spend.credits == pytest.approx(PARENT[usage][2] + CHILD["credits"])
     assert c.spend.unread == (paid.parents if usage == "unread" else [])
-    assert c.spend.models["c"].tokens == 160
-    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 8)
-    assert c.tool_use.wrong == {"no_result": 1, "denied": 4}
+    assert c.spend.models["c"].tokens == 40
+    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 2)
+    assert c.tool_use.wrong == {"no_result": 1, "denied": 1}
     assert len(c.accepted_holds) == len(c.counted_holds) == 1
     assert c.counted_children == paid.children
     assert captures(store) == []
@@ -273,7 +279,7 @@ def test_an_accepted_parent_and_its_paid_child_run_and_count_once_whichever_writ
 
     store = to_next_session(tmp_path, change_repo)
     assert_settled_once(store, usage, paid)
-    assert len(child_steps(store, label)) == (3 if fault == "settlement-log" else 4)
+    assert len(child_steps(store, label)) == (0 if fault == "settlement-log" else 1)
 
 
 def settlement_fails(tmp_path, change_repo, monkeypatch) -> Paid:
@@ -319,7 +325,7 @@ def test_a_pause_queued_after_a_failed_settlement_waits_and_the_resume_settles_f
     done = to_next_session(tmp_path, change_repo)
     assert done.read("c1").intent.paused_at is None
     assert_settled_once(done, "known", paid)
-    assert len(child_steps(done, plan_round.LABEL)) == 4
+    assert len(child_steps(done, plan_round.LABEL)) == 1
 
 
 def test_a_new_brief_after_failed_settlement_keeps_the_childs_shared_git_gate(tmp_path, change_repo, monkeypatch):
@@ -378,7 +384,7 @@ def ask_store(tmp_path, change_repo, monkeypatch) -> tuple[Paid, Store]:
     store.write(Lock("c1"), made(change_repo))
     first = tools.ReviewResult(verdict="fix", findings=[{"place": "t1", "problem": "AC-1 untested", "fix": "add"}])
     upheld = tools.ReviewResult(verdict="pass", rechecked=[{"finding": "F1", "upheld": True, "reason": "see t1"}])
-    paid.verdicts = [first, passing(), passing(), passing(), upheld]
+    paid.verdicts = [first, upheld]
     rejected = [{"finding": "F1", "reason": "covered"}]
     plans = [tools.PlanResult(tasks=[task(1)]), tools.PlanResult(tasks=[task(1)], rejected=rejected)]
 
@@ -414,7 +420,7 @@ def test_an_upheld_rejection_is_delegated_once_whatever_the_owner_does_next(tmp_
     assert (found.state, [e.id for e in asked.left]) == ("left-open", ["F1"])
     ids = [x.id for x in asked.questions]
     assert all(x.answer is not None for x in asked.questions)
-    assert (len(paid.parents), len(paid.children)) == (2, 5)
+    assert (len(paid.parents), len(paid.children)) == (2, 2)
 
     if then == "continue":
         to_next_session(tmp_path, change_repo)  # the planner's next round needs no owner answer
@@ -427,10 +433,10 @@ def test_an_upheld_rejection_is_delegated_once_whatever_the_owner_does_next(tmp_
     c = store.read("c1")
     assert [x.id for x in c.questions] == ids
     assert c.pending_child is None
-    assert (c.loops[PLAN].round, len(paid.children)) == (2, 5)
-    assert c.spend.credits == pytest.approx(2.5 + 5 * 3.5)
-    assert c.tool_use.tools["grep"].calls == 10
-    assert len(child_steps(store, plan_round.LABEL)) == 5
+    assert (c.loops[PLAN].round, len(paid.children)) == (2, 2)
+    assert c.spend.credits == pytest.approx(2.5 + 2 * 3.5)
+    assert c.tool_use.tools["grep"].calls == 4
+    assert len(child_steps(store, plan_round.LABEL)) == 2
     if then == "pause":
         assert c.intent.paused_at is not None
         assert loop.open_question(c) is None
@@ -458,10 +464,10 @@ def test_a_child_whose_own_usage_is_unread_takes_its_own_gate_and_its_retry_reru
     store.put_inbox("c1", AnswerItem(at=datetime.now(UTC), question=q.id, option="retry"))
     done = to_next_session(tmp_path, change_repo)
     c = done.read("c1")
-    assert (len(paid.parents), len(paid.children), len(paid.next)) == (1, 5, 1)  # the retry reran the child alone
-    assert (c.spend.credits, c.spend.unread) == (pytest.approx(2.5 + 4 * 3.5), paid.children[:1])
-    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 10)  # every attempt once
-    assert c.tool_use.wrong == {"no_result": 1, "denied": 5}
+    assert (len(paid.parents), len(paid.children), len(paid.next)) == (1, 2, 1)  # the retry reran the child alone
+    assert (c.spend.credits, c.spend.unread) == (pytest.approx(2.5 + 3.5), paid.children[:1])
+    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 4)  # each attempt once
+    assert c.tool_use.wrong == {"no_result": 1, "denied": 2}
     assert (c.counted_children, c.pending_child) == (paid.children, None)  # each child's receipt once
     assert (c.plan.version, c.loops[PLAN].round, c.step.kind) == (1, 1, K.BUILD)
 
@@ -485,9 +491,9 @@ def test_a_child_on_a_wrong_model_judges_nothing_and_its_rerun_after_the_wait_do
     later = c.outcome.wake_at + timedelta(seconds=1)
     done = to_next_session(tmp_path, change_repo, now=later)
     c = done.read("c1")
-    assert (len(paid.parents), len(paid.children), len(paid.next)) == (1, 5, 1)
-    assert c.spend.credits == pytest.approx(2.5 + 5 * 3.5)
-    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 10)
+    assert (len(paid.parents), len(paid.children), len(paid.next)) == (1, 2, 1)
+    assert c.spend.credits == pytest.approx(2.5 + 2 * 3.5)
+    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 4)
     assert (c.counted_children, c.pending_child) == (paid.children, None)
     assert (c.loops[PLAN].round, c.step.kind) == (1, K.BUILD)
 
@@ -522,8 +528,8 @@ def test_a_child_run_no_storage_keeps_is_printed_and_reported_never_claimed(tmp_
     monkeypatch.setattr(Store, "write", real_write)
     store = to_next_session(tmp_path, change_repo)
     c = store.read("c1")
-    assert len(paid.children) == 5  # nothing kept the first run, so its challenge ran again, as reported
-    assert (c.counted_children, c.spend.credits) == (paid.children[1:], pytest.approx(2.5 + 4 * 3.5))
+    assert len(paid.children) == 2  # nothing kept the first run, so its challenge ran again, as reported
+    assert (c.counted_children, c.spend.credits) == (paid.children[1:], pytest.approx(2.5 + 3.5))
 
 
 CLEANUPS = ["cleanup", "cleanup+capture-write", "cleanup+both-media"]
@@ -545,8 +551,8 @@ def test_a_kept_child_whose_result_no_longer_loads_counts_once_judges_nothing_an
     assert (c.loops[PLAN].round, c.step.mode) == (0, "challenge")
 
     c = restart(tmp_path, change_repo).read("c1")  # its retry: a new challenger, never the parent again
-    assert (len(paid.parents), len(paid.children)) == (1, 5)
-    assert (c.counted_children, c.spend.credits) == (paid.children, pytest.approx(2.5 + 5 * 3.5))
+    assert (len(paid.parents), len(paid.children)) == (1, 2)
+    assert (c.counted_children, c.spend.credits) == (paid.children, pytest.approx(2.5 + 2 * 3.5))
     assert (c.loops[PLAN].round, c.step.kind) == (1, K.BUILD)
 
 
@@ -606,16 +612,16 @@ def test_a_confirmed_child_whose_read_only_cleanup_fails_is_kept_before_it_and_n
         assert [p["child"]["run"]["session_id"] for p in printed] == paid.children
         assert captures(after) == []
 
-    # The next independent reviewer needs the stale marker cleared after the confirmed cleanup failure.
-    (live := after.root / "changes" / "c1" / disposable.LIVE).unlink()
-    assert not live.exists()
+    if fault == "cleanup+both-media":
+        (live := after.root / "changes" / "c1" / disposable.LIVE).unlink()  # the owner confirmed it gone
+        assert not live.exists()
     restart(tmp_path, change_repo)
     c = Store(tmp_path / "store").read("c1")
     honest = fault == "cleanup+both-media"  # its challenge ran again, as reported; only that run counted
-    assert (len(paid.parents), len(paid.children)) == (1, 5 if honest else 4)
-    assert (c.counted_children, c.pending_child) == (paid.children[-4:], None)
-    assert c.spend.credits == pytest.approx(2.5 + 4 * 3.5)
-    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 8)
+    assert (len(paid.parents), len(paid.children)) == (1, 2 if honest else 1)
+    assert (c.counted_children, c.pending_child) == (paid.children[-1:], None)
+    assert c.spend.credits == pytest.approx(2.5 + 3.5)
+    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 2)
     assert captures(Store(tmp_path / "store")) == []
     assert (c.plan.version, c.loops[PLAN].round, c.step.kind) == (1, 1, K.BUILD)
 
@@ -658,9 +664,9 @@ def test_an_unread_child_whose_cleanup_fails_keeps_its_own_gate_and_count_until_
 
     store.put_inbox("c1", AnswerItem(at=datetime.now(UTC), question=q.id, option="retry"))
     c = restart(tmp_path, change_repo).read("c1")  # the owner's retry runs the child alone
-    assert (len(paid.parents), len(paid.children)) == (1, 5)
-    assert (c.counted_children, c.spend.unread, c.spend.credits) == (paid.children, paid.children[:1], 2.5 + 4 * 3.5)
-    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 10)
+    assert (len(paid.parents), len(paid.children)) == (1, 2)
+    assert (c.counted_children, c.spend.unread, c.spend.credits) == (paid.children, paid.children[:1], 2.5 + 3.5)
+    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 4)
     assert (c.plan.version, c.loops[PLAN].round, c.step.kind) == (1, 1, K.BUILD)
 
 
@@ -718,7 +724,7 @@ def test_an_unread_child_whose_gate_write_fails_is_gated_from_its_capture_and_ne
         assert [p["child"]["run"]["session_id"] for p in printed] == paid.children
         assert captures(store) == []
         c = restart(tmp_path, change_repo).read("c1")
-        assert len(paid.children) == 5
+        assert len(paid.children) == 2
         assert paid.children[0] not in c.counted_children
         return
 
@@ -738,9 +744,9 @@ def test_an_unread_child_whose_gate_write_fails_is_gated_from_its_capture_and_ne
 
     store.put_inbox("c1", AnswerItem(at=datetime.now(UTC), question=q.id, option="retry"))
     c = restart(tmp_path, change_repo).read("c1")  # the owner's retry runs the child alone
-    assert (len(paid.parents), len(paid.children)) == (1, 5)
-    assert (c.counted_children, c.spend.unread, c.spend.credits) == (paid.children, paid.children[:1], 2.5 + 4 * 3.5)
-    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 10)
+    assert (len(paid.parents), len(paid.children)) == (1, 2)
+    assert (c.counted_children, c.spend.unread, c.spend.credits) == (paid.children, paid.children[:1], 2.5 + 3.5)
+    assert (c.tool_use.tools["bash"].calls, c.tool_use.tools["grep"].calls) == (3, 4)
     assert (c.plan.version, c.loops[PLAN].round, c.step.kind) == (1, 1, K.BUILD)
 
 
@@ -784,10 +790,10 @@ def test_an_old_unread_capture_only_counts_under_a_later_child_and_never_gates_i
     unread = [q for q in c.questions if (q.cause or "").endswith(f":{failures.UNREAD}") and q.answer is None]
     assert unread == []  # no gate for the old child; the parent's own was answered at its acceptance
     assert (c.spend.unread, c.counted_children[0]) == ([old], old)  # counted once
-    assert (c.pending_child, c.tool_use.tools["grep"].calls) == (None, 10)
-    assert c.spend.credits == pytest.approx(2.5 + 4 * 3.5)
+    assert (c.pending_child, c.tool_use.tools["grep"].calls) == (None, 4)
+    assert c.spend.credits == pytest.approx(2.5 + 3.5)
     # the later child settles from its kept run: no session, its round counted
-    assert (len(paid.children), c.counted_children) == (4, [old, "c1-plan-challenge-v2", *paid.children[1:]])
+    assert (len(paid.children), c.counted_children) == (1, [old, "c1-plan-challenge-v2"])
     assert (c.plan.version, c.loops[PLAN].round, c.step.kind) == (2, 1, K.BUILD)
     with pytest.raises(NextSessionError):  # the next step goes on: no gate, nothing of the old child again
         restart(tmp_path, change_repo)
@@ -817,7 +823,7 @@ def test_an_unread_capture_of_a_departed_brief_only_counts_when_a_new_brief_reus
     unread = [q for q in c.questions if (q.cause or "").endswith(f":{failures.UNREAD}") and q.answer is None]
     assert unread == []  # no gate for the departed brief's child
     assert (c.spend.unread, c.counted_children) == ([old], paid.children)  # old counted once; the new child too
-    assert (len(paid.parents), len(paid.children)) == (1, 5)  # the new target's own challenger ran
+    assert (len(paid.parents), len(paid.children)) == (1, 2)  # the new target's own challenger ran
     assert (c.pending_child, captures(store)) == (None, [])
     assert (c.plan.version, c.loops[PLAN].round, c.step.kind) == (1, 1, K.BUILD)
 
@@ -872,7 +878,7 @@ def test_a_kept_child_that_no_longer_loads_retries_with_its_whole_reason(
     store = restart(tmp_path, change_repo)
     expected = f"its kept result no longer loads: ValueError: {whole_error}\n{trigger}"
     outcome = store.read("c1").outcome
-    assert (outcome.exit, outcome.reason, outcome.cause) == (Exit.RETRY, f"need: {expected}", "tooling:review:sdk")
+    assert (outcome.exit, outcome.reason, outcome.cause) == (Exit.RETRY, expected, "tooling:review:sdk")
     assert [e["detail"] for e in store.events("c1") if e.get("kind") == "plan-challenge"][-1] == expected
 
 

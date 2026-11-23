@@ -16,7 +16,7 @@ from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK
 from owlbear_delivery_next.change_flow import brief_rounds, challenge_reviewers, loop, picks, worktree
 from owlbear_delivery_next.change_flow.moves import ask
 from owlbear_delivery_next.local_system.git_files import git_common_dir
-from owlbear_delivery_next.runtimes import challenge_input, sdk_adapter, step_decisions, step_input
+from owlbear_delivery_next.runtimes import challenge_input, sdk_adapter, session_result, step_decisions, step_input
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.workflow_steps import decisions_gate, pick, sessions
 
@@ -94,24 +94,47 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
 def _challenge(store: Store, lock: Lock, change: Change, path: Path) -> None:
     lp = change.loops[BRIEF]
     multiple = challenge_reviewers.first(lp, change.step.mode)
-    reviewers = challenge_reviewers.remaining(change, BRIEF) if multiple else [""]
-    if not multiple:
+    if multiple:
+        result = _first(store, lock, change, path)
+    else:
         lp.reviewers.clear()
-    for reviewer in reviewers:
         with step_decisions.using(*decisions_gate.shaping(store, change)):
-            verdict, done = sessions.review_run(store, lock, change, path, _made(store, lock, change, reviewer), LABEL)
-        if not reviewer:
-            result = judged(change, verdict, done.payload, datetime.now(UTC))
-        elif (said := challenge_reviewers.findings(verdict, done.payload, brief=True)) is None:
-            result = challenge_reviewers.failed(verdict, reviewer)
-        else:
-            challenge_reviewers.keep(change, BRIEF, reviewer, said[0])
-            store.write(lock, change)
-            continue
-        store.write(lock, change if result is None else loop.apply(change, result, datetime.now(UTC)))
-        return
-    result = _counted(change, challenge_reviewers.merged(lp), {}, datetime.now(UTC))
+            verdict, done = sessions.review_run(store, lock, change, path, _made(store, lock, change, ""), LABEL)
+        result = judged(change, verdict, done.payload, datetime.now(UTC))
     store.write(lock, change if result is None else loop.apply(change, result, datetime.now(UTC)))
+
+
+def _first(store: Store, lock: Lock, change: Change, path: Path) -> loop.StepResult | None:
+    reviewers = challenge_reviewers.remaining(change, BRIEF)
+
+    def made(at: Path) -> list[tuple[str, sdk_adapter.Session]]:
+        return [(LABEL, _made(store, lock, change, name)(at)) for name in reviewers]
+
+    with step_decisions.using(*decisions_gate.shaping(store, change)):
+        try:
+            ran = sessions.judges(store, lock, change, path, made) if reviewers else []
+        except sessions.UsageUnreadError as exc:
+            for name, run in zip(reviewers, exc.runs, strict=True):
+                if not sessions.unread(run):
+                    verdict = session_result.to_result(run, StepKind.REVIEW, datetime.now(UTC), change.step.kind)
+                    if (said := challenge_reviewers.findings(verdict, run.payload, brief=True)) is not None:
+                        challenge_reviewers.keep(change, BRIEF, name, said[0])
+            store.write(lock, change)
+            sessions.count_unread(store, lock, change, [r for r in exc.runs if r is not exc.run], LABEL)
+            raise
+    failed = []
+    for name, (verdict, done) in zip(reviewers, ran, strict=True):
+        if sessions.unread(done):  # its gate gave way to a sibling's unconfirmed end: counted below, never kept
+            continue
+        if (said := challenge_reviewers.findings(verdict, done.payload, brief=True)) is not None:
+            challenge_reviewers.keep(change, BRIEF, name, said[0])
+        else:
+            failed.append((challenge_reviewers.failed(verdict, name), done))
+    store.write(lock, change)
+    sessions.count_unread(store, lock, change, [done for _, done in ran], LABEL)
+    if failed:
+        return sessions.first_failure(failed)
+    return _counted(change, challenge_reviewers.merged(change.loops[BRIEF]), {}, datetime.now(UTC))
 
 
 def _made(store: Store, lock: Lock, change: Change, reviewer: str):  # noqa: ANN202 - a session maker
@@ -128,6 +151,7 @@ def _made(store: Store, lock: Lock, change: Change, reviewer: str):  # noqa: ANN
             policy=Policy(at, write=False),
             observe=lambda: worktree.observe(at, change.names.target),
             checks=(),
+            submit=tools.REVIEW,
             rechecks=keys,
             cap=cap,
             journal=sdk_adapter.Journal(lambda e: store.log(lock, change.slug, e)),
