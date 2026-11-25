@@ -229,6 +229,27 @@ def question(lp: RoundLoop, f: RoundFinding) -> Question:
 
 
 LAST_STOP = "The plan still had many findings after its last allowed challenge round"
+ANOTHER = "Run one more challenge round"  # the stop's way on: no planner session, the revised plan is judged (#1399)
+ANOTHER_RESUME = "the revised plan is challenged once more"
+
+
+def last_stop(c: Change) -> bool:
+    """Whether the Change is stopped after its plan's last allowed round, its attempt still in progress."""
+    return bool(
+        c.stop
+        and c.outcome
+        and c.outcome.exit == Exit.STOP
+        and c.step.kind == StepKind.PLAN
+        and (c.outcome.cause or "").startswith(ROUND)
+        and c.stop.reason.startswith(LAST_STOP)
+        and current(c)
+    )
+
+
+def another(c: Change) -> None:
+    """One more round on the plan as it stands: the owner's choice after the last allowed round (TD-208)."""
+    c.loops[PLAN].extra += 1
+    _mode(c, CHALLENGE)
 
 
 def delegated(c: Change) -> bool:
@@ -247,9 +268,14 @@ def delegated(c: Change) -> bool:
 
 
 def stopped(c: Change, lp: RoundLoop, now: datetime) -> None:
-    """The last allowed round's many findings: no question about plan quality, a stop with all of them (#1062)."""
+    """The last allowed round's many findings: no question about plan quality, a stop with all of them (#1062).
+
+    Its action is one more round on the revised plan: running the planner again would only meet the same stop (#1399).
+    """
     q = last(lp)
     asking.stop(c, q.cause or "", LAST_STOP, q.text, now)
+    if c.stop:
+        c.stop.action, c.stop.resume = ANOTHER, ANOTHER_RESUME
 
 
 def first(c: Change) -> Question | None:
@@ -293,8 +319,7 @@ def decided(c: Change, q: Question, target: str, note: str, now: datetime) -> No
         return
     if cause.startswith(ROUND):
         if target == "another":
-            lp.extra += 1
-            _mode(c, CHALLENGE)
+            another(c)
         elif target == "retry":
             _rotate(c, lp, "retried", now)
             c.step = Step(kind=StepKind.PLAN)  # a fresh planner, from the brief

@@ -19,6 +19,7 @@ CI_LOG, AMENDMENT_EXIT, MERGE_BASIS, PLAN_CUT = 1310, 1312, 1342, 1361
 INTEGRATION_DONE = 1373
 LENGTH_REJECTION = 1374
 CHECK_SUSPICION = 1376
+LAST_ROUND = 1399
 # Travels with actual fixes, never inferred from version order.
 FIXED = (
     CI_LOG,
@@ -28,6 +29,7 @@ FIXED = (
     INTEGRATION_DONE,
     LENGTH_REJECTION,
     CHECK_SUSPICION,
+    LAST_ROUND,
 )
 LEGACY = {
     "91b09919eb68085ecbcbabaf3ff9604cd27d898f6697ca168296f1f4ea269c22": (1310, "v1.279"),
@@ -100,7 +102,20 @@ def offered(c: Change) -> int | None:
         and not any(q.answer is None for q in c.questions)
     ):
         return MERGE_BASIS
+    if _last_round(c):
+        return LAST_ROUND
     return _repair(c)
+
+
+def _last_round(c: Change) -> bool:
+    """A last-round stop of a runtime whose only action ran the planner again, which met the same stop (#1399)."""
+    return bool(
+        plan_rounds.last_stop(c)
+        and c.stop
+        and c.stop.action == asking.RERUN
+        and not (c.finished_at or c.intent.abandoned_at or c.pending_child or c.pending_question or c.amending)
+        and not any(q.answer is None for q in c.questions)
+    )
 
 
 def _repair(c: Change) -> int | None:
@@ -163,6 +178,7 @@ LABELS = {
     MERGE_BASIS: "Recheck merge checks and continue",
     PLAN_CUT: "Challenge the whole plan again",
     INTEGRATION_DONE: "Finish the merge task and continue",
+    LAST_ROUND: plan_rounds.ANOTHER,
 }
 
 
@@ -192,21 +208,27 @@ def pending_ci(c: Change) -> Repair | None:
     )
 
 
+def _clear(c: Change) -> None:
+    """End the stop; a plan's last-round stop goes on with one more round, never the planner again (#1399)."""
+    if plan_rounds.last_stop(c):
+        plan_rounds.another(c)
+    c.stop = c.outcome = None
+
+
 def consume(c: Change, item: Recovery, *, unchanged: bool) -> None:
     """Recheck the queued remedy; an already-contained integration resumes its retained plan, not planning."""
     if c.stop is None or (item.stop_at is not None and item.stop_at != c.stop.at):
         return
     if item.remedy is None:
         if unchanged and item.action == c.stop.action and not asking.inventory_stop(c):
-            c.stop = c.outcome = None
+            _clear(c)
         return
     remedy, r = offered(c), stopped(c)
     if remedy is None or item.remedy != remedy or item.action != action(c, remedy):
         return
-    if remedy == MERGE_BASIS:
-        if item.stop_at != c.stop.at:
-            return
-        c.stop = c.outcome = None
+    if remedy in {MERGE_BASIS, LAST_ROUND}:
+        if item.stop_at == c.stop.at:
+            _clear(c)
         return
     if r is None:
         return
