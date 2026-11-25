@@ -16,7 +16,7 @@ from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepK
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import PLAN, RECHECK
-from owlbear_delivery_next.change_flow import amending, asking, challenge_reviewers, loop, plan_rounds, worktree
+from owlbear_delivery_next.change_flow import amending, challenge_reviewers, loop, plan_rounds, worktree
 from owlbear_delivery_next.change_flow.moves import carry_integrations
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import amendments, challenge_input, sdk_adapter, session_result, step_input
@@ -78,11 +78,18 @@ def planned(  # noqa: PLR0913, PLR0917 - the planner's session, its result and w
 
 
 def _last(change: Change) -> Result:
-    """The last allowed round left many findings: a stop with all of them, never a question (#1062)."""
+    """The last allowed round left many findings: a stop with all of them, never a question (#1062).
+
+    The stop's action is one more round on the revised plan (#1399).
+    """
     q = plan_rounds.last(change.loops[PLAN])
     reason = f"{plan_rounds.LAST_STOP}.\n\nDetails: {q.text}"
     stop = Stop(
-        kind=ErrorKind.REVIEW, reason=reason, action=asking.RERUN, resume="the step runs again", at=datetime.now(UTC)
+        kind=ErrorKind.REVIEW,
+        reason=reason,
+        action=plan_rounds.ANOTHER,
+        resume=plan_rounds.ANOTHER_RESUME,
+        at=datetime.now(UTC),
     )
     return loop.StepResult(exit=Exit.STOP, cause=q.cause, reason=reason, stop=stop)
 
