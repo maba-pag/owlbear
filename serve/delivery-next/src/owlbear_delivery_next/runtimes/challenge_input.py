@@ -5,10 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import check_hint
+from owlbear_delivery_next.change_contracts.round_records import RECHECK
 from owlbear_delivery_next.change_flow import brief_rounds, disputes, plan_rounds
 from owlbear_delivery_next.change_flow import worktree as wt
 from owlbear_delivery_next.runtimes import proof_input
-from owlbear_delivery_next.runtimes.step_input import READ_ONLY, REVIEW_FINISH, _brief, _flat, _others
+from owlbear_delivery_next.runtimes.step_input import READ_ONLY, REVIEW_FINISH, UNPICKED, _brief, _flat, _others
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -52,9 +53,8 @@ BRIEF = {
         "discovering its extent. Findings for: a case of a set a criterion cites for which the brief does not "
         "say what the owner sees and the code cannot answer it; a criterion that names a feature area or a "
         "kind of thing without its set; a UI Change with no state to look at; something only the installed "
-        "runtime or the owner's live data can show. Also check the decisions above against the complete list "
-        "below: one there that governs this work but is missing above is a finding. Place: the criterion id "
-        "or field."
+        "runtime or the owner's live data can show. Follow the complete list's heading for decisions. "
+        "Place: the criterion id or field."
     ),
 }
 
@@ -83,9 +83,8 @@ PLAN = {
         "that no task's goal names with the real run that shows it met; a case of a criterion's set that no "
         "task owns; a case without its expected result where the brief does not give it; a task that does not "
         "fit one session; a task that needs what a later task builds; a check that runs a whole suite where a "
-        "narrower one proves the task; an overlap with another open Change that the brief does not need. Also "
-        "check the decisions above against the complete list below: one there that governs this work but is "
-        "missing above is a finding. Place: the task number."
+        "narrower one proves the task; an overlap with another open Change that the brief does not need. "
+        "Follow the complete list's heading for decisions. Place: the task number."
     ),
 }
 
@@ -147,6 +146,7 @@ def plan_challenge(
                 ]
             ),
             *plan_rounds.challenge_lines(change),
+            *([UNPICKED] if change.step.mode != RECHECK and reviewer in {"", "pipeline"} else []),
             "",
             "## Finish",
             REVIEW_FINISH,
@@ -189,6 +189,7 @@ def brief_challenge(change: Change, worktree: Path, *, reviewer: str = "") -> st
                 ]
             ),
             *brief_rounds.challenge_lines(change),
+            *([UNPICKED] if change.step.mode != RECHECK and reviewer in {"", "pipeline"} else []),
             "",
             "## Finish",
             REVIEW_FINISH,

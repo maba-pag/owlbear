@@ -26,7 +26,8 @@ HEAD = "## Decisions in force (the lasting rules this Change follows: follow the
 NONE = "- none recorded: this project has no shared data repository"
 COMPLETE = (
     "## The complete list: every other decision in force (check the decisions above against it: one here that "
-    "governs this work but is missing above is a finding)"
+    "governs this work but is missing above is, by itself, neither a finding nor a wrong premise; every other "
+    "ground for a finding stays)"
 )
 _HELD: list[tuple[list[str], list[str]]] = []
 

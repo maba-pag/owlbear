@@ -78,11 +78,17 @@ def test_the_first_challenge_request_picks_from_the_complete_list_and_approval_p
 
 def test_a_repeated_request_keeps_the_pick_and_a_new_version_picks_again(picking):
     rule = picking.put(make())
+    missed = picking.put(make(title="Pages load in 1 s", statement="Every page loads in under a second."))
     picking.save()
     picking.ask(1)
     picking.picks.append(picked(rule.id))
-    picking.verdicts.extend([verdict("AC-1"), verdict(), verdict(), verdict()])
-    picking.step()
+    naming = tools.ReviewResult(verdict="pass", unpicked=[{"id": missed.id, "note": "the farewell page is a page"}])
+    picking.verdicts.extend([verdict("AC-1"), verdict(), verdict(), naming])  # the pipeline reviewer names a miss
+    c = picking.step()
+    assert (len(c.loops[BRIEF].findings), c.decisions_named) == (1, {missed.id: "the farewell page is a page"})
+    assert [e["judge"] for e in picking.store.events(c.slug) if e.get("event") == "decisions-named"] == [
+        "brief-challenge:pipeline"
+    ]
     assert picking.ask(1, {"F1": "AC-1 names the output"}).status_code == 200  # the same version again
     picking.verdicts.append(tools.ReviewResult(verdict="pass", rechecked=[{"finding": "F1", "upheld": False,
                                                                            "reason": "it does"}]))  # fmt: skip
@@ -94,16 +100,21 @@ def test_a_repeated_request_keeps_the_pick_and_a_new_version_picks_again(picking
     picking.verdicts.append(verdict())
     c = picking.step()
     assert (len(picking.pickers()), c.brief.picked.version, c.brief.picked.decisions) == (2, 2, [])
+    assert f"- {missed.id}: the farewell page is a page" in picking.pickers()[-1].message  # judged again, by the picker
+    assert c.decisions_named == {}
 
 
-def test_a_failed_pick_blocks_approval_until_a_retry_that_uses_no_round(picking):
+def test_a_failed_pick_blocks_approval_until_a_retry_then_its_first_challenge(picking):
     rule = picking.put(make())
     picking.save()
     picking.ask(1)
     picking.picks.append("error")
     picking.verdicts.extend([verdict(), verdict(), verdict(), verdict()])
     c = picking.step()
-    assert (c.brief.picked.status, c.brief.challenged) == ("failed", 1)  # the challenge still ran
+    assert (c.brief.picked.status, c.brief.challenged, c.loops[BRIEF].round) == ("failed", None, 0)
+    assert picking.told == picking.pickers()  # no challenger judges a version whose pick failed
+    assert loop.next_step(c, AT) is None  # waits for retry_pick, without spending a round
+    assert brief_rounds.running(c, 1, c.loops[BRIEF].attempt) is False  # the chat reads the failure, never waits on
     assert "the runtime did not start" in c.brief.picked.reason
     refused = picking.approve(1).json()["detail"]
     assert "the picker failed" in refused
@@ -122,7 +133,7 @@ def test_a_failed_pick_blocks_approval_until_a_retry_that_uses_no_round(picking)
     assert loop.next_step(picking.change(), AT).kind == StepKind.SHAPE  # runnable: the runner picks
     picking.picks.append(picked(rule.id))
     c = picking.step()
-    assert (c.brief.picked.status, c.loops[BRIEF].round, len(picking.told)) == ("ok", rounds, 6)  # no challenger
+    assert (c.brief.picked.status, c.loops[BRIEF].round, len(picking.told)) == ("ok", rounds + 1, 6)
     assert (c.outcome.exit, c.outcome.waiting, c.outcome.reason) == (Exit.PENDING, Waiting.CHAT, "approve brief v1")
     picking.put(make(title="Pages load in 1 s", statement="Every page loads in under a second."))
     assert picking.approve(1).status_code == 200  # a decision since the pick waits for the next step's picker
@@ -270,11 +281,14 @@ def test_a_pick_retried_while_the_shaper_revises_runs_and_leaves_that_wait(picki
     rule = picking.put(make())
     picking.save()
     picking.ask(1)
-    picking.picks.append("error")
+    picking.picks.append(picked(rule.id))
     picking.verdicts.extend([verdict("AC-1"), verdict(), verdict(), verdict()])
     c = picking.step()
     waited = c.outcome
-    assert (c.brief.picked.status, waited.waiting) == ("failed", Waiting.CHAT)
+    assert picking.ask(1, retry=True).status_code == 200
+    picking.picks.append("error")
+    c = picking.step()
+    assert (c.brief.picked.status, c.outcome, waited.waiting) == ("failed", waited, Waiting.CHAT)
     assert waited.reason == "the shaper revises brief v1 for F1"
     assert picking.ask(1, retry=True).status_code == 200
     c = picking.change()
@@ -285,7 +299,7 @@ def test_a_pick_retried_while_the_shaper_revises_runs_and_leaves_that_wait(picki
     assert (loop.next_step(paused, AT), loop.next_step(asked, AT)) == (None, None)
     picking.picks.append(picked(rule.id))
     c = picking.step()
-    assert (c.brief.picked.status, len(picking.told), c.outcome) == ("ok", 6, waited)  # no challenger; the same wait
+    assert (c.brief.picked.status, len(picking.told), c.outcome) == ("ok", 7, waited)  # no challenger; the same wait
     assert loop.next_step(c, AT) is None
 
 
