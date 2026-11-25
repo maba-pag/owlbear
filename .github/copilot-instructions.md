@@ -21,6 +21,17 @@ branch, worktree, and integration target in its per-change coordination record; 
 convention. Consumers clone the same branch ("clone = install"); versions will be git tags. There is no generated
 consumer branch and no sync workflow (TD-203).
 
+When authorized to handle a pull request by hand, fix in-scope CI failures and address feedback without waiting for
+direction. Reply and resolve fixed threads; ask the owner about an upheld rejection, feedback that contradicts
+the approved brief, or CI that still fails after repair retries.
+Reply to every human comment, whether or not it mentions OwlBear. Act on genuine bot findings and record
+"no action needed" for bot notices.
+For Delivery shell guard findings, fix regressions, incorrect denials and issues a worker could plausibly hit
+after a hook fails. For exotic shell constructs, point to the limits in issue #864.
+
+In each dependency round, merge waiting Renovate updates without asking once CI is green. Ask the owner
+first for major bumps. Fix new lint findings in code without relaxing rules or configuration.
+
 ### Plan and Status
 
 [The pinned tracker issue](https://github.com/maba-pag/owlbear/issues/713) holds where OwlBear stands, the order of the remaining work, as its
@@ -34,6 +45,9 @@ The decisions live only in owlbear-data, copied into no repository (D-01M5ZE13N3
 record is Git history (TD-466). Look decisions up with `find_decisions` or
 `lookup_decisions` and change them only with the decision tools or the Decisions page.
 
+On the public tracker and its sub-issues, you may cite a decision for this repository by ID and say what it
+requires in at most one line. Do not copy a record or include another project's decisions or private metadata.
+
 ### Asking the Owner
 
 When the owner decides or re-decides anything consequential, including a read-back or a recorded
@@ -46,6 +60,8 @@ what is wrong (TD-150). In OwlBear also:
   priorities, rules that cut across areas): his confirmed intent, never his words (TD-449); a changed decision
   names the one it replaces. A choice about behaviour that gets built ends there: the code is its record. A rule
   about how agents work goes into the instruction or skill file that governs that work.
+  State the intent of an in-force decision in at most two lines; leave implementation details in code, tests
+  and pull request descriptions.
 - A pick of "Autonomous (…)" leaves the choice to you: it is yours and is not recorded. Neither are your other
   choices or choices about tests.
 - Where he wants to be asked before a built behaviour changes again, state it at the code as a comment line
@@ -108,6 +124,20 @@ The Delivery engine's pages in `serve/delivery-next/src/owlbear_delivery_next/we
 plain HTML, CSS and JavaScript the machine host serves, with no build step. Their tests are the package's pytest
 suite, including its `browser`-marked Playwright tests. The root `package.json` holds only Node tooling (Biome, on
 the Node version pinned in `.nvmrc`); every `serve/` package is Python, so use `uv run`.
+
+Keep the New Change dialog. Use a bare confirmation only as an exception. For a low-cost, reversible action,
+tell the owner what happened after the action instead of asking first.
+For a consequential action, explain what will happen and how to continue if the owner declines. Include any cost
+or disruption and label each button with the action it takes.
+Keep hints at normal text size when they guide input or the choice to act, or state a lasting rule. Move the
+consequences of a single action into its dialog and remove only hints that repeat what the page already says.
+
+Show unexpected errors in full on the page where their effects appear: what happened, where and the details.
+Keep the full diagnostic in any existing log entry for the failure; do not build around unrealistic failures.
+When restoring the full text of an error the page already shows, verify it on that page. Do not add a log
+entry if none existed.
+When restoring the full text of an error no page shows, add it to an existing line or list on the affected page
+and verify it with one browser look at that page.
 
 ## 4. Test Domain Mapping
 

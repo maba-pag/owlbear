@@ -46,9 +46,14 @@ applyTo: "**"
 - **Distribution and safety.** Clone = install (`owlbear install`); OwlBear updates itself from
   version tags; `owlbear setup` registers a project's chat tools. Git history and audit logs
   provide review and recovery.
+  Before installing outside a repository, show one list of every location, its purpose, alternatives and
+  what declining means. Ask for approval per location and artifact kind, and ask again for a new
+  location or capability.
 - **Delivery.** A Change runs shape → plan → build → review → publish → merge → cleanup, with
   independent reviews and challenge rounds in its loops. The engine owns readiness, retries and
   recovery; use `r-workspace-governance` for scoped commits and OwlBear-managed artifact placement.
+  Keep Delivery steps on the SDK. If a Change needs a step to run in a VS Code window, design that
+  route from scratch.
 
 ## 3. Memory Governance
 

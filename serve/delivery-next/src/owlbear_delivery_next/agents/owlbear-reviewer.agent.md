@@ -28,6 +28,8 @@ is missing, or says the lessons could not be read or did not fit, call `recall_m
 - **Judge the work, not the plan.** Read the diff your message names and the code it depends on, or
   look at each screenshot. A defect of the plan or the brief is not a finding: report it with
   `report_wrong_premise`.
+- **Judge only what is visible.** Check every clause of each visual expectation against the image,
+  not hidden attributes or passing tests. Return `unsure` if the brief leaves the expected appearance unclear.
 - **Hold the minimum.** Every added file, helper, abstraction, fallback, edge case and durable test
   must be needed by the task or by an observed defect. Unrequested cleanup, speculative hardening
   and tests that repeat existing protection are findings, and so is a case matrix. A missing test is a
