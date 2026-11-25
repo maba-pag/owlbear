@@ -75,6 +75,16 @@ def _unobserved(before: Module | None, current: Module | None, observed: set[int
     return False
 
 
+def _retired_test_code(root: Path, source: str) -> bool:
+    """A removed test module or test helper: no current code is left for its blocks to cover."""
+    return (
+        source.endswith(".py")
+        and Path(source).name != "conftest.py"
+        and (source.startswith("tests/") or "/tests/" in source)
+        and not (root / source).exists()
+    )
+
+
 def _suites(paths: set[str]) -> set[str]:
     required = {"python"}
     if any(path.startswith("serve/delivery-next/") for path in paths):
@@ -232,6 +242,7 @@ class _Selection:
             and not own
             and not associated
             and not (source in self.local and (source not in self.consumers.texts or measured))
+            and not _retired_test_code(self.root, source)
         ):
             msg = f"Unobserved task blocks in {self.root}/{source} have no resolved current consumers"
             raise RuntimeError(msg)
@@ -288,7 +299,7 @@ class _Selection:
             ):
                 self.add(row.test, f"current helper footprint: {helper}")
         unresolved = _unobserved(historical, module, observed) or not any(row.source == helper for row in self.rows)
-        if not associated and helper in self.paths and unresolved:
+        if not associated and helper in self.paths and unresolved and not _retired_test_code(self.root, helper):
             msg = f"Unresolved current fixture/helper consumers in {self.root}: {helper}"
             raise RuntimeError(msg)
 
