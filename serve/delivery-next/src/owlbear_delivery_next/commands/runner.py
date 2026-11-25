@@ -17,7 +17,6 @@ from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_flow import (
     amending,
     budgets,
-    challenge_reviewers,
     disputes,
     loop,
     plan_rounds,
@@ -232,7 +231,7 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
             return
         change.pending_question, change.pending_child = None, None
     result = review.recorded(change, task, run, path, result)
-    events = challenge_reviewers.named(change, run.payload, f"review:{s.task or 'final'}", result)
+    events = review.named(change, run, result)
     result = disputes.processed(change, task, run.session_id, run.payload, result, run.changed)
     result = review.delegated(change, task, result)
     result = conversation.disputed(change, task, run.payload, result)
