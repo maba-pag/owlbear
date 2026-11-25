@@ -71,13 +71,16 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         change.step.started_at = now  # the pick's session is the step's: its stage counts from here (#718)
         store.write(lock, change)
         change = pick.run(store, lock, change)
-    failed = (p := picks.current(change)) is not None and p.status == "failed"
-    if failed or change.step.mode not in brief_rounds.MODES:
-        if failed and change.outcome is None:
+        if change.step.mode not in brief_rounds.MODES:
+            brief_rounds.idle(change, datetime.now(UTC))
+            store.write(lock, change)
+            return
+    if (p := picks.current(change)) is not None and p.status == "failed":
+        # no challenger judges a version without its rules: the challenge waits for the pick's retry (#1380)
+        if change.outcome is None:
             change.outcome = Outcome(
                 exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", reason=picks.unready(change), at=now
             )
-        brief_rounds.idle(change, datetime.now(UTC))
         store.write(lock, change)
         return
     if (stop := decisions_gate.wording_stop(store, change, now)) is not None:  # no challenger on unreadable wording

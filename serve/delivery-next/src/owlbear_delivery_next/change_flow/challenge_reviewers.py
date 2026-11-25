@@ -96,7 +96,7 @@ def named(change: Change, payload: object, judge: str, verdict: StepResult) -> l
     accepted = verdict.cause is None and verdict.exit in {Exit.DONE, Exit.RETRY}
     if not accepted or not isinstance(payload, tools.ReviewResult) or not payload.unpicked:
         return []
-    if change.step.kind == StepKind.SHAPE and change.brief.approved_version is None:
+    if change.step.kind == StepKind.SHAPE and change.brief.approved_version != change.brief.version:
         change.decisions_named.update({d.id: d.note for d in payload.unpicked})
     return [
         {
