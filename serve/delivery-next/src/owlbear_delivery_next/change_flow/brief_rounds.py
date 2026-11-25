@@ -417,6 +417,8 @@ def running(c: Change, version: int, attempt: int) -> bool:
     lp = c.loops.get(BRIEF)
     if lp is None or lp.attempt != attempt or c.brief.requested != version or c.brief.challenged == version:
         return False
+    if (p := picks.current(c)) is not None and p.status == "failed":
+        return False  # its challenge waits for the pick's retry: the chat reads why instead of waiting on
     return not owned_open(c) and (c.step.mode in MODES or lp.head != str(version))
 
 

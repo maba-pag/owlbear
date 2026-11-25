@@ -101,7 +101,7 @@ def _picked(store: Store, lock: Lock, change: Change, now: datetime) -> Change |
             return None
     if (p := picks.current(change)) is None or p.status != "failed":
         return change
-    if change.outcome is None:
+    if change.outcome is None or change.outcome.exit == Exit.RETRY:  # a retry would only meet the failed pick again
         why = picks.unready(change)
         change.outcome = Outcome(exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", reason=why, at=now)
     store.write(lock, change)
