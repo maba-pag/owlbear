@@ -67,21 +67,7 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     if _legacy(change):
         policy = rounds.pinned(change, BRIEF, store.settings(), "shaper")
         brief_rounds.request(change, change.brief.version, {}, policy, now)
-    if picks.owed(change):  # the version's decisions are picked before its challenger runs (TD-459)
-        change.step.started_at = now  # the pick's session is the step's: its stage counts from here (#718)
-        store.write(lock, change)
-        change = pick.run(store, lock, change)
-        if change.step.mode not in brief_rounds.MODES:
-            brief_rounds.idle(change, datetime.now(UTC))
-            store.write(lock, change)
-            return
-    if (p := picks.current(change)) is not None and p.status == "failed":
-        # no challenger judges a version without its rules: the challenge waits for the pick's retry (#1380)
-        if change.outcome is None:
-            change.outcome = Outcome(
-                exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", reason=picks.unready(change), at=now
-            )
-        store.write(lock, change)
+    if (change := _picked(store, lock, change, now)) is None:
         return
     if (stop := decisions_gate.wording_stop(store, change, now)) is not None:  # no challenger on unreadable wording
         store.write(lock, loop.apply(change, stop, now))
@@ -97,6 +83,29 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
         store.write(lock, change)  # the request settled it without a session
         return
     _challenge(store, lock, change, path)
+
+
+def _picked(store: Store, lock: Lock, change: Change, now: datetime) -> Change | None:
+    """The Change with its version's decisions picked (TD-459); None when the step ends without a challenger.
+
+    No challenger judges a version whose pick failed: it would have no rule to judge by, and a missing one is no
+    finding (#1380). The challenge waits for the pick's retry.
+    """
+    if picks.owed(change):
+        change.step.started_at = now  # the pick's session is the step's: its stage counts from here (#718)
+        store.write(lock, change)
+        change = pick.run(store, lock, change)
+        if change.step.mode not in brief_rounds.MODES:
+            brief_rounds.idle(change, datetime.now(UTC))
+            store.write(lock, change)
+            return None
+    if (p := picks.current(change)) is None or p.status != "failed":
+        return change
+    if change.outcome is None:
+        why = picks.unready(change)
+        change.outcome = Outcome(exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", reason=why, at=now)
+    store.write(lock, change)
+    return None
 
 
 def _challenge(store: Store, lock: Lock, change: Change, path: Path) -> None:
