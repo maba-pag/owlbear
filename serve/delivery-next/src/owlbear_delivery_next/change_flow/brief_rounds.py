@@ -126,7 +126,7 @@ def revising(c: Change) -> tuple[str, ...]:
 
 def _held(c: Change) -> tuple[str, tuple[str, ...]]:
     b, lp = c.brief, c.loops.get(BRIEF)
-    if b.challenged == b.version:
+    if b.challenged == b.version or picks.unready(c):
         return picks.unready(c), ()
     if c.step.mode in MODES:
         return f"the challenge of brief v{b.version} is running", ()
@@ -204,7 +204,7 @@ def _refusal(c: Change, version: int) -> str:
     if b.challenged == version:
         return picks.unready(c) or f"brief v{version} is challenged already; the owner may approve it"
     if c.step.mode in MODES or first(c) is not None or owned_open(c):
-        return "its challenge runs or waits for the owner's decision; ask again after it"
+        return picks.unready(c) or "its challenge runs or waits for the owner's decision; ask again after it"
     return ""
 
 

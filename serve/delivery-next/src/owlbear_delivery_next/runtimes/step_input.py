@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, NamedTuple
 from owlbear_delivery_next.change_contracts import check_hint, evidence, pick_tools, preparation, tools
 from owlbear_delivery_next.change_contracts.models import VISUAL, Exit, PersonCheck, StepKind
 from owlbear_delivery_next.change_contracts.preparation import Preparing
+from owlbear_delivery_next.change_contracts.round_records import RECHECK
 from owlbear_delivery_next.change_flow import (
     disputes,
     plan_rounds,
@@ -178,6 +179,10 @@ REVIEW_FINISH = (
     "Call `submit_result` once with `verdict` and `findings`; `covered_paths` may list the paths you read. "
     "Delivery covers the changed paths itself. If it is rejected, fix what each error names and call it again."
 )
+UNPICKED = (
+    "Name a decision in the complete list that governs this work but is missing from its picked set in `unpicked`, "
+    "with its id as listed and how it governs the work; it is not a finding, and pass may carry names."
+)
 SOURCE_ONLY = (
     "Find the command, directory and URL in manifests, scripts and test-runner web-server configuration. Inspect "
     "the Change's diff and added preview scripts in tests/fixtures, including docstring recipes, before concluding "
@@ -228,6 +233,7 @@ def review(change: Change, task: Task | None, worktree: Path, tree: Worktree) ->
             *_fixes(change, challenged=challenged),
             *disputes.review_lines(change, task),
             *round_flow.review_lines(change, task),
+            *([UNPICKED] if change.step.mode != RECHECK else []),
             "",
             "## Finish",
             REVIEW_FINISH,
