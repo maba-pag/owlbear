@@ -133,6 +133,7 @@ SET_TARGET = tools.Spec(
 )
 
 
+# OWNER: audit findings leave the Backlog only for a repository the note names literally as owner/name.
 def check(args: AuditFindings | AuditVerdicts, root: Path) -> list[str]:
     """Check destination consent or exact finding coverage while the author can still correct it."""
     run = json.loads((root / "context" / "run.json").read_text(encoding="utf-8"))

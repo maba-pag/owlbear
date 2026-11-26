@@ -19,6 +19,7 @@ def admit(request: Request, expected: bytes) -> None:
     request.scope[ADMITTED] = True
 
 
+# OWNER: only a caller the token admitted gets the whole error text; a page or asset read gets a generic 500.
 async def uncaught(request: Request, exc: Exception) -> Response:
     """An error no route caught: whole to a caller the token admitted, Starlette's own 500 to a page or asset read.
 
