@@ -16,7 +16,7 @@ import httpx
 from owlbear_delivery_next.change_contracts.models import Change
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import local_home
-from owlbear_delivery_next.machine_host import demo, demo_home
+from owlbear_delivery_next.machine_host import command, demo, demo_home
 from owlbear_delivery_next.state_store import project_home, registry
 from owlbear_delivery_next.state_store.store import Lock, Store
 
@@ -24,7 +24,7 @@ TRAP = "sentinel"
 CHILD = """import sys, types
 from owlbear_delivery_next.machine_host import command
 command.sys = types.SimpleNamespace(**{**vars(sys), "platform": "darwin"})  # CI runs on Linux
-sys.exit(command.main(["demo", "--port", sys.argv[1]]))
+sys.exit(command.main([sys.argv[1], "--port", sys.argv[2]]))
 """
 
 
@@ -89,7 +89,11 @@ def test_the_demo_serves_example_data_and_never_the_owners(tmp_path, monkeypatch
     env = os.environ | {"HOME": str(home), "OWLBEAR_DATA": str(data), "COPILOT_HOME": str(copilot),
                         "TMPDIR": str(tmp), "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}"}  # fmt: skip
     child = subprocess.Popen(  # noqa: S603 - this interpreter runs the real command, no shell
-        [sys.executable, "-c", CHILD, str(port)], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True
+        [sys.executable, "-c", CHILD, command.demo.__name__, str(port)],  # the command `demo` registers
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
     )
     said, stream = [], child.stdout
     try:
