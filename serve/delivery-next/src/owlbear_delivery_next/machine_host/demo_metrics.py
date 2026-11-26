@@ -1,40 +1,23 @@
-"""The machine host's Metrics page on fixture data only, for the visual check: ``metrics_preview.py <port>``.
+"""The demo's Metrics scenario: spend ledger runs and their sessions' logs for the two example projects.
 
-Launch recipe for the visual check: directory ``serve/delivery-next``, command
-``uv run python tests/metrics_preview.py {port}``, ready URL ``http://127.0.0.1:{port}/``; the state paths (e.g.
-``/metrics?period=all&by=agent``) open without ``#token=`` because SEED supplies the token.
-
-It never reads the owner's data: ``main`` replaces HOME with a fresh temporary folder before loading HOME-sensitive
-application state, drops ``OWLBEAR_DATA`` and ``COPILOT_HOME``, and keeps Git from reaching GitHub
-(D-01M68Z8Q740BSN13D1R06JX6DW); importing this file changes nothing.
-The page is ``http://127.0.0.1:<port>/metrics#token=preview``; every HTML page it
-serves also seeds that token itself (``SEED``), so a capture that opens a state path without the fragment still renders
-the fixture, never the page's missing-token notice. The fixture holds 8 agents in 2 projects, 4 models, 5 steps and
-"No step", 14 days of 2 runs each, 7 tools covering every outcome, and session logs: compactions with timing shares
-for 4 agents, a compacted session without a share, and an agent whose sessions are readable but never compacted.
-Context at start is measured for every role but the updater, in both projects, over the last 10 days only (older
-sessions ran before measuring began), with one failed read and a reviewer whose skills stay in their category.
+8 agents in the two example projects, 4 models, 5 steps and "No step", 14 days of 2 runs each, 7 tools covering every
+outcome, and session logs: compactions with timing shares for 4 agents, a compacted session without a share, and an
+agent whose sessions are readable but never compacted. Context at start is measured for every role but the updater,
+in both projects, over the last 10 days only (older sessions ran before measuring began), with one failed read and a
+reviewer whose skills stay in their category. Each line names its project by its registered name and its clone by
+its fixed id, as the Metrics page links rows to the served projects.
 """
 
 from __future__ import annotations
 
 import json
-import os
-import shutil
-import sys
-import tempfile
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
-
-import uvicorn
+from typing import Any
 
 from owlbear_delivery_next.improvement import chatlogs
-from owlbear_delivery_next.local_system import codebase
-from owlbear_delivery_next.project_host import pages
+from owlbear_delivery_next.machine_host.demo_home import PROJECTS
 from owlbear_delivery_next.state_store import spend_ledger
 
-TOKEN = "preview"  # noqa: S105 - a fixture host on 127.0.0.1 only
-SEED = f'<script>sessionStorage.setItem("token", "{TOKEN}")</script>'
 DAYS = 14
 DAILY = 2  # runs a day: the runs list stays short enough for one capture of each state
 AGENTS = (  # (agent, step, its sessions' logs: "compacts", "never" compacts, or None without a log)
@@ -43,7 +26,6 @@ AGENTS = (  # (agent, step, its sessions' logs: "compacts", "never" compacts, or
     ("repairer", "build", None), ("updater", "", None),
 )  # fmt: skip
 MODELS = ("claude-opus-5.5", "gpt-6.1-sol", "claude-haiku-5.5", "gpt-6-luna")
-PROJECTS = (("shop", "shop-site"), ("owlbear", "owlbear"))
 TOOLS = {  # one run's tally per tool: together every outcome (accepted, invalid, checks, order, unsplit, lint, late)
     "submit_result": {"calls": 4, "rejected": 2, "invalid": 1, "checks": 1, "lint": 1, "retries": 1},
     "ask_question": {"calls": 2, "rejected": 1, "order": 1},
@@ -56,20 +38,9 @@ TOOLS = {  # one run's tally per tool: together every outcome (accepted, invalid
 WINDOWS = {"claude-opus-5.5": 952_000, "gpt-6.1-sol": 400_000, "claude-haiku-5.5": 200_000, "gpt-6-luna": 272_000}
 MEASURED = 10  # days back that context at start was measured: older sessions ran before this release
 TIER = "default"  # a tier context_start.Start writes: "default" or "long"
+UNKNOWN = 5  # the run whose usage could not be read: its credits are unknown
+FAILED = 3  # days back that the preparer's context read failed
 KEPT = "skills: 2100 tokens stay in their category, which nesting does not name"
-
-
-def _isolate() -> Path:
-    """A fresh HOME for this process, the owner's data and Copilot folders dropped, Git kept off GitHub."""
-    home = Path(tempfile.mkdtemp(prefix="owlbear-metrics-preview-"))
-    os.environ["HOME"] = str(home)
-    for name in ("OWLBEAR_DATA", "COPILOT_HOME", *(n for n in os.environ if n.startswith("GIT_CONFIG_"))):
-        os.environ.pop(name, None)
-    offline, github = "/nonexistent/offline-in-preview/", "https://github.com/"
-    (home / ".gitconfig").write_text(f'[url "{offline}"]\n\tinsteadOf = {github}\n')
-    os.environ |= {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": f"url.{offline}.insteadOf",
-                   "GIT_CONFIG_VALUE_0": github}  # fmt: skip
-    return home
 
 
 def _event(kind: str, **data: object) -> str:
@@ -89,7 +60,7 @@ def _log(session: str, calls: int, before: int | None) -> None:
     path.write_text("".join(lines))
 
 
-def _context(place: dict, at: str, model: str, *, size: tuple[int, int], failed: bool) -> dict:
+def _context(place: dict[str, Any], at: str, model: str, *, size: tuple[int, int], failed: bool) -> dict[str, Any]:
     """A run's context line (``spend_ledger.context``): seven parts that add up to its total, or a failed read."""
     (i, k), agent = size, place["agent"]
     line = place | {"id": f"context:{place['run']}", "type": "context", "at": at, "model": model, "tier": TIER}
@@ -103,9 +74,9 @@ def _context(place: dict, at: str, model: str, *, size: tuple[int, int], failed:
 
 
 def seed() -> None:
-    """The ledger's runs and their sessions' logs, all written into the temporary HOME."""
+    """The ledger's runs and their sessions' logs, written into the demo's home."""
     now = datetime.now(UTC).replace(microsecond=0) - timedelta(hours=2)
-    lines: list[dict] = []
+    lines: list[dict[str, Any]] = []
     unshared: list[str] = []
     k = 0
     for day in range(DAYS):
@@ -114,12 +85,12 @@ def seed() -> None:
                 continue
             k += 1
             rid, model = f"r{k}", MODELS[(day // 2 + i + i // every) % len(MODELS)]
-            project, name = PROJECTS[day // 2 % 2]
+            name, clone = PROJECTS[day // 2 % 2]
             at = (now - timedelta(days=day, minutes=i)).isoformat(timespec="seconds")
             spent = round(0.4 + (day * 7 + i * 3) % 11 * 0.37, 2)
             counts = {"credits": spent, "input": 900 * k, "output": 40 * k}
-            usage = {"error": "TimeoutError"} if k == 5 else {"credits": spent, "models": {model: counts}}  # 5: unknown
-            place = {"run": rid, "session": f"s-{rid}", "clone": "", "project": project, "name": name,
+            usage = {"error": "TimeoutError"} if k == UNKNOWN else {"credits": spent, "models": {model: counts}}
+            place = {"run": rid, "session": f"s-{rid}", "clone": clone, "project": name, "name": name,
                      "change": "" if agent == "updater" else f"change-{day % 3}", "step": step, "job": "",
                      "agent": agent}  # fmt: skip
             tools = {t: tally for j, (t, tally) in enumerate(TOOLS.items()) if (k + j) % 3}
@@ -137,37 +108,7 @@ def seed() -> None:
                 else:
                     _log(f"s-{rid}", calls, None if logs == "never" else 1 + k * 5 % calls)
             if agent != "updater" and day < MEASURED:
-                lines.append(_context(place, at, model, size=(i, k), failed=agent == "preparer" and day == 3))
-    assert not spend_ledger.append(lines), "the fixture ledger could not be written"
-
-
-def seed_pages(pages) -> None:
-    """Each page *pages* serves gets ``SEED`` right after ``<head>``, before the page's own modules run."""
-    served = pages.pages
-    pages.pages = lambda: {path: html.replace("<head>", "<head>" + SEED, 1) for path, html in served().items()}
-
-
-def main() -> None:
-    port = int(sys.argv[1])
-    home = _isolate()
-    from owlbear_delivery_next.machine_host import app  # noqa: PLC0415
-    from owlbear_delivery_next.machine_host.machine import Machine  # noqa: PLC0415
-    from owlbear_delivery_next.project_host.host import HostRecord  # noqa: PLC0415
-
-    def gone() -> None:
-        shutil.rmtree(home, ignore_errors=True)
-
-    seed()
-    seed_pages(pages)
-    base = f"http://127.0.0.1:{port}"
-    record = HostRecord(url=f"{base}/", token=TOKEN, pid=os.getpid(), started_at=datetime.now(UTC),
-                        code=codebase.CURRENT)  # fmt: skip
-    print(f"Metrics preview: {base}/metrics#token={TOKEN}", flush=True)  # noqa: T201 - the recipe's address
-    try:  # Uvicorn replays a stop signal once it returns: the app's own end removes HOME
-        uvicorn.run(app.create(Machine(record), gone), host="127.0.0.1", port=port, log_level="warning")
-    finally:
-        gone()
-
-
-if __name__ == "__main__":
-    main()
+                lines.append(_context(place, at, model, size=(i, k), failed=agent == "preparer" and day == FAILED))
+    if spend_ledger.append(lines):
+        msg = "the demo's spend ledger could not be written"
+        raise RuntimeError(msg)

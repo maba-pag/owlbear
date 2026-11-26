@@ -53,8 +53,12 @@ def isolate() -> Path:
     return home
 
 
-def seed(home: Path) -> None:
-    """The write account chosen offline, the shared data settled, the example projects registered with their Changes."""
+def seed(home: Path) -> DataRepo:
+    """The write account chosen offline, the shared data settled, the example projects registered with their Changes.
+
+    Returns:
+        The shared data checkout, whose GitHub-shaped origin pushes to a local bare repository.
+    """
     account.resolve = _offline  # before any Store opens: its adopt publishes the project's claim
     shared = DataRepo(_checkout(home / ".owlbear" / "data", DATA, home / "remotes" / "owlbear-data.git"))
     shared.global_path.write_text(_global().model_dump_json(indent=2, exclude_none=True) + "\n")
@@ -71,6 +75,7 @@ def seed(home: Path) -> None:
         registry.register(clone)
         clones[name] = clone
     demo_changes.seed(clones)
+    return shared
 
 
 def _offline(setting: str, origin: account.Origin, *, until: float | None = None) -> Access:

@@ -22,7 +22,7 @@ import pytest
 from owlbear_delivery_next.change_contracts.models import Change
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import local_home
-from owlbear_delivery_next.machine_host import command, demo, demo_changes, demo_home
+from owlbear_delivery_next.machine_host import command, demo, demo_backlog, demo_changes, demo_home, demo_metrics
 from owlbear_delivery_next.state_store import project_home, registry
 from owlbear_delivery_next.state_store.store import Store
 
@@ -66,9 +66,16 @@ def _owner(home: Path, data: Path, copilot: Path, monkeypatch) -> None:
         (place / "config.json").parent.mkdir(parents=True, exist_ok=True)
         (place / "config.json").write_text(json.dumps({"format": 1, "github_account": TRAP}) + "\n")
         _repo(place, f"https://github.com/{TRAP}/{TRAP}-data.git")
-    line = {"id": f"start:{TRAP}", "type": "start", "at": datetime.now(UTC).isoformat(), "run": TRAP, "agent": TRAP}
-    (home / ".owlbear" / "spend").mkdir()
-    (home / ".owlbear" / "spend" / f"spend-{datetime.now(UTC):%Y-%m}.jsonl").write_text(json.dumps(line) + "\n")
+    trap = {"run": f"{TRAP}-run", "session": f"{TRAP}-session", "project": f"{TRAP}-project", "agent": TRAP}
+    at = datetime.now(UTC).isoformat(timespec="seconds")
+    ledger = "".join(json.dumps(trap | line) + "\n" for line in (
+        {"id": f"start:{TRAP}", "type": "start", "at": at, "model": f"{TRAP}-model", "before": {}},
+        {"id": f"end:{TRAP}", "type": "end", "at": at, "usage": {"credits": 99.0, "models": {}},
+         "tools": {f"{TRAP}_tool": {"calls": 1}}, "wrong": {}},
+    ))  # fmt: skip
+    for spend in (home / ".owlbear" / "spend", data / "spend"):
+        spend.mkdir(parents=True)
+        (spend / f"spend-{datetime.now(UTC):%Y-%m}.jsonl").write_text(ledger)
     for folder in (home / ".copilot", copilot):
         (folder / "session-state" / f"{TRAP}-session").mkdir(parents=True)
         (folder / "session-state" / f"{TRAP}-session" / "events.jsonl").write_text('{"type": "sentinel"}\n')
@@ -161,11 +168,14 @@ def test_the_demo_serves_example_data_and_never_the_owners(tmp_path, monkeypatch
         ids = {p["name"]: p["id"] for p in projects}
         details = [_get(f"{base}/p/{ids[p]}/api/next/changes/{s}", token) for p, s in demo_changes.CHANGES]
         spend = _files(ran / ".owlbear" / "spend")
-        metrics = [_get(f"{base}/api/next/metrics?project={p['name']}", token) for p in projects]
-        reconciled = [json.loads(m)["coverage"]["reconcile"]["state"] for m in metrics]
+        metrics = {by: _get(f"{base}/api/next/metrics?by={by}", token) for by in ("agent", "model", "step", "day")}
+        backlogs = [_get(f"{base}/p/{p['id']}/api/next/backlog", token) for p in projects]
+        links = [_get(f"{base}/metrics?period=all&by=agent"), _get(f"{base}/backlog?reviews=open")]  # no token
+        reconciled = [json.loads(m)["coverage"]["reconcile"]["state"] for m in metrics.values()]
         spent = _files(ran / ".owlbear" / "spend")
-        auth = {"authorization": f"Bearer {token}"}
-        refused = httpx.post(f"{base}/p/{projects[0]['id']}/api/next/config/read", headers=auth)
+        refused = httpx.post(
+            f"{base}/p/{projects[0]['id']}/api/next/config/read", headers={"authorization": f"Bearer {token}"}
+        )
         stored = _files(ran)
         offline = subprocess.run(  # noqa: S603 - fixture git argv
             [resolve_git_executable(), "ls-remote", "--get-url", "https://github.com/example/example-shop.git"],
@@ -174,7 +184,8 @@ def test_the_demo_serves_example_data_and_never_the_owners(tmp_path, monkeypatch
     finally:
         demo_run.stop()
     assert [str(p) for p, b in stored.items() if TRAP.encode() in b] == []
-    assert [a for a in [*answers, *configs, *metrics, *details, "".join(said)] if TRAP in a] == []
+    shown = [*answers, *configs, *metrics.values(), *backlogs, *links, *details, "".join(said)]
+    assert [a for a in shown if TRAP in a] == []
     assert [json.loads(d)["slug"] for d in details] == [s for _, s in demo_changes.CHANGES]
     after = _files(home, data, copilot)
     assert [str(p) for p in sorted(before.keys() | after.keys()) if before.get(p) != after.get(p)] == []
@@ -187,3 +198,42 @@ def test_the_demo_serves_example_data_and_never_the_owners(tmp_path, monkeypatch
     assert [json.loads(c)["notice"] for c in configs] == ["", ""]
     assert (refused.status_code, refused.json()["detail"]) == (403, demo.REFUSED)
     assert answers[0].index("sessionStorage.setItem") < answers[0].index('type="module"')
+    _scenarios({by: json.loads(m) for by, m in metrics.items()}, projects, json.loads(backlogs[0]), links)
+
+
+def _scenarios(found: dict[str, dict], projects: list[dict], backlog: dict, links: list[str]) -> None:
+    """Both deep links' scripts in order, and the scenarios' rows under the served example projects."""
+    page, unfolding = links
+    assert page.index("sessionStorage.setItem") < page.index('type="module"')  # before the page asks the host
+    assert (
+        unfolding.index("sessionStorage.setItem")
+        < unfolding.index(demo_backlog.OPEN)
+        < unfolding.index('type="module"')
+    )
+    entries = backlog["entries"]
+    reviews = [e["status"] for e in entries if e["suppression_review"]]
+    assert (reviews.count("inbox") >= 3, set(reviews)) == (True, {"inbox", "open", "dropped"})
+    assert {e["origin"] for e in entries} == {demo_home.PROJECTS[0][0]}  # every review links to the example shop
+    assert [e for e in entries if e["status"] == "inbox" and not e["suppression_review"]] != []
+    least = {"agent": 8, "model": 3, "step": 3, "day": 14}
+    assert [by for by, n in least.items() if len(found[by]["rows"]) < n] == []
+    choices = found["agent"]["choices"]
+    assert (choices["projects"], choices["clones"]) == (
+        sorted([[p["name"], p["name"]] for p in projects]),
+        {p["id"]: p["name"] for p in projects},
+    )
+    tools = found["agent"]["tool_use"]
+    outcomes = ("accepted", "invalid", "checks", "order", "unsplit", "lint", "late")
+    assert len(tools["tools"]) >= 6
+    assert [k for k in outcomes if not tools["totals"][k]] == []
+    compaction = found["agent"]["compaction"]["rows"]
+    assert len({r["agent"] for r in compaction if r["shares"]}) >= 3
+    assert [r["agent"] for r in compaction if r["unshared"] and r["project"]] == ["builder"]
+    assert [r["agent"] for r in compaction if r["logs"] and not r["compacted"] and r["project"]] != []
+    context = {r["role"]: r for r in found["agent"]["context"]["roles"]}
+    assert [r for r, x in context.items() if not x["latest"]] == ["updater"]
+    assert {(x["latest"]["project"], x["latest"]["tier"]) for x in context.values() if x["latest"]} == {
+        (p["name"], demo_metrics.TIER) for p in projects
+    }
+    assert [r for r, x in context.items() if x["errors"]] == ["preparer"]
+    assert [r for r, x in context.items() if (x["latest"] or {}).get("kept") == demo_metrics.KEPT] == ["reviewer"]

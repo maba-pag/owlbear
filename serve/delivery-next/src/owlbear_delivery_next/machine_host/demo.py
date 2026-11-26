@@ -3,8 +3,9 @@
 It serves the projects ``demo_home.seed`` registered without their schedulers or readiness checks, so no step,
 runner or AI session starts; every request that is not a GET or HEAD is refused before any route runs, with one plain
 sentence. A Metrics read never finds a spend reconciliation due, so none runs or writes. Settings' outside reads
-answer from example state: no Copilot runtime starts. Only the demo's pages carry
-the token's bootstrap, so its addresses open without ``#token=``.
+answer from example state: no Copilot runtime starts. Metrics and Backlog show the scenarios of ``demo_metrics`` and
+``demo_backlog`` under the same example projects. Only the demo's pages carry the token's bootstrap, so its addresses
+open without ``#token=``, and only its Backlog page the script that unfolds ``?reviews=open``.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ import uvicorn
 from starlette.responses import JSONResponse
 
 from owlbear_delivery_next.local_system import codebase
-from owlbear_delivery_next.machine_host import app, demo_home
+from owlbear_delivery_next.machine_host import app, demo_backlog, demo_home, demo_metrics
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.machine_host.project import Project
 from owlbear_delivery_next.project_host import pages
@@ -92,10 +93,17 @@ def _never(now: datetime | None = None) -> bool:
 
 
 def _seeded(token: str) -> None:
-    """Each page the demo serves gets the token's bootstrap right after ``<head>``, before the page's own modules."""
+    """Each page the demo serves gets the token's bootstrap right after ``<head>``, before the page's own modules.
+
+    The Backlog page also gets ``demo_backlog.OPEN`` right after that bootstrap.
+    """
     seed = f'<script>sessionStorage.setItem("token", "{token}")</script>'
     served = pages.pages
-    pages.pages = lambda: {path: html.replace("<head>", "<head>" + seed, 1) for path, html in served().items()}
+
+    def head(path: str) -> str:
+        return "<head>" + seed + (demo_backlog.OPEN if path == "/backlog" else "")
+
+    pages.pages = lambda: {path: html.replace("<head>", head(path), 1) for path, html in served().items()}
 
 
 def _load(machine: Machine) -> None:
@@ -127,7 +135,9 @@ def run(home: Path, port: int, say: Callable[[str], None]) -> int:
         shutil.rmtree(home, ignore_errors=True)
 
     try:
-        demo_home.seed(home)
+        shared = demo_home.seed(home)
+        demo_metrics.seed()
+        demo_backlog.seed(shared, demo_home.PROJECTS[0][0])
         sock = socket.socket()
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(("127.0.0.1", port))
