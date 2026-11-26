@@ -31,7 +31,8 @@ SECONDS = 1800
 SUMMARY = re.compile(r"^(?:FAILED|ERROR) (\S+)", re.MULTILINE)
 TRUST = ("NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "SSL_CERT_DIR")  # a proxy intercepting TLS needs its CA
 PROXY = tuple(n for v in ("HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY") for n in (v, v.lower()))
-# OWNER: the browser gate's process gets only the variables in KEPT; tokens and every other variable stay out.
+# OWNER: the browser gate's process inherits only the variables in KEPT; tokens and every other inherited
+# variable stay out.
 KEPT = ("PATH", "LANG", "LC_ALL", "TMPDIR", "PLAYWRIGHT_BROWSERS_PATH", *TRUST, *PROXY)  # the rest stays out
 type Runner = Callable[..., subprocess.CompletedProcess[str]]
 
