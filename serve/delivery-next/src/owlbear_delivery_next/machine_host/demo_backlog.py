@@ -19,6 +19,9 @@ from owlbear_delivery_next.state_store import backlog_issues
 from owlbear_delivery_next.state_store.backlog import Backlog, suppression_title
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+    from pathlib import Path
+
     from owlbear_delivery_next.local_system.data_repo import DataRepo
 
 REPOSITORY = "example/owlbear-data"
@@ -59,7 +62,14 @@ class Issues:
         self.labels: dict[str, dict[str, Any]] = {}
         self.tick = 0
 
-    def __call__(self, argv, data, _timeout, _cwd, _env) -> subprocess.CompletedProcess[bytes]:  # noqa: ANN001
+    def __call__(
+        self,
+        argv: tuple[str, ...],
+        data: bytes | None,
+        _timeout: float,
+        _cwd: Path | None,
+        _env: Mapping[str, str] | None,
+    ) -> subprocess.CompletedProcess[bytes]:
         """Answer one ``gh api`` call as GitHub would, from memory."""
         method = argv[argv.index("--method") + 1]
         path, _, query = next(a for a in argv if a.startswith("repos/")).partition("?")

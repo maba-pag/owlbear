@@ -21,10 +21,15 @@ from owlbear_delivery_next.state_store import spend_ledger
 DAYS = 14
 DAILY = 2  # runs a day: the runs list stays short enough for one capture of each state
 AGENTS = (  # (agent, step, its sessions' logs: "compacts", "never" compacts, or None without a log)
-    ("shaper", "shape", "compacts"), ("planner", "plan", "compacts"), ("builder", "build", "compacts"),
-    ("reviewer", "review", "compacts"), ("challenger", "plan", "never"), ("preparer", "check", None),
-    ("repairer", "build", None), ("updater", "", None),
-)  # fmt: skip
+    ("shaper", "shape", "compacts"),
+    ("planner", "plan", "compacts"),
+    ("builder", "build", "compacts"),
+    ("reviewer", "review", "compacts"),
+    ("challenger", "plan", "never"),
+    ("preparer", "check", None),
+    ("repairer", "build", None),
+    ("updater", "", None),
+)
 MODELS = ("claude-opus-5.5", "gpt-6.1-sol", "claude-haiku-5.5", "gpt-6-luna")
 TOOLS = {  # one run's tally per tool: together every outcome (accepted, invalid, checks, order, unsplit, lint, late)
     "submit_result": {"calls": 4, "rejected": 2, "invalid": 1, "checks": 1, "lint": 1, "retries": 1},
@@ -66,11 +71,22 @@ def _context(place: dict[str, Any], at: str, model: str, *, size: tuple[int, int
     line = place | {"id": f"context:{place['run']}", "type": "context", "at": at, "model": model, "tier": TIER}
     if failed:
         return line | {"measured": False, "error": "TimeoutError: the context attribution read took over 10 s"}
-    parts = {"system_prompt": 7_000 + i * 300, "custom_instructions": 3_500 + i * 500, "skills": 2_000 * (i % 3),
-             "subagents": 900 * (i % 2), "built_in_tools": 12_000 + i * 400, "mcp_tools": 4_000 + 1_500 * (i % 4),
-             "messages": 3_000 + k * 370 % 5_000}  # fmt: skip
-    return line | {"measured": True, "window": WINDOWS[model], "total": sum(parts.values()), "parts": parts,
-                   "kept": KEPT if agent == "reviewer" else ""}  # fmt: skip
+    parts = {
+        "system_prompt": 7_000 + i * 300,
+        "custom_instructions": 3_500 + i * 500,
+        "skills": 2_000 * (i % 3),
+        "subagents": 900 * (i % 2),
+        "built_in_tools": 12_000 + i * 400,
+        "mcp_tools": 4_000 + 1_500 * (i % 4),
+        "messages": 3_000 + k * 370 % 5_000,
+    }
+    return line | {
+        "measured": True,
+        "window": WINDOWS[model],
+        "total": sum(parts.values()),
+        "parts": parts,
+        "kept": KEPT if agent == "reviewer" else "",
+    }
 
 
 def seed() -> None:
@@ -90,16 +106,34 @@ def seed() -> None:
             spent = round(0.4 + (day * 7 + i * 3) % 11 * 0.37, 2)
             counts = {"credits": spent, "input": 900 * k, "output": 40 * k}
             usage = {"error": "TimeoutError"} if k == UNKNOWN else {"credits": spent, "models": {model: counts}}
-            place = {"run": rid, "session": f"s-{rid}", "clone": clone, "project": name, "name": name,
-                     "change": "" if agent == "updater" else f"change-{day % 3}", "step": step, "job": "",
-                     "agent": agent}  # fmt: skip
+            place = {
+                "run": rid,
+                "session": f"s-{rid}",
+                "clone": clone,
+                "project": name,
+                "name": name,
+                "change": "" if agent == "updater" else f"change-{day % 3}",
+                "step": step,
+                "job": "",
+                "agent": agent,
+            }
             tools = {t: tally for j, (t, tally) in enumerate(TOOLS.items()) if (k + j) % 3}
             lines += [
                 place | {"id": f"start:{rid}", "type": "start", "at": at, "model": model, "before": {}},
-                place | {"id": f"end:{rid}", "type": "end", "at": at, "usage": usage, "ending": "result",
-                         "limit": None, "stopped": "", "subagents": 0, "tools": tools,
-                         "wrong": {"denied": 1} if k % 9 == 0 else {}},
-            ]  # fmt: skip
+                place
+                | {
+                    "id": f"end:{rid}",
+                    "type": "end",
+                    "at": at,
+                    "usage": usage,
+                    "ending": "result",
+                    "limit": None,
+                    "stopped": "",
+                    "subagents": 0,
+                    "tools": tools,
+                    "wrong": {"denied": 1} if k % 9 == 0 else {},
+                },
+            ]
             if logs:
                 calls = 6 + k % 9
                 if agent == "builder" and not unshared:  # compacted before any model call: no timing share

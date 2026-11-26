@@ -68,11 +68,20 @@ def _owner(home: Path, data: Path, copilot: Path, monkeypatch) -> None:
         _repo(place, f"https://github.com/{TRAP}/{TRAP}-data.git")
     trap = {"run": f"{TRAP}-run", "session": f"{TRAP}-session", "project": f"{TRAP}-project", "agent": TRAP}
     at = datetime.now(UTC).isoformat(timespec="seconds")
-    ledger = "".join(json.dumps(trap | line) + "\n" for line in (
-        {"id": f"start:{TRAP}", "type": "start", "at": at, "model": f"{TRAP}-model", "before": {}},
-        {"id": f"end:{TRAP}", "type": "end", "at": at, "usage": {"credits": 99.0, "models": {}},
-         "tools": {f"{TRAP}_tool": {"calls": 1}}, "wrong": {}},
-    ))  # fmt: skip
+    ledger = "".join(
+        json.dumps(trap | line) + "\n"
+        for line in (
+            {"id": f"start:{TRAP}", "type": "start", "at": at, "model": f"{TRAP}-model", "before": {}},
+            {
+                "id": f"end:{TRAP}",
+                "type": "end",
+                "at": at,
+                "usage": {"credits": 99.0, "models": {}},
+                "tools": {f"{TRAP}_tool": {"calls": 1}},
+                "wrong": {},
+            },
+        )
+    )
     for spend in (home / ".owlbear" / "spend", data / "spend"):
         spend.mkdir(parents=True)
         (spend / f"spend-{datetime.now(UTC):%Y-%m}.jsonl").write_text(ledger)
