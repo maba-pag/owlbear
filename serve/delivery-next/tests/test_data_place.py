@@ -392,12 +392,12 @@ def git_whole(args: tuple[str, ...], stderr: str) -> str:
     return f"{head}\nstderr:\n{stderr}\nstdout:\n{OUT}"
 
 
-def git_fails(monkeypatch, stderr: str, fails) -> list[tuple[str, ...]]:
+def git_fails(monkeypatch, stderr: str, fails, *, at: Path | None = None) -> list[tuple[str, ...]]:
     """Makes the checkout's Git commands a picker chooses fail with distinct stdout and stderr; the args they ran."""
     real, ran = data_place._git, []  # noqa: SLF001 - the checkout's own Git calls are the boundary
 
     def git(cwd, *args, until=None):
-        if fails(args):
+        if (at is None or at == cwd) and fails(args):
             ran.append(args)
             return subprocess.CompletedProcess(["git", *args], 128, OUT + "\n", stderr + "\n")
         return real(cwd, *args, until=until)
@@ -504,6 +504,29 @@ def test_a_failed_worktree_repair_says_git_whole_at_owlbear_data_host_start_and_
     monkeypatch.setattr(data_place, "_git", real)  # repaired: the next `owlbear data` finishes the move
     assert cli.main(["data"]) == 0
     assert record() == {"repository": str(dest), "remote": url, "moved_from": str(source)}
+
+
+def test_owlbear_data_shows_whole_git_errors_listing_and_verifying_linked_worktrees(
+    tmp_path: Path, url: str, monkeypatch, capsys
+) -> None:
+    source, dest, linked = tmp_path / "old-data", data_place.default(), tmp_path / "linked"
+    git(tmp_path, "clone", "-q", url, str(source))
+    git(source, "worktree", "add", "-q", str(linked))
+    home().mkdir(parents=True, exist_ok=True)
+    data_place.pointer().write_text(json.dumps({"repository": str(source), "remote": url}))
+    stderr = "fatal: first line\n  second line"
+    listing = ("worktree", "list", "--porcelain")
+    with monkeypatch.context() as patch:
+        git_fails(patch, stderr, lambda args: args == listing)
+        assert cli.main(["data"]) == 0
+        assert git_whole(listing, stderr) in capsys.readouterr().out
+
+    data_place.pointer().write_text(json.dumps({"remote": url, "moving_from": str(source), "moving_to": str(dest)}))
+    source.rename(dest)
+    verify = ("rev-parse", "--path-format=absolute", "--git-common-dir")
+    git_fails(monkeypatch, stderr, lambda args: args == verify, at=linked)
+    assert cli.main(["data"]) == 1
+    assert f"its linked worktree {linked} does not reach it: {git_whole(verify, stderr)}" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(("clone_address", "words"), [(False, "Shared data: problem:"), (True, "Not set:")])

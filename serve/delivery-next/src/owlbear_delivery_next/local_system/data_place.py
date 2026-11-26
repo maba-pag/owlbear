@@ -418,20 +418,39 @@ def relink(root: Path) -> str:
     """Point the linked worktrees of the checkout at *root* back to it after a move; what failed, else ''."""
     if (done := _git(root, "worktree", "repair")).returncode:
         return command_failure.failed(done)
-    common = _git(root, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()
-    for linked in worktrees(root):
+    common = _git(root, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    if common.returncode:
+        return command_failure.failed(common)
+    try:
+        links = worktrees(root)
+    except DataRepoError as exc:
+        return str(exc)
+    for linked in links:
         if not linked.exists():
             continue  # gone before the move: git lists it as prunable, and nothing here can work
         found = _git(linked, "rev-parse", "--path-format=absolute", "--git-common-dir")
-        if found.returncode or Path(found.stdout.strip()).resolve() != Path(common).resolve():
-            return f"its linked worktree {linked} does not reach it"
+        why = f"its linked worktree {linked} does not reach it"
+        if found.returncode:
+            return f"{why}: {command_failure.failed(found)}"
+        if Path(found.stdout.strip()).resolve() != Path(common.stdout.strip()).resolve():
+            return why
     return ""
 
 
 def worktrees(root: Path) -> list[Path]:
-    """The checkout's linked worktrees, not its main one."""
-    listed = _git(root, "worktree", "list", "--porcelain").stdout.splitlines()
-    return [Path(line.removeprefix("worktree ")) for line in listed if line.startswith("worktree ")][1:]
+    """The checkout's linked worktrees, not its main one.
+
+    Raises:
+        DataRepoError: Git could not list the worktrees.
+    """
+    listed = _git(root, "worktree", "list", "--porcelain")
+    if listed.returncode:
+        msg = f"could not list linked worktrees in {root}: {command_failure.failed(listed)}"
+        raise DataRepoError(msg)
+    paths = [
+        Path(line.removeprefix("worktree ")) for line in listed.stdout.splitlines() if line.startswith("worktree ")
+    ]
+    return paths[1:]
 
 
 def inventory(shared: DataRepo) -> list[str]:
@@ -459,7 +478,10 @@ def inventory(shared: DataRepo) -> list[str]:
         lines.append(f"{len(runs)} refused memory curation run(s) held under {HELD}")
     if held := publication_hold.refusal(shared, until):
         lines.append(f"an automatic change is held: {held}")
-    lines += [f"linked worktree: {p}" for p in worktrees(root)]
+    try:
+        lines += [f"linked worktree: {p}" for p in worktrees(root)]
+    except DataRepoError as exc:
+        lines.append(str(exc))
     return lines
 
 

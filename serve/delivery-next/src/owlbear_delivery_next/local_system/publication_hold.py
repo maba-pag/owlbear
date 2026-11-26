@@ -395,7 +395,7 @@ def settled(repo: DataRepo, until: float | None) -> None:
         held = _load(path)
         if held is not None and _lapsed(repo, held, until):
             path.unlink(missing_ok=True)
-    except _UnknownError as exc:
+    except (_UnknownError, OSError) as exc:
         _log.warning("could not settle held publication in %s: %s", repo.root, failure(exc))
         return  # the record stays, and the next push or rebase checks it again
 

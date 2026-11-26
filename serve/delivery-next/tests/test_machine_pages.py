@@ -1741,8 +1741,7 @@ def test_a_failed_sdk_step_s_whole_error_shows_in_recent_activity(
 def test_a_crashed_runner_s_whole_error_shows_in_recent_activity(
     tmp_path: Path, monkeypatch, capsys, pds, whole_error
 ) -> None:
-    """D-01M6GCGED6NRBVEB2XGKRPCKX0: a Change runner that crashes says its whole error, notes included, in Recent
-    activity and on its output, runner.log; the exception still ends the runner, whose traceback follows there."""
+    """A step crash keeps its whole error in Recent activity and the runner log, and still raises."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
     alpha = registry.register(clone(tmp_path / "alpha", "flip"))
@@ -1775,8 +1774,29 @@ def test_a_crashed_runner_s_whole_error_shows_in_recent_activity(
         expect(page.locator("#detail")).to_contain_text("Build 1/1 · the runner failed")
         lines = page.locator("#detail .log li > span")
         assert lines.all_text_contents() == [f"Runner failed: {reason}"]
+        expect(lines).to_have_css("white-space", "pre-wrap")
         assert broke == []
     assert [e["reason"] for e in store.events("flip") if e.get("event") == "runner-failed"] == [reason]
+
+
+def test_an_observation_crash_records_one_activity_entry_without_printing_it(tmp_path, monkeypatch, capsys):
+    work = clone(tmp_path / "alpha", "flip")
+    store = Store.open(work)
+    with store.lock("flip") as lock:
+        store.write(lock, Change(slug="flip", brief=Brief(version=1)))
+    failure = RuntimeError("first line\n  second  line")
+
+    def observe(*_args):
+        raise failure
+
+    monkeypatch.setattr(runner.engine, "observe", observe)
+    with pytest.raises(RuntimeError) as crashed:
+        runner.main(["flip", "--repo", str(work)])
+    assert crashed.value is failure
+    assert not capsys.readouterr().out
+    assert [e["reason"] for e in store.events("flip") if e.get("event") == "runner-failed"] == [
+        "RuntimeError: first line\n  second  line"
+    ]
 
 
 @pytest.mark.browser

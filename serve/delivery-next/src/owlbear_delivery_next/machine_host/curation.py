@@ -449,9 +449,9 @@ class Curation:
         ended = datetime.now(UTC)
         report = done.payload if isinstance(done.payload, memory_curation_tools.MemoryCurationResult) else None
         if done.ending != "result" or report is None or unknown or done.usage_unread:
-            why = " ".join((done.detail or "no report was submitted").split())
+            why = done.detail or "no report was submitted"
             if done.usage_unread and done.ending == "result" and report is not None:  # TD-94: its model is unproven
-                why = " ".join(f"the model is unknown: {done.usage_unread}".split())
+                why = f"the model is unknown: {done.usage_unread}"
             why = f"{UNKNOWN}; {session_result.unverified(t)}; {why}" if unknown else why
             ran = f"ended {done.ending}: {why}"
             reason = f"{ran}; {curation_tree.held(tree, folder, key, ran)}"

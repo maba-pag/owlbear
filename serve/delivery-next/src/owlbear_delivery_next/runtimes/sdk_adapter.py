@@ -90,6 +90,7 @@ class _Step(StepTools):
 
     def __init__(self, cfg: Session, loop: asyncio.AbstractEventLoop) -> None:
         self.cfg, self.loop, self.run, self.proc = cfg, loop, Run(cfg.session_id, checks=cfg.checks), None
+        self.session_errors: list[str] = []
         self.client: CopilotClient | None = None
         self.turn = self.idle = False
         self.billed: dict[str, Any] = {"error": "not read"}  # usage before this invocation's first send
@@ -143,6 +144,10 @@ class _Step(StepTools):
             self.now(getattr(ev.data, "tool_name", "") or "tool", getattr(ev.data, "arguments", None))
         elif kind in {"session.quota_observation", "session.error"}:
             note_quota(self.run, kind, ev.data)
+            if kind == "session.error":
+                message = getattr(ev.data, "message", "") or ""
+                stack = getattr(ev.data, "stack", "") or ""
+                self.session_errors.extend(filter(None, (message, stack if stack not in message else "")))
         elif kind == "session.auto_mode_resolved":
             self.gate.wrong_model("the runtime resolved auto")
         elif kind == "assistant.message":
@@ -415,6 +420,10 @@ async def _run(st: _Step) -> Run:
             limit_reached(st.run, cfg.credit_limit)
             st.run.subagents = st.watch.report()
             await _proven(st, session)
+        if st.session_errors:
+            # An event need not end the turn. Retain its text without changing how the ending is classified.
+            st.run.classified = st.run.classified or st.run.detail
+            st.run.detail = "\n".join(filter(None, [st.run.detail, *st.session_errors]))
         interrupted = False
     finally:
         sdk_spend.metered(st, interrupted=interrupted)
