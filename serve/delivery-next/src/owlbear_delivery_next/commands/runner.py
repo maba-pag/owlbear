@@ -405,27 +405,20 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     store = Store.open(repo)
     try:
-        with store.lock(args.change) as lock:
-            stepping = False
+        with store.lock(args.change) as lock, command_marks.marking(store, lock, args.change):
             try:
-                with command_marks.marking(store, lock, args.change):
-                    state, moved = engine.observe(store, repo, args.change)
-                    leave = queue.barrier(store, repo)
-                    change, step = store.fold(lock, args.change, datetime.now(UTC), state, moved=moved, leave=leave)
-                    kind = step.kind.value if step is not None else ""
-                    spend_ledger.enter(spend_ledger.Where.of(store, repo, change=args.change, step=kind))
-                    stepping = True
-                    _step(store, lock, change, step, repo)
-                    stepping = False
-                    _out(describe(store.read(args.change)))
-            except Exception as exc:  # the Change's activity and the runner's original traceback
+                state, moved = engine.observe(store, repo, args.change)
+                leave = queue.barrier(store, repo)
+                change, step = store.fold(lock, args.change, datetime.now(UTC), state, moved=moved, leave=leave)
+                kind = step.kind.value if step is not None else ""
+                spend_ledger.enter(spend_ledger.Where.of(store, repo, change=args.change, step=kind))
+                _step(store, lock, change, step, repo)
+            except Exception as exc:  # the owner reads it in Recent activity; runner.log gets it and its traceback
                 at = datetime.now(UTC).isoformat()
                 failed = {"event": "runner-failed", "at": at, "reason": failure(exc)}
-                if stepping:
-                    sessions.announce(store, lock, args.change, failed)  # keep the step crash's runner.log output
-                else:
-                    store.log(lock, args.change, failed)
+                sessions.announce(store, lock, args.change, failed)
                 raise
+            _out(describe(store.read(args.change)))
     except LockHeldError as exc:
         _out(f"{args.change}: {exc}; another runner holds it")
     return 0

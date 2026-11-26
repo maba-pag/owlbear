@@ -1779,7 +1779,7 @@ def test_a_crashed_runner_s_whole_error_shows_in_recent_activity(
     assert [e["reason"] for e in store.events("flip") if e.get("event") == "runner-failed"] == [reason]
 
 
-def test_an_observation_crash_records_one_activity_entry_without_printing_it(tmp_path, monkeypatch, capsys):
+def test_an_observation_crash_records_one_activity_entry(tmp_path, monkeypatch):
     work = clone(tmp_path / "alpha", "flip")
     store = Store.open(work)
     with store.lock("flip") as lock:
@@ -1793,7 +1793,6 @@ def test_an_observation_crash_records_one_activity_entry_without_printing_it(tmp
     with pytest.raises(RuntimeError) as crashed:
         runner.main(["flip", "--repo", str(work)])
     assert crashed.value is failure
-    assert not capsys.readouterr().out
     assert [e["reason"] for e in store.events("flip") if e.get("event") == "runner-failed"] == [
         "RuntimeError: first line\n  second  line"
     ]
