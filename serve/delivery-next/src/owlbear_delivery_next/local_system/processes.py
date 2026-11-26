@@ -89,6 +89,7 @@ def members(ids: Pids) -> dict[int, str]:
     return found
 
 
+# OWNER: of a process outside the step, Delivery reads only its group and session ids.
 def _matches(ids: Pids) -> dict[int, list[int]]:
     """Every listed pid filed under each id its pgid and its sid is; nothing else of it is read.
 

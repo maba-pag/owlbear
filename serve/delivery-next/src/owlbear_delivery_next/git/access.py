@@ -46,6 +46,8 @@ class Access:
 
     LOCAL: ClassVar[Access]
 
+    # OWNER: a token goes only into the environment of the gh or git child that needs it; the active gh
+    # account is never switched.
     def environment(self, base: Mapping[str, str] | None = None) -> dict[str, str]:
         """*base* (the process's by default) with this account's token as the only GitHub token."""
         environment = dict(os.environ if base is None else base)
