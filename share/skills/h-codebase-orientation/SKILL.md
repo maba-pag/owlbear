@@ -26,9 +26,7 @@ Use this order to establish context without turning local instructions into univ
 
 ## Start From the Package Map
 
-Keep generated code and document indexes and architecture diagrams out of OwlBear, along with their
-generators, tests and CI wiring. If documentation needs a diagram, choose the tool for that need.
-In OwlBear's own repository, `serve/README.md`
+OwlBear keeps no generated code or document indexes. In OwlBear's own repository, `serve/README.md`
 maps each package to its job, and each package README names its commands, configuration and public
 interface. Other projects may have their own README map; use it when present.
 

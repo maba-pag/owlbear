@@ -118,6 +118,26 @@ plan or implementation challenge a chat runs by hand in this repository states t
 | `setup/` | Setup guide, operating guide, sharing guide |
 | `tests/` | Workspace regression and integration tests |
 
+### Delivery Runtime and Agent Files
+
+Keep Delivery steps on the SDK. If a Change needs a step to run in a VS Code window, design that route from scratch.
+
+Give each Delivery role its own agent file unless a recorded owner decision permits sharing.
+Put substantial or shared Delivery procedures in skills and short procedures for a single role in its agent file.
+Enforce contracts in the engine.
+Keep upstream names for unmodified vendored skills. Use `owlbear-` for Delivery-authored skills.
+Do not cap the length of agent instructions. Use precise specialist terms and complete sentences without filler
+or explanations the role does not need.
+
+Keep workspace agents, skills and instructions in `share/` and `.owlbear/`, loaded through VS Code's location
+settings. Decline any offer from VS Code to move them to `.github/` and dismiss the notice.
+After moving the shaper, use its next real shaping chat to verify that the runtime selects it, preloads its skill,
+grants working tools and restores the owner's settings. You may remove the old copies first; fix any problems
+in that run.
+
+Keep generated code and document indexes and architecture diagrams out of OwlBear, along with their
+generators, tests and CI wiring. If documentation needs a diagram, choose the tool for that need.
+
 ## 3. Web Frontend
 
 The Delivery engine's pages in `serve/delivery-next/src/owlbear_delivery_next/web/` are the only web frontend:
@@ -147,6 +167,20 @@ Copilot code review follows the [code-review](instructions/code-review.instructi
 Required external CI gates remain unchanged.
 
 ### Local Development and CI
+
+- Use default size and complexity guidance from comparable analysis tools to decide what to split or
+  rework, never as a hard gate. Do not use SonarQube.
+- Run a full test audit at least quarterly and when the on-demand census shows that more than
+  2% of test jobs for pushes to `main` in the past seven days failed on a first attempt that ran tests.
+  Count only jobs whose first attempt ran tests. The procedure is the owner's `ah-test-audit` user skill,
+  which lives outside this repository; without it, ask the owner how to run the audit.
+- Publish test audit reports, methods and census tools in the project's research folder in the shared
+  data repository, under `test-audit-<year>-<month>/`. Leave out cached API data and the working clone.
+- For flaky-test audits, change only tests, fixtures and test helpers. Leave product code, test
+  selection and CI workflows, including worker counts, job splits and shard collection, unchanged.
+- When rebuilding the suite by hand, simplify tests and cut low-value, duplicate, overlapping,
+  outdated or trivial cases without weakening required coverage. Investigate runtime only when
+  there is a concrete observed problem; otherwise skip timing work.
 
 This table maps source paths to their regression scope for local/CI tooling, including
 quality-runner `mode=full` with `changed_paths`.

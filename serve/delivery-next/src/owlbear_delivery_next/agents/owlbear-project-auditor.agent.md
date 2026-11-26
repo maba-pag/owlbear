@@ -38,7 +38,9 @@ no lessons, call `recall_memory` with agent `project-auditor`; without the tool,
 <tools>
 
 - Reading: `view`, `glob`, `grep` inspect the worktree and supplied context.
-- Shell: `bash` runs read-only inspection only. No generators, formatters, tests, validators that write, or scratch.
+- Shell: `bash` runs read-only inspection only. No generators, formatters, tests or validators that write.
+  Use pipes instead of scratch files, including in `/tmp`, and put notes in your result.
+  Reconsider the restriction only when a step log demonstrates a need for scratch space.
 - Memory: `recall_memory` (as `owlbear-memory/recall_memory`) recalls lessons for agent `project-auditor`.
 - Target: `set_target` sends the note's requested ref and reason to the session-bound host helper; never check out
   a ref yourself. Continue after its reply.

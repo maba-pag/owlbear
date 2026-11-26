@@ -16,12 +16,6 @@ file schemas, required sections, naming grammar, extraction criteria, and anti-p
 
 ## Agent Extraction Markers
 
-Give each Delivery role its own agent file unless a recorded owner decision permits sharing.
-Scale the shaper's interview depth to the size, uncertainty and stakes of the Change.
-Put substantial or shared Delivery procedures in skills and short procedures for a single role
-in its agent file. Enforce contracts in the engine.
-Keep upstream names for unmodified vendored skills. Use `owlbear-` for Delivery-authored skills.
-
 ### Extract when (≥ 2 apply)
 
 - Concern requires a distinct `tools:` allowlist.
@@ -61,8 +55,6 @@ rationale belong in planning authority, task history, or tests unless they chang
 
 Prefer one precise rule over a rationale plus examples plus repeated warnings. Keep edge cases only
 when they change routing, mutation, safety, or evidence requirements.
-Do not cap the length of agent instructions. Use precise specialist terms and complete
-sentences without filler or explanations the role does not need.
 
 An instruction that requires a tool mutation must name the tool, required arguments, and any
 outcome-specific fallback. Never shorten an executable procedure to an ambiguous verb such as

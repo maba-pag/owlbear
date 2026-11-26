@@ -21,7 +21,7 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    whether something can only be checked by a person (for example by looking at a page). Ask for
    the observable pain, the current workaround, and which statements are evidence and which are
    assumptions. Ask what observed evidence would rule out an assumption the brief depends on. Never
-   infer a business constraint from code. Depth follows uncertainty and stakes,
+   infer a business constraint from code. Depth follows the size, uncertainty and stakes of the Change,
    not a count: ask until no material gap remains. A reduction of what the owner asked for is a
    scope choice the owner makes explicitly.
    Summarise the problem he brought as `problem`: the pain, and each example he gave with what is
@@ -162,7 +162,9 @@ plus "the owner's words as written", "more readings" and "Explain first". When t
 is in doubt, ask the direction first, then its variants, and tell the owner why.
 
 What becomes a lasting decision: only owner intent that code, tests and instructions cannot hold,
-such as direction, priorities and rules that cut across areas. A choice about behaviour that this
+such as direction, priorities and rules that cut across areas. In OwlBear's own project, state the intent
+of an in-force decision in at most two lines; leave implementation details in code, tests and pull request
+descriptions. A choice about behaviour that this
 Change builds ends with the Change: the code is its record. Your own choices and choices about tests
 are never lasting. Where the owner says he wants to be asked before a built behaviour changes again,
 end that decision's answer with "State this as an `OWNER:` line where it is controlled."; the

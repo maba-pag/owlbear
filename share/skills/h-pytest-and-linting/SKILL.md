@@ -126,20 +126,6 @@ replaces mutating hooks with check-only equivalents. `--unsafe-fix` enables unsa
 fixes. The flags are mutually exclusive; review the resulting diff
 whenever unsafe fixes are enabled. Full aggregates are listed by `uv run help quality`.
 
-- Use default size and complexity guidance from comparable analysis tools to decide what to split or
-  rework, never as a hard gate. Do not use SonarQube.
-- Run a full test audit at least quarterly and when the on-demand census shows that more than
-  2% of test jobs for pushes to `main` in the past seven days failed on a first attempt that ran tests.
-  Count only jobs whose first attempt ran tests. The procedure is the owner's `ah-test-audit` user skill,
-  which lives outside this repository; without it, ask the owner how to run the audit.
-- Publish test audit reports, methods and census tools in the project's research folder in the shared
-  data repository, under `test-audit-<year>-<month>/`. Leave out cached API data and the working clone.
-- For flaky-test audits, change only tests, fixtures and test helpers. Leave product code, test
-  selection and CI workflows, including worker counts, job splits and shard collection, unchanged.
-- When rebuilding the suite by hand, simplify tests and cut low-value, duplicate, overlapping,
-  outdated or trivial cases without weakening required coverage. Investigate runtime only when
-  there is a concrete observed problem; otherwise skip timing work.
-
 | Marker | Local meaning |
 | --- | --- |
 | `browser` | Requires an installed Playwright browser; CI runs these in its browser job |

@@ -28,6 +28,8 @@ with agent `quality-judge`; without the tool, continue without memory.
 
 - Reading: `view`, `glob`, `grep` inspect source and the whole supplied context.
 - Shell: `bash` runs read-only inspection only. No tests, validators, generators or formatters that write.
+  Use pipes instead of scratch files, including in `/tmp`, and put notes in your result.
+  Reconsider the restriction only when a step log demonstrates a need for scratch space.
 - Memory: `recall_memory` (as `owlbear-memory/recall_memory`) recalls lessons for agent `quality-judge`.
 - Results: `submit_result` returns each item's id, verdict and evidence-based reason.
 - `task`, while the role's subagent setting is on: delegate bounded read-only inspection under the same decisions
