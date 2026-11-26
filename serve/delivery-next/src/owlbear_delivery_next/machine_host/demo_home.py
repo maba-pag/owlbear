@@ -111,7 +111,9 @@ def _global() -> GlobalLayer:
 
 def _git(cwd: Path, *args: str) -> None:
 
-    subprocess.run([resolve_git_executable(), *args], cwd=cwd, check=True, capture_output=True)  # noqa: S603 - fixed git argv
+    subprocess.run(  # noqa: S603 - fixed git argv
+        [resolve_git_executable(), *args], cwd=cwd, check=True, capture_output=True
+    )
 
 
 def _checkout(path: Path, origin: str, remote: Path | None = None) -> Path:
