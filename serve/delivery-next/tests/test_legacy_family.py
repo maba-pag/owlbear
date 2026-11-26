@@ -100,8 +100,8 @@ def test_the_registry_move_changes_only_the_current_read_set() -> None:
         ),
         (
             "local_system/git_run.py",
-            "            cwd=cwd,",
-            "            cwd=cwd.parent,",
+            '{"cwd": cwd}',
+            '{"cwd": cwd.parent}',
         ),
         (
             "local_system/maintenance.py",

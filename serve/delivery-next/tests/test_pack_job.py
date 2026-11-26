@@ -1689,8 +1689,9 @@ def test_a_failed_pack_stage_keeps_and_logs_its_whole_error(  # noqa: PLR0913, P
     if cause == "git":  # the checkout's own git refuses, in git's words: both its streams
 
         def refusing(args, *rest, **kw):
-            if args[:3] == ["git", "rev-parse", "--show-toplevel"]:
-                ran.append(args)
+            verb = 3 if kw.get("executable") else 1
+            if args[0] == "git" and args[verb : verb + 2] == ["rev-parse", "--show-toplevel"]:
+                ran.append([args[0], *args[verb:]])
                 return subprocess.CompletedProcess(args, 128, f"{OUT}\n", f"{whole_error}\n")
             return real(args, *rest, **kw)
 
