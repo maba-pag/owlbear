@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import dispute_tools, tools
-from owlbear_delivery_next.change_contracts.models import Exit, StepKind
+from owlbear_delivery_next.change_contracts.models import Exit, Outcome, StepKind, Waiting
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK
 from owlbear_delivery_next.change_flow import brief_rounds, challenge_reviewers, loop, picks, worktree
@@ -67,14 +67,8 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     if _legacy(change):
         policy = rounds.pinned(change, BRIEF, store.settings(), "shaper")
         brief_rounds.request(change, change.brief.version, {}, policy, now)
-    if picks.owed(change):  # the version's decisions are picked before its challenger runs (TD-459)
-        change.step.started_at = now  # the pick's session is the step's: its stage counts from here (#718)
-        store.write(lock, change)
-        change = pick.run(store, lock, change)
-        if change.step.mode not in brief_rounds.MODES:
-            brief_rounds.idle(change, datetime.now(UTC))
-            store.write(lock, change)
-            return
+    if (change := _picked(store, lock, change, now)) is None:
+        return
     if (stop := decisions_gate.wording_stop(store, change, now)) is not None:  # no challenger on unreadable wording
         store.write(lock, loop.apply(change, stop, now))
         return
@@ -91,21 +85,49 @@ def run(store: Store, lock: Lock, change: Change, repo: Path) -> None:
     _challenge(store, lock, change, path)
 
 
+def _picked(store: Store, lock: Lock, change: Change, now: datetime) -> Change | None:
+    """The Change with its version's decisions picked (TD-459); None when the step ends without a challenger.
+
+    No challenger judges a version whose pick failed: it would have no rule to judge by, and a missing one is no
+    finding (#1380). The challenge waits for the pick's retry.
+    """
+    if picks.owed(change):
+        change.step.started_at = now  # the pick's session is the step's: its stage counts from here (#718)
+        store.write(lock, change)
+        change = pick.run(store, lock, change)
+        if change.step.mode not in brief_rounds.MODES:
+            brief_rounds.idle(change, datetime.now(UTC))
+            store.write(lock, change)
+            return None
+    if (p := picks.current(change)) is None or p.status != "failed":
+        return change
+    if change.outcome is None or change.outcome.exit == Exit.RETRY:  # a retry would only meet the failed pick again
+        why = picks.unready(change)
+        change.outcome = Outcome(exit=Exit.PENDING, waiting=Waiting.CHAT, who="you", reason=why, at=now)
+    store.write(lock, change)
+    return None
+
+
 def _challenge(store: Store, lock: Lock, change: Change, path: Path) -> None:
     lp = change.loops[BRIEF]
     multiple = challenge_reviewers.first(lp, change.step.mode)
+    events: list[dict[str, object]] = []
     if multiple:
         result = _first(store, lock, change, path)
     else:
         lp.reviewers.clear()
         with step_decisions.using(*decisions_gate.shaping(store, change)):
             verdict, done = sessions.review_run(store, lock, change, path, _made(store, lock, change, ""), LABEL)
+        if challenge_reviewers.findings(verdict, done.payload, brief=True) is not None:
+            events += challenge_reviewers.named(change, done.payload, LABEL, verdict)
         result = judged(change, verdict, done.payload, datetime.now(UTC))
     store.write(lock, change if result is None else loop.apply(change, result, datetime.now(UTC)))
+    sessions.announce_all(store, lock, change.slug, events)
 
 
 def _first(store: Store, lock: Lock, change: Change, path: Path) -> loop.StepResult | None:
     reviewers = challenge_reviewers.remaining(change, BRIEF)
+    events: list[dict[str, object]] = []
 
     def made(at: Path) -> list[tuple[str, sdk_adapter.Session]]:
         return [(LABEL, _made(store, lock, change, name)(at)) for name in reviewers]
@@ -119,7 +141,9 @@ def _first(store: Store, lock: Lock, change: Change, path: Path) -> loop.StepRes
                     verdict = session_result.to_result(run, StepKind.REVIEW, datetime.now(UTC), change.step.kind)
                     if (said := challenge_reviewers.findings(verdict, run.payload, brief=True)) is not None:
                         challenge_reviewers.keep(change, BRIEF, name, said[0])
+                        events += challenge_reviewers.named(change, run.payload, f"{LABEL}:{name}", verdict)
             store.write(lock, change)
+            sessions.announce_all(store, lock, change.slug, events)
             sessions.count_unread(store, lock, change, [r for r in exc.runs if r is not exc.run], LABEL)
             raise
     failed = []
@@ -128,9 +152,11 @@ def _first(store: Store, lock: Lock, change: Change, path: Path) -> loop.StepRes
             continue
         if (said := challenge_reviewers.findings(verdict, done.payload, brief=True)) is not None:
             challenge_reviewers.keep(change, BRIEF, name, said[0])
+            events += challenge_reviewers.named(change, done.payload, f"{LABEL}:{name}", verdict)
         else:
             failed.append((challenge_reviewers.failed(verdict, name), done))
     store.write(lock, change)
+    sessions.announce_all(store, lock, change.slug, events)
     sessions.count_unread(store, lock, change, [done for _, done in ran], LABEL)
     if failed:
         return sessions.first_failure(failed)

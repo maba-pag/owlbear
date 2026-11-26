@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from owlbear_delivery_next.change_contracts import tools
@@ -88,6 +89,24 @@ def findings(verdict: StepResult, payload: object, *, brief: bool = False) -> Fi
     if brief and verdict.exit == Exit.BACK:
         return [" ".join(f"the brief {verdict.reason}".split())], {}
     return None
+
+
+def named(change: Change, payload: object, judge: str, verdict: StepResult) -> list[dict[str, object]]:
+    """Keep shaping names for its next pick and return their one activity event, announced after settlement."""
+    accepted = verdict.cause is None and verdict.exit in {Exit.DONE, Exit.RETRY}
+    if not accepted or not isinstance(payload, tools.ReviewResult) or not payload.unpicked:
+        return []
+    if change.step.kind == StepKind.SHAPE and change.brief.approved_version != change.brief.version:
+        change.decisions_named.update({d.id: d.note for d in payload.unpicked})
+    return [
+        {
+            "event": "decisions-named",
+            "at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "judge": judge,
+            "decisions": [d.model_dump() for d in payload.unpicked],
+            "reason": f"{judge}: " + "; ".join(f"{d.id}: {d.note}" for d in payload.unpicked),
+        }
+    ]
 
 
 def failed(verdict: StepResult, reviewer: str) -> StepResult:

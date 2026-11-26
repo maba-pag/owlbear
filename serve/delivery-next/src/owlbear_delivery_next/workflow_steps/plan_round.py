@@ -152,6 +152,8 @@ def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
         return verdict
     if event is not None:
         events.append(event)  # its caller logs this once the verdict's settlement is durable
+    if challenge_reviewers.findings(verdict, run.payload) is not None:
+        events += challenge_reviewers.named(change, run.payload, LABEL, verdict)
     return judged(change, verdict, run.payload)
 
 
@@ -204,6 +206,7 @@ def _kept(store: Store, lock: Lock, change: Change, reviewers: list[str], runs: 
         premise = isinstance(run.payload, tools.WrongPremise) and run.payload.stage == "brief"
         if not premise and (said := challenge_reviewers.findings(verdict, run.payload)) is not None:
             challenge_reviewers.keep(change, PLAN, name, said[0])
+            steps += challenge_reviewers.named(change, run.payload, f"{LABEL}:{name}", verdict)
     try:
         store.write(lock, change)
     except (OSError, StoreError) as exc:

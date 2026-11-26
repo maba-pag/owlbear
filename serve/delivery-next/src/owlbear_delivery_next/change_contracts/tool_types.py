@@ -22,6 +22,13 @@ def bounded(limit: int, description: str, example: object, least: int = 1) -> Fi
     return Field(min_length=least, max_length=limit, description=description, examples=[example])
 
 
+class Unpicked(Args):
+    """One decision missing from the picked set, for the picker to judge rather than the worker to fix."""
+
+    id: str = bounded(40, "The decision's id as the complete list shows it", "D-01JC0000000000000000000000")
+    note: str = bounded(300, "How it governs this work, not a finding", "The new page must have no build step.")
+
+
 @dataclass(frozen=True)
 class Spec:
     """One tool's name, description, argument model and the step ending an accepted call causes."""
