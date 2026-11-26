@@ -102,6 +102,7 @@ class Project:
         self.app: ASGIApp | None = None
         self.lock_fd: int | None = None
         self.scheduler: threading.Thread | None = None
+        self.scheduled = True  # False (the demo): served without its scheduler and readiness check, nothing starts
         self.publish_lock = threading.Lock()  # orders the discovery file's write against its removal in stop
 
     @property
@@ -110,17 +111,11 @@ class Project:
         return (self.store.name if self.store else "") or Path(self.entry.path).name
 
     def load(
-        self,
-        record: HostRecord,
-        paused: Callable[[], bool],
-        bind: Callable[[Host], None] = lambda _h: None,
-        *,
-        scheduled: bool = True,
+        self, record: HostRecord, paused: Callable[[], bool], bind: Callable[[Host], None] = lambda _h: None
     ) -> None:
         """Open the clone's store, take its host lock and start its scheduler and readiness check.
 
-        *bind* gives the new scheduler the machine's guards before it starts. Unscheduled (the demo), the project
-        is served without its scheduler and readiness check: nothing starts work.
+        *bind* gives the new scheduler the machine's guards before it starts.
         """
         repo = Path(self.entry.path)
         if why := registry.replaced(self.entry):
@@ -146,7 +141,7 @@ class Project:
         finally:
             os.close(fd)
         try:
-            self._start(store, record, paused, bind, scheduled=scheduled)
+            self._start(store, record, paused, bind)
         except ImportWaitingError as exc:
             self.stop(drain=0)
             self.state, self.reason = "failed", str(exc)
@@ -155,13 +150,7 @@ class Project:
             self.state, self.reason = "failed", f"it could not start: {failure(exc)}"
 
     def _start(
-        self,
-        store: Store,
-        record: HostRecord,
-        paused: Callable[[], bool],
-        bind: Callable[[Host], None],
-        *,
-        scheduled: bool,
+        self, store: Store, record: HostRecord, paused: Callable[[], bool], bind: Callable[[Host], None]
     ) -> None:
         repo = Path(self.entry.path)
         self.store = store
@@ -173,12 +162,11 @@ class Project:
         session_slots.join(self.host)  # before its first pass: what its live steps hold is counted first
         self._publish(self.host)
         self.app = api.create_app(store, record.token, self.host)
+        if self.scheduled:
+            self.scheduler = threading.Thread(target=self.host.run, daemon=True, name=f"scheduler-{self.entry.id}")
+            self.scheduler.start()
+            threading.Thread(target=self._ready, daemon=True, name=f"readiness-{self.entry.id}").start()
         self.state, self.reason = "loaded", ""
-        if not scheduled:
-            return
-        self.scheduler = threading.Thread(target=self.host.run, daemon=True, name=f"scheduler-{self.entry.id}")
-        self.scheduler.start()
-        threading.Thread(target=self._ready, daemon=True, name=f"readiness-{self.entry.id}").start()
 
     @staticmethod
     def import_state(store: Store, host: Host) -> None:

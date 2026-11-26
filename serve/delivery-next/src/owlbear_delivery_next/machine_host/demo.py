@@ -108,7 +108,8 @@ def _load(machine: Machine) -> None:
             h.merged = lambda: machine.curation.nudge([h.store.name], "merge")
             h.curating = machine.curation.fence
 
-        p.load(machine.record, lambda: False, bind, scheduled=False)
+        p.scheduled = False
+        p.load(machine.record, lambda: False, bind)
         machine.say(f"{p.name}: {p.state}" + (f": {p.reason}" if p.reason else ""))
 
 
