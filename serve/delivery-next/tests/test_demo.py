@@ -2,29 +2,38 @@
 
 from __future__ import annotations
 
+import contextlib
 import gc
 import json
 import os
-import socket
+import queue
+import re
 import subprocess
 import sys
+import threading
+import time
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import httpx
+import pytest
 
 from owlbear_delivery_next.change_contracts.models import Change
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.machine_host import command, demo, demo_home
 from owlbear_delivery_next.state_store import project_home, registry
-from owlbear_delivery_next.state_store.store import Lock, Store
+from owlbear_delivery_next.state_store.store import Store
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 TRAP = "sentinel"
 CHILD = """import sys, types
 from owlbear_delivery_next.machine_host import command
 command.sys = types.SimpleNamespace(**{**vars(sys), "platform": "darwin"})  # CI runs on Linux
-sys.exit(command.main([sys.argv[1], "--port", sys.argv[2]]))
+sys.exit(command.main([sys.argv[1]]))
 """
 
 
@@ -50,7 +59,9 @@ def _owner(home: Path, data: Path, copilot: Path, monkeypatch) -> None:
     registry.register(clone)
     fixture = Path(__file__).parent / "fixtures" / "c1_v4_waiting.json"
     change = Change.model_validate_json(fixture.read_text()).model_copy(update={"slug": f"{TRAP}-change"})
-    Store(project_home.located(clone)).write(Lock(change.slug), change)
+    store = Store(project_home.located(clone))
+    with store.lock(change.slug) as lock:  # its persisted writer-lock file stays in the owner's home
+        store.write(lock, change)
     gc.collect()  # the store's connection closes: its database is checkpointed before the snapshot
     for place in (home / ".owlbear" / "data", data):
         (place / "config.json").parent.mkdir(parents=True, exist_ok=True)
@@ -74,6 +85,45 @@ def _get(url: str, token: str = "") -> str:
     return answer.text
 
 
+class Child:
+    """The demo's process and what it printed, read on a thread so the test never blocks on it."""
+
+    def __init__(self, child: subprocess.Popen[str]) -> None:
+        self.child, self.lines, self.said = child, queue.Queue[str](), list[str]()
+        self.reader = threading.Thread(target=lambda: [self.lines.put(s) for s in child.stdout or ()], daemon=True)
+        self.reader.start()
+
+    def stop(self) -> None:
+        """Stop and reap the child, then keep the rest of what it printed."""
+        self.child.terminate()
+        try:
+            self.child.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            self.child.kill()
+            self.child.wait()
+        self.reader.join(timeout=5)
+        while not self.lines.empty():
+            self.said.append(self.lines.get())
+
+    def wait[T](self, ready: Callable[[], T | None], seconds: float) -> T:
+        """*ready*'s first answer within *seconds*, collecting the output; else the child is stopped and reaped."""
+        deadline = time.monotonic() + seconds
+        while (found := ready()) is None:
+            if self.child.poll() is not None or time.monotonic() > deadline:
+                self.stop()
+                pytest.fail(f"the demo did not start (exit {self.child.returncode}):\n{''.join(self.said)}")
+            with contextlib.suppress(queue.Empty):
+                self.said.append(self.lines.get(timeout=0.2))
+        return found
+
+
+def _answer(url: str) -> str | None:
+    try:
+        return _get(url)
+    except httpx.TransportError:
+        return None
+
+
 def test_the_demo_serves_example_data_and_never_the_owners(tmp_path, monkeypatch) -> None:
     home, data, copilot, tmp = (tmp_path / n for n in ("owner-home", "owner-data", "owner-copilot", "tmp"))
     _owner(home, data, copilot, monkeypatch)
@@ -83,48 +133,51 @@ def test_the_demo_serves_example_data_and_never_the_owners(tmp_path, monkeypatch
     (tools / "gh").write_text(f"#!/bin/sh\ntouch {marker}\nexit 1\n")
     (tools / "gh").chmod(0o755)
     before = _files(home, data, copilot)
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        port = sock.getsockname()[1]
     env = os.environ | {"HOME": str(home), "OWLBEAR_DATA": str(data), "COPILOT_HOME": str(copilot),
                         "TMPDIR": str(tmp), "PATH": f"{tools}{os.pathsep}{os.environ['PATH']}"}  # fmt: skip
-    child = subprocess.Popen(  # noqa: S603 - this interpreter runs the real command, no shell
-        [sys.executable, "-c", CHILD, command.demo.__name__, str(port)],  # the command `demo` registers
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
+    demo_run = Child(
+        subprocess.Popen(  # noqa: S603 - this interpreter runs the real command, no shell
+            [sys.executable, "-c", CHILD, command.demo.__name__],  # the command `demo` registers, on its default port
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
     )
-    said, stream = [], child.stdout
+    said = demo_run.said
     try:
-        while stream and not any("#token=" in s for s in said):
-            said.append(stream.readline())
-            assert said[-1], "".join(said)
-        base, _, token = next(s for s in said if "#token=" in s).split()[-1].partition("/#token=")
-        assert base == f"http://127.0.0.1:{port}"
+        printed = demo_run.wait(lambda: next((s for s in said if "#token=" in s), None), 60)
+        base, _, token = printed.split()[-1].partition("/#token=")
+        assert re.fullmatch(r"http://127\.0\.0\.1:[1-9]\d*", base), printed
+        answers = [demo_run.wait(lambda: _answer(f"{base}/"), 30)]  # it prints before it listens
         [ran] = list(tmp.glob("owlbear-demo-*"))
-        answers = [_get(f"{base}/"), _get(f"{base}/api/next/projects", token)]
+        answers.append(_get(f"{base}/api/next/projects", token))
         projects = json.loads(answers[1])["projects"]
         configs = [_get(f"{base}/p/{p['id']}/api/next/config", token) for p in projects]
         for p in projects:
             answers += [
                 _get(f"{base}/p/{p['id']}/api/next/{r}", token) for r in ("changes", "config/read", "config/models")
             ]
+        spend = _files(ran / ".owlbear" / "spend")
+        metrics = [_get(f"{base}/api/next/metrics?project={p['name']}", token) for p in projects]
+        reconciled = [json.loads(m)["coverage"]["reconcile"]["state"] for m in metrics]
+        spent = _files(ran / ".owlbear" / "spend")
         auth = {"authorization": f"Bearer {token}"}
         refused = httpx.post(f"{base}/p/{projects[0]['id']}/api/next/config/read", headers=auth)
         stored = _files(ran)
         offline = subprocess.run(  # noqa: S603 - fixture git argv
-            [resolve_git_executable(), "ls-remote", "https://github.com/example/example-shop.git"],
-            env={"HOME": str(ran), "PATH": os.environ["PATH"]}, capture_output=True, text=True, check=False,
+            [resolve_git_executable(), "ls-remote", "--get-url", "https://github.com/example/example-shop.git"],
+            cwd=ran, env={"HOME": str(ran), "PATH": os.environ["PATH"]}, capture_output=True, text=True, check=False,
         )  # fmt: skip
     finally:
-        child.terminate()
-        out, _ = child.communicate(timeout=20)
+        demo_run.stop()
     assert [str(p) for p, b in stored.items() if TRAP.encode() in b] == []
-    assert [a for a in [*answers, *configs, "".join(said), out] if TRAP in a] == []
+    assert [a for a in [*answers, *configs, *metrics, "".join(said)] if TRAP in a] == []
     after = _files(home, data, copilot)
     assert [str(p) for p in sorted(before.keys() | after.keys()) if before.get(p) != after.get(p)] == []
-    assert (marker.exists(), demo_home.OFFLINE in offline.stderr, ran.exists()) == (False, True, False)
+    assert any(p.name == "lock" and p.parent.name == f"{TRAP}-change" for p in before), "the writer lock is compared"
+    assert (marker.exists(), offline.stdout.startswith(demo_home.OFFLINE), ran.exists()) == (False, True, False)
+    assert ("running" in reconciled, spent) == (False, spend)
     assert [(p["name"], p["unset"], p["blocked"]) for p in projects] == [
         (name, [], "") for name, _ in demo_home.PROJECTS
     ]

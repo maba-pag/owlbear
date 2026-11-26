@@ -2,7 +2,8 @@
 
 It serves the projects ``demo_home.seed`` registered without their schedulers or readiness checks, so no step,
 runner or AI session starts; every request that is not a GET or HEAD is refused before any route runs, with one plain
-sentence. Settings' outside reads answer from example state: no Copilot runtime starts. Only the demo's pages carry
+sentence. A Metrics read never finds a spend reconciliation due, so none runs or writes. Settings' outside reads
+answer from example state: no Copilot runtime starts. Only the demo's pages carry
 the token's bootstrap, so its addresses open without ``#token=``.
 """
 
@@ -25,7 +26,7 @@ from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.machine_host.project import Project
 from owlbear_delivery_next.project_host import pages
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.runtimes import model_choices
+from owlbear_delivery_next.runtimes import model_choices, spend_reconcile
 from owlbear_delivery_next.state_store import registry
 
 if TYPE_CHECKING:
@@ -84,6 +85,12 @@ class Browse:
         await self.inner(scope, receive, send)
 
 
+def _never(now: datetime | None = None) -> bool:
+    """``spend_reconcile.due`` in the demo: a pass is never due, so none writes state or the ledger."""
+    del now
+    return False
+
+
 def _seeded(token: str) -> None:
     """Each page the demo serves gets the token's bootstrap right after ``<head>``, before the page's own modules."""
     seed = f'<script>sessionStorage.setItem("token", "{token}")</script>'
@@ -130,6 +137,7 @@ def run(home: Path, port: int, say: Callable[[str], None]) -> int:
         record = HostRecord(url=f"{base}/", token=token, pid=os.getpid(), started_at=now, code=codebase.CURRENT)
         machine = Machine(record, paused=False)
         machine.reads.offered = Offered()
+        spend_reconcile.due = _never  # Metrics reads start no reconciliation pass in the demo
         machine.reads.ledger.finish({}, [], unshared=False, at=now.astimezone())  # Settings shows a read, not none
         _load(machine)
         say(f"OwlBear demo on example data: {base}/#token={token}")
