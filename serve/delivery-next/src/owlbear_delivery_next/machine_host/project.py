@@ -110,11 +110,17 @@ class Project:
         return (self.store.name if self.store else "") or Path(self.entry.path).name
 
     def load(
-        self, record: HostRecord, paused: Callable[[], bool], bind: Callable[[Host], None] = lambda _h: None
+        self,
+        record: HostRecord,
+        paused: Callable[[], bool],
+        bind: Callable[[Host], None] = lambda _h: None,
+        *,
+        scheduled: bool = True,
     ) -> None:
         """Open the clone's store, take its host lock and start its scheduler and readiness check.
 
-        *bind* gives the new scheduler the machine's guards before it starts.
+        *bind* gives the new scheduler the machine's guards before it starts. Unscheduled (the demo), the project
+        is served without its scheduler and readiness check: nothing starts work.
         """
         repo = Path(self.entry.path)
         if why := registry.replaced(self.entry):
@@ -140,7 +146,7 @@ class Project:
         finally:
             os.close(fd)
         try:
-            self._start(store, record, paused, bind)
+            self._start(store, record, paused, bind, scheduled=scheduled)
         except ImportWaitingError as exc:
             self.stop(drain=0)
             self.state, self.reason = "failed", str(exc)
@@ -149,7 +155,13 @@ class Project:
             self.state, self.reason = "failed", f"it could not start: {failure(exc)}"
 
     def _start(
-        self, store: Store, record: HostRecord, paused: Callable[[], bool], bind: Callable[[Host], None]
+        self,
+        store: Store,
+        record: HostRecord,
+        paused: Callable[[], bool],
+        bind: Callable[[Host], None],
+        *,
+        scheduled: bool,
     ) -> None:
         repo = Path(self.entry.path)
         self.store = store
@@ -161,10 +173,12 @@ class Project:
         session_slots.join(self.host)  # before its first pass: what its live steps hold is counted first
         self._publish(self.host)
         self.app = api.create_app(store, record.token, self.host)
+        self.state, self.reason = "loaded", ""
+        if not scheduled:
+            return
         self.scheduler = threading.Thread(target=self.host.run, daemon=True, name=f"scheduler-{self.entry.id}")
         self.scheduler.start()
         threading.Thread(target=self._ready, daemon=True, name=f"readiness-{self.entry.id}").start()
-        self.state, self.reason = "loaded", ""
 
     @staticmethod
     def import_state(store: Store, host: Host) -> None:
