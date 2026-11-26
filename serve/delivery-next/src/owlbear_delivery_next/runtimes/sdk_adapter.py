@@ -422,7 +422,7 @@ async def _run(st: _Step) -> Run:
             await _proven(st, session)
         if st.session_errors:
             # An event need not end the turn. Retain its text without changing how the ending is classified.
-            st.run.classified = st.run.classified or st.run.detail
+            st.run.classified = st.run.classified or st.run.detail or "session error"
             st.run.detail = "\n".join(filter(None, [st.run.detail, *st.session_errors]))
         interrupted = False
     finally:

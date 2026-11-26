@@ -451,7 +451,7 @@ class Curation:
         if done.ending != "result" or report is None or unknown or done.usage_unread:
             why = done.detail or "no report was submitted"
             if done.usage_unread and done.ending == "result" and report is not None:  # TD-94: its model is unproven
-                why = f"the model is unknown: {done.usage_unread}"
+                why = "\n".join(filter(None, (f"the model is unknown: {done.usage_unread}", done.detail)))
             why = f"{UNKNOWN}; {session_result.unverified(t)}; {why}" if unknown else why
             ran = f"ended {done.ending}: {why}"
             reason = f"{ran}; {curation_tree.held(tree, folder, key, ran)}"
