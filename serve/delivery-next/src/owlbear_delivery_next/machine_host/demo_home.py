@@ -3,9 +3,9 @@
 ``isolate`` runs before the host's modules, some of which read HOME when imported (this one's imports do not): a
 fresh temporary folder becomes HOME, ``OWLBEAR_DATA``, ``COPILOT_HOME`` and ``GIT_CONFIG_*`` are dropped, Git resolves
 every ``https://github.com/`` address to a missing path, and a ``gh`` that only fails comes first on PATH. ``seed``
-then writes, in that home, the shared data checkout with a complete Global layer, this machine's settings and the two
-registered example projects. Their GitHub-shaped origins never reach GitHub: the data checkout pushes to a local bare
-repository and the write account is chosen offline.
+then writes, in that home, the shared data checkout with a complete Global layer, this machine's settings, the two
+registered example projects and their six example Changes. Their GitHub-shaped origins never reach GitHub: the data
+checkout pushes to a local bare repository and the write account is chosen offline.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github import account
 from owlbear_delivery_next.github.provider import MergeMethod
 from owlbear_delivery_next.local_system.data_repo import DataRepo
+from owlbear_delivery_next.machine_host import demo_changes
 from owlbear_delivery_next.settings import carried
 from owlbear_delivery_next.settings.config import Agent, GlobalLayer, MemoryValues, Prefs
 from owlbear_delivery_next.settings.improvement import CATEGORIES, Spotter
@@ -53,7 +54,7 @@ def isolate() -> Path:
 
 
 def seed(home: Path) -> None:
-    """The write account chosen offline, then the shared data, settled, and the example projects registered."""
+    """The write account chosen offline, the shared data settled, the example projects registered with their Changes."""
     account.resolve = _offline  # before any Store opens: its adopt publishes the project's claim
     shared = DataRepo(_checkout(home / ".owlbear" / "data", DATA, home / "remotes" / "owlbear-data.git"))
     shared.global_path.write_text(_global().model_dump_json(indent=2, exclude_none=True) + "\n")
@@ -61,12 +62,15 @@ def seed(home: Path) -> None:
         msg = f"the demo's example settings could not be published: {why}"
         raise RuntimeError(msg)
     registry.save(registry.Machine(settings_moved=True))
+    clones = {}
     for name, pid in PROJECTS:
         clone = _checkout(home / "projects" / name, f"https://github.com/example/{name}.git")
         folder = registry.store_of(clone)
         folder.mkdir(mode=0o700)
         (folder / "clone-id").write_text(pid + "\n")
         registry.register(clone)
+        clones[name] = clone
+    demo_changes.seed(clones)
 
 
 def _offline(setting: str, origin: account.Origin, *, until: float | None = None) -> Access:

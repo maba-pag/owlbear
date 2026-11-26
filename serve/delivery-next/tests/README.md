@@ -18,3 +18,16 @@ token themselves: a state path such as `/metrics?period=all&by=agent` opens with
 `backlog_preview.py` isolates itself the same way and makes no `gh` or GitHub call: its backlog issues live in
 memory, its shared data checkout and registered clone are local folders in that `HOME`. `/backlog?reviews=open` unfolds
 the Suppression reviews section, a state only the preview offers. `test_backlog_preview.py` guards that boundary.
+
+### Example Changes in `owlbear demo`
+
+`machine_host/demo_changes.py` writes six Changes on every start of the demo, at the same addresses:
+
+| Project | State | Address |
+| --- | --- | --- |
+| example-shop | being built | `/?change=e0a1b2c3d4e5f601/example-shop-cart-badge` |
+| example-shop | waiting on a disputed brief finding | `/?change=e0a1b2c3d4e5f601/example-shop-gift-cards` |
+| example-shop | waiting on a worker's question | `/?change=e0a1b2c3d4e5f601/example-shop-search-filters` |
+| example-docs | stopped after a failed repair | `/?change=e0a1b2c3d4e5f602/example-docs-link-checker` |
+| example-docs | paused | `/?change=e0a1b2c3d4e5f602/example-docs-dark-theme` |
+| example-docs | done | `/?change=e0a1b2c3d4e5f602/example-docs-install-guide` |

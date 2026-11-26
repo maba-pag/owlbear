@@ -22,7 +22,7 @@ import pytest
 from owlbear_delivery_next.change_contracts.models import Change
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.local_system import local_home
-from owlbear_delivery_next.machine_host import command, demo, demo_home
+from owlbear_delivery_next.machine_host import command, demo, demo_changes, demo_home
 from owlbear_delivery_next.state_store import project_home, registry
 from owlbear_delivery_next.state_store.store import Store
 
@@ -158,6 +158,8 @@ def test_the_demo_serves_example_data_and_never_the_owners(tmp_path, monkeypatch
             answers += [
                 _get(f"{base}/p/{p['id']}/api/next/{r}", token) for r in ("changes", "config/read", "config/models")
             ]
+        ids = {p["name"]: p["id"] for p in projects}
+        details = [_get(f"{base}/p/{ids[p]}/api/next/changes/{s}", token) for p, s in demo_changes.CHANGES]
         spend = _files(ran / ".owlbear" / "spend")
         metrics = [_get(f"{base}/api/next/metrics?project={p['name']}", token) for p in projects]
         reconciled = [json.loads(m)["coverage"]["reconcile"]["state"] for m in metrics]
@@ -172,7 +174,8 @@ def test_the_demo_serves_example_data_and_never_the_owners(tmp_path, monkeypatch
     finally:
         demo_run.stop()
     assert [str(p) for p, b in stored.items() if TRAP.encode() in b] == []
-    assert [a for a in [*answers, *configs, *metrics, "".join(said)] if TRAP in a] == []
+    assert [a for a in [*answers, *configs, *metrics, *details, "".join(said)] if TRAP in a] == []
+    assert [json.loads(d)["slug"] for d in details] == [s for _, s in demo_changes.CHANGES]
     after = _files(home, data, copilot)
     assert [str(p) for p in sorted(before.keys() | after.keys()) if before.get(p) != after.get(p)] == []
     assert any(p.name == "lock" and p.parent.name == f"{TRAP}-change" for p in before), "the writer lock is compared"
