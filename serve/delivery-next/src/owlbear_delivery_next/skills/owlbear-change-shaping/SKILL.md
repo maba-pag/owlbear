@@ -20,7 +20,8 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    code cannot answer: the outcome, what must be true when it is done, what is out of scope, and
    whether something can only be checked by a person (for example by looking at a page). Ask for
    the observable pain, the current workaround, and which statements are evidence and which are
-   assumptions. Never infer a business constraint from code. Depth follows uncertainty and stakes,
+   assumptions. Ask what observed evidence would rule out an assumption the brief depends on. Never
+   infer a business constraint from code. Depth follows the size, uncertainty and stakes of the Change,
    not a count: ask until no material gap remains. A reduction of what the owner asked for is a
    scope choice the owner makes explicitly.
    Summarise the problem he brought as `problem`: the pain, and each example he gave with what is
@@ -111,7 +112,8 @@ conversation; approvals, merge consent and recovery happen in the Changes page.
    Resolve missing setup where possible and show the actual reasons when it cannot render before inviting
    approval. Keep the person check for transient behaviour that screenshots cannot prove.
    Approval waits until the capture has ended, with pictures or reasons.
-8. Once the draft is ready, call `challenge_brief` with the handle and the saved version. A challenger
+8. Call the pre-approval check a brief challenge, not a review. Once the draft is ready, call
+   `challenge_brief` with the handle and the saved version. A challenger
    judges that version; the tool waits about 70 s for its verdict and returns the findings by ID. A challenge
    takes minutes: while a reply says `running`, call `await_challenge` with the handle and the version at once,
    again and again; it only reads, it asks for nothing. A verdict, an `owner_action` (tell the owner what to do,
@@ -160,7 +162,9 @@ plus "the owner's words as written", "more readings" and "Explain first". When t
 is in doubt, ask the direction first, then its variants, and tell the owner why.
 
 What becomes a lasting decision: only owner intent that code, tests and instructions cannot hold,
-such as direction, priorities and rules that cut across areas. A choice about behaviour that this
+such as direction, priorities and rules that cut across areas. In OwlBear's own project, state the intent
+of an in-force decision in at most two lines; leave implementation details in code, tests and pull request
+descriptions. A choice about behaviour that this
 Change builds ends with the Change: the code is its record. Your own choices and choices about tests
 are never lasting. Where the owner says he wants to be asked before a built behaviour changes again,
 end that decision's answer with "State this as an `OWNER:` line where it is controlled."; the

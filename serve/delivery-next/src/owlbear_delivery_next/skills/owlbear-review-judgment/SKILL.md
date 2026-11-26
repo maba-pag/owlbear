@@ -11,6 +11,8 @@ a criterion needs; this skill owns how you judge the evidence and what you repor
 
 ## Evidence
 
+- In a read-only step, use pipes instead of scratch files, including in `/tmp`, and put notes in your
+  result. Reconsider the restriction only when a step log demonstrates a need for scratch space.
 - Judge the exact version your message names and the code it depends on. Summaries, commit messages, earlier
   reports and passing checks are claims: confirm a cited path, line or command result before you rely on it. An
   unconfirmed claim is not a finding, in either direction.

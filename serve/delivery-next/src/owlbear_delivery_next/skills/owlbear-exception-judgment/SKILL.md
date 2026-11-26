@@ -23,6 +23,9 @@ necessary callers to understand its purpose and the tool's actual boundary.
 A suppression is legitimate when the rule does not fit the code's purpose and its reason explains why, when the
 finding is a false positive, or at a boundary the tool cannot see. Accept it with the specific evidence.
 
+One exception to the rule on reasons: accept `fmt: skip` without a reason when it keeps one or more lines more
+compact than the formatter would. Refuse it only when it saves no space.
+
 A suppression is a workaround when the code can meet the rule, when its reason only restates the rule or is missing,
 or when it hides a defect. Refuse it and name the evidence and the code change that would meet the rule. A supplied
 decision covering the rule takes precedence over these general criteria.

@@ -36,7 +36,9 @@ with agent `audit-verifier`; without the tool, continue without memory.
 <tools>
 
 - Reading: `view`, `glob`, `grep` inspect source and the whole supplied context.
-- Shell: `bash` runs read-only inspection only. No tests or validators that write, generators, formatters or scratch.
+- Shell: `bash` runs read-only inspection only. No tests or validators that write, generators or formatters.
+  Use pipes instead of scratch files, including in `/tmp`, and put notes in your result.
+  Reconsider the restriction only when a step log demonstrates a need for scratch space.
 - Memory: `recall_memory` (as `owlbear-memory/recall_memory`) recalls lessons for agent `audit-verifier`.
 - Results: `submit_result` returns one verdict per finding with evidence, decision citations and duplicate references.
 - `task`, while the role's subagent setting is on: delegate bounded read-only inspection with the same authority
