@@ -62,7 +62,6 @@ def _owner(home: Path, data: Path, copilot: Path, monkeypatch) -> None:
     store = Store(project_home.located(clone))
     with store.lock(change.slug) as lock:  # its persisted writer-lock file stays in the owner's home
         store.write(lock, change)
-    gc.collect()  # the store's connection closes: its database is checkpointed before the snapshot
     for place in (home / ".owlbear" / "data", data):
         (place / "config.json").parent.mkdir(parents=True, exist_ok=True)
         (place / "config.json").write_text(json.dumps({"format": 1, "github_account": TRAP}) + "\n")
@@ -127,6 +126,7 @@ def _answer(url: str) -> str | None:
 def test_the_demo_serves_example_data_and_never_the_owners(tmp_path, monkeypatch) -> None:
     home, data, copilot, tmp = (tmp_path / n for n in ("owner-home", "owner-data", "owner-copilot", "tmp"))
     _owner(home, data, copilot, monkeypatch)
+    gc.collect()  # the fixture's store is unreachable now: its connection closes and checkpoints before the snapshot
     marker, tools = tmp_path / "gh-was-called", tmp_path / "owner-bin"
     tools.mkdir()
     tmp.mkdir()
