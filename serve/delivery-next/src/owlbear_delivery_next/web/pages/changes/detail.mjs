@@ -1,6 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { statusLine } from "/assets/page/config/unset.mjs";
-import { DIALOG, state, show, several, formsOf, send, starts, reads } from "./state.mjs";
+import { DIALOG, state, show, several, formsOf, send, starts } from "./state.mjs";
 import { toggle, button, hd, text, info, notice, refusal } from "./widgets.mjs";
 import {
   questionForm, retryForm, criteriaPanel, checkForm, mergeForm, restartButton, pullbackNote, stopNotice,
@@ -69,17 +69,13 @@ const PAUSED = /· paused by you/;
 
 export function releaseLook(d) {
   if (!d.release_look) return nothing;
-  const looked = async (e) => {
-    const control = e.currentTarget;
-    control.disabled = true;
-    try {
-      await send("/release-look", {}, state.detail?.key === d.key ? state.detail : d);
-    } finally {
-      if (control.isConnected) control.disabled = false;
-    }
-  };
-  return html`<p class="next">${d.release_look.text} ${d.release_look.ready
-    ? button("Mark done", looked, reads(d)) : nothing}</p>`;
+  const looked = () => send("/release-look", {}, state.detail?.key === d.key ? state.detail : d);
+  // The one button on a card that writes: off while its project is not read, as what shows of it is as last read.
+  const why = state.unread.get(d.project);
+  const off = why === undefined ? {}
+    : { disabled: true, title: `Shown as last read: its project was not read (${why})` };
+  return html`<p class="next">${d.release_look.text} ${d.release_look.ready ? button("Mark done", looked, off)
+    : nothing}</p>`;
 }
 
 export function badge(c) {

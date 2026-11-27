@@ -45,12 +45,6 @@ export function starts(d) {
   return why ? { disabled: true, title: why } : {};
 }
 
-// A button that writes for Change *d* is disabled while its project is not read: what shows of it is as last read.
-export function reads(d) {
-  const why = state.unread.get(d.project);
-  return why === undefined ? {} : { disabled: true, title: `Shown as last read: its project was not read (${why})` };
-}
-
 // One call to the project *of* (this page's by default); a Change's own calls name its project.
 export function call(path, body, of = project) {
   return host(path, body === undefined ? { of } : { body, of });
