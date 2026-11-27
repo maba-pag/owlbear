@@ -41,6 +41,10 @@ function saved(layer, key) {
 // ones; display only, never an edit itself (so a reload or a conflict never turns old text into one).
 const typing = { project: {}, machine: {}, global: {} };
 
+// Before a refused publication, the local file already took the draft values. Keep their earlier values for the
+// pending list and confirmation without relying on those older values to build the next save.
+const unpublished = { project: new Map(), machine: new Map(), global: new Map() };
+
 // The edited layer's value of *key*: the draft as typed, else the saved value.
 export function own(key) {
   const value = key in drafts[state.layer] ? drafts[state.layer][key] : saved(state.layer, key);
@@ -70,8 +74,9 @@ if (state.layer === "project" && key.startsWith("prefs.")) state.prefsReview = t
   const value = !literal && !NUMBERS.includes(field) && !CREDITS.includes(field) && !POINTS.includes(field)
     && raw === INHERIT ? "" : raw;
   if (LISTS.includes(key)) typing[state.layer][key] = value;  // shown as typed: a comma, a space
-  if (canonical(key, value) === saved(state.layer, key)) delete drafts[state.layer][key];
-  else drafts[state.layer][key] = value;
+  if (!unpublished[state.layer].has(key) && canonical(key, value) === saved(state.layer, key)) {
+    delete drafts[state.layer][key];
+  } else drafts[state.layer][key] = value;
 }
 
 // Fill Global's blank fields; even a deliberate unsaved clear stays the owner's edit.
@@ -119,9 +124,10 @@ function canonical(key, text) {
   return value.split(",").map((i) => i.trim()).filter(Boolean).join(", ");
 }
 
-// The edited layer's drafts that differ from what is saved, compared as they will be sent.
+// The edited layer's drafts that still need a write or publication.
 function dirty(layer) {
-  return Object.entries(drafts[layer]).filter(([key, value]) => canonical(key, value) !== saved(layer, key));
+  return Object.entries(drafts[layer]).filter(([key, value]) =>
+    unpublished[layer].has(key) || canonical(key, value) !== saved(layer, key));
 }
 
 // Whether the edited layer has an unsaved edit of the setting at *path* ("agents.builder.model"), as the pending line
@@ -144,8 +150,10 @@ function settingOf(draft) {
 function changes(layer) {
   const blank = layer === "global" ? "unset" : "inherited";
   const said = (v) => (v === "" || v === null || v === undefined ? blank : v);
-  return dirty(layer).map(([key, value]) =>
-    `${nameOf(settingOf(key))}: ${said(saved(layer, key))} → ${said(value.trim())}`);
+  return dirty(layer).map(([key, value]) => {
+    const before = unpublished[layer].get(key) ?? saved(layer, key);
+    return `${nameOf(settingOf(key))}: ${said(before)} → ${said(value.trim())}`;
+  });
 }
 
 // Confirms a pending legacy import's Merge and cleanup preferences as reviewed, with no edit: the saved values stand.
@@ -375,19 +383,25 @@ async function saveLayer(review) {
   state.layerNotice = "";
   state.status = "Saving…";
   show();
+  const prior = dirty(layer).map(([key]) => [key, saved(layer, key)]);
   try {
     state.loaded = await call(`/config/${layer}`,
       { method: "PUT", body: { rev: state.loaded[`${layer}_rev`], layer: edited(layer),
         prefs_reviewed: layer === "project" && state.prefsReview }, timeout: WRITE });
     answers.shown();
     state.layerNotice = standingNotice(state.loaded);
-    if (layer === "project" && !state.loaded.unpublished) state.prefsReview = false;  // kept until published
-    for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
-    state.kept.clear();  // what was saved is no longer an unsaved edit for the filter
     error = state.loaded.write_notice ?? "";
-    const whose = { global: "the global", machine: "this machine's" }[layer]
-      ?? (named() ? `${named()}'s` : "this project's");
-    status = `Saved ${whose} settings. They apply to the next session.`;
+    if (state.loaded.unpublished) {
+      for (const [key, value] of prior) if (!unpublished[layer].has(key)) unpublished[layer].set(key, value);
+    } else {
+      unpublished[layer].clear();
+      if (layer === "project") state.prefsReview = false;
+      for (const [key, value] of Object.entries(sent)) if (drafts[layer][key] === value) delete drafts[layer][key];
+      state.kept.clear();  // what was saved is no longer an unsaved edit for the filter
+      const whose = { global: "the global", machine: "this machine's" }[layer]
+        ?? (named() ? `${named()}'s` : "this project's");
+      status = `Saved ${whose} settings. They apply to the next session.`;
+    }
     await readAcross();
   } catch (e) {
     error = e.message;
