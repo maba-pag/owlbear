@@ -421,10 +421,10 @@ def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
         page.get_by_role("button", name="Continue").click()
         pds.answer(page, "Not now")
         expect(page.locator("#choose")).to_have_count(0)  # declined: nothing is left to click
-        _alpha_does_not_answer(page, base, a.id, b.id, expect)
+        _alpha_does_not_answer(page, base, a.id, b.id)
 
 
-def _alpha_does_not_answer(page, base: str, alpha: str, beta: str, expect) -> None:
+def _alpha_does_not_answer(page, base: str, alpha: str, beta: str) -> None:
     changes = f"**/p/{alpha}/api/next/changes"
     page.route(changes, lambda r: r.fulfill(status=503, json={"detail": "stopping"}))
     expect(page.locator("#notes")).to_contain_text("alpha: not read just now (stopping)")
