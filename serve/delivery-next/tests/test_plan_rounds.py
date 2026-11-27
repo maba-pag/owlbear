@@ -339,19 +339,19 @@ def test_persisted_plan_reconsideration_left_unsure_is_recorded_once(store, chan
 def test_an_already_asked_disputes_clarified_finding_goes_to_the_planner_as_the_owners(store, change_repo, mp):
     mp.plans += [plan(1), plan(1, {"F1": "no"}), plan(2)]
     mp.reviews += [*first_round(review("t1")), review(upheld={"F1": True})]
-    mp.reconsiders += [
-        ReconsiderResult(
-            reconsidered=[{"finding": "F1", "verdict": "clarified", "text": "t1: AC-1 edge", "reason": "r"}]
-        )
-    ]
+    verdict = {"finding": "F1", "verdict": "clarified", "text": "t1: AC-1 edge", "reason": "r"}
+    mp.reconsiders.append(ReconsiderResult(reconsidered=[verdict]))
     step(store, change_repo)
     step(store, change_repo)
     asked(store)
-    answer(store, "reconsider", "narrow it")
+    note = "Narrow it.\n\n  Preserve this example."
+    answer(store, "reconsider", note)
     c = step(store, change_repo)
+    assert note in mp.said("reconsider")
     assert (c.step.mode, c.loops[PLAN].findings[0].state) == (None, "owner-fix")
     step(store, change_repo)
     assert "> F1. t1: AC-1 edge [the owner's]" in mp.said("plan")
+    assert f"F1:\n{note}" in mp.said("plan")
 
 
 def test_a_plan_question_settles_only_while_it_is_the_open_one_and_retires_with_its_attempt():
