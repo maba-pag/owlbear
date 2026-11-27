@@ -207,18 +207,15 @@ def test_the_demo_serves_example_data_and_never_the_owners(tmp_path, monkeypatch
     assert [json.loads(c)["notice"] for c in configs] == ["", ""]
     assert (refused.status_code, refused.json()["detail"]) == (403, demo.REFUSED)
     assert answers[0].index("sessionStorage.setItem") < answers[0].index('type="module"')
-    _scenarios({by: json.loads(m) for by, m in metrics.items()}, projects, json.loads(backlogs[0]), links)
+    _scenarios({by: json.loads(m) for by, m in metrics.items()}, projects, json.loads(backlogs[0]), links, token)
 
 
-def _scenarios(found: dict[str, dict], projects: list[dict], backlog: dict, links: list[str]) -> None:
+def _scenarios(found: dict[str, dict], projects: list[dict], backlog: dict, links: list[str], token: str) -> None:
     """Both deep links' scripts in order, and the scenarios' rows under the served example projects."""
     page, unfolding = links
-    assert page.index("sessionStorage.setItem") < page.index('type="module"')  # before the page asks the host
-    assert (
-        unfolding.index("sessionStorage.setItem")
-        < unfolding.index(demo_backlog.OPEN)
-        < unfolding.index('type="module"')
-    )
+    seed = f'sessionStorage.setItem("token", "{token}")'  # the printed token, under the key the pages read
+    assert page.index(seed) < page.index('type="module"')  # before the page asks the host
+    assert unfolding.index(seed) < unfolding.index(demo_backlog.OPEN) < unfolding.index('type="module"')
     entries = backlog["entries"]
     reviews = [e["status"] for e in entries if e["suppression_review"]]
     assert (reviews.count("inbox") >= 3, set(reviews)) == (True, {"inbox", "open", "dropped"})
