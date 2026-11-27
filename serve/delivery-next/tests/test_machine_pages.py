@@ -444,8 +444,7 @@ def _alpha_does_not_answer(page, base: str, alpha: str, beta: str, expect) -> No
     expect(page.locator("#error")).to_be_hidden()
     expect(page.locator("#detail")).to_have_class("stale")  # alpha's: not shown as freshly read
     theirs.locator("a.open").click()
-    expect(page.locator("#detail")).to_contain_text("in beta", timeout=30000)
-    expect(page.locator("#detail")).not_to_have_class("stale")
+    expect(page.locator("#detail:not(.stale)")).to_contain_text("in beta", timeout=30000)
 
 
 class Chats:
