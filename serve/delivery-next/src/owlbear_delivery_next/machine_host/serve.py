@@ -37,10 +37,43 @@ from owlbear_delivery_next.state_store import decision_store, registry
 from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
     from types import FrameType
 
+    from starlette.types import ASGIApp, Receive, Scope, Send
+
 PROVISION_RETRY = 600  # seconds between tries to clone the shared repository
+SLOW = 1.0  # seconds: a read of the API that took longer gets a line in the host's log
+
+
+def timed(served: ASGIApp, say: Callable[[str], None]) -> ASGIApp:
+    """Say each read of the API that took over ``SLOW`` seconds: its path and how long it took.
+
+    Only the reads of the pages and of ``owlbear status`` are timed. A request with ``X-OwlBear-Use`` (a chat, a
+    replay) is left out: chats wait long by design.
+    """
+
+    async def call(scope: Scope, receive: Receive, send: Send) -> None:
+        path = scope.get("path", "")
+        project = app.PROJECT.match(path)
+        read = (
+            scope["type"] == "http"
+            and scope.get("method") == "GET"
+            and path[project.end() if project else 0 :].startswith("/api/next/")
+            and all(name != b"x-owlbear-use" for name, _ in scope.get("headers", []))
+        )
+        if not read:
+            await served(scope, receive, send)
+            return
+        start = time.monotonic()
+        try:
+            await served(scope, receive, send)
+        finally:
+            if (took := time.monotonic() - start) > SLOW:
+                say(f"slow: {path} took {took:.1f} s")
+
+    return call
 
 
 class Server(uvicorn.Server):
@@ -154,7 +187,7 @@ def serve(*, run: bool = False, handing: bool = False) -> int:
         if machine.handover is None:
             (home / "host.json").unlink(missing_ok=True)
 
-    server = Server(uvicorn.Config(app.create(machine, ended), log_level="warning"), machine)
+    server = Server(uvicorn.Config(timed(app.create(machine, ended), machine.say), log_level="warning"), machine)
     machine.on_stop = server.stop
     clean = False
     try:
