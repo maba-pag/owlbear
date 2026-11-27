@@ -1385,25 +1385,25 @@ def test_explicit_review_waits_for_publication(pending, tmp_path, monkeypatch, s
         sent = _project_puts(page)
         held = hold_first(page, "**/api/next/config/project", "PUT", fetch=False)
         expect(page.locator("#error")).to_be_visible()  # the page's standing notice of the pending import
+        page.get_by_label("Rounds at most, builder").fill("4")
         page.get_by_role("button", name="Confirm merge preferences reviewed").click()
         pds.modal(page).get_by_role("button", name="Save project settings").click()
         page.wait_for_function("() => document.querySelector('#save')?.loading === true")
         expect(page.locator("#status")).to_have_text("Saving…")
         expect(page.locator("#error")).to_be_hidden()  # nothing offers a retry the running save would ignore
-
         with page.expect_response("**/api/next/config/project") as written:
             held[0][0].fallback()
         assert written.value.json()["write_notice"], written.value.json()
         expect(page.locator("#error")).to_be_visible()
-        expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
+        expect(page.locator("#pending")).to_contain_text("Rounds at most: inherited → 4")
+        expect(page.locator("#status")).to_have_text("")
         assert page.evaluate("() => document.querySelector('#save').loading") is False
         assert pending.read_profile().prefs_import == "pending"
-
         page.locator("#save").click()  # the offered retry carries no new edit and is taken
         pds.modal(page).get_by_role("button", name="Save project settings").click()
         expect(page.locator("#error")).to_be_hidden()
         expect(page.locator("#status")).to_have_text("Saved this-project's settings. They apply to the next session.")
-
+        expect(page.locator("#pending")).to_have_text("No unsaved edits.")
     assert [body["prefs_reviewed"] for body in sent] == [True, True]
     assert pending.read_profile().prefs_import == "done"
     assert _fresh(tmp_path, shared_repo[1]).read_config().prefs is None
