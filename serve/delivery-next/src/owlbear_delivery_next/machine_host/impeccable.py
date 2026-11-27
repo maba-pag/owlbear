@@ -190,20 +190,26 @@ class Impeccable:
         return {"install": install, "release": self.machine.checks.release(), "unkept": unkept}
 
     def install(self) -> dict[str, Any]:
-        """Install: the running version's pack when missing, and a failed version's own; refused while updating."""
+        """Install the running version's pack or a failed version's own, unless OwlBear is updating or draining."""
         m = self.machine
-        if why := m.updating or ("OwlBear is stopping" if m.stopping.is_set() else ""):
-            return self.read() | {"refused": why}
-        if m.updater.thread is not None and m.updater.thread.is_alive():
-            return self.read() | {"refused": "an update runs; it installs the pack of the version it takes"}
-        with self.lock:
-            if self.thread is None or not self.thread.is_alive():
+        with m.lock, self.lock:  # pause_stop and idle_stop use the same admission barrier
+            why = m.updating or ("OwlBear is stopping" if m.stopping.is_set() else "")
+            if not why and m.ending:
+                why = "OwlBear stops once nothing runs"
+            if not why and (update := m.updater.thread) is not None and update.is_alive():
+                why = "an update runs; it installs the pack of the version it takes"
+            if not why and (self.thread is None or not self.thread.is_alive()):
                 failure = self.failure
                 self.target = (failure["version"] if failure else "") or versions.running()  # unreadable: none named
                 self.thread = threading.Thread(target=self._run, args=(failure, self.target), name="impeccable",
                                                daemon=True)  # fmt: skip
                 self.thread.start()
-        return self.read()
+        return self.read() | ({"refused": why} if why else {})
+
+    def working(self) -> list[str]:
+        """What a stop when idle still waits for from an admitted Install."""
+        with self.lock:
+            return ["installing Impeccable"] if self.thread is not None and self.thread.is_alive() else []
 
     def _run(self, failure: dict[str, Any] | None, tag: str) -> None:
         try:

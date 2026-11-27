@@ -91,6 +91,33 @@ def kept() -> dict:
     return json.loads((local_home.root() / update_steps.RECORD).read_text())
 
 
+def test_pause_stop_drains_an_admitted_pack_install_and_refuses_a_new_one(stepping, monkeypatch):
+    m = stepping.machine
+    entered, release = threading.Event(), threading.Event()
+
+    def install(_failure, _target):
+        entered.set()
+        release.wait(5)
+
+    monkeypatch.setattr(m.impeccable, "_run", install)
+    client = TestClient(app.create(m), base_url="http://127.0.0.1", headers={"authorization": f"Bearer {TOKEN}"})
+    assert client.post("/api/next/impeccable/install").status_code == 200
+    first = m.impeccable.thread
+    try:
+        assert entered.wait(5)
+        assert client.post("/api/next/pause-stop").json()["ending"]
+        left, stopped = m.left(), m.idle_stop()
+    finally:
+        release.set()
+        first.join(5)
+
+    reply = client.post("/api/next/impeccable/install").json()
+    current = m.impeccable.thread
+    current.join(5)
+    assert (left, stopped) == (["installing Impeccable"], False)
+    assert (reply.get("refused"), current is first, m.idle_stop()) == ("OwlBear stops once nothing runs", True, True)
+
+
 def test_a_successful_update_reports_each_step_with_its_times_and_line_and_keeps_them_for_the_new_host(stepping):
     stepping.busy = [["p: c1: a running step (process 9)"]] * 3
     m = stepping.machine

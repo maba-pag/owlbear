@@ -8,12 +8,14 @@ from types import SimpleNamespace
 import pytest
 
 from owlbear_delivery_next.change_contracts import tools
-from owlbear_delivery_next.change_contracts.models import Brief, Change, Exit, Step, StepKind, VisualState
+from owlbear_delivery_next.change_contracts.models import Brief, Change, ErrorKind, Exit, Step, StepKind, VisualState
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.visual_records import DetectorFinding, DetectorScan
+from owlbear_delivery_next.change_flow import loop, worktree
 from owlbear_delivery_next.impeccable import design_tools
 from owlbear_delivery_next.local_system import preload
 from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.project_host.host import Host, RunnerRecord
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.results import ACCEPTED, Gate
 from owlbear_delivery_next.runtimes.session_result import Run, to_result
@@ -240,6 +242,37 @@ def test_a_judge_left_running_outranks_another_judges_unread_usage(tmp_path, cha
 
 async def _ok(cfg):
     return Run(cfg.session_id, ending="error", termination=Termination(confirmed=True))
+
+
+def test_a_proven_git_change_stays_stopped_after_the_reviewers_processes_are_gone(tmp_path, change_repo, monkeypatch):
+    now, store, members = datetime.now(UTC), Store(tmp_path / "store"), {7: "reviewer"}
+    change = Change(slug="c1", brief=Brief(version=1), step=Step(kind=StepKind.REVIEW, started_at=now))
+    lock = Lock("c1")
+    store.write(lock, change)
+    folder = store.root / "changes" / "c1"
+    rec = RunnerRecord(pid=6, created=None, started_at=now, sessions=1)
+    (folder / "runner.json").write_text(rec.model_dump_json())
+    host = Host(store, change_repo, paused=lambda: True, alive=lambda *_: False, members=lambda _: members)
+    host.observe_pr = lambda _: (None, False)
+
+    async def fake(cfg):
+        worktree.git(cfg.worktree, "config", "core.hooksPath", "/elsewhere")
+        return Run(cfg.session_id, "result", termination=Termination(confirmed=False, survivors=(7,)))
+
+    monkeypatch.setattr(sessions.sdk_adapter, "run", fake)
+    result = sessions.reviewer(store, lock, change, change_repo, lambda _: session(role=""), "plan-challenge")
+    store.write(lock, loop.apply(change, result, datetime.now(UTC)))
+    assert host.tick() == []
+    held = store.read("c1")
+    assert held.blocked.action == "End processes 7"
+    assert disposable.live(folder)
+    members.clear()
+    assert host.tick() == []
+    cleared = store.read("c1")
+    assert held.stop.kind == ErrorKind.POLICY
+    assert (cleared.stop.kind, cleared.outcome.exit) == (ErrorKind.POLICY, Exit.STOP)
+    assert "added config core.hookspath=/elsewhere" in cleared.stop.reason
+    assert (cleared.blocked, host.runner("c1"), disposable.live(folder)) == (None, None, None)
 
 
 def test_a_judge_never_runs_the_judged_steps_callbacks(tmp_path, change_repo, monkeypatch) -> None:
