@@ -301,6 +301,22 @@ def test_new_work_after_the_final_loop_ended_adds_one_focused_round(tmp_path, cl
     )
 
 
+def test_a_reopened_final_review_does_not_use_its_unused_rounds(tmp_path, clone, monkeypatch):
+    store = stored(tmp_path, RoundLoop(subject=FINAL, policy=RoundPolicy(max_rounds=4)))
+    reviewed(store, clone, monkeypatch)
+    c = store.read("c1")
+    assert (c.loops[FINAL].round, c.loops[FINAL].ended) == (1, "clean")
+    c.plan.tasks.append(Task(id="t2", title="Address PR feedback", scope=["a.txt"], origin="pr-feedback"))
+    c.step = Step(kind=K.BUILD, task="t2")
+    store.write(Lock("c1"), c)
+    built(store, clone, monkeypatch, "follow-up\n")
+    reviewed(store, clone, monkeypatch, range(1, 6))  # enough findings to continue an ordinary round
+    built(store, clone, monkeypatch, "repair\n")
+    c = store.read("c1")
+    lp = c.loops[FINAL]
+    assert (lp.round, lp.policy.max_rounds, lp.ended, at(c)) == (2, 4, "max", (K.PUBLISH, None, None))
+
+
 def test_the_owner_is_asked_after_the_last_final_round_and_may_accept_it_as_done(tmp_path, clone, monkeypatch):
     store = stored(tmp_path, RoundLoop(subject=FINAL, policy=RoundPolicy(max_rounds=1)))
     reviewed(store, clone, monkeypatch, range(1, 9))

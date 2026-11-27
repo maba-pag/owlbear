@@ -129,7 +129,7 @@ class RoundLoop(_Record):
     since: int = 0  # the plan's task count when the attempt began: later tasks were made during it
     round: int = 0  # completed verdicts
     found: int = 0  # the latest verdict's new findings
-    extra: int = 0  # rounds the owner granted beyond max rounds
+    extra: int = 0  # adjustment to max rounds: grants add rounds; reopening a final review replaces unused rounds
     policy: RoundPolicy
     findings: list[RoundFinding] = Field(default_factory=list)
     last: bool = False  # the latest verdict made its round the last
