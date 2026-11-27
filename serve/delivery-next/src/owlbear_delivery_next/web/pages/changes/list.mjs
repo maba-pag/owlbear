@@ -158,13 +158,13 @@ function reveal(target) {
 
 // The heading takes focus only once its PDS wrapper has rendered; a hidden element cannot be focused.
 function focusHeading() {
-  const target = document.getElementById("detail");
+  const target = document.getElementById("chosen");  // with "All Changes" above the detail
   const wrapper = target.querySelector("p-heading"), name = target.querySelector("h2");
   if (!name) return;
   Promise.resolve(wrapper?.componentOnReady?.()).then(() => {
     if (name.isConnected) name.focus({ preventScroll: true });
   });
-  reveal(target.parentElement);  // with "All Changes" above it
+  reveal(target);
 }
 
 // A key the page can open: a bare slug from an older link names the page's project, if it names one.
