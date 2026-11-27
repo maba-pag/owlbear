@@ -90,7 +90,7 @@ def prompt(c: Change, task: Task, at: Path) -> str:
     for d in disputes.waiting(task):
         lines += [f"- {d.key}: {_flat(d.finding)}", f"  Builder's reason: {_flat(d.reason)}"]
         lines += [f"  Earlier recheck: {_flat(d.recheck)}"] if d.recheck else []
-        lines += [f"  The owner's note: {_flat(d.note)}"]
+        lines += [f"  The owner's note: {d.note}"]
     return "\n".join([*lines, "", "## Judge", JUDGE, "", "## Finish", FINISH])
 
 

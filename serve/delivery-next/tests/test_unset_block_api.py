@@ -8,30 +8,33 @@ from __future__ import annotations
 
 import contextlib
 import json
+import sqlite3
 import subprocess
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 import pytest
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.git.command_failure import failure
+from owlbear_delivery_next.improvement import chatlogs
 from owlbear_delivery_next.local_system import codebase, local_home
 from owlbear_delivery_next.machine_host import app, project
 from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api
 from owlbear_delivery_next.project_host.host import Host, HostRecord
+from owlbear_delivery_next.runtimes import chat_contact, spend_reconcile
+from owlbear_delivery_next.runtimes.vscode_contract import Outcome
 from owlbear_delivery_next.settings import config
 from owlbear_delivery_next.settings.config import Layer, Prefs
-from owlbear_delivery_next.state_store import machine_settings, registry
+from owlbear_delivery_next.state_store import machine_settings, registry, spend_ledger, spend_metrics, spend_shares
 from owlbear_delivery_next.state_store.backlog import Backlog
+from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import curation
-
-if TYPE_CHECKING:
-    from owlbear_delivery_next.state_store.store import Store
 
 AUTH = {"authorization": "Bearer t"}
 GAP = "prefs.ci_poll_seconds"
@@ -163,6 +166,54 @@ def test_new_change_and_a_backlog_change_start_no_chat_for_a_blocked_project(hos
             break
         time.sleep(0.02)
     assert host.launched == [Path(host.machine.projects[b].entry.path)]
+
+
+@pytest.mark.parametrize("stored_chat", ["new", "default"])
+def test_new_change_records_its_bound_shapers_spend_under_the_launching_project(tmp_path, stored_chat) -> None:
+    shaper, bystander = "11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"
+    db = chat_contact.store()
+    db.parent.mkdir(parents=True)
+    with contextlib.closing(sqlite3.connect(db)) as conn, conn:
+        conn.execute("CREATE TABLE chats_v2 (owner_session_uri, chat_uri PRIMARY KEY, provider_data, tombstoned)")
+        conn.executemany("INSERT INTO chats_v2 VALUES ('copilotcli:/aaa', ?, ?, 0)", [
+            (f"ahp-chat://{chat}/Y29waWxvdGNsaTovYWFh", json.dumps({"sdkSessionId": sid}))
+            for chat, sid in ((stored_chat, shaper), ("other", bystander))
+        ])  # fmt: skip
+
+    def checkpoint(sid: str, minute: int, nano: int) -> None:
+        log = chatlogs.state() / sid / "events.jsonl"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open("a") as stream:
+            stream.write(json.dumps({"type": "session.usage_checkpoint", "timestamp": f"2026-11-27T00:{minute:02}:00Z",
+                                     "data": {"totalNanoAiu": nano}}) + "\n")  # fmt: skip
+
+    checkpoint(shaper, 1, 1_000_000_000)
+    checkpoint(bystander, 1, 9_000_000_000)
+    assert spend_reconcile.run([])["imported"]["logs"] == 0
+    outcome = Outcome("started", session="ahp-session:/aaa", chat="ahp-chat:/new")
+    store = Store(tmp_path / "shop-local", name="shop")
+    launch = partial(api.new_chat, start=lambda *_: (outcome, ""))
+    project_app = api.create_app(store, "t", Host(store, tmp_path), launch=launch, which=lambda _: "/bin/code")
+    with TestClient(project_app, base_url="http://127.0.0.1", headers=AUTH) as client:
+        started = client.post("/api/next/new-change")
+        assert started.status_code == 200, started.text
+        launch_id = started.json()["launch"]
+        deadline = time.monotonic() + 5
+        while (state := client.get(f"/api/next/new-change/{launch_id}").json())["state"] == "opening":
+            assert time.monotonic() < deadline, state
+            time.sleep(0.01)
+        assert state["state"] == "open", state
+
+    assert spend_ledger.WRITER.settled(5)
+    [entry] = spend_ledger.lines()
+    assert (entry["project"], entry["clone"]) == ("shop", "shop-local")
+    assert spend_reconcile.run([])["imported"]["logs"] == 1
+    checkpoint(shaper, 16, 2_500_000_000)
+    assert spend_reconcile.run([])["imported"]["logs"] == 1
+    assert spend_reconcile.run([])["imported"]["logs"] == 0
+    report = spend_metrics.query(spend_shares.derive(spend_ledger.lines()), tz=ZoneInfo("UTC"), project="shop")
+    assert [(row["key"], row["credits"]) for row in report["rows"]] == [("shaper", 2.5)]
+    assert report["totals"]["credits"] == 2.5
 
 
 def test_a_test_review_for_a_blocked_project_is_refused_before_any_change_exists(host, a_b) -> None:

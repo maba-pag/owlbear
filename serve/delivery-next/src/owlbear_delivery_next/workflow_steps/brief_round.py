@@ -249,5 +249,5 @@ def prompt(c: Change, at: Path) -> str:
     for f in brief_rounds.due(c):
         lines += [f"- {f.id}: {' '.join(f.text.split())}", f"  Shaper's reason: {' '.join(f.reason.split())}"]
         lines += [f"  Earlier recheck: {' '.join(f.judgement.split())}"] if f.judgement else []
-        lines += [f"  The owner's note: {' '.join(f.note.split())}"]
+        lines += [f"  The owner's note: {f.note}"]
     return "\n".join([*lines, "", "## Judge", JUDGE, "", "## Finish", FINISH])
