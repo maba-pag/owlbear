@@ -1,23 +1,38 @@
 # Delivery engine tests
 
-## Preview servers for visual checks
+## `owlbear demo` for visual checks
 
 The `owlbear` script starts the machine host on a free port of its own choosing against the owner's home, so it is
-never a visual check's launch. Use a preview script instead; each takes the port and serves fixture data only.
+never a visual check's launch. `owlbear demo` is: it serves every page on example data, on the port it is given.
 
-| Page | Directory | Command | Ready URL |
+| Directory | Command | Ready URL | Preparation option |
 | --- | --- | --- | --- |
-| Metrics | `serve/delivery-next` | `uv run python tests/metrics_preview.py {port}` | `http://127.0.0.1:{port}/` |
-| Backlog | `serve/delivery-next` | `uv run python tests/backlog_preview.py {port}` | `http://127.0.0.1:{port}/backlog` |
+| `serve/delivery-next` | `uv run owlbear demo --port {port}` | `http://127.0.0.1:{port}/` | `demo-example-data` |
 
-`metrics_preview.py` replaces `HOME` with a fresh temporary folder, drops `OWLBEAR_DATA` and `COPILOT_HOME`, and
-seeds its own fixture there, so it reads neither the owner's data nor a prepared copy's `HOME`. Its pages seed the
-token themselves: a state path such as `/metrics?period=all&by=agent` opens without `#token=`.
-`test_metrics_preview.py` guards that boundary.
+The demo replaces `HOME` with a fresh temporary folder, drops `OWLBEAR_DATA` and `COPILOT_HOME`, keeps Git and `gh`
+off GitHub and seeds its own example data there; it removes that folder when it stops. It runs no scheduler and
+refuses every request that would start work, with one plain sentence. Its pages seed the token themselves, so a state
+path such as `/metrics?period=all&by=agent` opens without `#token=`, and `/backlog?reviews=open` unfolds the
+Suppression reviews section. `test_demo.py` guards that boundary and the served Metrics and Backlog rows.
 
-`backlog_preview.py` isolates itself the same way and makes no `gh` or GitHub call: its backlog issues live in
-memory, its shared data checkout and registered clone are local folders in that `HOME`. `/backlog?reviews=open` unfolds
-the Suppression reviews section, a state only the preview offers. `test_backlog_preview.py` guards that boundary.
+A visual check launches only on a declared test preparation. The owner declares `demo-example-data` in the project's
+settings before the first follow-on Change is shaped:
+
+```json
+"preparations": [
+  {
+    "id": "demo-example-data",
+    "kind": "data-only",
+    "seed": "mkdir -p .owlbear/scratch/demo-home",
+    "cleanup": "rm -rf .owlbear/scratch/demo-home",
+    "isolation": {"HOME": ".owlbear/scratch/demo-home"}
+  }
+]
+```
+
+It copies no data: the demo seeds and removes its own temporary home, so `seed` only creates the empty, git-ignored
+folder that `HOME` names and `cleanup` removes it. `HOME` keeps the launch off the owner's home: `uv run` and the
+version lease run before the demo replaces `HOME` itself.
 
 ### Example Changes in `owlbear demo`
 
