@@ -68,11 +68,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime, *, tools: boo
 
 
 def tool_use(store: Store, slug: str) -> dict[str, Any]:
-    """A Change's tool use, from the spend ledger.
-
-    Deriving it reads the whole ledger again after every line a run adds, under one lock for all projects: so no
-    page's list or detail reads it, and every row waited for it while they did.
-    """
+    """A Change's tool use, derived from the spend ledger: a chat's rows hold it, a page reads it by its own route."""
     return {"tool_use": tool_metrics.of_change(spend_ledger.Where.of(store).clone, slug).model_dump()}
 
 
