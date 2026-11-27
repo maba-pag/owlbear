@@ -28,7 +28,7 @@ from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import runner
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.project_host import api
-from owlbear_delivery_next.runtimes import sdk_adapter
+from owlbear_delivery_next.runtimes import sdk_adapter, step_input
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Lock, Store
 from owlbear_delivery_next.workflow_steps import reconsider, review
@@ -42,7 +42,7 @@ DONE = Termination(confirmed=True)
 K = StepKind
 ONE, TWO = "a.txt:1: AC-1 greets in English - fix: use Hallo", "a.txt:2: no test - fix: add one"
 RECONSIDER = "Ask the reviewer to reconsider"
-NOTE = "the brief allows English in AC-1"
+NOTE = "the brief allows English in AC-1\n\n  " + "x" * 1959 + "\nTail"
 
 
 class Host:
@@ -246,6 +246,7 @@ def test_each_reconsideration_outcome_settles_clarifies_asks_or_runs_again(tmp_p
     fix = c.plan.tasks[-1]
     assert (c.step.kind, c.step.task, fix.settled) == (K.BUILD, fix.id, ["F1"])
     assert (fix.detail, fix.notes) == (f"- {narrower}", {"F1": NOTE})
+    assert f"F1:\n{NOTE}" in step_input.build(c, fix, clone, [])
 
     # unsure: asks the owner to fix or drop
     store = fresh("unsure")
@@ -354,7 +355,7 @@ def test_the_owners_note_guides_the_fix_and_authorises_its_round():
     c = change()
     c.step = Step(kind=K.REVIEW, task="t3")
     fix = review.repair(c, task, [f"- {ONE}", f"- {TWO}"], disputes.kept(task))[0]
-    assert f"> F1: {note.strip()}" in disputes.build_lines(fix)
+    assert f"F1:\n{note}" in disputes.build_lines(fix)
     task.disputes[0].owner = "drop"
     assert (disputes.kept(task), disputes.authorised(task)) == ({}, False)
 

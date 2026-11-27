@@ -273,6 +273,7 @@ export function checkForm(check, d) {
       now: "The builder gets this fix task:", items: [why],
       then: "Delivery fixes it, reviews the fix and prepares the check again; this uses AI credits. Then it asks you "
         + "to check again.",
+      after: "Delivery can't take back the failed result or the AI credits already used.",
       instead: "The check stays open; you can still mark it passed.",
     })) send("/check-results", body, d, key);
   };
@@ -339,9 +340,10 @@ export function pullbackNote(p, d) {
   const pull = async () => {
     const sure = await ask({
       title: `Update your local ${d.target}?`, yes: "Update", no: "Leave it",
-      now: `Delivery moves your local ${d.target} to the merged one, replaying any local commits on top; their `
-        + "commit IDs change.",
-      after: "If local changes touch the same files, the update stops and says why.",
+      now: `Delivery tries to update your local ${d.target} from the merged branch. If it replays local commits, `
+        + "their IDs change.",
+      then: "If local changes touch the same files, the update stops and says why.",
+      after: "Delivery can't undo a successful update. To go back, restore the previous local branch tip in Git.",
       instead: `Your local ${d.target} stays behind; Pull stays here.`,
     });
     if (sure) send("/pull", {}, d);
