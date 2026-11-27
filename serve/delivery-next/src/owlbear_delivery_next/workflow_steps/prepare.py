@@ -266,8 +266,7 @@ def _snapshot(store: Store, slug: str, rec: Prepared, home: Path, log: Log) -> s
     rec.snapshot = str(folder)
     _write(store, slug, rec)  # before the export: the end of the check removes even a partial snapshot
     live = dict(os.environ) | {SNAPSHOT: str(folder)}  # export reads live; it is the copy the owner permitted
-    note = snapshot_files.command(rec, "export", home, log, live) or snapshot_files.plain(folder)
-    note = note or snapshot_files.command(rec, "masking", home, log, live) or snapshot_files.plain(folder)
+    note = snapshot_files.copy_live(rec, home, folder, log, live)
     if not note and not any(folder.iterdir()):
         note = f"the export wrote nothing into ${SNAPSHOT}"
     if note:  # only a masked snapshot may be kept

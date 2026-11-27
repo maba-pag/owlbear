@@ -222,9 +222,9 @@ def _checked(sent: dict[str, Any], answer: dict[str, Any], result: dict[str, Any
 
 
 def labels(job: Job) -> dict[str, Any]:
-    """The Global labels, created where the repository lacks them, if ticked."""
-    plan, client = job.plan, None
-    if not (wanted := plan.get("labels") or []):
+    """The Global labels, if ticked for a repository without prior GitHub history."""
+    plan = job.plan
+    if plan.get("entry") in {"E1", "E2", "E4b"} or not (wanted := plan.get("labels") or []):
         return {"created": []}
     client = _client(job)
     have = {x.casefold() for x in repo_target.labels(client, plan["repository"])}  # GitHub's names ignore case
