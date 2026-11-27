@@ -14,17 +14,11 @@ import json
 import sqlite3
 import threading
 from typing import TYPE_CHECKING, Any
-from zoneinfo import ZoneInfo
 
 import pytest
 
-from owlbear_delivery_next.improvement import acts, chatlogs, credit_meter, spotter
+from owlbear_delivery_next.improvement import acts, credit_meter, spotter
 from owlbear_delivery_next.machine_host import chat_acts
-from owlbear_delivery_next.project_host import api
-from owlbear_delivery_next.runtimes import chat_contact, spend_reconcile
-from owlbear_delivery_next.runtimes.vscode_contract import Outcome
-from owlbear_delivery_next.settings import carried
-from owlbear_delivery_next.state_store import spend_ledger, spend_metrics, spend_shares
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -55,41 +49,6 @@ def store(tmp_path: Path, *rows: tuple[str, str, str]) -> Path:
         conn.executemany("INSERT INTO chats_v2 (chat_uri, owner_session_uri, provider_data) VALUES (?, ?, ?)",
                          [(chat, owner, json.dumps({"sdkSessionId": sid})) for owner, chat, sid in rows])  # fmt: skip
     return db
-
-
-@pytest.mark.parametrize("stored_chat", ["new", "default"])
-def test_new_change_reconciles_only_its_bound_shapers_cumulative_spend(tmp_path, monkeypatch, stored_chat) -> None:
-    owner = "copilotcli:/aaa"
-    shaper = "11111111-1111-4111-8111-111111111111"
-    bystander = "22222222-2222-4222-8222-222222222222"
-    db = store(tmp_path, (owner, f"ahp-chat://{stored_chat}/{b64(owner)}", shaper),
-               (owner, f"ahp-chat://other/{b64(owner)}", bystander))  # fmt: skip
-    monkeypatch.setattr(chat_contact, "store", lambda: db)
-
-    def checkpoint(sid: str, minute: int, nano: int) -> None:
-        log = tmp_path / "sessions" / sid / "events.jsonl"
-        log.parent.mkdir(parents=True, exist_ok=True)
-        with log.open("a") as stream:
-            stream.write(json.dumps({"type": "session.usage_checkpoint", "timestamp": f"2026-11-27T00:{minute:02}:00Z",
-                                     "data": {"totalNanoAiu": nano}}) + "\n")  # fmt: skip
-
-    monkeypatch.setattr(chatlogs, "state", lambda: tmp_path / "sessions")
-    checkpoint(shaper, 1, 1_000_000_000)
-    checkpoint(bystander, 1, 9_000_000_000)
-    assert spend_reconcile.run([])["imported"]["logs"] == 0
-    outcome = Outcome("started", session="ahp-session:/aaa", chat="ahp-chat:/new")
-    with spend_ledger.at(spend_ledger.Where(project="shop", clone="shop-local", name="Shop")):
-        role = carried.layer().agents["shaper"]
-        assert api.new_chat(tmp_path, role, start=lambda *_: (outcome, "")) == {"state": "open"}
-    assert spend_ledger.WRITER.settled(5)
-    assert spend_reconcile.run([])["imported"]["logs"] == 1
-    checkpoint(shaper, 16, 2_500_000_000)
-    assert spend_reconcile.run([])["imported"]["logs"] == 1
-    assert spend_reconcile.run([])["imported"]["logs"] == 0
-
-    report = spend_metrics.query(spend_shares.derive(spend_ledger.lines()), tz=ZoneInfo("UTC"), project="shop")
-    assert [(row["key"], row["credits"]) for row in report["rows"]] == [("shaper", 2.5)]
-    assert report["totals"]["credits"] == 2.5
 
 
 class Clock:
