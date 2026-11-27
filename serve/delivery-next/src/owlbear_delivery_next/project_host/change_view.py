@@ -33,10 +33,7 @@ if TYPE_CHECKING:
 
 
 def summary(store: Store, slug: str, act: Activity, now: datetime, *, tools: bool = False) -> dict[str, Any]:
-    """One Change's status line, next action, chat handle and open question; shared with the chat fallback.
-
-    Its tool use only with *tools*, as a chat's status reads it: a page reads it apart (`router`).
-    """
+    """One Change's status row; its tool use only with *tools*, for a chat: a page reads that apart (`router`)."""
     try:
         c = store.read(slug)
     except StoreError as exc:
