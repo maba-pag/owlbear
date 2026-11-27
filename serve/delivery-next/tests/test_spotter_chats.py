@@ -443,20 +443,20 @@ def test_switched_off_or_unset_reads_nothing_and_drops_what_was_followed(world, 
     asyncio.run(scenario())
 
 
-def test_a_restart_records_the_missed_bytes_as_a_gap_and_never_looks_at_them(world):
-    async def scenario() -> None:
-        await world.passes()
-        world.chat("c1", [asked("first")])
-        await world.passes()
-        await world.follower._quit()  # noqa: SLF001 - the first run ends and keeps its offsets
-        world.chat("c1", turn("while OwlBear was down"))  # written while no follower ran
-        world.follower = world.new()
-        await world.passes(2)
-        assert [(r["look"], r["skipped"][:26]) for r in records()] == [("gap", "OwlBear was not following:")]
-        world.chat("c1", turn("after the restart"))
-        await world.passes(2)
-
-    asyncio.run(scenario())
+@pytest.mark.parametrize("known", [True, False], ids=["saved-offset", "new-chat"])
+@pytest.mark.asyncio
+async def test_a_restart_records_the_missed_bytes_as_a_gap_and_never_looks_at_them(world, known):
+    await world.passes()
+    first = world.chat("c1", [asked("first")]).stat().st_size if known else 0
+    await world.passes()
+    await world.follower._quit()  # noqa: SLF001 - the first run ends and keeps its offsets
+    end = world.chat("c1", turn("while OwlBear was down")).stat().st_size
+    world.follower = world.new()
+    await world.passes(2)
+    why = f"OwlBear was not following: bytes {first}..{end}"
+    assert [(r["session"], r["look"], r["skipped"].split(" of ", 1)[0]) for r in records()] == [("c1", "gap", why)]
+    world.chat("c1", turn("after the restart"))
+    await world.passes(2)
     assert sorted(r["look"] for r in records()) == ["gap", "hand-off", "plan"]
 
 
