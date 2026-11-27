@@ -16,7 +16,7 @@
   main { max-width: 90rem; }
   #board { display: grid; gap: var(--p-spacing-fluid-md); align-items: start; }
   #list, #detail { display: grid; gap: var(--p-spacing-fluid-sm); align-content: start; min-width: 0; }
-  #chosen { display: grid; gap: var(--p-spacing-static-sm); align-content: start; min-width: 0; }
+  #chosen { display: grid; gap: var(--p-spacing-static-sm); min-width: 0; }
   #chosen .back { justify-self: start; }
   #board:not(.open) #chosen { display: none; }
   #board:not(.open) .cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); }
