@@ -116,6 +116,15 @@ const held = {
   },
 };
 
+// In place of a detail the page does not hold, while the Change's project is not read: which Change, and why.
+function unreadView() {
+  const [of, slug] = state.selected ? parts(state.selected) : [], why = state.unread.get(of);
+  if (why === undefined) return nothing;
+  const row = state.changes?.find((c) => c.key === state.selected);
+  return html`${hd(2, row?.title || slug, "xl")}${text(`Not read just now (${why}). It shows once its project
+    answers.`)}`;
+}
+
 export function view() {
   const d = state.detail && state.detail.key === state.selected ? state.detail : null;
   // The way back to the list stands outside the detail: it works while the detail is as last read, or not shown yet.
@@ -137,7 +146,7 @@ export function view() {
       </section>
       <div id="chosen">${back}
         <section id="detail" aria-label=${`Selected Change${d?.old ? OFF : ""}`} class=${d?.old ? "stale" : ""}
-          @click=${held}>${d ? detailView(d) : nothing}</section>
+          @click=${held}>${d ? detailView(d) : unreadView()}</section>
       </div>
     </div>`;
 }
