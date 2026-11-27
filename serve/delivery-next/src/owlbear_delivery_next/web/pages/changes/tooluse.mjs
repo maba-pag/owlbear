@@ -10,18 +10,16 @@ const read = new WeakSet();  // the details that asked
 const asked = new Set();  // the keys whose read has no answer yet
 let slot = null;  // { key, got }: got is the answer, an Error, or null before the first
 
-function ask(d) {
+async function ask(d) {
   const key = d.key;
   read.add(d);
   asked.add(key);
-  call(`/changes/${encodeURIComponent(d.slug)}/tool-use`, { of: d.project, timeout: 60000 })
-    .catch((error) => error)
-    .then((got) => {
-      asked.delete(key);
-      if (slot?.key !== key) return;  // another Change was selected meanwhile: its own read answers for it
-      slot.got = got;
-      show();
-    });
+  const got = await call(`/changes/${encodeURIComponent(d.slug)}/tool-use`, { of: d.project, timeout: 60000 })
+    .catch((error) => error);
+  asked.delete(key);
+  if (slot?.key !== key) return;  // another Change was selected meanwhile: its own read answers for it
+  slot.got = got;
+  show();
 }
 
 export function toolUse(d) {
