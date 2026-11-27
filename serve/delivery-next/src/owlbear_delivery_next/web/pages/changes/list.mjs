@@ -105,7 +105,8 @@ function blockedBanner() {
 }
 
 // What shows as last read takes no activation, by key as little as by pointer: a focused button in it must not send.
-// It stays readable for a screen reader, so it is not made inert.
+// It stays readable for a screen reader, so it is not made inert; its region's name says that its controls are off.
+const OFF = ", as last read: its controls are off";
 const held = {
   capture: true,
   handleEvent(event) {
@@ -130,12 +131,13 @@ export function view() {
     <section id="notes" class="panel" aria-label="Repository settings" ?hidden=${!state.notes.length}>
       ${state.notes.map((n) => text(n))}</section>
     <div id="board" class=${state.selected ? "open" : ""}>
-      <section id="list" aria-label="Changes" class=${state.stale ? "stale" : ""} @click=${held}>
+      <section id="list" aria-label=${`Changes${state.stale ? OFF : ""}`} class=${state.stale ? "stale" : ""}
+        @click=${held}>
         <div id="changes">${listView()}</div>
       </section>
       <div id="chosen">${back}
-        <section id="detail" aria-label="Selected Change" class=${d?.old ? "stale" : ""} @click=${held}>${d
-          ? detailView(d) : nothing}</section>
+        <section id="detail" aria-label=${`Selected Change${d?.old ? OFF : ""}`} class=${d?.old ? "stale" : ""}
+          @click=${held}>${d ? detailView(d) : nothing}</section>
       </div>
     </div>`;
 }
