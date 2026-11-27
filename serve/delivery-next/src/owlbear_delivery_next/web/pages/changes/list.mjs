@@ -106,12 +106,10 @@ function blockedBanner() {
 }
 
 // What shows as last read takes no activation, by key as little as by pointer: a focused button in it must not send.
-// It stays readable for a screen reader, so it is not made inert; its region's name says that its controls are off.
-const OFF = ", as last read: its controls are off";
+// It stays readable for a screen reader, so it is not made inert; a line above such a detail says that it is off.
 const held = {
   capture: true,
   handleEvent(event) {
-    if (!event.currentTarget.classList.contains("stale")) return;
     event.preventDefault();
     event.stopPropagation();
   },
@@ -138,15 +136,16 @@ export function view() {
     <section id="notes" class="panel" aria-label="Repository settings" ?hidden=${!state.notes.length}>
       ${state.notes.map((n) => text(n))}</section>
     <div id="board" class=${state.selected ? "open" : ""}>
-      <section id="list" aria-label=${`Changes${state.stale ? OFF : ""}`} class=${state.stale ? "stale" : ""}
-        @click=${held}>
+      <section id="list" aria-label="Changes" class=${state.stale ? "stale" : ""}
+        @click=${state.stale ? held : nothing}>
         <div id="changes">${listView()}</div>
       </section>
       <!-- The way back stands outside the detail: it works while the detail is as last read, or not shown yet. -->
       <div id="chosen"><p-button-pure type="button" icon="arrow-left" class="back" @click=${() => choose(null)}>All
         Changes</p-button-pure>
-        <section id="detail" aria-label=${`Selected Change${d?.old ? OFF : ""}`} class=${d?.old ? "stale" : ""}
-          @click=${held}>${d ? detailView(d) : unreadView()}</section>
+        ${d?.old ? text("Shown as last read: its controls are off until it is read again.") : nothing}
+        <section id="detail" aria-label="Selected Change" class=${d?.old ? "stale" : ""}
+          @click=${d?.old ? held : nothing}>${d ? detailView(d) : unreadView()}</section>
       </div>
     </div>`;
 }
