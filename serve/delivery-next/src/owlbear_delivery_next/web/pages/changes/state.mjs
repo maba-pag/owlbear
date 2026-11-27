@@ -10,9 +10,8 @@ const TITLE = document.title;
 export const KEY = /^(?:[0-9a-f]{16}\/)?[a-z0-9][a-z0-9-]{0,63}$/;
 export const DIALOG = "{ 'aria-haspopup': 'dialog' }";  // PDS's aria property, for a button that opens a dialog
 export const REVERT = "Reversing the merge needs a revert you make yourself.";
-// Everything the page shows comes from here (TD-264): the list and the selected Change's detail as last read (a
-// detail goes with its selection), the owner's unsent input per form (drafts: form key -> its fields), which toggles
-// are open (by their summary), and the notes above.
+// Everything the page shows comes from here (TD-264): the list and the detail as last read, the owner's unsent input
+// per form (drafts: form key -> its fields), which toggles are open (by their summary), and the notes above.
 // unread: the shown projects the last refresh could not read (id -> why), their Changes kept as last read.
 // A detail kept as last read is marked `old`; only a read of its own replaces it.
 export const state = {
