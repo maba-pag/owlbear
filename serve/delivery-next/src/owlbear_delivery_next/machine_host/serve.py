@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from starlette.types import ASGIApp, Receive, Scope, Send
 
 PROVISION_RETRY = 600  # seconds between tries to clone the shared repository
-SLOW = 1.0  # seconds: a read of the API that took longer gets a line in the host's log
+SLOW = 2.0  # seconds: a read of the API that took longer gets a line in the host's log
 
 
 def timed(served: ASGIApp, say: Callable[[str], None]) -> ASGIApp:

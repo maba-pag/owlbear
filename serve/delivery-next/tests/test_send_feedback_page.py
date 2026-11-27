@@ -54,7 +54,8 @@ def page_url(tmp_path) -> Iterator[tuple[Store, str]]:
 
 class Wire:
     """The page's requests to the test host: Answer posts recorded and answered as the test plans; the detail shows
-    the check waiting; while *down* is set, every API request fails as that kind of loss does."""
+    the check waiting; while *down* is set, every API request fails as that kind of loss does. An Answer planned as a
+    loss is where that loss begins."""
 
     def __init__(self, page: Any) -> None:
         self.posts: list[Any] = []
@@ -85,6 +86,8 @@ class Wire:
     def answer(self, route: Any) -> None:
         self.posts.append(route.request.post_data_json)
         step = self.plan.pop(0) if self.plan else ""
+        if step in {"abort", "restarted"}:
+            self.down = step
         if self.down:
             self.lost(route)
         elif step == "hold":
@@ -186,12 +189,13 @@ def test_a_refused_lost_or_unanswered_answer_unlocks_its_form_and_says_so(page_u
         assert words.input_value() == "keep this too"
 
         for down, page_wide in [("abort", "Delivery is not running"), ("restarted", "Delivery restarted")]:
-            wire.down = down
-            button.dispatch_event("click")  # the page-wide message of the first loss covers the board
+            expect(page.locator("#detail")).not_to_have_class("stale")  # shown as last read, it takes no click
+            wire.plan = [down]
+            button.dispatch_event("click")
             expect(form.get_by_role("button", name="Failed", exact=True)).to_be_visible()
             expect(page.locator("#error")).to_contain_text(page_wide)
             assert not form.evaluate("f => f.inert")
-        wire.down = ""
+            wire.down = ""
         assert len(wire.posts) == 4
 
 

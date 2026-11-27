@@ -390,6 +390,7 @@ def test_owlbears_own_project_shows_as_owlbear_apart_and_first_wherever_projects
 
 
 @pytest.mark.browser
+@pytest.mark.timeout(90)  # its end waits three times the 5 s the page gives a project that does not answer
 def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
     tmp_path: Path, monkeypatch, pds
 ) -> None:
@@ -420,10 +421,10 @@ def test_two_projects_with_one_slug_stay_apart_in_list_detail_actions_and_links(
         page.get_by_role("button", name="Continue").click()
         pds.answer(page, "Not now")
         expect(page.locator("#choose")).to_have_count(0)  # declined: nothing is left to click
-        _alpha_does_not_answer(page, base, a.id, expect)
+        _alpha_does_not_answer(page, base, a.id, b.id)
 
 
-def _alpha_does_not_answer(page, base: str, alpha: str, expect) -> None:
+def _alpha_does_not_answer(page, base: str, alpha: str, beta: str) -> None:
     changes = f"**/p/{alpha}/api/next/changes"
     page.route(changes, lambda r: r.fulfill(status=503, json={"detail": "stopping"}))
     expect(page.locator("#notes")).to_contain_text("alpha: not read just now (stopping)")
@@ -433,9 +434,17 @@ def _alpha_does_not_answer(page, base: str, alpha: str, expect) -> None:
     page.unroute(changes)
     expect(page.locator("#detail")).to_contain_text("in alpha")  # kept, and opened once it answers
     assert page.evaluate("location.search") == f"?change={alpha}%2Fsame"
-    page.route(changes, lambda _r: None)  # up, yet never answers
-    expect(page.locator("#error")).to_contain_text("slow to answer", timeout=30000)
-    expect(page.locator("#detail")).to_have_class("stale")  # not shown as freshly read
+    theirs = page.locator("#changes li.card", has_text="beta")
+    expect(theirs.locator(".top p-tag")).to_have_text("Paused")
+    page.route(changes, lambda _r: None)  # up, yet never answers: beta's Changes go on all the same
+    resume = f"{base}/p/{beta}/api/next/changes/same/intent"
+    assert page.request.post(resume, data={"intent": "resume"}, headers={"Authorization": "Bearer t"}).ok
+    expect(page.locator("#notes")).to_contain_text("alpha: not read just now (Delivery is slow", timeout=30000)
+    expect(theirs.locator(".top p-tag")).not_to_have_text("Paused", timeout=30000)
+    expect(page.locator("#error")).to_be_hidden()
+    expect(page.locator("#detail")).to_have_class("stale")  # alpha's: not shown as freshly read
+    theirs.locator("a.open").click()
+    expect(page.locator("#detail:not(.stale)")).to_contain_text("in beta", timeout=30000)
 
 
 class Chats:

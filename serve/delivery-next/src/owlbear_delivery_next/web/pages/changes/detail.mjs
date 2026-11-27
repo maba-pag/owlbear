@@ -6,18 +6,16 @@ import {
   questionForm, retryForm, criteriaPanel, checkForm, mergeForm, restartButton, pullbackNote, stopNotice,
 } from "./forms.mjs";
 import { decisionForm, visualSection, beforeSection, roundRefused } from "./visual.mjs";
-import { spendLines, toolLines, planInfo, roundsInfo, stepper } from "./progress.mjs";
+import { spendLines, planInfo, roundsInfo, stepper } from "./progress.mjs";
 import { activityLog, split } from "./activity.mjs";
 import { approval, briefInfo } from "./brief.mjs";
-import { choose } from "./list.mjs";
 import { watcherSection } from "./watcher.mjs";
 import { improvementSection } from "./improvement.mjs";
 import { detailsOn, detailsSwitch } from "./details.mjs";
 import { actionItems } from "./actions.mjs";
+import { toolUse } from "./tooluse.mjs";
 
 function detailHead(d) {
-  const back = html`<p-button-pure type="button" icon="arrow-left" class="back" @click=${() => choose(null)}>All
-    Changes</p-button-pure>`;
   let intent = nothing, amend = nothing;
   if (!d.finished) {
     const body = { intent: d.paused ? "resume" : "pause" }, said = d.paused
@@ -55,7 +53,7 @@ function detailHead(d) {
     }
   }
   const under = [d.brief.title && d.slug, several() && `in ${d.projectName}`].filter(Boolean).join(" \u00b7 ");
-  return html`<div class="detail-head">${back}<div>${hd(2, d.brief.title || d.slug, "xl", { tabindex: "-1" })}${under
+  return html`<div class="detail-head"><div>${hd(2, d.brief.title || d.slug, "xl", { tabindex: "-1" })}${under
     ? text(under, { size: "sm", color: "contrast-medium" }) : nothing}</div><div class="row">${
     detailsSwitch()}${amend}${intent}
     </div></div>`;
@@ -71,17 +69,12 @@ const PAUSED = /· paused by you/;
 
 export function releaseLook(d) {
   if (!d.release_look) return nothing;
-  const looked = async (e) => {
-    const control = e.currentTarget;
-    control.disabled = true;
-    try {
-      await send("/release-look", {}, state.detail?.key === d.key ? state.detail : d);
-    } finally {
-      if (control.isConnected) control.disabled = false;
-    }
-  };
+  // The one button on a card that writes: off while its project is not read, as what shows of it is as last read.
+  const why = state.unread.get(d.project);
+  const off = why === undefined ? {}
+    : { disabled: true, title: `Shown as last read: its project was not read (${why})` };
   return html`<p class="next">${d.release_look.text} ${d.release_look.ready
-    ? button("Mark done", looked) : nothing}</p>`;
+    ? button("Mark done", () => send("/release-look", {}, d), off) : nothing}</p>`;
 }
 
 export function badge(c) {
@@ -148,5 +141,5 @@ export function detailView(d) {
     ${improvementSection(d)}
     ${on ? info("Recent activity", activityLog(d.activity)) : nothing}
     ${spendLines(d.spend)}
-    ${on ? toolLines(d.tool_use) : nothing}`;
+    ${on ? toolUse(d) : nothing}`;
 }
