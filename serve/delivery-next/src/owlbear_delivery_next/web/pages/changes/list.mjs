@@ -39,6 +39,7 @@ function card([c, label, variant]) {
     bits.push(`${spentText(c.credits.change, c.credits.unknown || 0)}${now}`);
   }
   if (c.quiet) bits.push("quiet");
+  if (state.unread.has(c.project)) bits.push("shown as last read");  // the note above the list may be out of sight
   if (c.watcher?.outside) bits.push(`${c.watcher.outside} outside write${c.watcher.outside === 1 ? "" : "s"} observed`);
   const own = c.own ? html` <p-tag compact="true">${OWN_TAG}</p-tag>` : nothing;
   return html`<li class=${current ? "card current" : "card"}>
