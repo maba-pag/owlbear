@@ -33,7 +33,7 @@ OwlBear keeps everything it runs and records under `~/.owlbear/` on your Mac:
 | `onboarding/<id>.json` | Each Add a project run's receipt: its approved choices and each step's result, so **Resume** never repeats a step |
 | `data/` | The [shared settings repository](#the-shared-settings-repository)'s checkout, unless you set one elsewhere; updates and uninstalling never delete it |
 | `data.json`, `data.lock` | Which shared settings repository OwlBear uses and where it is cloned from, and the lock held while that changes |
-| `host.log` | The running host's log; `owlbear logs` shows its end |
+| `host.log` | The running host's log; `owlbear logs` shows its end. A read by a page or the `owlbear` command that took over 1 s leaves a `slow:` line with its path and time |
 
 Only with your yes at `owlbear install`, OwlBear also adds:
 

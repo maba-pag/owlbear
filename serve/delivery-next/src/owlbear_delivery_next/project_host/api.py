@@ -52,7 +52,7 @@ from owlbear_delivery_next.project_host import (
     token_guard,
 )
 from owlbear_delivery_next.project_host.admission import admitted
-from owlbear_delivery_next.project_host.change_view import summary
+from owlbear_delivery_next.project_host.change_view import shown_suppressions, summary
 from owlbear_delivery_next.project_host.launches import Launches, Refused
 from owlbear_delivery_next.runtimes import chat_contact, readiness, spend_logs
 from owlbear_delivery_next.runtimes.vscode_adapter import open_chat
@@ -368,6 +368,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         prefs, fault = display_prefs(store)
         return (
             summary_of(slug)
+            | shown_suppressions(store, c)
             | {
                 "brief": brief_view.shown(store, c, paused=host.activity(slug).paused),
                 "criteria": [k.model_dump() for k in c.brief.criteria],
