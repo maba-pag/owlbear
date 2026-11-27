@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from owlbear_delivery_next.change_contracts import models as m
-from owlbear_delivery_next.change_contracts.amend_tools import CandidateItem, CandidateResult, VerdictResult
+from owlbear_delivery_next.change_contracts.amend_tools import Affected, CandidateItem, CandidateResult, VerdictResult
 from owlbear_delivery_next.change_contracts.amendment_records import AmendedItem
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, ObjectionItem
 from owlbear_delivery_next.change_contracts.round_records import RoundPolicy
 from owlbear_delivery_next.change_flow import amending, loop
 from owlbear_delivery_next.project_host import api
@@ -134,6 +134,40 @@ def test_the_brief_panel_lists_each_amendment_and_takes_an_objection_to_an_appli
         assert reply.value.status == 200
         with store.db.read() as db:
             assert '"amendment":"A1"' in db.execute("SELECT item FROM inbox").fetchone()[0].replace(" ", "")
+
+
+def test_folding_an_objection_names_affected_evidence_before_the_owner_chooses(tmp_path) -> None:
+    store = Store(tmp_path)
+    c = approved()
+    c.checks = [
+        m.PersonCheck(id="criterion", criteria=["AC-1"]),
+        m.PersonCheck(id="named", criteria=["AC-2"]),
+        m.PersonCheck(id="unrelated", answer=m.Answer(at=NOW, passed=True)),
+        m.PersonCheck(id="answered"),
+    ]
+    proposed(
+        c, "AC-1", "greet() trims spaces", "AC-1 is over-specific", qualifies=True,
+        affected=[Affected(item="check:named", reason="it also reads the greeting")],
+    )  # fmt: skip
+    c.reviews = [
+        m.Review(task="t1", commit="before", inputs=m.Inputs(), verdict="pass", brief=3),
+        m.Review(task="t1", commit="after", inputs=m.Inputs(), verdict="pass", brief=4),
+        m.Review(commit="final", inputs=m.Inputs(), verdict="pass", brief=4),
+    ]
+    later = NOW.replace(hour=10)
+    c.checks[-1].answer = m.Answer(at=later, passed=True)
+    store.write(Lock(SLUG), c)
+    store.put_inbox(SLUG, ObjectionItem(amendment="A1", at=later))
+    with store.lock(SLUG) as lock:
+        c, step = store.fold(lock, SLUG, later)
+
+    assert step is None
+    q = loop.open_question(c)
+    assert q is not None
+    assert "reviews: task t1 (brief v4, after), final review (brief v4, final)" in q.text
+    assert "checks: answered, criterion, named;" in q.text
+    assert "brief v3, before" not in q.text
+    assert "unrelated" not in q.text
 
 
 @pytest.mark.browser
