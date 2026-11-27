@@ -138,7 +138,8 @@ function defaults(f) {
   return { owner, name: f.name, visibility: "private", ci: !f.state.workflows,
     protect: PUSH_FIRST.has(f.entry) && !unprotectable(f),
     needs: unmet.filter((i) => f.rules.needs.includes(i.key)).map((i) => i.key), advice: [],
-    labels: (f.labels ?? []).length > 0, consents: { task: f.old_task, server: true, memory: true, harness: true },
+    labels: f.stages.includes("labels") && (f.labels ?? []).length > 0,
+    consents: { task: f.old_task, server: true, memory: true, harness: true },
     files_warned: false, author: { name: "", email: "" }, method: null };
 }
 
@@ -322,8 +323,10 @@ function choicesView() {
     ${m.ask ? html`<p-radio-group name="method" label="Merge method for this project" .value=${live(m.write)}
       @change=${(e) => { c.method = e.target.value; }}>${f.allowed.map((x) => html`<p-radio-group-option
       value=${x} label=${x}></p-radio-group-option>`)}</p-radio-group>` : nothing}
-    ${f.on_github && f.labels?.length ? tick(`Create Global's labels: ${f.labels.join(", ")}`, "labels") : nothing}
-    ${f.labels_error ? html`<p-text size="sm" role="alert">${f.labels_error}</p-text>` : nothing}
+    ${f.stages.includes("labels") && f.labels?.length
+      ? tick(`Create Global's labels: ${f.labels.join(", ")}`, "labels") : nothing}
+    ${f.stages.includes("labels") && f.labels_error
+      ? html`<p-text size="sm" role="alert">${f.labels_error}</p-text>` : nothing}
     ${f.stages.includes("files") ? [...(f.old_task ? [TASK] : []), ...FILES].map(([key, label]) => tick(label, key,
       { into: c.consents })) : nothing}
     ${f.state.files && f.stages.includes("commit") ? html`<p-inline-notification state="warning"

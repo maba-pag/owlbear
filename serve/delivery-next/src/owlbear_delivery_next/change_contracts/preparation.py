@@ -42,7 +42,7 @@ def _command(v: str, name: str) -> str:
 
 
 class Preparation(BaseModel):
-    """One declared way to prepare a check's test copy; every command runs without a shell in the worktree root."""
+    """Commands run without a shell: export and masking from the committed tree, others from the worktree."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 

@@ -244,7 +244,9 @@ def stages(found: dict[str, Any]) -> tuple[list[str], str]:
         left.add("repository")
     if github and not clone and not (local_commits and remote_commits):
         left.add("push")  # the first push, or an unborn clone's pull of the repository's commits
-    left |= {"protection", "labels", *SETUP} if github else {"files", "end"}
+    left |= {"protection", *SETUP} if github else {"files", "end"}
+    if github and not remote_commits:
+        left.add("labels")
     if found["registered"]:
         left.discard("register")
     return [s for s in ORDER if s in left], _entry(st, remote, github=github, clone=clone)
