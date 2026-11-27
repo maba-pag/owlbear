@@ -434,6 +434,27 @@ def objectable(c: Change, ident: str) -> str:
     return "you objected to it already; answer that question" if a.objected_at and not a.objection else ""
 
 
+def _objection_checks(c: Change, a: Amendment) -> str:
+    """Name directly affected checks and checks judged on this or a later brief version."""
+    checks = set(a.affected)
+    checks.update(amend_apply.mark(i) for i in a.items if i.field in {"check", "visual"})
+    criteria = {i.key for i in a.items if i.field == "criterion"}
+    scope = any(i.field == "scope" for i in a.items)
+    checks.update(
+        f"check:{p.id}"
+        for b in c.brief.approved
+        if b.version in {a.base, a.version}
+        for p in b.checks
+        if scope or criteria.intersection(p.criteria)
+    )
+    applied = next((b.approved_at for b in c.brief.approved if b.version == a.version), None)
+    if applied is not None:
+        checks.update(f"check:{p.id}" for p in c.checks if p.answer and p.answer.at > applied)
+        if c.visual is not None and c.visual.at > applied:
+            checks.update(f"screen:{name}" for name, version in c.visual.states.items() if version != amend_apply.STALE)
+    return ", ".join(ref.removeprefix("check:") for ref in sorted(checks)) or "none"
+
+
 def objected(c: Change, item: ObjectionItem, now: datetime) -> None:
     """His objection: dependent work waits on his choice, and he sees what was built and judged on it.
 
@@ -445,10 +466,16 @@ def objected(c: Change, item: ObjectionItem, now: datetime) -> None:
     a.objected_at = item.at
     later = [x.id for x in c.amendments if x.state == "applied" and (x.version or 0) > (a.version or 0)]
     done = [t.id for t in c.plan.tasks if t.done and f"{c.plan.version}:{t.id}" not in a.done] if c.plan else []
+    reviews = [
+        f"{f'task {r.task}' if r.task else 'final review'} (brief v{r.brief}, {r.commit[:12]})"
+        for r in c.reviews
+        if r.brief is not None and r.brief >= (a.version or 0)
+    ]
     text = (
         f"You objected to amendment {a.id} (brief v{a.version}: {'; '.join(_item_line(i) for i in a.items)})"
         f"{f': {item.text}' if item.text else ''}. Built and judged on it since: tasks {', '.join(done) or 'none'}, "
-        f"the reviews and checks after v{a.version}; later amendments {', '.join(later) or 'none'}. Merged or "
+        f"reviews: {', '.join(reviews) or 'none'}; checks: {_objection_checks(c, a)}; "
+        f"later amendments {', '.join(later) or 'none'}. Merged or "
         "published work can't be undone. Revert it as a new version, keep it, or reshape the brief?"
     )
     _ask(c, a, "objection", text, REVERT, KEEP, RESHAPE, now=now)
