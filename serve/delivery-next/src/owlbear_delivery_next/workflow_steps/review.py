@@ -10,7 +10,7 @@ from owlbear_delivery_next.change_contracts import round_records, tools
 from owlbear_delivery_next.change_contracts.failures import signature
 from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, Inputs, Review, Score, StepKind, Task
 from owlbear_delivery_next.change_contracts.round_records import FINAL, RECHECK
-from owlbear_delivery_next.change_flow import disputes, loop, rebuilds, worktree
+from owlbear_delivery_next.change_flow import challenge_reviewers, disputes, loop, rebuilds, worktree
 from owlbear_delivery_next.change_flow.moves import loop_of, subject_of
 from owlbear_delivery_next.settings import rounds
 from owlbear_delivery_next.workflow_steps import reconsider, retry
@@ -57,7 +57,7 @@ def _final(c: Change, settings: Settings) -> None:
         rounds.loop(c, FINAL, settings)
     elif lp is not None and lp.ended:
         lp.ended, lp.last, lp.reentry, lp.completion, lp.rebuild = "", False, True, None, []
-        lp.extra = max(lp.extra, lp.round + 1 - lp.policy.max_rounds)
+        lp.extra = lp.round + 1 - lp.policy.max_rounds
 
 
 def _subject(c: Change, task: Task) -> str | None:
@@ -125,6 +125,13 @@ def recorded(change: Change, task: Task | None, run: Run, path: Path, result: St
     fixes = repair(change, task, found)
     update = {"review": review, "fix_task": fixes[0], "more_fixes": fixes[1:], "ungated": lp is not None}
     return result.model_copy(update=update | {"score": score(found, change.step.kind)})
+
+
+def named(change: Change, run: Run, result: StepResult) -> list[dict[str, object]]:
+    """The accepted review's named decisions; the runner announces them with its durable settlement."""
+    if result.review is None:
+        return []
+    return challenge_reviewers.named(change, run.payload, f"review:{change.step.task or 'final'}", result)
 
 
 def _head(path: Path) -> str:

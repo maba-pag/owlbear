@@ -126,7 +126,7 @@ def revising(c: Change) -> tuple[str, ...]:
 
 def _held(c: Change) -> tuple[str, tuple[str, ...]]:
     b, lp = c.brief, c.loops.get(BRIEF)
-    if b.challenged == b.version:
+    if b.challenged == b.version or picks.unready(c):
         return picks.unready(c), ()
     if c.step.mode in MODES:
         return f"the challenge of brief v{b.version} is running", ()
@@ -204,7 +204,7 @@ def _refusal(c: Change, version: int) -> str:
     if b.challenged == version:
         return picks.unready(c) or f"brief v{version} is challenged already; the owner may approve it"
     if c.step.mode in MODES or first(c) is not None or owned_open(c):
-        return "its challenge runs or waits for the owner's decision; ask again after it"
+        return picks.unready(c) or "its challenge runs or waits for the owner's decision; ask again after it"
     return ""
 
 
@@ -374,12 +374,12 @@ def decided(c: Change, q: Question, target: str, note: str, now: datetime) -> No
     if f is None or f.state != "escalated" or f.reconsider == "due":
         return
     if target == "reconsider":  # an unsure finding's question offers it no more (TD-193: once per finding)
-        f.reconsider, f.note = "due", _flat(note, 2000)
+        f.reconsider, f.note = "due", note
     elif target in {"repair", "accept"}:
         if f.reconsider == "unsure":
             f.judgement += f"\nReconsideration was unsure: {f.clarified}"
             f.clarified = ""
-        f.state, f.note, f.reconsider = ("owner-fix" if target == "repair" else "owner-drop"), _flat(note, 2000), ""
+        f.state, f.note, f.reconsider = ("owner-fix" if target == "repair" else "owner-drop"), note, ""
     else:
         return
     q.shaping_version = c.brief.version
@@ -417,6 +417,8 @@ def running(c: Change, version: int, attempt: int) -> bool:
     lp = c.loops.get(BRIEF)
     if lp is None or lp.attempt != attempt or c.brief.requested != version or c.brief.challenged == version:
         return False
+    if (p := picks.current(c)) is not None and p.status == "failed":
+        return False  # its challenge waits for the pick's retry: the chat reads why instead of waiting on
     return not owned_open(c) and (c.step.mode in MODES or lp.head != str(version))
 
 

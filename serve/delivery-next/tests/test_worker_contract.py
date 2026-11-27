@@ -93,6 +93,30 @@ def _judgment(*, check: bool = False) -> pick_tools.QuestionJudgment:
     )
 
 
+@pytest.mark.parametrize(
+    ("approved", "menu", "refused"), [(True, True, True), (False, True, False), (True, False, False)]
+)
+def test_a_product_question_must_be_binary_after_brief_approval(approved, menu, refused):
+    proposed = AskQuestion(
+        question="Change the greeting to German?",
+        why="The owner chooses the greeting.",
+        options=[
+            {"label": "Yes", "effect": "Use German.", "action": "continue"},
+            {"label": "No", "effect": "Pause this Change.", "action": "pause"},
+        ],
+    )
+    verdict = _judgment()
+    if menu:
+        proposed.options.append(tools.AskOption(label="Use French", effect="Use French.", action="continue"))
+        verdict.options.append(verdict.options[0].model_copy(update={"index": 2}))
+    done = Run("admission", "result", verdict, termination=Termination(confirmed=True))
+
+    _, errors = worker_questions.judged(done, proposed, None, approved=approved)
+
+    expected = ["options: a product question is one proposal, yes (continue) or no (pause or abandon)"]
+    assert errors == (expected if refused else [])
+
+
 def test_a_confirmed_admission_is_kept_before_its_temporary_directory_cleanup(tmp_path, change_repo, monkeypatch):
     store, lock = Store(tmp_path / "store"), Lock("c1")
     store.root.mkdir()

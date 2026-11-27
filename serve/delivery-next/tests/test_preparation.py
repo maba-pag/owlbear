@@ -81,6 +81,7 @@ def env(tmp_path, monkeypatch):
     (repo / "src").mkdir()
     (repo / "fixtures" / "users.json").write_text("[]\n")
     (repo / "src" / "app.py").write_text("print('app')\n")
+    (repo / "tool.py").write_text(TOOL)
     git(repo, "init", "-q")
     git(repo, "add", ".")
     git(repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base")
@@ -97,13 +98,17 @@ def run(tmp_path: Path, act: str) -> str:
     return f"{sys.executable} {tmp_path / 'tool.py'} {act}"
 
 
+def live_run(act: str) -> str:
+    return f"{sys.executable} tool.py {act}"
+
+
 def option(tmp_path: Path, kind: str = "live-copy-plus-data", **fields) -> Preparation:
     live = kind != "data-only"
     base = {
         "id": "copy", "kind": kind, "cleanup": run(tmp_path, "cleanup"),
         "isolation": {"TEST_DB": str(tmp_path / "test.db"), "TEST_LOG": str(tmp_path / "prep.log")},
         "setup_globs": ["fixtures/**"],
-        **({"export": run(tmp_path, "export"), "masking": run(tmp_path, "mask"), "restore": run(tmp_path, "restore"),
+        **({"export": live_run("export"), "masking": live_run("mask"), "restore": run(tmp_path, "restore"),
             "data_classes": ["customers"], "live": LIVE} if live else {}),
         **({"seed": run(tmp_path, "seed")} if kind != "live-copy" else {}),
     }  # fmt: skip
@@ -260,6 +265,30 @@ def test_export_and_masking_never_run_a_script_the_preparer_edited(env):
         "test preparation failed: the export or masking runs fixtures/export.py, which the preparer edited; they "
         "read live"
     )
+
+
+def test_export_and_masking_import_only_the_committed_helper(env):
+    repo, store, log, tmp = env
+    helper = repo / "helper.py"
+    helper.write_text('source = "committed"\n')
+    entry = repo / "tool.py"
+    entry.write_text(
+        "import os, sys\n"
+        "from helper import source\n"
+        'with open(os.environ["PREP_LOG"], "a") as f:\n'
+        '    f.write(f"{source}-{sys.argv[1]}\\n")\n'
+        + TOOL
+        + '\nif act == "export":\n    pathlib.Path("helper.py").write_text(\'source = "from-export"\\n\')\n'
+    )
+    commit(repo, "tool.py", "helper.py")
+    helper.write_text('source = "working-tree"\n')
+    chosen = option(tmp, export=f"{sys.executable} {entry} export")
+    c, s = change(repo), settings(chosen)
+    prepare._write(store, "c1", prepare.Prepared(check="visual", option=chosen))  # noqa: SLF001 - as accepted
+
+    assert prepare.launch(store, c, s, lambda _e: None).exit == Exit.PENDING
+    assert lines(log) == ["committed-export", "export", "committed-mask", "mask", "restore", "seed"]
+    assert helper.read_text() == 'source = "working-tree"\n'
 
 
 def test_keys_and_unmasked_classes_are_allowed_only_by_the_permissions(tmp_path):
@@ -539,11 +568,11 @@ def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env, monke
             cfg.session_id,
             "ask",
             tools.AskQuestion(
-                question="Pause or abandon?",
-                why="Choose the next move.",
+                question="Change the greeting to German?",
+                why="The owner chooses the greeting.",
                 options=[
+                    {"label": "Yes", "effect": "Use German for the greeting.", "action": "continue"},
                     {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
-                    {"label": "Abandon", "effect": "Abandon this Change.", "action": "abandon"},
                 ],
             ),
             termination=Termination(confirmed=True),
@@ -651,11 +680,11 @@ def test_a_returned_reviewer_question_does_not_rebuild_its_message_before_checkp
             cfg.session_id,
             "ask",
             tools.AskQuestion(
-                question="Pause or abandon?",
-                why="Choose the next move.",
+                question="Change the greeting to German?",
+                why="The owner chooses the greeting.",
                 options=[
+                    {"label": "Yes", "effect": "Use German for the greeting.", "action": "continue"},
                     {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
-                    {"label": "Abandon", "effect": "Abandon this Change.", "action": "abandon"},
                 ],
             ),
             checks=cfg.checks,
@@ -849,7 +878,7 @@ def test_a_live_copy_pointing_at_live_is_refused_and_never_exported(env):
 def test_an_export_that_reaches_live_through_a_link_is_never_masked_and_is_deleted(env, link):
     repo, store, log, tmp = env
     (live := tmp / "live.txt").write_text("alice@example.com")
-    linked = option(tmp, export=run(tmp, link))
+    linked = option(tmp, export=live_run(link))
     c, s = change(repo), settings(linked, retention="keep")
     prepare._write(store, "c1", prepare.Prepared(check="visual", option=linked))  # noqa: SLF001 - as accepted
     kept = set(prepare.snapshots().iterdir()) if prepare.snapshots().is_dir() else set()
@@ -864,7 +893,7 @@ def test_an_export_that_reaches_live_through_a_link_is_never_masked_and_is_delet
 
 def test_a_failed_masking_is_deleted_even_when_the_owner_keeps_snapshots(env, monkeypatch):
     repo, store, _log, tmp = env
-    failing = option(tmp, masking=run(tmp, "fail"))
+    failing = option(tmp, masking=live_run("fail"))
     c, s = change(repo), settings(failing, retention="keep")
     prepare._write(store, "c1", prepare.Prepared(check="visual", option=failing))  # noqa: SLF001 - as accepted
     events = []

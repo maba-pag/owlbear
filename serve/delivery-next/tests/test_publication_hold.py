@@ -710,6 +710,32 @@ def test_a_hold_that_never_wrote_lapses_with_the_next_healthy_publication(three)
     assert remote_head(remote) == git(root, "rev-parse", "HEAD")
 
 
+def test_a_successful_push_keeps_its_result_when_the_hold_cannot_be_removed(three, monkeypatch, caplog):
+    winner, _, remote = three
+    root, shared = winner.shared.root, winner.shared
+    record = root / git(root, "rev-parse", "--git-path", publication_hold.RECORD)
+    real = Path.unlink
+    detail = "cannot remove hold\n  directory is not writable"
+
+    def denied(target, *args, **kwargs):
+        if target == record:
+            raise PermissionError(detail)
+        return real(target, *args, **kwargs)
+
+    requires = publication_hold.Requires("an automatic fill")
+    with shared.locked():
+        shared.hold(winner.config_path, requires)
+        winner.config_path.write_text(Layer().model_dump_json())
+        with monkeypatch.context() as patch:
+            patch.setattr(Path, "unlink", denied)
+            assert shared.publish(winner.config_path, "settings: automatic fill") == ""
+        assert record.is_file()
+        assert remote_head(remote) == git(root, "rev-parse", "HEAD")
+        assert caplog.messages.count(f"could not settle held publication in {root}: PermissionError: {detail}") == 1
+        assert shared.publish(winner.config_path, "settings: automatic fill") == ""
+    assert not record.exists()
+
+
 def mutate(record: dict, case: str) -> bytes:
     if case == "not json":
         return b"{ not json"

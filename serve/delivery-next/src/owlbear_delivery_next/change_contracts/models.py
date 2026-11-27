@@ -494,6 +494,7 @@ class Change(Record):
     tests: TestReview | None = None  # a test review's shares and report (TD-373)
     pending_question: PendingQuestion | None = None
     decisions_baseline: DecisionBaseline | None = None  # pinned at brief approval (TD-419 slice 4)
+    decisions_named: dict[str, str] = Field(default_factory=dict)  # unpicked rules named while shaping
     decisions_offered: DecisionBaseline | None = None  # the set the owner's open decisions question would pin
     decisions_unpinned_at: datetime | None = None  # approved while unreadable: the owner confirms the set to pin
     decisions_published: list[Published] = Field(default_factory=list)  # the brief's project ones (TD-453)

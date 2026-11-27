@@ -16,7 +16,7 @@ from owlbear_delivery_next.change_contracts.models import ErrorKind, Exit, StepK
 from owlbear_delivery_next.change_contracts.permissions import Policy
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import PLAN, RECHECK
-from owlbear_delivery_next.change_flow import amending, asking, challenge_reviewers, loop, plan_rounds, worktree
+from owlbear_delivery_next.change_flow import amending, challenge_reviewers, loop, plan_rounds, worktree
 from owlbear_delivery_next.change_flow.moves import carry_integrations
 from owlbear_delivery_next.local_system.git_files import git_common_dir
 from owlbear_delivery_next.runtimes import amendments, challenge_input, sdk_adapter, session_result, step_input
@@ -78,11 +78,18 @@ def planned(  # noqa: PLR0913, PLR0917 - the planner's session, its result and w
 
 
 def _last(change: Change) -> Result:
-    """The last allowed round left many findings: a stop with all of them, never a question (#1062)."""
+    """The last allowed round left many findings: a stop with all of them, never a question (#1062).
+
+    The stop's action is one more round on the revised plan (#1399).
+    """
     q = plan_rounds.last(change.loops[PLAN])
     reason = f"{plan_rounds.LAST_STOP}.\n\nDetails: {q.text}"
     stop = Stop(
-        kind=ErrorKind.REVIEW, reason=reason, action=asking.RERUN, resume="the step runs again", at=datetime.now(UTC)
+        kind=ErrorKind.REVIEW,
+        reason=reason,
+        action=plan_rounds.ANOTHER,
+        resume=plan_rounds.ANOTHER_RESUME,
+        at=datetime.now(UTC),
     )
     return loop.StepResult(exit=Exit.STOP, cause=q.cause, reason=reason, stop=stop)
 
@@ -145,6 +152,8 @@ def challenge(  # noqa: PLR0913, PLR0917 - the plan's session context
         return verdict
     if event is not None:
         events.append(event)  # its caller logs this once the verdict's settlement is durable
+    if challenge_reviewers.findings(verdict, run.payload) is not None:
+        events += challenge_reviewers.named(change, run.payload, LABEL, verdict)
     return judged(change, verdict, run.payload)
 
 
@@ -197,6 +206,7 @@ def _kept(store: Store, lock: Lock, change: Change, reviewers: list[str], runs: 
         premise = isinstance(run.payload, tools.WrongPremise) and run.payload.stage == "brief"
         if not premise and (said := challenge_reviewers.findings(verdict, run.payload)) is not None:
             challenge_reviewers.keep(change, PLAN, name, said[0])
+            steps += challenge_reviewers.named(change, run.payload, f"{LABEL}:{name}", verdict)
     try:
         store.write(lock, change)
     except (OSError, StoreError) as exc:
@@ -298,7 +308,7 @@ def prompt(c: Change, at: Path) -> str:
     for f in plan_rounds.due(c):
         lines += [f"- {f.id}: {' '.join(f.text.split())}", f"  Planner's reason: {' '.join(f.reason.split())}"]
         lines += [f"  Earlier recheck: {' '.join(f.judgement.split())}"] if f.judgement else []
-        lines += [f"  The owner's note: {' '.join(f.note.split())}"]
+        lines += [f"  The owner's note: {f.note}"]
     return "\n".join([*lines, "", "## Judge", JUDGE, "", "## Finish", FINISH])
 
 

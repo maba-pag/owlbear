@@ -9,6 +9,7 @@ import os
 import subprocess
 import threading
 import urllib.error
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from email.message import Message
 from http.client import IncompleteRead
@@ -18,6 +19,8 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from mcp import ClientSession
+from mcp.shared.memory import create_client_server_memory_streams
 
 from owlbear_delivery_next.audit_runs import job as audit_job
 from owlbear_delivery_next.audit_runs import record as audit_record
@@ -118,6 +121,37 @@ def test_the_tools_a_chat_server_offers_are_those_of_its_contract():
     assert advertised.annotations is not None
     assert advertised.annotations.read_only_hint is False
     assert advertised.annotations.destructive_hint is True
+
+
+def test_an_unexpected_chat_tool_failure_returns_its_whole_diagnostic(monkeypatch):
+    def broken(_change):
+        error = RuntimeError("first line\n  second  line")
+        error.add_note("while reading the Change")
+        raise error
+
+    monkeypatch.setattr(mcp_server, "_STATE", {"chat": SimpleNamespace(show_status=broken)})
+
+    async def call():
+        async with create_client_server_memory_streams() as (client_streams, server_streams):
+
+            @asynccontextmanager
+            async def stdio():
+                yield server_streams
+
+            monkeypatch.setattr("mcp.server.mcpserver.server.stdio_server", stdio)
+            task = asyncio.create_task(mcp_server.mcp.run_stdio_async())
+            async with ClientSession(*client_streams) as client:
+                await client.initialize()
+                reply = await client.call_tool("show_status", {})
+            await client_streams[1].aclose()
+            await task
+            return reply
+
+    result = asyncio.run(call())
+    assert result.is_error
+    assert [part.text for part in result.content if part.type == "text"] == [
+        "Error executing tool show_status: RuntimeError: first line\n  second  line\nwhile reading the Change"
+    ]
 
 
 @pytest.mark.parametrize("n", sorted(chat_contract.SUPPORTED))

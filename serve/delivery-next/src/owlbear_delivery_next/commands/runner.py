@@ -231,12 +231,12 @@ def _agent(store: Store, lock: Lock, change: Change, repo: Path) -> None:  # noq
             return
         change.pending_question, change.pending_child = None, None
     result = review.recorded(change, task, run, path, result)
+    events = review.named(change, run, result)
     result = disputes.processed(change, task, run.session_id, run.payload, result, run.changed)
     result = review.delegated(change, task, result)
     result = conversation.disputed(change, task, run.payload, result)
     conversation.respond(task, run.payload, run.head, result.exit)
     change = budgets.effect_observed(change, answer.id, end) if answer and session_result.effect_seen(run) else change
-    events: list[dict[str, object]] = []
     if s.kind == StepKind.PLAN and result.plan:  # recorded, then challenged in its loop (TD-190)
         result = plan_round.planned(post, lock, change, path, run.payload, result, profile, others, events)
         overlap.record(change, result, others, path)
@@ -406,12 +406,12 @@ def main(argv: list[str] | None = None) -> int:
     store = Store.open(repo)
     try:
         with store.lock(args.change) as lock, command_marks.marking(store, lock, args.change):
-            state, moved = engine.observe(store, repo, args.change)
-            leave = queue.barrier(store, repo)
-            change, step = store.fold(lock, args.change, datetime.now(UTC), state, moved=moved, leave=leave)
-            kind = step.kind.value if step is not None else ""
-            spend_ledger.enter(spend_ledger.Where.of(store, repo, change=args.change, step=kind))  # every session's
             try:
+                state, moved = engine.observe(store, repo, args.change)
+                leave = queue.barrier(store, repo)
+                change, step = store.fold(lock, args.change, datetime.now(UTC), state, moved=moved, leave=leave)
+                kind = step.kind.value if step is not None else ""
+                spend_ledger.enter(spend_ledger.Where.of(store, repo, change=args.change, step=kind))
                 _step(store, lock, change, step, repo)
             except Exception as exc:  # the owner reads it in Recent activity; runner.log gets it and its traceback
                 at = datetime.now(UTC).isoformat()

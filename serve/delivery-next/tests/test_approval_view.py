@@ -693,6 +693,7 @@ def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_coun
 
     store, base = page_url
     stopped = f"runtime stop failed: RuntimeError: {whole_error}"
+    merged = "Pull Request successfully merged\n  GitHub recorded /the/full/path"
     events = [
         {"event": "step", "kind": "cleanup", "exit": "done", "at": "2026-10-16T00:59:00+00:00",
          "reason": "workspace kept: large ignored files (/Users/Jane Doe/.owlbear/wt/flip)"},
@@ -701,7 +702,7 @@ def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_coun
         {"event": "tool", "tool": "submit_result", "accepted": True, "at": "2026-10-16T01:02:00+00:00"},
         {"event": "prepared-end", "check": "feel", "cleanup": "ok", "at": "2026-10-16T01:03:00+00:00"},
         {"event": "merge-request", "pr": 20, "head": "abc", "status": "merged",
-         "message": "Pull Request successfully merged", "at": "2026-10-16T01:04:00+00:00"},
+         "message": merged, "at": "2026-10-16T01:04:00+00:00"},
         {"event": "merged", "pr": 20, "head": "abc", "sha": "77541c4e9", "method": "squash",
          "at": "2026-10-16T01:04:01+00:00"},
         {"event": "step", "kind": "merge", "exit": "done", "reason": "merged PR #20 as 77541c4 (squash)",
@@ -733,7 +734,7 @@ def test_recent_activity_reads_in_words_with_one_line_per_merge_and_repeats_coun
         expect(lines.nth(4)).to_contain_text("Could not undo task t1, attempt 2: conflict in '/Users/me/repo/hero.css'")
         expect(lines.nth(5)).to_contain_text("Lint not run: ruff: no configuration for new.py")
         expect(lines.nth(6)).to_contain_text("Workspace flip kept: large ignored files")
-        expect(lines.nth(7)).to_contain_text("Merged PR #20 as 77541c4 (squash)")
+        assert lines.nth(7).locator(":scope > span").text_content() == f"Merged PR #20 as 77541c4 (squash): {merged}"
         expect(lines.nth(8)).to_have_text(re.compile(r"Check feel ended; its cleanup ran$"))
         expect(lines.nth(9)).to_have_text(re.compile(r"Submitted its result\s*\u00d73, 3 times$"))
         kept = r"Clean-up finished: workspace kept: large ignored files \(/Users/Jane Doe/\.owlbear/wt/flip\)$"

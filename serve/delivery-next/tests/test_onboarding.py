@@ -262,14 +262,19 @@ def test_an_empty_repository_with_an_unborn_clone_gets_a_first_commit_and_merge_
     assert facts(info)["profile"] is True
 
 
-def test_an_existing_clone_left_unprotected_gets_no_rule_and_no_merge_method(hub, jobs, tmp_path):
+def test_an_existing_clone_left_unprotected_gets_no_rule_and_no_merge_method(hub, jobs, tmp_path, monkeypatch):
     folder = committed_clone(hub, tmp_path, "ada/patch")
     found = jobs.probe({"kind": "folder", "folder": str(folder)})
     assert found["entry"] == "E2"
     assert found["stages"][0] == "protection"
+    assert "labels" not in found["stages"]
     head = git(folder, "rev-parse", "HEAD")
-    info = run(jobs, plan_for(found, protect=False, method=None))
-    assert [c for c in hub.calls if c[0] in {"ruleset", "create"}] == []
+    # A plan retained before the label stage was removed must not change GitHub either.
+    monkeypatch.setattr(repo_target, "labels", lambda *_a: set())
+    monkeypatch.setattr(repo_target, "create_label", lambda *_a: hub.calls.append(("label",)))
+    old_stages = ["protection", "labels", *found["stages"][1:]]
+    info = run(jobs, plan_for(found, protect=False, method=None, stages=old_stages, labels=["release:minor"]))
+    assert [c for c in hub.calls if c[0] in {"ruleset", "create", "label"}] == []
     assert Store.open(folder).read_config().prefs is None
     assert git(folder, "rev-parse", "HEAD") == head
     assert stage(info, "end")["state"] == "done"
@@ -546,6 +551,27 @@ def test_the_dialog_takes_a_new_project_from_zero_to_new_change(hub, tmp_path, m
         modal.get_by_role("button", name="Close").click()
         expect(page.get_by_role("dialog")).to_have_count(0)
         expect(opener).to_be_focused()
+
+
+@pytest.mark.browser
+def test_existing_repo_onboarding_keeps_github_unchanged_by_default(hub, tmp_path, monkeypatch, pds):
+    monkeypatch.setattr("owlbear_delivery_next.machine_host.onboarding._labels", lambda: (["release:minor"], ""))
+    folder = committed_clone(hub, tmp_path, "ada/proj")
+    with served(monkeypatch, pds) as (page, base, _machine):
+        page.goto(f"{base}/projects#token=t")
+        page.get_by_role("button", name="Add a project").click()
+        modal = pds.modal(page)
+        modal.get_by_role("radio", name="A folder on this Mac").check()
+        modal.get_by_role("textbox", name="Folder").fill(str(folder))
+        modal.get_by_role("button", name="Look").click()
+        protection = modal.get_by_role("checkbox", name="Protect the default branch (opt-in: it has history)")
+        expect(protection).to_be_visible()
+        expect(protection).not_to_be_checked()
+        with page.expect_request("**/onboarding/preflight") as request:
+            modal.get_by_role("button", name="Check and continue").click()
+        plan = request.value.post_data_json
+        assert (plan["protect"], plan["labels"]) == (False, [])
+        assert modal.get_by_role("checkbox", name="Create Global's labels: release:minor").count() == 0
 
 
 @pytest.mark.browser

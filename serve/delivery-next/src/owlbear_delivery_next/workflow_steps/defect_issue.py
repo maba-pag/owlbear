@@ -31,6 +31,7 @@ REPOSITORY = codebase.URL.removeprefix("https://github.com/").removesuffix(".git
 SOURCE = codebase.ROOT.parents[3]  # the OwlBear checkout holding serve/delivery-next/src/owlbear_delivery_next
 
 
+# OWNER: a public defect issue never names a private project or its paths; such text is held for the owner.
 def file(store: Store, path: Path, defect: Defect) -> str:
     """File *defect* once; what happened, as the repair records it. It never names the Change."""
     verified = [p for p in defect.paths if _ours(p)]

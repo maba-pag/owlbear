@@ -437,8 +437,14 @@ def settle(c: Change, now: datetime, paths: Mapping[str, str]) -> Change:
         return loop.apply(c, loop.StepResult(exit=Exit.DONE, reason=reason, paths=dict(paths)), now)
     tasks = c.plan.tasks if c.plan else []
     last = tasks[-1] if tasks else Task(id="t0", title="")
-    title = f"Fix: the check {person.id} failed for the owner: {answer.text}"
-    fix = Task(id=f"t{len(tasks) + 1}", title=title, scope=last.scope, checks=last.checks, origin="person-check")
+    fix = Task(
+        id=f"t{len(tasks) + 1}",
+        title=f"Fix: the check {person.id} failed for the owner",
+        scope=last.scope,
+        checks=last.checks,
+        origin="person-check",
+        detail=answer.text,
+    )
     cause = failures.cause_key(ErrorKind.CHECKS, StepKind.CHECK, person.id)
     result = loop.StepResult(
         exit=Exit.BACK, back_to=StepKind.BUILD, cause=cause, reason=f"{person.id} failed for you", fix_task=fix

@@ -888,6 +888,25 @@ def test_a_session_failure_keeps_its_whole_error_in_the_journal_and_status(world
     assert result.reason == f"RuntimeError: {whole_error}"
 
 
+def test_a_session_error_event_keeps_its_whole_text_in_the_journal_and_status(world, monkeypatch, tmp_path):
+    message, stack = "first line\n  second  line", "first frame\n  second frame"
+
+    async def opened(_client, st):
+        data = SimpleNamespace(message=message, stack=stack)
+        st.on_event(SimpleNamespace(type="session.error", data=data))
+        st.finish("no-result")
+
+    monkeypatch.setattr(sdk_adapter, "_open", opened)
+    run = asyncio.run(sdk_adapter.run(world.cfg))
+    store, change = Store(tmp_path / "store"), Change(slug="c1", brief=Brief(version=1))
+    store.write(Lock("c1"), change)
+    sessions.logged(store, Lock("c1"), change, run, {"kind": StepKind.BUILD, "exit": "retry"})
+    (step,) = [e for e in store.events("c1") if e.get("event") == "step"]
+    detail = f"{message}\n{stack}"
+    assert (run.ending, run.detail, step["detail"]) == ("no-result", detail, detail)
+    assert to_result(run, StepKind.BUILD, NOW).reason == f"no valid result: {detail}"
+
+
 TRIGGER = "the connection timed out once the quota of credits was read"  # words the retry classifiers match (R7)
 
 

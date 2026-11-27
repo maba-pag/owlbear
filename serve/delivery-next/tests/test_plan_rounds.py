@@ -12,7 +12,7 @@ import pytest
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.dispute_tools import SUBMIT as RECONSIDER
 from owlbear_delivery_next.change_contracts.dispute_tools import ReconsiderResult
-from owlbear_delivery_next.change_contracts.inbox import AnswerItem
+from owlbear_delivery_next.change_contracts.inbox import AnswerItem, Recovery
 from owlbear_delivery_next.change_contracts.models import (
     Answer,
     Brief,
@@ -275,7 +275,7 @@ def test_plan_round_limit_stops_with_the_plan_and_attempt_kept(store, change_rep
     mp.reviews += [*first_round(review("t1")), *([review(upheld={"F1": False})] if rejected else [])]
     step(store, change_repo)
     c = step(store, change_repo)
-    assert (c.outcome.exit, c.questions, c.stop.action) == (Exit.STOP, [], "Run the step again")
+    assert (c.outcome.exit, c.questions, c.stop.action) == (Exit.STOP, [], plan_rounds.ANOTHER)
     assert c.stop.reason.startswith(plan_rounds.LAST_STOP)
     lp = c.loops[PLAN]
     assert (c.outcome.exit, c.questions, lp.attempt, lp.round, lp.history) == (Exit.STOP, [], 1, 1, [])
@@ -288,6 +288,14 @@ def test_plan_round_limit_stops_with_the_plan_and_attempt_kept(store, change_rep
         assert "F1 revised for, not challenged again" in c.stop.reason
     assert mp.kinds() == ["plan", *(["challenge"] * 4), "plan"] + (["challenge"] if rejected else [])
     assert loop.next_step(c, datetime.now(UTC)) is None
+    # the stop's action: one more round on the revised plan, never the planner again (#1399)
+    store.put_inbox("c1", Recovery(at=datetime.now(UTC), action=c.stop.action, stop_at=c.stop.at))
+    c = store.fold(Lock("c1"), "c1", datetime.now(UTC))[0]
+    assert (c.stop, c.step.mode, c.loops[PLAN].extra) == (None, plan_rounds.CHALLENGE, 1)
+    mp.reviews += [review()]
+    c = step(store, change_repo)
+    assert (mp.kinds()[-1], mp.kinds().count("plan")) == ("challenge", 2)
+    assert (c.loops[PLAN].round, c.step.kind) == (2, K.BUILD)
 
 
 def asked(store: Store) -> None:
@@ -331,19 +339,19 @@ def test_persisted_plan_reconsideration_left_unsure_is_recorded_once(store, chan
 def test_an_already_asked_disputes_clarified_finding_goes_to_the_planner_as_the_owners(store, change_repo, mp):
     mp.plans += [plan(1), plan(1, {"F1": "no"}), plan(2)]
     mp.reviews += [*first_round(review("t1")), review(upheld={"F1": True})]
-    mp.reconsiders += [
-        ReconsiderResult(
-            reconsidered=[{"finding": "F1", "verdict": "clarified", "text": "t1: AC-1 edge", "reason": "r"}]
-        )
-    ]
+    verdict = {"finding": "F1", "verdict": "clarified", "text": "t1: AC-1 edge", "reason": "r"}
+    mp.reconsiders.append(ReconsiderResult(reconsidered=[verdict]))
     step(store, change_repo)
     step(store, change_repo)
     asked(store)
-    answer(store, "reconsider", "narrow it")
+    note = "Narrow it.\n\n  Preserve this example."
+    answer(store, "reconsider", note)
     c = step(store, change_repo)
+    assert note in mp.said("reconsider")
     assert (c.step.mode, c.loops[PLAN].findings[0].state) == (None, "owner-fix")
     step(store, change_repo)
     assert "> F1. t1: AC-1 edge [the owner's]" in mp.said("plan")
+    assert f"F1:\n{note}" in mp.said("plan")
 
 
 def test_a_plan_question_settles_only_while_it_is_the_open_one_and_retires_with_its_attempt():

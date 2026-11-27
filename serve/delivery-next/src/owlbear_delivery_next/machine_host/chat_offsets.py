@@ -25,19 +25,19 @@ if TYPE_CHECKING:
 STATE = "chats.json"
 
 
-def load() -> dict[str, Any]:
-    """The last run's offsets by chat; none when unreadable."""
+def load() -> dict[str, Any] | None:
+    """The last run's offsets by chat; None if there is no readable record of a previous run."""
     with contextlib.suppress(OSError, ValueError):
         got = json.loads((spotter.place() / STATE).read_text())
         if isinstance(got, dict):
             return {k: v for k, v in got.items() if isinstance(v, dict)}
-    return {}
+    return None
 
 
-def save(chats: Iterable[Chat], saved: dict[str, Any]) -> dict[str, Any]:
-    """Keep each of *chats*' offset, unless *saved* holds them already; what is kept now.
+def save(chats: Iterable[Chat], saved: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Keep each of *chats*' offset, including an empty set for a run that followed no chats.
 
-    A failure loses only the next gap record's bounds: what was kept before stays *saved*.
+    Return the offsets kept now. A failure leaves *saved* unchanged.
     """
     now = {c.id: {"offset": max(c.offset, c.history), "file": list(c.file)} for c in chats}
     if now == saved:
@@ -56,12 +56,12 @@ def save(chats: Iterable[Chat], saved: dict[str, Any]) -> dict[str, Any]:
     return saved
 
 
-def missed(cid: str, old: dict[str, Any], start: int, file: tuple[int, int]) -> None:
+def missed(cid: str, old: dict[str, Any] | None, start: int, file: tuple[int, int]) -> None:
     """Record what chat *cid*'s log got while OwlBear was not following it as a gap.
 
-    *old* is where the last run read it to, *start* where following begins in *file* (its device and inode).
+    *old* is where the last run read it to (None for a newly found chat), *start* where following begins in *file*.
     """
-    was = (int(old.get("offset") or 0), tuple(old.get("file") or (0, 0)))
+    was = (0, file) if old is None else (int(old.get("offset") or 0), tuple(old.get("file") or (0, 0)))
     if was[1] != file:
         gap(cid, "the chat's log was replaced while OwlBear was not following it; read as context only")
     elif was[0] < start:

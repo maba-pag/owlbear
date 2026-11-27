@@ -431,8 +431,8 @@ def _read_routes(routes: APIRouter, reads: Callable[[], settings_read.Reader]) -
         return {"reads": reads().shown()}
 
 
-def _save_global(store: Store, path: Path, host: Host, body: Save, reads: settings_read.Reader) -> str:
-    """Save Global from the page; its notice also says whole when the save could not be recorded as seen."""
+def _save_global(store: Store, path: Path, host: Host, body: Save, reads: settings_read.Reader) -> tuple[str, str]:
+    """Return the publication failure, if any, separately from the full notice shown on the page."""
     unrecorded: list[str] = []
 
     def own(before: GlobalLayer, after: GlobalLayer) -> None:
@@ -440,7 +440,7 @@ def _save_global(store: Store, path: Path, host: Host, body: Save, reads: settin
         unrecorded.append(reads.ledger.own(before, after))
 
     notice = _save(store, path, GlobalLayer, body, "global: from the settings page", host, written=own)
-    return "; ".join(filter(None, [notice, *unrecorded]))
+    return notice, "; ".join(filter(None, [notice, *unrecorded]))
 
 
 def router(store: Store, host: Host) -> APIRouter:
@@ -468,7 +468,8 @@ def router(store: Store, host: Host) -> APIRouter:
     def put_global(body: Save) -> dict[str, Any]:
         if store.global_path is None:
             raise HTTPException(409, "no shared settings location is set up; run `owlbear-next data PATH`")
-        return state(_save_global(store, store.global_path, host, body, reads()))
+        unpublished, notice = _save_global(store, store.global_path, host, body, reads())
+        return state(notice) | {"unpublished": unpublished}
 
     @routes.put("/config/machine")
     def put_machine(body: Save) -> dict[str, Any]:

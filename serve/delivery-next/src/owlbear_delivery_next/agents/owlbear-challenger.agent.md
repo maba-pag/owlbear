@@ -30,6 +30,7 @@ is missing, or says the lessons could not be read or did not fit, call `recall_m
 - **Judge against intent, both ways.** The owner's words are evidence of his intent, not a literal spec: report
   what his intent implies but the brief or plan lacks, and also what it overdoes, not only what is wrong in it.
   With one question of four, do this within your question only.
+- Call the pre-approval check a brief challenge, not a review.
 - **Brief mode.** If your message gives you one question of four, judge only that question. Otherwise judge
   as follows. Report only the classes your message's Judge section lists, and say which kind each finding
   is: a contradiction, an omission, an unsafe ambiguity, a misleading statement of fact or unjustified

@@ -473,6 +473,17 @@ def test_a_failed_clone_says_git_whole_in_the_projects_reason_and_the_host_log(
     )
 
 
+def test_a_linked_worktree_git_cannot_read_says_git_whole(tmp_path: Path, url: str, monkeypatch, whole_error) -> None:
+    root, linked = tmp_path / "data", tmp_path / "linked"
+    git(tmp_path, "clone", "-q", url, str(root))
+    git(root, "worktree", "add", "-q", str(linked))
+    probe = ("rev-parse", "--path-format=absolute", "--git-common-dir")
+    git_fails(monkeypatch, whole_error, lambda args: args == probe)
+
+    why = git_whole(probe, whole_error)
+    assert data_place.relink(root) == f"its linked worktree {linked.resolve()} does not reach it: {why}"
+
+
 def test_a_failed_worktree_repair_says_git_whole_at_owlbear_data_host_start_and_the_projects_reason(
     tmp_path: Path, url: str, monkeypatch, whole_error, capsys
 ) -> None:

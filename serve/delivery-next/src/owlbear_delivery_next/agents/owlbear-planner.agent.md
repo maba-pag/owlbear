@@ -75,6 +75,8 @@ on without them.
 
 <tools>
 
+- In a read-only step, use pipes instead of scratch files, including in `/tmp`, and put notes in your
+  result. Reconsider the restriction only when a step log demonstrates a need for scratch space.
 - Shell: `bash`, `read_bash`, `list_bash`, `stop_bash`: run read-only commands and read their output;
   stop anything you started.
 - Reading: `view`, `glob`, `grep`: open files, find paths and search the code.

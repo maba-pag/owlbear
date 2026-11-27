@@ -27,6 +27,7 @@ from owlbear_delivery_next.change_contracts.models import (
 from owlbear_delivery_next.change_contracts.profile_record import Profile
 from owlbear_delivery_next.change_contracts.round_records import BRIEF, RECHECK, RoundLoop, RoundPolicy, Verdict
 from owlbear_delivery_next.change_flow import brief_rounds, brief_starts, brief_tools, loop, plan_rounds, status
+from owlbear_delivery_next.change_flow.shaper_wake import prompt as shaper_prompt
 from owlbear_delivery_next.change_flow.status import Activity
 from owlbear_delivery_next.commands import chat_client, runner
 from owlbear_delivery_next.local_system.codebase import CURRENT
@@ -321,17 +322,16 @@ def test_a_clarified_reconsideration_hands_the_finding_to_the_shaper_who_may_sav
     shaping.save()
     shaping.ask_challenge(1)
     clarified = [{"finding": "F1", "verdict": "clarified", "text": "AC-1: name the exact text", "reason": "r"}]
-    shaping.verdicts += [
-        *first_round(verdict("AC-1")),
-        verdict(upheld={"F1": True}),
-        ReconsiderResult(reconsidered=clarified),
-    ]
+    shaping.verdicts += first_round(verdict("AC-1"))
+    shaping.verdicts += [verdict(upheld={"F1": True}), ReconsiderResult(reconsidered=clarified)]
     shaping.step()
     shaping.ask_challenge(1, {"F1": "no"})
     shaping.step()
-    assert shaping.answer("reconsider", "narrow it").step.mode == "reconsider"
+    note = "Narrow it.\n\n  Preserve this example."
+    assert shaping.answer("reconsider", note).step.mode == "reconsider"
     c = shaping.step()
     assert (c.step.mode, c.outcome.waiting, c.loops[BRIEF].findings[0].state) == (None, Waiting.CHAT, "owner-fix")
+    assert (note in shaping.told[-1].message, note in shaper_prompt(c, "Test project")) == (True, True)
     assert shaping.save(title="Add a farewell")["version"] == 2
 
 

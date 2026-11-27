@@ -202,8 +202,17 @@ def unverified(t: Termination | None) -> str:
 def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
     run: Run, kind: StepKind, now: datetime, enclosing: StepKind
 ) -> StepResult:
-    """One exit per ending; unread inspection keeps its question while the host scans for surviving processes."""
+    """One exit per ending; a Git inspection gate stays while the host scans for surviving processes."""
     t = run.termination or Termination(confirmed=False, problems=("termination did not run",))
+    if run.ending == "shared-git-changed":  # never restored: the owner may have made the change himself (TD-146)
+        stop = Stop(
+            kind=ErrorKind.POLICY,
+            reason=run.detail,
+            action="Check the repository's shared Git config and hooks folder; undo any change you did not make",
+            resume="The shared Git config and hooks are as you want them",
+            at=now,
+        )
+        return StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
     if run.ending == "read-only-unread":
         text = f"{run.detail}\nThe result was voided; no shared Git setting was restored. "
         text += (
@@ -230,15 +239,6 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
         )
         return StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
     p = run.payload
-    if run.ending == "shared-git-changed":  # never restored: the owner may have made the change himself (TD-146)
-        stop = Stop(
-            kind=ErrorKind.POLICY,
-            reason=run.detail,
-            action="Check the repository's shared Git config and hooks folder; undo any change you did not make",
-            resume="The shared Git config and hooks are as you want them",
-            at=now,
-        )
-        return StepResult(exit=Exit.STOP, reason=stop.reason, stop=stop)
     if run.ending == "credit-limit":  # the owner's spending bound: never retried, nor waited out as a quota
         stop = Stop(
             kind=ErrorKind.POLICY,
@@ -323,7 +323,7 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
             cause = cause_key(env, kind, "sdk") if env else cause_key(ErrorKind.LIVENESS, kind, "deadline")
             return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail or "deadline", classified=run.classified)
         case "missing":
-            return StepResult(exit=Exit.RETRY, cause=missing_cause(kind), reason=run.detail)
+            return StepResult(exit=Exit.RETRY, cause=missing_cause(kind), reason=run.detail, classified=run.classified)
         case "unread":
             cause = cause_key(ErrorKind.LIVENESS, kind, "transcript")
             return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail, classified=run.classified)
@@ -336,4 +336,5 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
             return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail, classified=run.classified)
         case _:
             reason = f"no valid result: {run.detail}"
-            return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.RESULT, kind), reason=reason)
+            cause = cause_key(ErrorKind.RESULT, kind)
+            return StepResult(exit=Exit.RETRY, cause=cause, reason=reason, classified=run.classified)

@@ -1,4 +1,4 @@
-"""The Change page's status row and current committed exception verdicts."""
+"""The Changes list's status row, and the selected Change's current committed exception verdicts."""
 
 from __future__ import annotations
 
@@ -45,10 +45,6 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     out["progress"] = asdict(progress(c))
     out["spend"] = c.spend.model_dump()
     out["tool_use"] = tool_metrics.of_change(spend_ledger.Where.of(store).clone, slug).model_dump()
-    try:
-        out["suppressions"] = suppressions(store, c)
-    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
-        out["suppressions_fault"] = failure(exc)
     out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
     out["release_look"] = release_look.shown(store, c)
     out["watcher"] = watch_reports.counts(store.db, slug)  # observed calls writing outside, unresolved ones apart
@@ -71,6 +67,18 @@ def _added(root: Path, base: str, head: str) -> list[Addition]:
     return added(quality.git, root, base, head)
 
 
+def shown_suppressions(store: Store, c: Change) -> dict[str, Any]:
+    """The detail's added suppressions, or why they could not be read.
+
+    Only the selected Change's detail shows them: on the list, Git and the verdict ledger's lock for every row on
+    every refresh kept the Changes page from answering.
+    """
+    try:
+        return {"suppressions": suppressions(store, c)}
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+        return {"suppressions_fault": failure(exc)}
+
+
 def suppressions(store: Store, c: Change) -> list[dict[str, str]]:
     """Current added copies or the recorded verdicts when the worktree is gone."""
     if not c.names.worktree or not (root := Path(c.names.worktree)).exists():
@@ -84,8 +92,10 @@ def suppressions(store: Store, c: Change) -> list[dict[str, str]]:
     target = worktree.tracking(root, c.names.target)
     base = worktree.git(root, "merge-base", target, head).strip()
     found = []
-    for addition in _added(root, base, head):
-        rows = exception_gate.ordered(ledger.counting(store.root, addition.identity, scope=c.slug))
+    additions = _added(root, base, head)
+    verdicts = ledger.current(store.root) if additions else {}  # one lock for all copies, not one per copy
+    for addition in additions:
+        rows = exception_gate.ordered([v for v in verdicts.get(addition.identity, []) if v["for"] == c.slug])
         for n, place in enumerate(addition.places[: addition.count]):
             row = rows[n] if n < len(rows) else {}
             found.append(

@@ -27,6 +27,9 @@ Spec = tool_types.Spec
 bounded = tool_types.bounded
 OptionAction = option_records.OptionAction
 _f = bounded
+check_build = build_tools.check_build
+check_question = question_tools.check_question
+_few = build_tools.few
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -42,11 +45,6 @@ EXAMPLE_CHECK = "cd ./packages/app && {\nnpm test\n}"
 STAGES = ("Which document is wrong; target when the task needs a commit or API on the target branch but not in this "
           "one yet; setup when something outside the brief and plan is missing or broken (a PR not merged, a profile "
           "entry or setting, a tool, a check that cannot end); brief only if what the owner gets changes")  # fmt: skip
-
-
-check_build = build_tools.check_build
-check_question = question_tools.check_question
-_few = build_tools.few
 
 
 class CheckRun(Args):
@@ -225,6 +223,13 @@ class ReviewResult(Args):
         max_length=20,
         description="Each problem that must be fixed; empty for pass",
         examples=[[{"place": "src/greet.ts:4", "problem": "AC-1: English", "fix": "Use Hallo"}]],
+    )
+    unpicked: list[tool_types.Unpicked] = Field(
+        default_factory=list,
+        max_length=10,
+        description="At most 10 decisions that govern this work but are missing from its picked set; not findings, "
+        "even with pass; empty when none",
+        examples=[[{"id": "D-01JC0000000000000000000000", "note": "The new page must have no build step."}]],
     )
     covered_paths: list[str] = Field(
         default_factory=list,

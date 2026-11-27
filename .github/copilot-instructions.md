@@ -21,6 +21,17 @@ branch, worktree, and integration target in its per-change coordination record; 
 convention. Consumers clone the same branch ("clone = install"); versions will be git tags. There is no generated
 consumer branch and no sync workflow (TD-203).
 
+When authorized to handle a pull request by hand, fix in-scope CI failures and address feedback without waiting for
+direction. Reply and resolve fixed threads; ask the owner about an upheld rejection, feedback that contradicts
+the approved brief, or CI that still fails after repair retries.
+Reply to every human comment, whether or not it mentions OwlBear. Act on genuine bot findings and record
+"no action needed" for bot notices.
+For Delivery shell guard findings, fix regressions, incorrect denials and issues a worker could plausibly hit
+after a hook fails. For exotic shell constructs, point to the limits in issue #864.
+
+In each dependency round, merge waiting Renovate updates without asking once CI is green. Ask the owner
+first for major bumps. Fix new lint findings in code without relaxing rules or configuration.
+
 ### Plan and Status
 
 [The pinned tracker issue](https://github.com/maba-pag/owlbear/issues/713) holds where OwlBear stands, the order of the remaining work, as its
@@ -34,6 +45,9 @@ The decisions live only in owlbear-data, copied into no repository (D-01M5ZE13N3
 record is Git history (TD-466). Look decisions up with `find_decisions` or
 `lookup_decisions` and change them only with the decision tools or the Decisions page.
 
+On the public tracker and its sub-issues, you may cite a decision for this repository by ID and say what it
+requires in at most one line. Do not copy a record or include another project's decisions or private metadata.
+
 ### Asking the Owner
 
 When the owner decides or re-decides anything consequential, including a read-back or a recorded
@@ -46,6 +60,8 @@ what is wrong (TD-150). In OwlBear also:
   priorities, rules that cut across areas): his confirmed intent, never his words (TD-449); a changed decision
   names the one it replaces. A choice about behaviour that gets built ends there: the code is its record. A rule
   about how agents work goes into the instruction or skill file that governs that work.
+  State the intent of an in-force decision in at most two lines; leave implementation details in code, tests
+  and pull request descriptions.
 - A pick of "Autonomous (…)" leaves the choice to you: it is yours and is not recorded. Neither are your other
   choices or choices about tests.
 - Where he wants to be asked before a built behaviour changes again, state it at the code as a comment line
@@ -102,12 +118,46 @@ plan or implementation challenge a chat runs by hand in this repository states t
 | `setup/` | Setup guide, operating guide, sharing guide |
 | `tests/` | Workspace regression and integration tests |
 
+### Delivery Runtime and Agent Files
+
+Keep Delivery steps on the SDK. If a Change needs a step to run in a VS Code window, design that route from scratch.
+
+Give each Delivery role its own agent file unless a recorded owner decision permits sharing.
+Put substantial or shared Delivery procedures in skills and short procedures for a single role in its agent file.
+Enforce contracts in the engine.
+Keep upstream names for unmodified vendored skills. Use `owlbear-` for Delivery-authored skills.
+Do not cap the length of agent instructions. Use precise specialist terms and complete sentences without filler
+or explanations the role does not need.
+
+Keep workspace agents, skills and instructions in `share/` and `.owlbear/`, loaded through VS Code's location
+settings. Decline any offer from VS Code to move them to `.github/` and dismiss the notice.
+After moving the shaper, use its next real shaping chat to verify that the runtime selects it, preloads its skill,
+grants working tools and restores the owner's settings. You may remove the old copies first; fix any problems
+in that run.
+
+Keep generated code and document indexes and architecture diagrams out of OwlBear, along with their
+generators, tests and CI wiring. If documentation needs a diagram, choose the tool for that need.
+
 ## 3. Web Frontend
 
 The Delivery engine's pages in `serve/delivery-next/src/owlbear_delivery_next/web/` are the only web frontend:
 plain HTML, CSS and JavaScript the machine host serves, with no build step. Their tests are the package's pytest
 suite, including its `browser`-marked Playwright tests. The root `package.json` holds only Node tooling (Biome, on
 the Node version pinned in `.nvmrc`); every `serve/` package is Python, so use `uv run`.
+
+Keep the New Change dialog. Use a bare confirmation only as an exception. For a low-cost, reversible action,
+tell the owner what happened after the action instead of asking first.
+For a consequential action, explain what will happen and how to continue if the owner declines. Include any cost
+or disruption and label each button with the action it takes.
+Keep hints at normal text size when they guide input or the choice to act, or state a lasting rule. Move the
+consequences of a single action into its dialog and remove only hints that repeat what the page already says.
+
+Show unexpected errors in full on the page where their effects appear: what happened, where and the details.
+Keep the full diagnostic in any existing log entry for the failure; do not build around unrealistic failures.
+When restoring the full text of an error the page already shows, verify it on that page. Do not add a log
+entry if none existed.
+When restoring the full text of an error no page shows, add it to an existing line or list on the affected page
+and verify it with one browser look at that page.
 
 ## 4. Test Domain Mapping
 
@@ -117,6 +167,20 @@ Copilot code review follows the [code-review](instructions/code-review.instructi
 Required external CI gates remain unchanged.
 
 ### Local Development and CI
+
+- Use default size and complexity guidance from comparable analysis tools to decide what to split or
+  rework, never as a hard gate. Do not use SonarQube.
+- Run a full test audit at least quarterly and when the on-demand census shows that more than
+  2% of test jobs for pushes to `main` in the past seven days failed on a first attempt that ran tests.
+  Count only jobs whose first attempt ran tests. The procedure is the owner's `ah-test-audit` user skill,
+  which lives outside this repository; without it, ask the owner how to run the audit.
+- Publish test audit reports, methods and census tools in the project's research folder in the shared
+  data repository, under `test-audit-<year>-<month>/`. Leave out cached API data and the working clone.
+- For flaky-test audits, change only tests, fixtures and test helpers. Leave product code, test
+  selection and CI workflows, including worker counts, job splits and shard collection, unchanged.
+- When rebuilding the suite by hand, simplify tests and cut low-value, duplicate, overlapping,
+  outdated or trivial cases without weakening required coverage. Investigate runtime only when
+  there is a concrete observed problem; otherwise skip timing work.
 
 This table maps source paths to their regression scope for local/CI tooling, including
 quality-runner `mode=full` with `changed_paths`.

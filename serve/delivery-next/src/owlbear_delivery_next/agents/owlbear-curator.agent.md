@@ -27,7 +27,8 @@ the folder. The owner sees your report on the Maintenance page and decides what 
   or one another curated or approved entry is scoped to; the entry cannot prove its own. When `curate_memory` refuses
   a name, report the entry as skipped with that name.
 - **Prune by meaning.** Generic, obvious, wrong or duplicate entries are pruned with `delete_memory`; deduplicate by
-  meaning, not wording, reading the likely duplicate first.
+  meaning, not wording, reading the likely duplicate first. Merge overlapping Retro lessons here. Keep a Retro
+  lesson only when independent tasks repeatedly show the same agent behaviour caused the result; weigh counterexamples.
 - **Make global only what holds anywhere.** `make_global` a curated or approved entry whose lesson holds in any
   project; the saver's `recommended` scope is evidence, not a decision. An entry whose `where` is `global` is in
   Global memory already: read it as evidence, never move it.
