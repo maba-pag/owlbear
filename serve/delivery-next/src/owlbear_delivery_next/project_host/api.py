@@ -6,6 +6,7 @@ import hashlib
 import re
 import shlex
 import shutil
+import sqlite3
 import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
@@ -53,11 +54,11 @@ from owlbear_delivery_next.project_host import (
 from owlbear_delivery_next.project_host.admission import admitted
 from owlbear_delivery_next.project_host.change_view import summary
 from owlbear_delivery_next.project_host.launches import Launches, Refused
-from owlbear_delivery_next.runtimes import readiness
+from owlbear_delivery_next.runtimes import chat_contact, readiness, spend_logs
 from owlbear_delivery_next.runtimes.vscode_adapter import open_chat
 from owlbear_delivery_next.runtimes.window_files import HARNESS
 from owlbear_delivery_next.settings.config import SettingsUnset
-from owlbear_delivery_next.state_store import watch_reports, work_block
+from owlbear_delivery_next.state_store import spend_ledger, watch_reports, work_block
 from owlbear_delivery_next.state_store.briefs import save_brief, save_visual
 from owlbear_delivery_next.state_store.database import DIAGNOSTIC_EVENTS
 from owlbear_delivery_next.state_store.store import StoreError
@@ -193,6 +194,14 @@ def new_chat(
     out, warning = start(repo, shaper, prompt)
     if out.end == "started":
         ending = {"state": "open"}
+        if out.session and out.chat:
+            try:
+                sid = chat_contact.default_sdk_session(out.session, out.chat)
+            except (sqlite3.Error, ValueError, chat_contact.ChatError) as exc:
+                warning = "\n".join(filter(None, (warning, f"Shaping spend was not registered: {failure(exc)}")))
+            else:
+                spend_ledger.started(f"shaping:{sid}", sid, agent="shaper", job=spend_logs.SHAPING,
+                                     model=shaper.model, before={})  # fmt: skip
     else:
         why = f"the Copilot chat did not start ({out.end}: {out.detail})"
         if out.end == "unbound":  # the window opened a Local chat: it reads the harness key only when it starts
@@ -282,11 +291,16 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         command = by_hand(prompt)
         if not which("code"):
             return {"started": False, "command": command, "reason": f"`code` is not on PATH; run this in {host.repo}"}
+
+        def open_in_project() -> dict[str, str]:
+            with spend_ledger.at(spend_ledger.Where.of(store, host.repo)):
+                return launch(host.repo, shaper, prompt)
+
         try:
             with admitted(host):
                 if why := work_block.of_store(store).text():  # again under the lock: unset while it waited for it
                     return {"started": False, "reason": why}
-                started = launches.start(lambda: launch(host.repo, shaper, prompt), command, done)
+                started = launches.start(open_in_project, command, done)
                 return {"started": True, "launch": started}
         except Refused as exc:
             raise HTTPException(exc.status, exc.text) from exc
