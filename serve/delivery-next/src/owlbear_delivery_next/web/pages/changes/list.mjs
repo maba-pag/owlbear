@@ -188,9 +188,9 @@ async function everything() {
     return [changes.map((c) => ({ ...c, key: c.slug, project: "", projectName: "" })), said.notes, new Map()];
   }
   const each = await Promise.allSettled(projects.map((p) => both(p.id)));
-  const lost = (r, ...kinds) => r.status === "rejected" && kinds.some((k) => r.reason instanceof k);
   // The host is gone, or no project answered in time: the whole page says so. One slow project of several does not.
-  const down = each.find((r) => lost(r, HostDown, Restarted)) ?? (each.every((r) => lost(r, Slow)) ? each[0] : null);
+  const down = each.find((r) => r.reason instanceof HostDown || r.reason instanceof Restarted)
+    ?? (each.every((r) => r.reason instanceof Slow) ? each[0] : null);
   if (down) throw down.reason;
   const rows = [], notes = [], failing = new Map();
   each.forEach((r, i) => {  // one project that cannot be read keeps its last Changes and says why; the others go on
