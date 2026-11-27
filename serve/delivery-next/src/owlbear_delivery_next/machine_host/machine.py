@@ -311,6 +311,7 @@ class Machine:
             + self.chats.working()
             + self.retro.working()
             + self.onboarding.working()
+            + self.impeccable.working()
             + self._unproven_packs()
         )
 

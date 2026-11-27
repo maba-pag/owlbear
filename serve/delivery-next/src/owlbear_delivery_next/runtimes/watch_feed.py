@@ -146,7 +146,7 @@ class Feed:
             return None
         at = getattr(ev, "timestamp", None) or datetime.now(UTC)
         return {"at": at.astimezone(UTC).isoformat(timespec="milliseconds"), "kind": "a state change", "call": cid,
-                "tool": seen.call.tool, "command": seen.command, "targets": list(outcome.targets[:20]),
+                "tool": seen.call.tool, "command": seen.command, "targets": list(outcome.targets),
                 "what": outcome.verdict}  # fmt: skip
 
     def close(self) -> None:
