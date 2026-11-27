@@ -102,6 +102,7 @@ class Project:
         self.app: ASGIApp | None = None
         self.lock_fd: int | None = None
         self.scheduler: threading.Thread | None = None
+        self.scheduled = True  # False (the demo): served without its scheduler and readiness check, nothing starts
         self.publish_lock = threading.Lock()  # orders the discovery file's write against its removal in stop
 
     @property
@@ -161,9 +162,10 @@ class Project:
         session_slots.join(self.host)  # before its first pass: what its live steps hold is counted first
         self._publish(self.host)
         self.app = api.create_app(store, record.token, self.host)
-        self.scheduler = threading.Thread(target=self.host.run, daemon=True, name=f"scheduler-{self.entry.id}")
-        self.scheduler.start()
-        threading.Thread(target=self._ready, daemon=True, name=f"readiness-{self.entry.id}").start()
+        if self.scheduled:
+            self.scheduler = threading.Thread(target=self.host.run, daemon=True, name=f"scheduler-{self.entry.id}")
+            self.scheduler.start()
+            threading.Thread(target=self._ready, daemon=True, name=f"readiness-{self.entry.id}").start()
         self.state, self.reason = "loaded", ""
 
     @staticmethod

@@ -1014,3 +1014,9 @@ def test_unobserved_data_uses_named_ci_consumers_without_expanding_their_modules
         pytest.raises(RuntimeError, match="no resolved current consumers"),
     ):
         selection.fingerprints({orphan}, "base")
+    retired, chosen = "serve/demo/tests/test_deleted.py", set(selection.reasons)
+    with patch.object(
+        test_impact, "_revision", return_value={retired: Module(source_code="def test_only():\n    pass\n")}
+    ):
+        selection.fingerprints({retired}, "base")
+    assert set(selection.reasons) == chosen
