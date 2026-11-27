@@ -220,7 +220,8 @@ def disputed(c: Change, task: Task | None, payload: object, result: StepResult) 
         return result
     if isinstance(p, tools.MissingTool) and result.exit == Exit.ASK and (q := result.question):
         options = [DECLINE if o.next == StepKind.PLAN else o for o in q.options]
-        return result.model_copy(update={"question": q.model_copy(update={"options": options})})
+        subject = "reserved" if DECLINE in options else q.subject
+        return result.model_copy(update={"question": q.model_copy(update={"options": options, "subject": subject})})
     if result.exit != Exit.BACK or not isinstance(p, tools.WrongPremise) or p.stage not in {"brief", "plan"}:
         return result
     where = task.item.url or task.item.id
