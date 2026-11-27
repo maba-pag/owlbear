@@ -10,7 +10,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
-from urllib.parse import quote, unquote
+from urllib.parse import quote, unquote, urlsplit
 
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.improvement import chatlogs, events
@@ -47,6 +47,26 @@ def chat_of(session: str, db: Path | None = None) -> tuple[str, str]:
         msg = f"no exact chat for session {session}: {len(found)} matches"
         raise ChatError(msg)
     return found.pop()
+
+
+def default_sdk_session(owner: str, chat: str) -> str:
+    """The runtime backing of the bound default chat, not the editor's own session id."""
+    sid = owner.split(":/", 1)[-1]
+    address = urlsplit(chat)
+    key = address.netloc or address.path.removeprefix("/")
+    with contextlib.closing(sqlite3.connect(f"file:{quote(str(store()))}?mode=ro", uri=True)) as conn:
+        rows = conn.execute(
+            "SELECT chat_uri, provider_data FROM chats_v2 WHERE tombstoned = 0 AND owner_session_uri IN (?, ?, ?)",
+            (owner, f"copilotcli:/{sid}", f"ahp-session:/{sid}"),
+        ).fetchall()
+    matches = [_sdk(data) for uri, data in rows if uri == chat or (not address.netloc and urlsplit(uri).netloc == key)]
+    if not matches:
+        # The store may name the default chat by its role even when the host lists it by UUID.
+        matches = [_sdk(data) for uri, data in rows if urlsplit(uri).netloc == "default"]
+    if len(matches) != 1:
+        msg = f"no exact runtime backing for editor chat {chat}: {len(matches)} matches"
+        raise ChatError(msg)
+    return str(uuid.UUID(matches[0]))
 
 
 def _sdk(data: str | None) -> str:

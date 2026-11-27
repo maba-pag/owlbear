@@ -34,6 +34,7 @@ OPEN = timedelta(hours=3)  # a run still open after this was killed: its runtime
 EPS = 1e-9
 QUARTER = 15 * 60  # seconds: every time zone's midnight is a quarter hour's start in UTC, so no day loses a checkpoint
 LOOKUP = "decision-lookup"
+SHAPING = "shaping"
 UNKNOWN_PROJECT = Where(project="(unknown)", name="Project unknown")
 
 
@@ -62,15 +63,20 @@ def found(
     for the last): a killed run those since it started, the others every one. Each line's id is its content's, so a
     later, larger checkpoint is a new line, and ``spend_shares`` keeps a run's largest usage, or, for a run whose
     ending is itself a checkpoint, dates each one's growth between it and the one before.
-    Until the log shows the session shut down, its usage stays provisional (``incomplete``) and the log is read again
-    whenever it changes. Each log read is noted in *pending*; it counts as read (*checked*) only once its lines are
-    written. A Spotter look's session (``_look``) carries its look's id, and its owner when known (``Owners``); an
-    owner known only later moves it with an ``owner`` line (``_owned``).
+    Shaping chats are read while open and after shutdown because their owner can resume them. Until the log shows
+    shutdown, usage stays provisional. Each read goes in *pending*; it counts as read (*checked*) once its lines
+    are written. A Spotter look's session (``_look``) carries its look's id and its owner when known (``Owners``);
+    an owner known only later moves it with an ``owner`` line (``_owned``).
     """
     now, later = datetime.now(UTC), _resumed(known)
     found = list({r["run"]: r for r in spend_shares.runs(known)}.values())  # each run as its latest entry says
-    out = _unfinished(found, later, checked, pending)
+    out = _unfinished([run for run in found if run.get("job") != SHAPING], later, checked, pending)
     for run in found:
+        if run.get("job") == SHAPING:
+            sid = str(run["session"])
+            out += [_correction(run["run"], sid, at, usage, final)
+                    for at, usage, final in _checkpoints(sid, checked, pending)]  # fmt: skip
+            continue
         if run.get("ended") or not run.get("started") or later(run):
             continue  # ended, or a later run of its session accounts for what it spent
         with contextlib.suppress(ValueError, TypeError):
