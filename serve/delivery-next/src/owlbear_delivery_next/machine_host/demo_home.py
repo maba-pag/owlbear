@@ -1,12 +1,12 @@
 """The demo's temporary home: the owner's data replaced, GitHub cut off, the example world seeded in it.
 
-``isolate`` runs before the host's modules, some of which read HOME when imported (this one's imports do not): a
-fresh temporary folder becomes HOME, ``OWLBEAR_DATA``, ``COPILOT_HOME`` and ``GIT_CONFIG_*`` are dropped, Git resolves
-every ``https://github.com/`` address to a missing path, and a ``gh`` that only fails comes first on PATH. ``seed``
-then writes, in that home, the shared data checkout with a complete Global layer, this machine's settings, the two
-registered example projects, each with its chat server entry, and their six example Changes. Their GitHub-shaped
-origins never reach GitHub: the data checkout pushes to a local bare repository and the write account is chosen
-offline.
+``isolate`` runs before the host's modules, some of which read HOME when imported (this one's imports do not): a fresh
+temporary folder becomes HOME, ``OWLBEAR_DATA``, ``COPILOT_HOME``, ``XDG_CONFIG_HOME`` (Git reads its settings there
+too) and ``GIT_CONFIG_*`` are dropped, Git resolves every ``https://github.com/`` address to a missing path, and a
+``gh`` that only fails comes first on PATH. ``seed`` then writes, in that home, the shared data checkout with a complete
+Global layer, this machine's settings, the two registered example projects, each with its chat server entry, and their
+six example Changes. Their GitHub-shaped origins never reach GitHub: the data checkout pushes to a local bare repository
+and the write account is chosen offline.
 """
 
 from __future__ import annotations
@@ -43,7 +43,8 @@ def isolate() -> Path:
     """A fresh HOME for this process, the owner's data and Copilot folders dropped, Git and ``gh`` kept off GitHub."""
     home = Path(tempfile.mkdtemp(prefix="owlbear-demo-")).resolve()
     os.environ["HOME"] = str(home)
-    for name in ("OWLBEAR_DATA", "COPILOT_HOME", *(n for n in os.environ if n.startswith("GIT_CONFIG_"))):
+    owner = ("OWLBEAR_DATA", "COPILOT_HOME", "XDG_CONFIG_HOME")
+    for name in (*owner, *(n for n in os.environ if n.startswith("GIT_CONFIG_"))):
         os.environ.pop(name, None)
     (home / ".gitconfig").write_text(
         f'[url "{OFFLINE}"]\n\tinsteadOf = {GITHUB}\n[user]\n\tname = OwlBear demo\n\temail = demo@example.invalid\n'
