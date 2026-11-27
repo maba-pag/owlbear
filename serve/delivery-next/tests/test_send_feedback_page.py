@@ -100,6 +100,46 @@ def answer_button(form: Any) -> Any:
 
 
 @pytest.mark.browser
+def test_check_and_local_branch_confirmations_explain_what_can_be_undone(page_url, pds) -> None:
+    store, base = page_url
+    c = store.read(SLUG)
+    c.step = m.Step(kind=m.StepKind.CHECK, task="feel")
+    c.outcome = m.Outcome(exit=m.Exit.PENDING, waiting=m.Waiting.PERSON_CHECK, who="you", at=NOW)
+    c.pullback = m.Pullback(state="behind", reason="local branch is behind", at=NOW)
+    store.write(Lock(SLUG), c)
+    with opened(base, pds) as page:
+        check = page.locator("section.act", has_text="Your check feel")
+        check.get_by_label("What failed", exact=False).fill("It stutters.")
+        for opener, confirm, decline, undo in [
+            (
+                check.get_by_role("button", name="Failed"),
+                "Send to the builder",
+                "Keep checking",
+                "Delivery can't take back the failed result or the AI credits already used.",
+            ),
+            (
+                page.get_by_role("button", name="Pull", exact=True),
+                "Update",
+                "Leave it",
+                "Delivery can't undo a successful update. To go back, restore the previous local branch tip in Git.",
+            ),
+        ]:
+            opener.click()
+            dialog = pds.modal(page)
+            expect(dialog.get_by_text(undo, exact=False)).to_be_visible()
+            choices = [dialog.get_by_role("button", name=name, exact=True) for name in (confirm, decline)]
+            for choice in choices:
+                size = choice.bounding_box()
+                assert size
+                assert min(size["width"], size["height"]) >= 24
+            for _ in range(3):
+                page.keyboard.press("Tab")
+                assert page.evaluate(pds.INSIDE)
+            pds.answer(page, decline)
+            expect(opener).to_be_focused()
+
+
+@pytest.mark.browser
 def test_a_refused_lost_or_unanswered_answer_unlocks_its_form_and_says_so(page_url, pds) -> None:
     """AC-1, AC-2, AC-4..AC-7, AC-9: one request per click, only the sent form locks, each outcome on the button."""
 

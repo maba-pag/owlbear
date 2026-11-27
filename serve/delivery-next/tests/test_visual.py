@@ -831,10 +831,10 @@ def test_a_fail_sends_the_ticked_findings_back_and_its_comment_becomes_a_criteri
 
 
 def test_a_failed_check_s_note_is_used_as_written_unless_it_contradicts_the_brief(tmp_path):
-    change = Change(slug="c1", brief=Brief(version=1))
-    fix = Task(id="t2", title="Fix: the check p1 failed for the owner: the logo is blue", origin="person-check")
-    told = [step_input.build(change, t, tmp_path, []) for t in (fix, Task(id="t1", title="Add the logo"))]
-    assert [step_input.OWNER_NOTE in t for t in told] == [True, False]  # TD-153, TD-340
+    change, note = Change(slug="c1", brief=Brief(version=1)), "  No greeting.\n\n" + "x" * 1979 + "\nTail"
+    fix = Task(id="t2", title="Fix: the check p1 failed for the owner", detail=note, origin="person-check")
+    failed, plain = (step_input.build(change, t, tmp_path, []) for t in (fix, Task(id="t1", title="Add the logo")))
+    assert (note in failed, step_input.OWNER_NOTE in failed, step_input.OWNER_NOTE in plain) == (True, True, False)
 
 
 def test_a_decision_never_passes_a_capture_of_another_head(flow):

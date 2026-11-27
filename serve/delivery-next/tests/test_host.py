@@ -416,9 +416,9 @@ def checking(**env):
     return Change(slug="c1", plan=plan, checks=[person], step=step, env=e.model_copy(update=env))
 
 
-def answered(c, at, *, passed=True, inputs=None):
+def answered(c, at, *, passed=True, inputs=None, text="no greeting"):
     inputs = check_inputs(c, c.checks[0], {}) if inputs is None else inputs
-    c.checks[0].answer = Answer(at=at, passed=passed, text="no greeting", inputs=inputs)
+    c.checks[0].answer = Answer(at=at, passed=passed, text=text, inputs=inputs)
     return c
 
 
@@ -442,10 +442,10 @@ def test_check_environment_decisions(change, live, expected):
 
 
 def test_a_failed_check_goes_back_to_build_with_the_owners_note_and_settles_no_later_round():
-    c = answered(checking(ready_at=NOW), NOW, passed=False)
+    c = answered(checking(ready_at=NOW), NOW, passed=False, text="  No greeting.\n\n" + "x" * 1979 + "\nTail")
     after = check.settle(c, NOW, {})
     assert (after.step.kind, after.step.task, after.plan.tasks[-1].origin) == (StepKind.BUILD, "t2", "person-check")
-    assert "no greeting" in after.plan.tasks[-1].title
+    assert after.plan.tasks[-1].detail == c.checks[0].answer.text
     again = after.model_copy(update={"step": Step(kind=StepKind.CHECK, task="preview"), "env": checking().env})
     assert check.action(again, live=False, paths={}) == "launch"
 
