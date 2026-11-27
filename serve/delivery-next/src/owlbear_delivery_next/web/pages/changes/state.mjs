@@ -13,6 +13,7 @@ export const REVERT = "Reversing the merge needs a revert you make yourself.";
 // Everything the page shows comes from here (TD-264): the list and the detail as last read, the owner's unsent input
 // per form (drafts: form key -> its fields), which toggles are open (by their summary), and the notes above.
 // unread: the shown projects the last refresh could not read (id -> why), their Changes kept as last read.
+// A detail kept as last read is marked `old`; only a read of its own replaces it.
 export const state = {
   changes: null, detail: null, notes: [], selected: null, started: null, error: null, seen: "",
   stale: false, refused: null, drafts: new Map(), opened: new Set(), doneOpen: false, choosing: false,
@@ -80,6 +81,7 @@ function unreachable(e) {
     ? html`Delivery restarted at a new address — open the link from chat or <code>owlbear status</code>.`
     : html`Delivery is not running. Start it with <code>owlbear start</code>, then reload this page.`;
   state.stale = true;
+  if (state.detail) state.detail.old = true;
   if (page.lastSeen) state.seen = `last seen ${page.lastSeen.toLocaleTimeString()}`;
 }
 

@@ -118,7 +118,6 @@ const held = {
 
 export function view() {
   const d = state.detail && state.detail.key === state.selected ? state.detail : null;
-  const old = (shows) => (state.stale || shows ? "stale" : "");
   // The way back to the list stands outside the detail: it works while the detail is as last read, or not shown yet.
   const back = state.selected ? html`<p-button-pure type="button" icon="arrow-left" class="back"
     @click=${() => choose(null)}>All Changes</p-button-pure>` : nothing;
@@ -132,12 +131,12 @@ export function view() {
     <section id="notes" class="panel" aria-label="Repository settings" ?hidden=${!state.notes.length}>
       ${state.notes.map((n) => text(n))}</section>
     <div id="board" class=${state.selected ? "open" : ""}>
-      <section id="list" aria-label="Changes" class=${old(false)} @click=${held}>
+      <section id="list" aria-label="Changes" class=${state.stale ? "stale" : ""} @click=${held}>
         <div id="changes">${listView()}</div>
       </section>
       <div id="chosen">${back}
-        <section id="detail" aria-label="Selected Change" class=${old(d && state.unread.has(d.project))}
-          @click=${held}>${d ? detailView(d) : nothing}</section>
+        <section id="detail" aria-label="Selected Change" class=${d?.old ? "stale" : ""} @click=${held}>${d
+          ? detailView(d) : nothing}</section>
       </div>
     </div>`;
 }
@@ -240,7 +239,7 @@ export async function refresh() {
     state.stale = false;
     const key = state.selected;
     if (key && unread) {
-      // its project did not answer: the detail stays as last read
+      if (state.detail?.key === key) state.detail.old = true;  // its project did not answer: it stays as last read
     } else if (key) {
       const [of, slug] = parts(key), d = await call(`/changes/${encodeURIComponent(slug)}`, undefined, of);
       const row = state.changes.find((c) => c.key === key);

@@ -1,5 +1,5 @@
 import { call } from "/assets/ui.mjs";
-import { state, show, parts } from "./state.mjs";
+import { show, parts } from "./state.mjs";
 import { notice } from "./widgets.mjs";
 import { toolLines } from "./progress.mjs";
 
@@ -32,6 +32,6 @@ function ask(d) {
 // The detail's tool-call lines, shown with its details only; their place says in full why they could not be read.
 export function toolUse(d) {
   if (slot?.key !== d.key) slot = { key: d.key, use: null, error: "", due: true };
-  if (slot.due && !asked.has(d.key) && !state.stale && !state.unread.has(d.project)) ask(d);
+  if (slot.due && !asked.has(d.key) && !d.old) ask(d);
   return slot.error ? notice("error", "Tool calls could not be read", slot.error) : toolLines(slot.use);
 }
