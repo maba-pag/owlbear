@@ -120,6 +120,8 @@ checks do not acquire a separate file-reader requirement.
 Reflective module readers (`getattr`/`hasattr`/`vars`) retain named consumers, including computed attribute names.
 Changed test modules remain required and also feed dependency analysis for their imported helpers and fixtures.
 Deleted test modules cannot supply observed coverage; unresolved current consumers fail explicitly.
+A removed test module or test helper (not `conftest.py`) leaves no code to cover, so it needs no consumer of its own;
+current tests that import it or name its path still run.
 Unobserved blocks in test helpers also resolve through their current importing test modules, including helpers
 launched via `__file__` in a child process without naming the changed functions. Those modules run in full.
 Conftest consumers retain fixture scoping; a helper with no resolved consumer still raises an error.

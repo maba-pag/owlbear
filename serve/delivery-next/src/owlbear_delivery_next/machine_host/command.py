@@ -155,6 +155,21 @@ def doctor() -> int:
 
 
 @app.command
+def demo(*, port: int = 0) -> int:
+    """OwlBear's pages on example data in a fresh temporary home, for browsing only; removed when it stops.
+
+    Args:
+        port: The port on 127.0.0.1; a free one when not given.
+    """
+    from owlbear_delivery_next.machine_host import demo_home  # noqa: PLC0415
+
+    home = demo_home.isolate()  # before any module that reads HOME is imported
+    from owlbear_delivery_next.machine_host import demo as example  # noqa: PLC0415
+
+    return example.run(home, port, say)
+
+
+@app.command
 def autostart(state: Literal["on", "off"], /) -> int:
     """Start OwlBear at login, or not.
 
