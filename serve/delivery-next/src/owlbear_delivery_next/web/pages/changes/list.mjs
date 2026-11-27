@@ -75,7 +75,7 @@ export function youCount() {
 function listView() {
   const changes = state.changes, groups = grouped();
   if (!changes) return nothing;
-  const head = state.unread.size ? nothing  // a project that was not read may hold what these would deny
+  const head = state.unread.size || state.stale ? nothing  // what was not read may hold what these would deny
     : !changes.length
       ? html`<p class="empty meta">No Changes yet. New Change opens a chat in VS Code where you shape the first
         one.</p>`
