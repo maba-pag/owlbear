@@ -265,6 +265,7 @@ export async function refresh() {
       focusHeading();
     }
   } catch (e) {
+    if (state.detail) state.detail.old = true;  // not read this time, whatever failed
     failed(e);
   } finally {
     page.busy = false;
