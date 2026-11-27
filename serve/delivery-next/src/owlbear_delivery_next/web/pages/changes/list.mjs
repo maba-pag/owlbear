@@ -215,7 +215,6 @@ export async function refresh() {
     state.seen = "";
     state.stale = false;
     const key = state.selected;
-    show();  // the rows first: the selected Change's detail can take longer to read
     if (key && unread) {
       // its project did not answer: the detail stays as last read
     } else if (key) {

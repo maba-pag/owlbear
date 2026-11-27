@@ -239,7 +239,7 @@ def _routes(machine: Machine) -> APIRouter:
         here = work_block.machine()
         listed = [p.info(here) for p in list(machine.projects.values())]
         stop = _stop_state(machine)
-        waiting = machine.waiting() if machine.paused else None  # it reads every Change; shown only while paused
+        waiting = machine.waiting() if machine.paused else 0  # it reads every Change; shown only while paused
         return {
             "paused": machine.paused, "waiting": waiting, "projects": listed, "ending": machine.ending,
             **stop,
