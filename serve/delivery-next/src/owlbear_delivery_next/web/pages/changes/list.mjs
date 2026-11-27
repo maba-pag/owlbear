@@ -127,9 +127,6 @@ function unreadView() {
 
 export function view() {
   const d = state.detail && state.detail.key === state.selected ? state.detail : null;
-  // The way back to the list stands outside the detail: it works while the detail is as last read, or not shown yet.
-  const back = state.selected ? html`<p-button-pure type="button" icon="arrow-left" class="back"
-    @click=${() => choose(null)}>All Changes</p-button-pure>` : nothing;
   return html`
     ${startedView()}
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error
@@ -144,7 +141,9 @@ export function view() {
         @click=${held}>
         <div id="changes">${listView()}</div>
       </section>
-      <div id="chosen">${back}
+      <!-- The way back stands outside the detail: it works while the detail is as last read, or not shown yet. -->
+      <div id="chosen"><p-button-pure type="button" icon="arrow-left" class="back" @click=${() => choose(null)}>All
+        Changes</p-button-pure>
         <section id="detail" aria-label=${`Selected Change${d?.old ? OFF : ""}`} class=${d?.old ? "stale" : ""}
           @click=${held}>${d ? detailView(d) : unreadView()}</section>
       </div>
