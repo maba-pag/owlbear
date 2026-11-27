@@ -121,8 +121,8 @@ function unreadView() {
   const [of, slug] = state.selected ? parts(state.selected) : [], why = state.unread.get(of);
   if (why === undefined) return nothing;
   const row = state.changes?.find((c) => c.key === state.selected);
-  return html`${hd(2, row?.title || slug, "xl")}${text(`Not read just now (${why}). It shows once its project
-    answers.`)}`;
+  return html`${hd(2, row?.title || slug, "xl", { tabindex: "-1" })}${text(`Not read just now (${why}). It shows once
+    its project answers.`)}`;
 }
 
 export function view() {
@@ -260,7 +260,7 @@ export async function refresh() {
       if (key === state.selected) state.detail = d;  // the person may have chosen another Change meanwhile
     }
     show();
-    if (page.arrived && state.detail) {
+    if (page.arrived && (state.detail || unread)) {  // also what says why an unread Change shows no detail
       page.arrived = false;
       focusHeading();
     }
