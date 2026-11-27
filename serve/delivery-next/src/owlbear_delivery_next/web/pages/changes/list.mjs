@@ -169,7 +169,7 @@ export function choose(key, push = true) {
   const was = state.selected;
   state.selected = wanted(key);
   page.arrived = Boolean(state.selected);
-  if (state.selected !== was) state.started = null;  // a note belongs to its Change
+  if (state.selected !== was) [state.started, state.detail] = [null, null];  // a note and a detail belong to a Change
   if (push && state.selected !== was) {
     history.pushState(null, "", here({ change: state.selected }));
   }
@@ -239,8 +239,8 @@ export async function refresh() {
     state.seen = "";
     state.stale = false;
     const key = state.selected;
-    if (key && unread) {
-      if (state.detail?.key === key) state.detail.old = true;  // its project did not answer: it stays as last read
+    if (unread) {
+      if (state.detail) state.detail.old = true;  // its project did not answer: the detail stays as last read
     } else if (key) {
       const [of, slug] = parts(key), d = await call(`/changes/${encodeURIComponent(slug)}`, undefined, of);
       const row = state.changes.find((c) => c.key === key);
