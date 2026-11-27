@@ -48,10 +48,10 @@ SLOW = 1.0  # seconds: a read of the API that took longer gets a line in the hos
 
 
 def timed(served: ASGIApp, say: Callable[[str], None]) -> ASGIApp:
-    """Say each read of the API that took over ``SLOW`` seconds: its path and how long it took.
+    """Say each unmarked read of the API that took over ``SLOW`` seconds: its path and how long it took.
 
-    Only the reads of the pages and of ``owlbear status`` are timed. A request with ``X-OwlBear-Use`` (a chat, a
-    replay) is left out: chats wait long by design.
+    The pages and the ``owlbear`` command read unmarked. A request with ``X-OwlBear-Use`` (a chat, a replay) is
+    left out: chats wait long by design.
     """
 
     async def call(scope: Scope, receive: Receive, send: Send) -> None:
