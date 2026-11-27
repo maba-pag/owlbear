@@ -165,7 +165,7 @@ function focusHeading() {
   Promise.resolve(wrapper?.componentOnReady?.()).then(() => {
     if (name.isConnected) name.focus({ preventScroll: true });
   });
-  reveal(target);
+  reveal(target.parentElement);  // with "All Changes" above it
 }
 
 // A key the page can open: a bare slug from an older link names the page's project, if it names one.
