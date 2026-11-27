@@ -12,9 +12,11 @@ export const DIALOG = "{ 'aria-haspopup': 'dialog' }";  // PDS's aria property, 
 export const REVERT = "Reversing the merge needs a revert you make yourself.";
 // Everything the page shows comes from here (TD-264): the list and the detail as last read, the owner's unsent input
 // per form (drafts: form key -> its fields), which toggles are open (by their summary), and the notes above.
+// unread: the shown projects the last refresh could not read (id -> why), their Changes kept as last read.
 export const state = {
   changes: null, detail: null, notes: [], selected: null, started: null, error: null, seen: "",
   stale: false, refused: null, drafts: new Map(), opened: new Set(), doneOpen: false, choosing: false,
+  unread: new Map(),
 };
 // The page's other mutable values, in an object since a module cannot reassign another's binding.
 export const page = { busy: false, again: false, lastSeen: null, arrived: false, skipped: false };
@@ -40,6 +42,12 @@ export function show() {
 export function starts(d) {
   const why = blockedOf(d.project);
   return why ? { disabled: true, title: why } : {};
+}
+
+// A button that writes for Change *d* is disabled while its project is not read: what shows of it is as last read.
+export function reads(d) {
+  const why = state.unread.get(d.project);
+  return why === undefined ? {} : { disabled: true, title: `Shown as last read: its project was not read (${why})` };
 }
 
 // One call to the project *of* (this page's by default); a Change's own calls name its project.

@@ -75,9 +75,11 @@ export function youCount() {
 function listView() {
   const changes = state.changes, groups = grouped();
   if (!changes) return nothing;
-  const head = !changes.length
-    ? html`<p class="empty meta">No Changes yet. New Change opens a chat in VS Code where you shape the first one.</p>`
-    : !groups.you.length ? html`<p class="says" id="nothing-yours">Nothing needs you right now.</p>` : nothing;
+  const head = state.unread.size ? nothing  // a project that was not read may hold what these would deny
+    : !changes.length
+      ? html`<p class="empty meta">No Changes yet. New Change opens a chat in VS Code where you shape the first
+        one.</p>`
+      : !groups.you.length ? html`<p class="says" id="nothing-yours">Nothing needs you right now.</p>` : nothing;
   const toggled = (e) => { state.doneOpen = e.target.open; };
   return html`${head}${Object.entries(GROUPS).map(([key, title]) => {
     if (!groups[key].length) return nothing;
@@ -102,8 +104,23 @@ function blockedBanner() {
       change: "" }, "/config")}>${displayName(p)}</a>: ${blockedOf(p.id)}</li>`)}</ul></p-inline-notification>`;
 }
 
+// What shows as last read takes no activation, by key as little as by pointer: a focused button in it must not send.
+// It stays readable for a screen reader, so it is not made inert.
+const held = {
+  capture: true,
+  handleEvent(event) {
+    if (!event.currentTarget.classList.contains("stale")) return;
+    event.preventDefault();
+    event.stopPropagation();
+  },
+};
+
 export function view() {
   const d = state.detail && state.detail.key === state.selected ? state.detail : null;
+  const old = (shows) => (state.stale || shows ? "stale" : "");
+  // The way back to the list stands outside the detail: it works while the detail is as last read, or not shown yet.
+  const back = state.selected ? html`<p-button-pure type="button" icon="arrow-left" class="back"
+    @click=${() => choose(null)}>All Changes</p-button-pure>` : nothing;
   return html`
     ${startedView()}
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error
@@ -114,11 +131,13 @@ export function view() {
     <section id="notes" class="panel" aria-label="Repository settings" ?hidden=${!state.notes.length}>
       ${state.notes.map((n) => text(n))}</section>
     <div id="board" class=${state.selected ? "open" : ""}>
-      <section id="list" aria-label="Changes" class=${state.stale ? "stale" : ""}>
+      <section id="list" aria-label="Changes" class=${old(false)} @click=${held}>
         <div id="changes">${listView()}</div>
       </section>
-      <section id="detail" aria-label="Selected Change" class=${state.stale ? "stale" : ""}>${d ? detailView(d)
-        : nothing}</section>
+      <div id="chosen">${back}
+        <section id="detail" aria-label="Selected Change" class=${old(d && state.unread.has(d.project))}
+          @click=${held}>${d ? detailView(d) : nothing}</section>
+      </div>
     </div>`;
 }
 
@@ -158,31 +177,35 @@ export function choose(key, push = true) {
   refresh();
 }
 
-// Every shown project's Changes, each with its project, and the projects' repository notes.
+// Every shown project's Changes, each with its project, and the projects' repository notes. A project's two reads
+// go out together, so one that does not answer holds the others' rows for the time of one read.
 async function everything() {
   const projects = shown();
+  const both = (of) => Promise.all([call("/changes", undefined, of), call("/project", undefined, of)]);
   if (projects === null) {  // a clone's own host: the one project it serves
-    const rows = (await call("/changes")).map((c) => ({ ...c, key: c.slug, project: "", projectName: "" }));
-    return [rows, (await call("/project")).notes, new Set()];
+    const [changes, said] = await both();
+    return [changes.map((c) => ({ ...c, key: c.slug, project: "", projectName: "" })), said.notes, new Map()];
   }
-  const each = await Promise.allSettled(projects.map(async (p) => [await call("/changes", undefined, p.id),
-    (await call("/project", undefined, p.id)).notes]));
-  const lost = (r) => r.status === "rejected" && [HostDown, Restarted, Slow].some((k) => r.reason instanceof k);
-  const down = each.find(lost);
+  const each = await Promise.allSettled(projects.map((p) => both(p.id)));
+  const lost = (r, ...kinds) => r.status === "rejected" && kinds.some((k) => r.reason instanceof k);
+  // The host is gone, or no project answered in time: the whole page says so. One slow project of several does not.
+  const down = each.find((r) => lost(r, HostDown, Restarted)) ?? (each.every((r) => lost(r, Slow)) ? each[0] : null);
   if (down) throw down.reason;
-  const rows = [], notes = [], failing = new Set();
+  const rows = [], notes = [], failing = new Map();
   each.forEach((r, i) => {  // one project that cannot be read keeps its last Changes and says why; the others go on
     const p = projects[i], named = (n) => (projects.length > 1 ? `${displayName(p)}: ${n}` : n);
     if (r.status === "rejected") {
-      failing.add(p.id);
-      rows.push(...(state.changes ?? []).filter((c) => c.project === p.id));
-      notes.push(named(`not read just now (${r.reason.message}); its Changes show as last read`));
+      const kept = (state.changes ?? []).filter((c) => c.project === p.id);
+      failing.set(p.id, r.reason.message);
+      rows.push(...kept);
+      notes.push(named(`not read just now (${r.reason.message})${kept.length ? "; its Changes show as last read"
+        : ""}`));
       return;
     }
     const [changes, said] = r.value;
     rows.push(...changes.map((c) => ({ ...c, key: keyOf(p.id, c.slug), project: p.id, projectName: displayName(p),
       own: isOwn(p) })));
-    notes.push(...said.map(named));
+    notes.push(...said.notes.map(named));
   });
   return [rows, notes, failing];
 }
@@ -204,7 +227,7 @@ export async function refresh() {
       page.skipped = true;
       return;
     }
-    [state.changes, state.notes] = [rows, notes];
+    [state.changes, state.notes, state.unread] = [rows, notes, failing];
     const unread = state.selected && failing.has(parts(state.selected)[0]);  // absent only once its project answers
     if (state.selected && !unread && !rows.some((c) => c.key === state.selected)) {  // gone, or a stale link
       state.selected = null;

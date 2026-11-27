@@ -1,6 +1,6 @@
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { statusLine } from "/assets/page/config/unset.mjs";
-import { DIALOG, state, show, several, formsOf, send, starts } from "./state.mjs";
+import { DIALOG, state, show, several, formsOf, send, starts, reads } from "./state.mjs";
 import { toggle, button, hd, text, info, notice, refusal } from "./widgets.mjs";
 import {
   questionForm, retryForm, criteriaPanel, checkForm, mergeForm, restartButton, pullbackNote, stopNotice,
@@ -9,15 +9,12 @@ import { decisionForm, visualSection, beforeSection, roundRefused } from "./visu
 import { spendLines, toolLines, planInfo, roundsInfo, stepper } from "./progress.mjs";
 import { activityLog, split } from "./activity.mjs";
 import { approval, briefInfo } from "./brief.mjs";
-import { choose } from "./list.mjs";
 import { watcherSection } from "./watcher.mjs";
 import { improvementSection } from "./improvement.mjs";
 import { detailsOn, detailsSwitch } from "./details.mjs";
 import { actionItems } from "./actions.mjs";
 
 function detailHead(d) {
-  const back = html`<p-button-pure type="button" icon="arrow-left" class="back" @click=${() => choose(null)}>All
-    Changes</p-button-pure>`;
   let intent = nothing, amend = nothing;
   if (!d.finished) {
     const body = { intent: d.paused ? "resume" : "pause" }, said = d.paused
@@ -55,7 +52,7 @@ function detailHead(d) {
     }
   }
   const under = [d.brief.title && d.slug, several() && `in ${d.projectName}`].filter(Boolean).join(" \u00b7 ");
-  return html`<div class="detail-head">${back}<div>${hd(2, d.brief.title || d.slug, "xl", { tabindex: "-1" })}${under
+  return html`<div class="detail-head"><div>${hd(2, d.brief.title || d.slug, "xl", { tabindex: "-1" })}${under
     ? text(under, { size: "sm", color: "contrast-medium" }) : nothing}</div><div class="row">${
     detailsSwitch()}${amend}${intent}
     </div></div>`;
@@ -81,7 +78,7 @@ export function releaseLook(d) {
     }
   };
   return html`<p class="next">${d.release_look.text} ${d.release_look.ready
-    ? button("Mark done", looked) : nothing}</p>`;
+    ? button("Mark done", looked, reads(d)) : nothing}</p>`;
 }
 
 export function badge(c) {
