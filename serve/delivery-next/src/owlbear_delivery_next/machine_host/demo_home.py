@@ -4,14 +4,17 @@
 fresh temporary folder becomes HOME, ``OWLBEAR_DATA``, ``COPILOT_HOME`` and ``GIT_CONFIG_*`` are dropped, Git resolves
 every ``https://github.com/`` address to a missing path, and a ``gh`` that only fails comes first on PATH. ``seed``
 then writes, in that home, the shared data checkout with a complete Global layer, this machine's settings, the two
-registered example projects and their six example Changes. Their GitHub-shaped origins never reach GitHub: the data
-checkout pushes to a local bare repository and the write account is chosen offline.
+registered example projects, each with its chat server entry, and their six example Changes. Their GitHub-shaped
+origins never reach GitHub: the data checkout pushes to a local bare repository and the write account is chosen
+offline.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -32,6 +35,8 @@ PROJECTS = (  # (name, fixed clone id): each start registers them under the same
     ("example-shop", "e0a1b2c3d4e5f601"),
     ("example-docs", "e0a1b2c3d4e5f602"),
 )
+# Each clone's own chat server entry, as `owlbear setup` writes it: no page shows a project that needs setup.
+CHAT = {"type": "stdio", "command": sys.executable, "args": ["-m", "owlbear_delivery_next", "mcp"], "tools": ["*"]}
 
 
 def isolate() -> Path:
@@ -72,6 +77,7 @@ def seed(home: Path) -> DataRepo:
         folder = registry.store_of(clone)
         folder.mkdir(mode=0o700)
         (folder / "clone-id").write_text(pid + "\n")
+        (clone / ".mcp.json").write_text(json.dumps({"mcpServers": {"owlbear-delivery": CHAT}}, indent=2) + "\n")
         registry.register(clone)
         clones[name] = clone
     demo_changes.seed(clones)
