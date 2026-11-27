@@ -12,7 +12,6 @@ import { short, split } from "./activity.mjs";
 import { badge, detailView, releaseLook } from "./detail.mjs";
 import { startedView } from "./shaping.mjs";
 import { elsewhereBanner } from "./elsewhere.mjs";
-import { due } from "./tooluse.mjs";
 
 const GROUPS = { you: "Needs you", working: "Delivery is working", paused: "Paused", done: "Done" };
 
@@ -249,7 +248,6 @@ export async function refresh() {
         return;
       }
       if (key === state.selected) state.detail = d;  // the person may have chosen another Change meanwhile
-      due();
     } else {
       state.detail = null;
     }
