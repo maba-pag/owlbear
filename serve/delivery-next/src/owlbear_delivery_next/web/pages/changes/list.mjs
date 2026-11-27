@@ -126,7 +126,7 @@ function unreadView() {
 }
 
 export function view() {
-  const d = state.detail && state.detail.key === state.selected ? state.detail : null;
+  const d = state.detail;
   return html`
     ${startedView()}
     <p-inline-notification id="error" state="error" dismiss-button="false" ?hidden=${!state.error}>${state.error
@@ -239,7 +239,7 @@ export async function refresh() {
     [state.changes, state.notes, state.unread] = [rows, notes, failing];
     const unread = state.selected && failing.has(parts(state.selected)[0]);  // absent only once its project answers
     if (state.selected && !unread && !rows.some((c) => c.key === state.selected)) {  // gone, or a stale link
-      state.selected = null;
+      [state.selected, state.detail] = [null, null];
       history.replaceState(null, "", here({ change: "" }));
     }
     page.lastSeen = new Date();
@@ -258,11 +258,9 @@ export async function refresh() {
         return;
       }
       if (key === state.selected) state.detail = d;  // the person may have chosen another Change meanwhile
-    } else {
-      state.detail = null;
     }
     show();
-    if (page.arrived && state.detail?.key === state.selected) {
+    if (page.arrived && state.detail) {
       page.arrived = false;
       focusHeading();
     }

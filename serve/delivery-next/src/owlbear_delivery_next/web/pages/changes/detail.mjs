@@ -69,7 +69,7 @@ const PAUSED = /· paused by you/;
 
 export function releaseLook(d) {
   if (!d.release_look) return nothing;
-  const looked = () => send("/release-look", {}, state.detail?.key === d.key ? state.detail : d);
+  const looked = () => send("/release-look", {}, d);
   // The one button on a card that writes: off while its project is not read, as what shows of it is as last read.
   const why = state.unread.get(d.project);
   const off = why === undefined ? {}
