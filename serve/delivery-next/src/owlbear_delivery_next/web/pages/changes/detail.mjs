@@ -69,13 +69,12 @@ const PAUSED = /· paused by you/;
 
 export function releaseLook(d) {
   if (!d.release_look) return nothing;
-  const looked = () => send("/release-look", {}, d);
   // The one button on a card that writes: off while its project is not read, as what shows of it is as last read.
   const why = state.unread.get(d.project);
   const off = why === undefined ? {}
     : { disabled: true, title: `Shown as last read: its project was not read (${why})` };
-  return html`<p class="next">${d.release_look.text} ${d.release_look.ready ? button("Mark done", looked, off)
-    : nothing}</p>`;
+  return html`<p class="next">${d.release_look.text} ${d.release_look.ready
+    ? button("Mark done", () => send("/release-look", {}, d), off) : nothing}</p>`;
 }
 
 export function badge(c) {
