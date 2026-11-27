@@ -568,11 +568,11 @@ def test_a_session_that_ends_without_a_recipe_keeps_none_of_its_edits(env, monke
             cfg.session_id,
             "ask",
             tools.AskQuestion(
-                question="Pause or abandon?",
-                why="Choose the next move.",
+                question="Change the greeting to German?",
+                why="The owner chooses the greeting.",
                 options=[
+                    {"label": "Yes", "effect": "Use German for the greeting.", "action": "continue"},
                     {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
-                    {"label": "Abandon", "effect": "Abandon this Change.", "action": "abandon"},
                 ],
             ),
             termination=Termination(confirmed=True),
@@ -680,11 +680,11 @@ def test_a_returned_reviewer_question_does_not_rebuild_its_message_before_checkp
             cfg.session_id,
             "ask",
             tools.AskQuestion(
-                question="Pause or abandon?",
-                why="Choose the next move.",
+                question="Change the greeting to German?",
+                why="The owner chooses the greeting.",
                 options=[
+                    {"label": "Yes", "effect": "Use German for the greeting.", "action": "continue"},
                     {"label": "Pause", "effect": "Pause this Change.", "action": "pause"},
-                    {"label": "Abandon", "effect": "Abandon this Change.", "action": "abandon"},
                 ],
             ),
             checks=cfg.checks,

@@ -190,7 +190,7 @@ def checked(store: Store, lock: Lock, c: Change, path: Path) -> tuple[loop.StepR
         store.write(lock, c)
     route, done = pending_child.child(store, lock, c, (LABEL, parent.session_id), start)
     if route.exit == Exit.DONE:
-        verdict, errors = judged(done, proposed, p.proof)
+        verdict, errors = judged(done, proposed, p.proof, approved=c.brief.approved_version is not None)
         result = settled(c, proposed, (verdict, [*tried, *errors]), _stale(p, path), p.proof)
     else:
         result = route
@@ -362,7 +362,7 @@ def session(store: Store, lock: Lock, c: Change, proposed: tools.AskQuestion, *,
 
 
 def judged(
-    done: Run, proposed: tools.AskQuestion, proof: OptionProof | None
+    done: Run, proposed: tools.AskQuestion, proof: OptionProof | None, *, approved: bool
 ) -> tuple[pick_tools.QuestionJudgment | None, list[str]]:
     """A complete trusted verdict and any field refusals; no missing or untrusted verdict is a pass."""
     if not (done.termination and done.termination.confirmed):
@@ -374,7 +374,7 @@ def judged(
     verdict = done.payload
     if sorted(o.index for o in verdict.options) != list(range(len(proposed.options))):
         return None, ["options: admission must judge every proposed option exactly once"]
-    errors = _worded(verdict, proposed)
+    errors = _worded(verdict, proposed, approved=approved)
     for v in verdict.options:
         if not v.executable:
             errors.append(f"options[{v.index}].action: {v.why}")
@@ -393,12 +393,13 @@ def judged(
     return verdict, errors
 
 
-def _worded(verdict: pick_tools.QuestionJudgment, proposed: tools.AskQuestion) -> list[str]:
-    """What the worker can correct: words the owner can't judge, or a reserved question that isn't yes or no."""
+def _worded(verdict: pick_tools.QuestionJudgment, proposed: tools.AskQuestion, *, approved: bool) -> list[str]:
+    """Return correctable wording and option errors before offering an owner question."""
     errors = [] if verdict.plain else [f"question: not plain words: {verdict.why} - say what the owner gets or allows"]
     actions = sorted(o.action or "" for o in proposed.options)
-    if verdict.subject == "reserved" and actions not in (["continue", "pause"], ["abandon", "continue"]):
-        errors.append("options: a reserved question is one proposal, yes (continue) or no (pause or abandon)")
+    binary = verdict.subject == "reserved" or (approved and verdict.subject == "product")
+    if binary and actions not in (["continue", "pause"], ["abandon", "continue"]):
+        errors.append(f"options: a {verdict.subject} question is one proposal, yes (continue) or no (pause or abandon)")
     if verdict.subject == "reserved" and proposed.recommended is not None:
         errors.append("recommended: a reserved question is the owner's own choice - mark no option")
     return errors
