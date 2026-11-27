@@ -406,12 +406,12 @@ def main(argv: list[str] | None = None) -> int:
     store = Store.open(repo)
     try:
         with store.lock(args.change) as lock, command_marks.marking(store, lock, args.change):
-            state, moved = engine.observe(store, repo, args.change)
-            leave = queue.barrier(store, repo)
-            change, step = store.fold(lock, args.change, datetime.now(UTC), state, moved=moved, leave=leave)
-            kind = step.kind.value if step is not None else ""
-            spend_ledger.enter(spend_ledger.Where.of(store, repo, change=args.change, step=kind))  # every session's
             try:
+                state, moved = engine.observe(store, repo, args.change)
+                leave = queue.barrier(store, repo)
+                change, step = store.fold(lock, args.change, datetime.now(UTC), state, moved=moved, leave=leave)
+                kind = step.kind.value if step is not None else ""
+                spend_ledger.enter(spend_ledger.Where.of(store, repo, change=args.change, step=kind))
                 _step(store, lock, change, step, repo)
             except Exception as exc:  # the owner reads it in Recent activity; runner.log gets it and its traceback
                 at = datetime.now(UTC).isoformat()

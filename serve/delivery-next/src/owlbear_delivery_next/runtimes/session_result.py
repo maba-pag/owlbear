@@ -323,7 +323,7 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
             cause = cause_key(env, kind, "sdk") if env else cause_key(ErrorKind.LIVENESS, kind, "deadline")
             return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail or "deadline", classified=run.classified)
         case "missing":
-            return StepResult(exit=Exit.RETRY, cause=missing_cause(kind), reason=run.detail)
+            return StepResult(exit=Exit.RETRY, cause=missing_cause(kind), reason=run.detail, classified=run.classified)
         case "unread":
             cause = cause_key(ErrorKind.LIVENESS, kind, "transcript")
             return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail, classified=run.classified)
@@ -336,4 +336,5 @@ def _exit(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one case per ending
             return StepResult(exit=Exit.RETRY, cause=cause, reason=run.detail, classified=run.classified)
         case _:
             reason = f"no valid result: {run.detail}"
-            return StepResult(exit=Exit.RETRY, cause=cause_key(ErrorKind.RESULT, kind), reason=reason)
+            cause = cause_key(ErrorKind.RESULT, kind)
+            return StepResult(exit=Exit.RETRY, cause=cause, reason=reason, classified=run.classified)

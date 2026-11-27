@@ -88,11 +88,11 @@ const SAID = {
   ci: (e) => (e.failed?.length ? `CI failed: ${e.failed.join(", ")}`
     : `CI passed${e.passed?.length ? `: ${e.passed.join(", ")}` : ""}`),
   "merge-offer": (e) => `Merge offered for commit ${sha(e.head)}`,
-  "merge-request": (e) => (e.status === "merged" ? `Merged${pr(e)}`
+  "merge-request": (e) => (e.status === "merged" ? `Merged${pr(e)}${why(e.message)}`
     : `Merge of${pr(e)} ${e.status === "refused" ? "refused" : "not confirmed"}${why(e.message)}`),
   "merge-enqueue": (e) => `Merge queue for${pr(e)}: ${e.message || e.status}`,
   merged: (e) => `Merged${pr(e)}${e.sha ? ` as ${sha(e.sha)}` : ""}${e.method
-    ? ` (${METHOD[e.method] ?? e.method})` : ""}`,
+    ? ` (${METHOD[e.method] ?? e.method})` : ""}${why(e.message)}`,
   "queue-adopted": (e) => `Found${pr(e)} already in the merge queue`,
   "queue-left": (e) => `${pr(e).trim()} left the merge queue${why(e.reason)}`,
   "queue-removed": (e) => `${pr(e).trim()} was taken out of the merge queue${why(e.reason)}`,
@@ -138,10 +138,13 @@ const said = (e) => (SAID[e.event] ?? ((x) => `${words(x.event)}${why(x.reason |
 // A merge is recorded three times (its request, the merge, the merge step); it reads once, as the merge.
 function oneMerge(events) {
   const merged = new Set(events.filter((e) => e.event === "merged").map((e) => `${e.pr}`));
+  const messages = new Map(events.filter((e) => e.event === "merge-request" && e.status === "merged")
+    .map((e) => [`${e.pr}:${e.head}`, e.message]));
   return events.filter((e) => !(
     (e.event === "merge-request" && e.status === "merged" && merged.has(`${e.pr}`))
     || (e.event === "step" && e.kind === "merge" && e.exit === "done"
-      && [...merged].some((n) => String(e.reason || "").startsWith(`merged PR #${n} `)))));
+      && [...merged].some((n) => String(e.reason || "").startsWith(`merged PR #${n} `)))))
+    .map((e) => e.event === "merged" ? { ...e, message: e.message || messages.get(`${e.pr}:${e.head}`) } : e);
 }
 
 // Newest first, in words, the same line in a row once with its count; bookkeeping stays in the activity file.

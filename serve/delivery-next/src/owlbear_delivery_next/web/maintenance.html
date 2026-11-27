@@ -24,7 +24,7 @@
   .history-notice { white-space: pre-wrap; overflow-wrap: anywhere; }
   #tests { display: grid; gap: var(--p-spacing-static-xs); }
   #tests fieldset { display: grid; gap: var(--p-spacing-static-xs); margin: 0; padding: 0; border: 0; }
-  .read-errors { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .read-errors, .curation-reason { white-space: pre-wrap; overflow-wrap: anywhere; }
   .audit { display: grid; gap: var(--p-spacing-static-xs); }
   .audit-text { white-space: pre-wrap; overflow-wrap: anywhere; }
   .review-text { display: block; max-inline-size: 75ch; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -213,7 +213,7 @@ function folderRun(f) {
       "Some memory files could not be read; automatic curation considers only readable pending entries:\n"}${
       Object.entries(f.read_errors).map(([path, error]) => `${path}: ${error}`).join("\n")}</p-text>` : nothing}
     ${f.summary ? html`<p-text size="sm">${f.summary}</p-text>` : nothing}
-    ${reason ? html`<p-text size="xs" color="contrast-medium">${reason}</p-text>` : nothing}
+    ${reason ? html`<p-text class="curation-reason" size="xs" color="contrast-medium">${reason}</p-text>` : nothing}
     ${skipped.length ? html`<p-text size="xs">Left for you: ${skipped.map((e) => `${e.entry_id.slice(0, 8)} (${
       e.confidence}%${e.reason ? `: ${e.reason}` : ""})`).join("; ")}</p-text>` : nothing}
   </li>`;

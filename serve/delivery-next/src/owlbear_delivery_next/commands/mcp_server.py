@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from mcp.server import MCPServer
+from mcp.server.mcpserver.exceptions import UnexpectedToolError
 from mcp.types import ImageContent, TextContent, ToolAnnotations
 from pydantic import BaseModel, Field
 
@@ -23,10 +24,13 @@ from owlbear_delivery_next.change_contracts import (
 from owlbear_delivery_next.change_flow import brief_tools
 from owlbear_delivery_next.commands.chat_client import WAIT, Chat, Closed, workspace
 from owlbear_delivery_next.commands.mcp_launch import serve_stdio
+from owlbear_delivery_next.git.command_failure import rpc_failure
 from owlbear_delivery_next.project_host import answers
 from owlbear_delivery_next.workflow_steps import lookup
 
 if TYPE_CHECKING:
+    from mcp.server.mcpserver import Context
+    from mcp.types import CallToolResult, InputRequiredResult
     from pydantic.fields import FieldInfo
 
 _STATE: dict[str, Chat | Closed] = {}
@@ -38,7 +42,19 @@ def _d(name: str, model: type[BaseModel] = brief_tools.BriefDraft) -> FieldInfo:
     return Field(description=field.description, examples=field.examples)
 
 
-mcp = MCPServer(
+class _ChatServer(MCPServer):
+    async def call_tool(
+        self, name: str, arguments: dict[str, Any], context: Context[Any, Any] | None = None
+    ) -> CallToolResult | InputRequiredResult:
+        try:
+            return await super().call_tool(name, arguments, context)
+        except UnexpectedToolError as exc:
+            if exc.__cause__ is not None:
+                exc.args = (f"{exc}: {rpc_failure(exc.__cause__)}",)
+            raise
+
+
+mcp = _ChatServer(
     "owlbear-delivery",
     instructions="Shape a Change with the owner, save its brief and visual check, show Delivery status, answer a "
     "worker's question, find decisions, record one the owner confirmed or propose one, complete a finite "

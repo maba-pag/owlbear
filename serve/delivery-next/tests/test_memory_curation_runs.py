@@ -635,16 +635,17 @@ def test_a_run_unconfirmed_without_processes_to_watch_retains_its_slot_and_says_
 
 def test_an_unverified_session_end_says_its_problems_whole(repo, whole_error, caplog) -> None:
     left = Termination(confirmed=False, unknown=(9,), problems=(f"disconnect failed: RuntimeError: {whole_error}",))
+    detail = "the session's own detail\n  indented  diagnostic"
 
     def run(cfg) -> Run:
-        return Run(cfg.session_id, ending="error", detail="the session's own detail", termination=left)
+        return Run(cfg.session_id, ending="error", detail=detail, termination=left)
 
     job = curation.Curation(Slots(lambda: 1), shared=lambda: DataRepo(repo), run=run)
     job.start("shop")
     drained(job)
     shop = {f["folder"]: f for f in job.read()["folders"]}["shop"]
     why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
-    reason = f"ended error: {curation.UNKNOWN}; {why}; the session's own detail; "
+    reason = f"ended error: {curation.UNKNOWN}; {why}; {detail}; "
     reason += "the run changed no memory, so nothing is held"
     assert (shop["state"], shop["reason"]) == ("failed", reason)
     logged = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == curation.__name__]
@@ -652,22 +653,25 @@ def test_an_unverified_session_end_says_its_problems_whole(repo, whole_error, ca
 
 
 @pytest.mark.browser
-@pytest.mark.parametrize("unpruned", [False, True], ids=["raised", "unpruned"])
-def test_a_failed_folder_s_whole_reason_shows_on_maintenance(repo, pds, whole_error, monkeypatch, unpruned) -> None:
+@pytest.mark.parametrize("ending", ["raised", "unpruned", "error"])
+def test_a_failed_folder_s_whole_reason_shows_on_maintenance(repo, pds, whole_error, monkeypatch, ending) -> None:
     """#951: a folder's failed run, read as the host's route returns it, shows its whole reason in its Maintenance row;
     every failed run's reason (raised, ended unverified, or its worktree left listed) goes through that one line."""
     note = f"the session's teardown also failed: OSError: {whole_error}"
     real, failing = curation_tree._git, []  # noqa: SLF001
     locked = curation_tree.DataRepoError(f"git worktree failed: locked\n{whole_error}")
     locked.add_note(note)
+    detail = f"{whole_error}\n  indented  diagnostic"
 
     def git_(cwd, *args, **kw):
         if failing and args == ("worktree", "prune"):
             raise locked
         return real(cwd, *args, **kw)
 
-    def run(_cfg) -> Run:
-        failing.extend([True] * unpruned)  # the seed's own prune ran
+    def run(cfg) -> Run:
+        if ending == "error":
+            return Run(cfg.session_id, ending="error", detail=detail, termination=Termination(confirmed=True))
+        failing.extend([True] * (ending == "unpruned"))  # the seed's own prune ran
         broke = RuntimeError(whole_error)
         broke.add_note(note)  # as loop_owner.run adds it
         raise broke
@@ -677,10 +681,16 @@ def test_a_failed_folder_s_whole_reason_shows_on_maintenance(repo, pds, whole_er
     job.start("owlbear")
     drained(job)
     read, reason = job.read(), f"RuntimeError: {whole_error}\n{note}"
-    if unpruned:
+    if ending == "unpruned":
         listed = f"{curation_tree.LISTED}: DataRepoError: git worktree failed: locked\n{whole_error}\n{note}"
         reason = f"RuntimeError: {listed}; {reason}"
+    elif ending == "error":
+        reason = f"ended error: {detail}; the run changed no memory, so nothing is held"
     assert {f["folder"]: f["reason"] for f in read["folders"]}["owlbear"] == reason
+    assert_maintenance_reason(repo, pds, read, reason)
+
+
+def assert_maintenance_reason(repo, pds, read, reason) -> None:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         server = uvicorn.Server(
@@ -705,7 +715,9 @@ def test_a_failed_folder_s_whole_reason_shows_on_maintenance(repo, pds, whole_er
                 page.goto(f"http://127.0.0.1:{sock.getsockname()[1]}/maintenance#token=tok")
                 row = page.locator("#curation > li", has=page.get_by_role("heading", name="owlbear", exact=True))
                 expect(row).to_be_visible()
-                assert row.locator('p-text[size="xs"]:not(.blocked)').first.text_content() == reason
+                shown = row.locator(".curation-reason")
+                assert shown.text_content() == reason
+                expect(shown).to_have_css("white-space", "pre-wrap")
                 browser.close()
         finally:
             server.should_exit = True
