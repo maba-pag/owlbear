@@ -177,9 +177,9 @@ export function choose(key, push = true) {
   const was = state.selected;
   state.selected = wanted(key);
   page.arrived = Boolean(state.selected);
-  if (state.selected !== was) [state.started, state.detail] = [null, null];  // a note and a detail belong to a Change
-  if (push && state.selected !== was) {
-    history.pushState(null, "", here({ change: state.selected }));
+  if (state.selected !== was) {
+    [state.started, state.detail] = [null, null];  // a note and a detail belong to a Change
+    if (push) history.pushState(null, "", here({ change: state.selected }));
   }
   show();
   if (!state.selected && was) document.querySelector(`#changes a[data-key="${CSS.escape(was)}"]`)?.focus();
