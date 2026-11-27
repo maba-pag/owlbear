@@ -17,7 +17,7 @@ function ask(d) {
   read.add(d);
   asked.add(key);
   call(`/changes/${encodeURIComponent(d.slug)}/tool-use`, { of: d.project, timeout: 60000 })
-    .then((got) => got.tool_use, (error) => error)
+    .catch((error) => error)
     .then((got) => {
       asked.delete(key);
       if (slot?.key !== key) return;  // another Change was selected meanwhile: its own read answers for it

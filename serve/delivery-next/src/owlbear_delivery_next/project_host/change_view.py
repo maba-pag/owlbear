@@ -47,7 +47,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime, *, tools: boo
     out["progress"] = asdict(progress(c))
     out["spend"] = c.spend.model_dump()
     if tools:
-        out |= tool_use(store, slug)
+        out["tool_use"] = tool_use(store, slug)
     out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
     out["release_look"] = release_look.shown(store, c)
     out["watcher"] = watch_reports.counts(store.db, slug)  # observed calls writing outside, unresolved ones apart
@@ -66,7 +66,7 @@ def summary(store: Store, slug: str, act: Activity, now: datetime, *, tools: boo
 
 def tool_use(store: Store, slug: str) -> dict[str, Any]:
     """A Change's tool use, derived from the spend ledger: a chat's rows hold it, a page reads it by its own route."""
-    return {"tool_use": tool_metrics.of_change(spend_ledger.Where.of(store).clone, slug).model_dump()}
+    return tool_metrics.of_change(spend_ledger.Where.of(store).clone, slug).model_dump()
 
 
 def router(store: Store, read: Callable[[str], Change]) -> APIRouter:
