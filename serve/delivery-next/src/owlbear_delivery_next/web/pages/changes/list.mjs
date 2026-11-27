@@ -119,7 +119,7 @@ const held = {
 function unreadView() {
   const [of, slug] = state.selected ? parts(state.selected) : [], why = state.unread.get(of);
   if (why === undefined) return nothing;
-  const row = state.changes?.find((c) => c.key === state.selected);
+  const row = state.changes.find((c) => c.key === state.selected);
   return html`${hd(2, row?.title || slug, "xl", { tabindex: "-1" })}${text(`Not read just now (${why}). It shows once
     its project answers.`)}`;
 }
