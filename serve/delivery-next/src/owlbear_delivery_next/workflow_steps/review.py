@@ -57,7 +57,7 @@ def _final(c: Change, settings: Settings) -> None:
         rounds.loop(c, FINAL, settings)
     elif lp is not None and lp.ended:
         lp.ended, lp.last, lp.reentry, lp.completion, lp.rebuild = "", False, True, None, []
-        lp.extra = max(lp.extra, lp.round + 1 - lp.policy.max_rounds)
+        lp.extra = lp.round + 1 - lp.policy.max_rounds
 
 
 def _subject(c: Change, task: Task) -> str | None:
