@@ -419,11 +419,11 @@ def relink(root: Path) -> str:
     if (done := _git(root, "worktree", "repair")).returncode:
         return command_failure.failed(done)
     common = _git(root, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()
-    for linked in worktrees(root):
-        if not linked.exists():
-            continue  # gone before the move: git lists it as prunable, and nothing here can work
+    for linked in filter(Path.exists, worktrees(root)):  # one gone before the move is prunable: nothing to check
         found = _git(linked, "rev-parse", "--path-format=absolute", "--git-common-dir")
-        if found.returncode or Path(found.stdout.strip()).resolve() != Path(common).resolve():
+        if found.returncode:
+            return f"its linked worktree {linked} does not reach it: {command_failure.failed(found)}"
+        if Path(found.stdout.strip()).resolve() != Path(common).resolve():
             return f"its linked worktree {linked} does not reach it"
     return ""
 
