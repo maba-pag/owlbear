@@ -1,5 +1,5 @@
 import { call } from "/assets/ui.mjs";
-import { show, parts } from "./state.mjs";
+import { show } from "./state.mjs";
 import { notice, text } from "./widgets.mjs";
 import { toolLines } from "./progress.mjs";
 
@@ -13,10 +13,10 @@ const asked = new Set();  // the keys whose read has no answer yet
 let slot = null;  // { key, got }: got is the answer, an Error, or null before the first
 
 function ask(d) {
-  const key = d.key, [of, slug] = parts(key);
+  const key = d.key;
   read.add(d);
   asked.add(key);
-  call(`/changes/${encodeURIComponent(slug)}/tool-use`, { of, timeout: WAIT })
+  call(`/changes/${encodeURIComponent(d.slug)}/tool-use`, { of: d.project, timeout: WAIT })
     .then((got) => got.tool_use, (error) => error)
     .then((got) => {
       asked.delete(key);
