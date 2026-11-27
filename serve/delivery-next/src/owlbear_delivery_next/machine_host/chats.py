@@ -26,8 +26,8 @@ when the enrolled folders change: the baseline, by folder names alone) starts at
 at its beginning. What came before the start is read as context once the chat grows, never looked at; so is a
 replaced log, and so is a chat followed before and found again (its metadata was missing meanwhile): it starts at
 its end then. A restart records each chat's bytes written while OwlBear was not following them as a gap
-(D-01M5XCE8ZA4FGYYY45YP44M8RD), from the offsets the last run left in ``chats.json``. A chat without a new event for a
-day goes dormant: its intake is dropped and its offset kept until it grows.
+(D-01M5XCE8ZA4FGYYY45YP44M8RD), from the offsets the last run left in ``chats.json``, or from zero for a newly found
+chat on the startup baseline. A chat without a new event for a day goes dormant until it grows; its offset is kept.
 
 Admission (``room``, ``chat_looks.Gate``): one chat look at a time across all chats, a draining one counted; none while
 the machine is paused (D-01M5XCE8ZC030KT2FZ7D6SZCJN), once the follower closes, once an update's fence or a stop holds
@@ -137,15 +137,15 @@ class Follower:
         self.tasks: set[asyncio.Future[Any]] = set()  # their drains
         self.baseline: set[str] | None = None  # the session folders when following began; None while not following
         self.folders: tuple[str, ...] = ()
-        self.last: dict[str, Any] = {}  # the last run's offsets, until its chats were found again
-        self.restarted = True  # the first time following begins compares with the last run's offsets
+        self.last: dict[str, dict[str, Any] | None] = {}  # startup chats not yet opened, with their saved offsets
+        self.restarted = True  # the first time following begins records gaps
         self.metadata = chat_acts.Metadata()
         self.unfollowed: dict[str, dict[str, str]] = {}  # enrolled chats not VS Code's: their folder and why
         self.share = 0  # the steer share of the latest pass
         self.turns = 0
         self.said = self.failed = ""  # the line last told, and the last pass's whole error if it failed
         self.refused = ""  # why the follower did not start, whole: no chat is followed until OwlBear starts again
-        self.saved: dict[str, Any] = {}
+        self.saved: dict[str, Any] | None = None
 
     def start(self) -> None:
         """Run on the follower's own daemon thread."""
@@ -226,7 +226,8 @@ class Follower:
         spots = [c.spot for c in self.chats.values() if c.spot] + self.leaving
         if spots:
             await asyncio.wait({asyncio.ensure_future(s.drain()) for s in spots}, timeout=CLOSE - spotter.GRACE - 2)
-        self.saved = chat_offsets.save(self.chats.values(), self.saved)  # for the next run's gap record
+        if not self.restarted:
+            self.saved = chat_offsets.save(self.chats.values(), self.saved)  # for the next run's gap record
 
     def _tell(self, text: str) -> None:
         if text and text != self.said:
@@ -260,6 +261,7 @@ class Follower:
         self._tell("")
         self.share = plan.share
         found = self._found(listed, ours, plan.folders)
+        self.last = {cid: old for cid, old in self.last.items() if cid in found}
         ids = sorted(found)
         self.turns += 1
         ids = ids[self.turns % len(ids) :] + ids[: self.turns % len(ids)] if ids else []
@@ -268,7 +270,6 @@ class Follower:
             if self.closed.is_set() or left <= 0:
                 break
             left -= await self._tail(cid, found[cid], plan.ctx, left)
-        self.last = {}  # what the last run left counts only for the chats found when following began
         self.saved = chat_offsets.save(self.chats.values(), self.saved)  # for the next run's gap record
 
     def _off(self, why: str) -> None:
@@ -276,16 +277,20 @@ class Follower:
         for cid in list(self.chats):
             self._forget(cid)
         self.baseline = None
+        self.last.clear()
 
     def _begin(self, folders: tuple[str, ...]) -> None:
         """Following begins, or the enrolled folders changed: the session folders now are the baseline."""
-        if self.restarted:
-            self.last, self.restarted = chat_offsets.load(), False
         self.folders = folders
         try:
             self.baseline = {p.name for p in self._root().iterdir() if p.is_dir()}
         except OSError:
             self.baseline = set()
+        if self.restarted:
+            self.saved = chat_offsets.load()
+            if self.saved is not None:
+                self.last = {cid: self.saved.get(cid) for cid in self.baseline}
+            self.restarted = False
 
     def _found(self, listed: list[Path], ours: set[str], folders: tuple[str, ...]) -> dict[str, str]:
         """Each chat of *listed* that may be read now, with its workspace; a chat followed that may not be is dropped.
@@ -315,8 +320,8 @@ class Follower:
 
     def _new(self, cid: str, cwd: str, size: int, file: tuple[int, int]) -> Chat:
         start = size if self.baseline is not None and cid in self.baseline else 0
-        if (old := self.last.get(cid)) is not None:
-            chat_offsets.missed(cid, old, start, file)
+        if cid in self.last:
+            chat_offsets.missed(cid, self.last.pop(cid), start, file)
         return Chat(cid, cwd, offset=start, history=start, file=file, grew=time.time())
 
     def _intake(self, c: Chat, ctx: spotter.Context) -> None:

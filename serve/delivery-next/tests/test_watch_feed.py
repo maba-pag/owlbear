@@ -389,3 +389,34 @@ def test_a_completed_write_outside_is_a_state_change_look_never_a_sample_whateve
     expected = [("exempt", "state-change"), ("inside", "sample"), ("mine", "state-change"), ("outside", "state-change")]
     assert sorted((r["call"], r["look"]) for r in looked) == expected
     assert sorted(rows(place)) == ["outside"]  # the reports leave out the exempt root and the Change's own state
+
+
+def test_spotter_sees_every_reported_target_of_a_batch_move(place, monkeypatch) -> None:
+    targets = [str(place.elsewhere / f"file-{i}.txt") for i in range(26)]
+    edits = [
+        {"before": {"path": before, "content": ""}, "after": {"path": after, "content": ""}}
+        for before, after in zip(targets[::2], targets[1::2], strict=True)
+    ]
+    request = {"kind": "write", "toolCallId": "c1", "canOfferSessionApproval": False, "diff": "",
+               "fileName": targets[0], "intention": "move files", "fileEdits": edits}  # fmt: skip
+    seen = []
+
+    async def judge(card, _ctx, _meter):
+        seen.append(card["moment"]["targets"])
+        return '{"category": "none"}'
+
+    monkeypatch.setattr(watch_feed.spotter_look, "judged", judge)
+    spot = spotter.Context(project="p", change="c1", step="build", looks=("state-change",), sample_rate=0,
+                           verbose=False, model="m", effort="", limit=1.0)  # fmt: skip
+    place.watching = dataclasses.replace(place.watching, spot=spot)
+
+    async def main() -> None:
+        st = stepped(place, start("c1", "edit", path=targets[0]),
+                     event("permission.requested", {"requestId": "w1", "permissionRequest": request}),
+                     event("tool.execution_complete", {"toolCallId": "c1", "success": True}), close=False)  # fmt: skip
+        await asyncio.wait(st.feed.spotter.tasks)
+        st.feed.close()
+
+    asyncio.run(main())
+    assert rows(place)["c1"]["targets"] == targets
+    assert seen == [targets]
