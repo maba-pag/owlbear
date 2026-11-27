@@ -38,6 +38,7 @@ from owlbear_delivery_next.project_host import (
     brief_actions,
     brief_routes,
     brief_view,
+    change_view,
     chat_routes,
     config_routes,
     decision_routes,
@@ -247,8 +248,8 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
         except StoreError as exc:
             raise HTTPException(409, failure(exc)) from exc
 
-    def summary_of(slug: str) -> dict[str, Any]:
-        return summary(store, slug, host.activity(slug), datetime.now(UTC))
+    def summary_of(slug: str, *, tools: bool = False) -> dict[str, Any]:
+        return summary(store, slug, host.activity(slug), datetime.now(UTC), tools=tools)
 
     def put(slug: str, item: InboxItem) -> dict[str, str]:
         if not isinstance(item, AnswerItem):
@@ -327,7 +328,8 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
 
     @router.get("/changes")
     def changes(request: Request) -> list[dict[str, Any]]:
-        return [for_chat(summary_of(slug), request.headers.get(chat_contract.HEADER)) for slug in store.slugs()]
+        chat = request.headers.get(chat_contract.HEADER)  # a chat's status holds each Change's tool use; no page does
+        return [for_chat(summary_of(slug, tools=chat is not None), chat) for slug in store.slugs()]
 
     router.add_api_route("/project", project_notes.reader(store, host), methods=["GET"])
 
@@ -477,6 +479,7 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     router.include_router(brief_actions.router(store, read, wake))
     router.include_router(stop_routes.router(store, read, wake))
     router.include_router(release_look.router(store, read))
+    router.include_router(change_view.router(store, read))
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))
     router.include_router(memory_routes.router(store))
     router.include_router(decision_routes.project(store, lambda: host.repo))

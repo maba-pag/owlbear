@@ -6,13 +6,14 @@ import {
   questionForm, retryForm, criteriaPanel, checkForm, mergeForm, restartButton, pullbackNote, stopNotice,
 } from "./forms.mjs";
 import { decisionForm, visualSection, beforeSection, roundRefused } from "./visual.mjs";
-import { spendLines, toolLines, planInfo, roundsInfo, stepper } from "./progress.mjs";
+import { spendLines, planInfo, roundsInfo, stepper } from "./progress.mjs";
 import { activityLog, split } from "./activity.mjs";
 import { approval, briefInfo } from "./brief.mjs";
 import { watcherSection } from "./watcher.mjs";
 import { improvementSection } from "./improvement.mjs";
 import { detailsOn, detailsSwitch } from "./details.mjs";
 import { actionItems } from "./actions.mjs";
+import { toolUse } from "./tooluse.mjs";
 
 function detailHead(d) {
   let intent = nothing, amend = nothing;
@@ -145,5 +146,5 @@ export function detailView(d) {
     ${improvementSection(d)}
     ${on ? info("Recent activity", activityLog(d.activity)) : nothing}
     ${spendLines(d.spend)}
-    ${on ? toolLines(d.tool_use) : nothing}`;
+    ${on ? toolUse(d) : nothing}`;
 }

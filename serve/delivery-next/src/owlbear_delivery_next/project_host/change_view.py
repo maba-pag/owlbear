@@ -1,4 +1,4 @@
-"""The Changes list's status row, and the selected Change's current committed exception verdicts."""
+"""The Changes list's status row, and what only a selected Change shows: its exception verdicts and its tool use."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from fastapi import APIRouter
 from owlbear_quality import ledger
 from owlbear_quality.inspect import added
 
@@ -21,6 +22,7 @@ from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import held
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from datetime import datetime
 
     from owlbear_quality.inspect import Addition
@@ -30,8 +32,11 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.state_store.store import Store
 
 
-def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, Any]:
-    """One Change's status line, next action, chat handle and open question; shared with the chat fallback."""
+def summary(store: Store, slug: str, act: Activity, now: datetime, *, tools: bool = False) -> dict[str, Any]:
+    """One Change's status line, next action, chat handle and open question; shared with the chat fallback.
+
+    Its tool use only with *tools*, as a chat's status reads it: a page reads it apart (`router`).
+    """
     try:
         c = store.read(slug)
     except StoreError as exc:
@@ -44,7 +49,8 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
     out |= card(c, act, store.events(slug), now, tool, pending=store.shared.pending if store.shared else None)
     out["progress"] = asdict(progress(c))
     out["spend"] = c.spend.model_dump()
-    out["tool_use"] = tool_metrics.of_change(spend_ledger.Where.of(store).clone, slug).model_dump()
+    if tools:
+        out |= tool_use(store, slug)
     out["pullback"] = c.pullback.model_dump(mode="json") if c.pullback else None
     out["release_look"] = release_look.shown(store, c)
     out["watcher"] = watch_reports.counts(store.db, slug)  # observed calls writing outside, unresolved ones apart
@@ -59,6 +65,27 @@ def summary(store: Store, slug: str, act: Activity, now: datetime) -> dict[str, 
             "answer_in": where,
         }
     return out
+
+
+def tool_use(store: Store, slug: str) -> dict[str, Any]:
+    """A Change's tool use, from the spend ledger.
+
+    Deriving it reads the whole ledger again after every line a run adds, under one lock for all projects: so no
+    page's list or detail reads it, and every row waited for it while they did.
+    """
+    return {"tool_use": tool_metrics.of_change(spend_ledger.Where.of(store).clone, slug).model_dump()}
+
+
+def router(store: Store, read: Callable[[str], Change]) -> APIRouter:
+    """GET /changes/{slug}/tool-use: the tool use a Change's page shows with its details, read apart from them."""
+    routes = APIRouter()
+
+    @routes.get("/changes/{slug}/tool-use")
+    def shown_tool_use(slug: str) -> dict[str, Any]:
+        read(slug)  # 404 for no such Change
+        return tool_use(store, slug)
+
+    return routes
 
 
 @functools.lru_cache(maxsize=32)
