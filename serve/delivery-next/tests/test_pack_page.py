@@ -361,22 +361,28 @@ def test_a_ci_failed_publish_stop_fits_a_phone_and_says_no_calibration_evidence_
     inv = history()
     replay = pack_progress.opened(inv, "replay", "replay", round_=2, identity="b")
     pack_progress.closed(inv, replay, "passed", REPLAY_NONE + " (advisory: too few rounds)")
-    log = "\n".join(f"line {i}: " + "x" * 200 for i in range(3))
+    log = "\n".join(f"line {i}: " + "x" * 200 for i in range(35))
     pack_progress.closed(inv, pack_progress.opened(inv, "merge", "merge"), "failed", log)
     long_diff = DIFF + "+" + "y" * 400 + "\n"
     job.state |= {"invocations": inv, "questions": [CI_FAILED | {"diff": long_diff}], "published": PUBLISHED}
     job._save()  # noqa: SLF001
     with opened(base, pds) as page:
-        page.set_viewport_size({"width": 375, "height": 800})
+        page.set_viewport_size({"width": 390, "height": 800})
         expect(page.locator("#pack-questions p-radio-group-option")).to_have_count(2)
         expect(page.locator("#pack-pushed").get_by_role("link")).to_have_text("pull request #7")
         step = page.locator(".pack-step", has_text="Calibration replay").last
         expect(step.locator(".pack-step-head p-tag")).to_have_text("no calibration evidence")
         expect(step).not_to_contain_text("0%")
         ci = page.locator(".pack-step").last
-        expect(ci.locator("pre.pack-detail")).to_be_hidden()  # a multi-line detail, folded until asked for
+        detail = ci.get_by_role("region", name="CI and merge: details", include_hidden=True)
+        expect(detail).to_be_hidden()  # a multi-line detail, folded until asked for
         ci.locator("summary").click()
-        expect(ci.locator("pre.pack-detail")).to_be_visible()
+        expect(detail).to_be_visible()
+        assert detail.text_content() == log
+        detail.focus()
+        expect(detail).to_be_focused()
+        page.keyboard.press("PageDown")
+        page.wait_for_function("(el) => el.scrollTop > 0", arg=detail.element_handle())
         expect(page.locator(".pack-diff .pack-add").first).to_have_text("+new line")  # its markers kept
         assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
         small = page.evaluate("""[...document.querySelectorAll('#pack p-button, #pack summary')]

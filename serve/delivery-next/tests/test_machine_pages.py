@@ -2182,6 +2182,22 @@ def test_updates_owlbear_and_impeccable_show_a_failed_updates_and_installs_whole
         assert said == []
 
 
+def scroll_pds_diagnostic(page, label: str, reason: str) -> None:
+    detail = page.get_by_role("region", name=label)
+    expect(detail).to_be_visible()
+    assert detail.text_content() == reason
+    assert detail.evaluate("(el) => el.scrollHeight > el.clientHeight")
+    assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+    height, viewport, audit = page.evaluate("""[
+        document.documentElement.scrollHeight, window.innerHeight, document.querySelector('#check').offsetTop
+    ]""")
+    assert audit < 3 * viewport and height < 4 * viewport, (height, viewport, audit)
+    detail.focus()
+    expect(detail).to_be_focused()
+    page.keyboard.press("PageDown")
+    until(page, lambda: detail.evaluate("(el) => el.scrollTop > 0"))
+
+
 def retry_stopped_pds(page, url: str, reason: str, resume) -> None:
     """The page shows the whole multi-line stop and asks the run that stopped to resume."""
     answers = []
@@ -2200,10 +2216,7 @@ def retry_stopped_pds(page, url: str, reason: str, resume) -> None:
     page.set_viewport_size({"width": 390, "height": 800})
     question = page.get_by_role("article", name="The update stopped")
     expect(page.locator("#pack-todo")).to_have_text("Choose an answer under 'The update stopped'.")
-    detail = question.locator("pre.pack-detail")
-    expect(detail).to_be_visible()
-    assert detail.text_content() == reason
-    assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+    scroll_pds_diagnostic(page, "Why the update stopped", reason)
     page.evaluate("window.scrollTo({top: 0, behavior: 'instant'})")
     expect(page.locator("#pack ~ #check")).to_have_count(1)
     retry = question.get_by_role("button", name="Try again")
@@ -2287,10 +2300,7 @@ def pds_update_actions(page, pds, base: str, phase: str, stopped) -> None:
     elif phase == "failed":
         viewport = page.viewport_size
         page.set_viewport_size({"width": 390, "height": 800})
-        detail = page.locator("pre#pack-reason")
-        expect(detail).to_be_visible()
-        assert detail.text_content() == stopped[0]
-        assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+        scroll_pds_diagnostic(page, "Why the update failed", stopped[0])
         page.set_viewport_size(viewport)
 
 
@@ -2322,7 +2332,7 @@ def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_wa
         "The browser rerun on main did not clear the failures. Try again if the machine was busy; "
         "if main is broken, fix it, discard this update and start a new one."
     )
-    reason = f"{lead}\npytest output:\n" + "x" * 6430
+    reason = f"{lead}\npytest output:\n" + "\n".join(f"Failure {n}: " + "x" * 220 for n in range(35))
     asked = pack_rounds.question("r1-stop", "stopped", reason, ["retry", "discard"], lead=lead)
 
     def resume() -> None:

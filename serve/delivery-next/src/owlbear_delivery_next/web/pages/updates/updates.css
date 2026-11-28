@@ -52,4 +52,6 @@
 .pack-step-more > summary { min-block-size: 24px; display: list-item; }
 .pack-detail, #pack-log { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere;
   font-size: var(--p-typescale-xs); }
+.pack-detail { max-block-size: 16rem; overflow: auto; padding: var(--p-spacing-static-sm);
+  background: var(--p-color-surface); border-radius: var(--p-radius-md); }
 .pack-reason { min-inline-size: 0; font-size: var(--p-typescale-sm); }

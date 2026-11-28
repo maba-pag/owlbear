@@ -128,6 +128,11 @@ function diff(text) {
     class=${line(l)}>${l}</span>\n`)}</pre>`;
 }
 
+function diagnostic(text, label, { id, reason = false } = {}) {
+  return html`<pre id=${id ?? nothing} class=${reason ? "pack-detail pack-reason" : "pack-detail"}
+    tabindex="0" role="region" aria-label=${label}>${text}</pre>`;
+}
+
 // Alternatives with no priority among them are chosen, nothing preselected, and sent with one button: the lead
 // question's is the panel's one primary (D-01M63C7BJZZ7RQV9XS4XVR0DNE) without favouring an answer.
 function choose(run, q, answers, lead) {
@@ -191,7 +196,7 @@ function question(run, q, lead, discardControl) {
         { variant: lead ? emphasis(q, o) : "secondary", busy: own.busy === `${q.id}:${o.id}`,
           disabled: Boolean(own.busy) }))}</div>`}
     ${actionError(q.id)}
-    ${stopped ? html`${discardControl}<pre class="pack-detail pack-reason">${q.text}</pre>` : nothing}
+    ${stopped ? html`${discardControl}${diagnostic(q.text, "Why the update stopped", { reason: true })}` : nothing}
   </article>`;
 }
 
@@ -215,7 +220,7 @@ function step(i) {
     <span class="pack-step-head"><span>${i.label}${i.attempt > 1 ? ` (attempt ${i.attempt})` : ""}</span> ${tag}</span>
     ${said || i.stale ? html`<details class="pack-step-more"><summary>Details</summary>
       ${more.map((m) => html`<p-text size="xs" color="contrast-medium">${m}</p-text>`)}
-      ${!said ? nothing : many ? html`<pre class="pack-detail">${said}</pre>`
+      ${!said ? nothing : many ? diagnostic(said, `${i.label}: details`)
         : html`<p-text size="xs">${said}</p-text>`}</details>` : nothing}
   </li>`;
 }
@@ -298,7 +303,8 @@ export function runPart(run) {
   return html`<div id="pack-run" class="pack-run">
     ${stopped ? ask : nothing}
     ${summary(run, questions)}
-    ${!why ? nothing : run.state === "failed" ? html`<pre id="pack-reason" class="pack-detail pack-reason">${why}</pre>`
+    ${!why ? nothing : run.state === "failed"
+      ? diagnostic(why, "Why the update failed", { id: "pack-reason", reason: true })
       : html`<p-text id="pack-reason" size="sm">${why}</p-text>`}
     ${p?.commit ? html`<p-text id="pack-pushed" size="sm">Commit ${p.commit.slice(0, 12)} on ${p.branch}${p.url
       ? html`, <a href=${p.url} target="_blank" rel="noopener">pull request #${p.number}</a>` : nothing}${p.merged
