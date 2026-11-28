@@ -1,6 +1,6 @@
 // Updates ▸ Impeccable, the same in every project and under All projects: the frame,
-// where the pack stands (installed here, released with an OwlBear version, published by an update, the candidate an
-// update validates), and the one Impeccable update of this machine, answerable from wherever the page is opened.
+// where the pack stands (installed here, released with an OwlBear version, published by an update),
+// and the one Impeccable update of this machine, answerable from wherever the page is opened.
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { defined, machineState } from "/assets/ui.mjs";
 import { readChecks, update } from "./checks.mjs";
@@ -34,15 +34,6 @@ function published(run) {
     : p.url ? ", not merged yet" : ""}; a machine takes it with the OwlBear version that carries it.`;
 }
 
-function candidate(run) {
-  if (!run || !["running", "waiting"].includes(run.state)) return historyUnread()
-    ? "Not known: run history could not be read completely." : "None: no update runs now.";
-  const made = (run.stages ?? []).find((s) => s.name === "candidate" && s.detail)?.detail;
-  const last = own.unread.runs ? "Last read: " : "";
-  return `${last}${made ?? "Being prepared"}; it is not active anywhere until it is `
-    + "published and released.";
-}
-
 function fact(term, said, id) {
   return said ? html`<div><dt>${term}</dt><dd id=${id}>${said}</dd></div>` : nothing;
 }
@@ -63,7 +54,6 @@ function stands() {
       ${fact("Install record", bar?.pack?.unkept ? `${sentence(bar.pack.unkept)}.` : "", "pack-unkept")}
       ${fact("Released", released(bar), "pack-release")}
       ${own.runs ? fact("Published", published(run), "pack-published") : nothing}
-      ${own.runs ? fact("Candidate", candidate(run), "pack-candidate") : nothing}
     </dl>
     <p-text id="pack-notice" size="xs" color="contrast-medium">${pin ? `Upstream: ${pin.notice.said}${pin.notice
       .checked_at ? `, checked ${when(pin.notice.checked_at)}` : ", not checked yet"}.` : ""}</p-text>
