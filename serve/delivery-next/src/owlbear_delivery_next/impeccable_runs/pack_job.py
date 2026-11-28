@@ -213,6 +213,9 @@ class Job(Steps):
                 self._log(said)
                 self._finish("discarded", "discarded by you; nothing changed")
                 return self._copy()
+            if q["kind"] == "stopped" and self._workspace_retained():
+                msg = "Maintenance keeps this run's workspace; discard the update and start it again"
+                raise Refused(msg)
             ctx = self.CONTEXT.model_validate(self.state["context"])
             lp = RoundLoop.model_validate(self.state["loop"])
             left = self._decided(self.state["questions"], q, option, note=note, ctx=ctx, lp=lp)
@@ -355,6 +358,9 @@ class Job(Steps):
             return workspace != self.store.root / UPDATER
         return not self.maintenance.retained(str(workspace))
 
+    def _workspace_retained(self) -> bool:
+        return self.maintenance is not None and not self._removable(self.workspace)
+
     def _claim(self, admits: Callable[[], None], *, holder: str | None = None) -> None:
         """Take the machine's one pack lock for the run's thread, if the caller's policy *admits* it under the lock.
 
@@ -440,7 +446,7 @@ class Job(Steps):
         except Stopped as exc:
             with self.lock:
                 kept = self.state.get("context")
-                if kept and not (exc.current or exc.terminal):
+                if kept and not (exc.current or exc.terminal or self._workspace_retained()):
                     ctx = self.CONTEXT.model_validate(kept)
                     self._hold(ctx, exc.reason, retry=exc.retry, lead=exc.lead)
                 else:

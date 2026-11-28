@@ -1940,6 +1940,55 @@ def test_golden_pages_that_differ_go_to_the_updater_and_still_differing_after_it
     ]
 
 
+def assert_maintenance_keeps_stopped_workspace(job, run_session, monkeypatch, session_method):
+    """Run the same stop with a lease acquired after the question, then with a lease already held at the stop."""
+    boot = 1.0
+    ledger = job.maintenance = Maintenance(Slots(lambda: 4), boot=lambda: boot)
+    witnesses = []
+
+    def hold(workspace):
+        lease = ledger.begin(update_home.KEY, f"{job.KIND}:test", job.KIND, str(workspace))
+        ledger.failed(lease, "the session did not confirm termination")
+        return lease
+
+    original = getattr(job.live, session_method)
+
+    def unconfirmed(store, cfg):
+        done = original(store, cfg)
+        witness = next(p for p in sorted(cfg.worktree.rglob("*")) if p.is_file() and ".git" not in p.parts)
+        witnesses.append((cfg.worktree, witness, witness.read_bytes()))
+        if len(witnesses) == 2:
+            hold(cfg.worktree)
+        return dataclasses.replace(done, termination=Termination(confirmed=False))
+
+    monkeypatch.setattr(job.live, session_method, unconfirmed)
+    waiting = run_session(job)
+    [question] = waiting["questions"]
+    assert question["kind"] == "stopped"
+    [(workspace, witness, contents)] = witnesses
+    lease = hold(workspace)
+    boot += 1
+    ledger.recover(lease, rebooted=True)
+    with pytest.raises(pack_job.Refused, match="Maintenance keeps this run's workspace; discard .* start it again"):
+        job.answer(question["id"], "retry")
+    assert job.read()["questions"] == [question]
+    assert witness.read_bytes() == contents
+    assert job.discard(waiting["run"])["state"] == "discarded"
+    assert witness.read_bytes() == contents
+
+    failed = run_session(job)
+    assert (failed["state"], failed["questions"]) == ("failed", [])
+    assert "may still be running" in failed["reason"] or "not proven ended" in failed["reason"]
+    _, witness, contents = witnesses[1]
+    assert witness.read_bytes() == contents
+
+
+def test_maintenance_keeps_a_stopped_impeccable_updater_workspace(tmp_path, checkout, clone, monkeypatch):
+    fakes = Fakes(clone)
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    assert_maintenance_keeps_stopped_workspace(job, run, monkeypatch, "update")
+
+
 def test_retrying_a_stopped_action_cannot_select_activation():
     ctx = pack_run.Context(
         tag="new", why="Impeccable", diff="", golden="", pins={}, manifest="", notice="", baseline={},

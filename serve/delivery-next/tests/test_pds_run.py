@@ -1211,6 +1211,12 @@ def test_an_unverified_session_end_says_its_problems_whole(tmp_path, checkout, w
     assert logged[-3:] == [f"{name}: running", f"{name}: failed: {reason}", f"waiting for you: {reason}"]
 
 
+def test_maintenance_keeps_a_stopped_pds_audit_workspace(tmp_path, checkout, monkeypatch):
+    fakes = Fakes(checkout)
+    job = pds_job.Job(store(tmp_path), fakes.live(checkout))
+    PACK.assert_maintenance_keeps_stopped_workspace(job, run, monkeypatch, "session")
+
+
 def test_retrying_a_stopped_action_cannot_select_publication():
     ctx = context.Context(version=NEW, old=OLD, why="PDS update", diff="", candidate="", checkout={}, next="browser")
     lp = RoundLoop(subject=PDS, policy=RoundPolicy())
