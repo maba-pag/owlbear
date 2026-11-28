@@ -2611,6 +2611,7 @@ def test_a_successor_claim_is_never_erased_by_a_release_paused_after_its_close(t
     job._release()  # noqa: SLF001 - idle: nothing held, nothing to close
     with job.exclusive():
         assert job.held is not None
+        assert pack_job.running_for() == "calibration replay"
     assert job.held is None
     failure = RuntimeError("the replay failed")
     with pytest.raises(RuntimeError), job.exclusive():

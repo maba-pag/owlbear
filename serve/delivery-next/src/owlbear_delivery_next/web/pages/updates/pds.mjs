@@ -10,7 +10,7 @@ import { oldWaiting, runPart, startPart, stoppedQuestion } from "./run.mjs";
 
 const CHECKS = "the deprecation audit and the browser tests";
 own.kind = {
-  name: "PDS", label: "Start update", peer: ["Impeccable", "/updates/impeccable"],
+  name: "PDS", label: "Start update", peer: { path: "/updates/impeccable", holders: ["Impeccable update"] },
   pinned: null, runs: "/maintenance/pds/runs", update: "/pds/update",
   intro: `An update takes the newest release from npm, runs ${CHECKS} on the pages, has an updater session fix what `
     + "they find and a challenger check the change, all with model requests. Only if every check passes, or if you "

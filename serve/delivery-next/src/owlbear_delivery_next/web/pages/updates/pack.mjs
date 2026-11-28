@@ -16,7 +16,8 @@ export const FOUND = { open: "to fix", fixed: "fixed by the updater",
 
 // What differs between the kinds: where the runs are read and the update is answered, and what the dialogs say.
 export const IMPECCABLE = {
-  name: "Impeccable", label: "Update Impeccable", peer: ["PDS", "/updates/pds"],
+  name: "Impeccable", label: "Update Impeccable",
+  peer: { path: "/updates/pds", holders: ["PDS update", "check for deprecations"] },
   intro: "An update takes the newest upstream pack and validates it with model requests. Only if every stage "
     + "passes, or if you accept it after its challenge rounds end without a pass, it commits it on its own branch, "
     + "opens a pull request to main and merges it once CI passes.",

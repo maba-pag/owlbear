@@ -355,7 +355,7 @@ class Job(Steps):
             return workspace != self.store.root / UPDATER
         return not self.maintenance.retained(str(workspace))
 
-    def _claim(self, admits: Callable[[], None]) -> None:
+    def _claim(self, admits: Callable[[], None], *, holder: str | None = None) -> None:
         """Take the machine's one pack lock for the run's thread, if the caller's policy *admits* it under the lock.
 
         The lock stays held from the policy's reading through the saved claim, so no other update comes between them.
@@ -366,7 +366,7 @@ class Job(Steps):
         self._unproven()
         try:
             # Verified again while the lock is held: an earlier updater may have released it unconfirmed before this.
-            self.held = take(local_home.root() / MACHINE_LOCK, self.HOLDER, lambda: self._admitted(admits))
+            self.held = take(local_home.root() / MACHINE_LOCK, holder or self.HOLDER, lambda: self._admitted(admits))
         except HeldError as exc:
             msg = self.BUSY.format(who=exc.who)
             raise Busy(msg) from None
@@ -428,7 +428,7 @@ class Job(Steps):
             if self.busy() or self.state["state"] in ("running", "waiting"):
                 msg = "an Impeccable update is running or waits for answers: finish it before a replay"
                 raise Busy(msg)
-            self._claim(self._alone)
+            self._claim(self._alone, holder="calibration replay")
         try:
             yield
         finally:

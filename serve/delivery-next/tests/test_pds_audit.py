@@ -579,7 +579,7 @@ def test_hand_audit_exclusion_refuses_before_session_or_state_change(tmp_path, p
         try:
             assert http.post("/pds/audit").status_code == 409
             assert http.get("/pds/audit").json()["state"] == "running"
-            with pytest.raises(machine_lock.HeldError, match="PDS audit"):
+            with pytest.raises(machine_lock.HeldError, match="check for deprecations"):
                 os.close(machine_lock.take(local_home.root() / MACHINE_LOCK, "other", lambda: None))
         finally:
             gate.set()

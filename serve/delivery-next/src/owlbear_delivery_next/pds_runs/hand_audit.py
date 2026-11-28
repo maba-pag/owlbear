@@ -109,7 +109,7 @@ class Hand:
             except SettingsUnset as exc:
                 raise Busy(str(exc)) from None
             try:
-                held = machine_lock.take(local_home.root() / MACHINE_LOCK, "PDS audit", self._unproven)
+                held = machine_lock.take(local_home.root() / MACHINE_LOCK, "check for deprecations", self._unproven)
             except machine_lock.HeldError as exc:
                 msg = f"{exc.who} holds the lock; one update runs at a time on this machine"
                 raise Busy(msg) from None

@@ -54,9 +54,9 @@ def take(path: Path, owner: str, verify: Callable[[], None]) -> int:
                 raise HeldError(path.read_text(encoding="utf-8").strip() or "another update") from None
             time.sleep(STEP)
     try:
-        verify()
         os.ftruncate(fd, 0)
         os.write(fd, owner.encode())
+        verify()
     except BaseException:
         os.close(fd)
         raise

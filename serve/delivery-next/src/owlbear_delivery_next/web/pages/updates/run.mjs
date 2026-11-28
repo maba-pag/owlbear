@@ -241,9 +241,11 @@ function article(name) {
 // Starting a machine update, and the result of its admission.
 export function startPart() {
   const r = own.runs, run = r?.run, open = run && ["running", "waiting"].includes(run.state);
-  const busy = Boolean(open || r?.holder);
-  const [peer, path] = own.kind.peer;
-  const other = r?.holder?.includes(`${peer} update`);
+  const holder = r?.holder, busy = Boolean(open || holder);
+  const { path, holders } = own.kind.peer;
+  const work = holders.includes(holder)
+    ? html`The <a href=${path + location.search + location.hash}>${holder}</a>`
+    : holder === "another update" ? "Another update" : `The ${holder}`;
   return html`<div class="part">
     <p-heading size="md"><h3 id="pack-update-title">Update</h3></p-heading>
     <p-text>${own.kind.intro} ${SETTINGS}</p-text>
@@ -252,8 +254,7 @@ export function startPart() {
         variant: open ? "secondary" : "primary",
         busy: own.busy === "start" || Boolean(own.awaiting),
         disabled: busy || !r || historyUnread() || Boolean(own.busy) || Boolean(own.awaiting) })}
-      ${other ? html`<p-text id="pack-lock">The <a href=${path + location.search + location.hash}>${peer} update</a>
-        runs; one update runs at a time on this machine.</p-text>` : nothing}
+      ${holder ? html`<p-text id="pack-lock">${work} runs; one runs at a time on this machine.</p-text>` : nothing}
     </div>
     ${own.awaiting ? html`<p-inline-notification id="pack-admitting" state="info" dismiss-button="false">
       Delivery has not answered the start yet; it may still be checking GitHub for an open ${own.kind.name} pull

@@ -2242,9 +2242,24 @@ def pds_menu_state(page, level, tags) -> None:
 def pds_update_actions(page, pds, base: str, phase: str, stopped) -> None:
     if phase == "idle":
         expect(page.locator("#pack-update")).to_be_enabled()
+        for holder in ("check for deprecations", "calibration replay", "Impeccable update"):
+            fd = machine_lock.take(local_home.root() / pack_state.MACHINE_LOCK, holder, lambda: None)
+            try:
+                page.reload()
+                expect(page.locator("#pack-update")).to_be_disabled()
+                notice = page.locator("#pack-lock")
+                expect(notice).to_have_text(f"The {holder} runs; one runs at a time on this machine.")
+                link = notice.get_by_role("link")
+                if holder == "Impeccable update":
+                    expect(link).to_have_attribute("href", "/updates/impeccable")
+                else:
+                    expect(link).to_have_count(0)
+            finally:
+                os.close(fd)
     elif phase == "running":
         page.goto(f"{base}/updates/impeccable#token=t")
         notice = page.locator("#pack-lock")
+        expect(notice).to_have_text("The PDS update runs; one runs at a time on this machine.")
         expect(notice.get_by_role("link", name="PDS update")).to_have_attribute("href", "/updates/pds")
         expect(page.get_by_role("button", name="Update Impeccable")).to_be_disabled()
     elif phase == "waiting":
