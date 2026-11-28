@@ -2202,13 +2202,12 @@ def retry_stopped_pds(page, url: str, reason: str, resume) -> None:
     expect(page.locator("#pack-todo")).to_have_text("Choose an answer under 'The update stopped'.")
     detail = question.locator("pre.pack-detail")
     expect(detail).to_be_visible()
-    lead, _, rest = reason.partition("\n")
-    assert detail.text_content() == rest
+    assert detail.text_content() == reason
     assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
     page.evaluate("window.scrollTo({top: 0, behavior: 'instant'})")
     expect(page.locator("#pack ~ #check")).to_have_count(1)
     retry = question.get_by_role("button", name="Try again")
-    guidance = question.get_by_text(lead, exact=True)
+    guidance = question.get_by_text("Try again repeats: Browser tests on the candidate. Earlier work is kept.")
     expect(guidance).to_be_in_viewport(ratio=1)
     assert guidance.evaluate("(el) => el.getBoundingClientRect().bottom") <= retry.bounding_box()["y"]
     box = retry.bounding_box()
@@ -2336,7 +2335,8 @@ def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_wa
     journey = [
         (None, "newer version", "Updates, 1 available", ["Available"], "This machine has not run a PDS update yet"),
         ({"state": "running"}, "update running", "Updates", ["Running"], "Running since"),
-        ({"state": "waiting", "questions": [asked], "reason": reason}, "update waiting for you", "Updates",
+        ({"state": "waiting", "questions": [asked], "reason": reason, "context": {"next": "browser"}},
+         "update waiting for you", "Updates",
          ["Waiting for you"], "waits for your answers"),
         ({"state": "failed", "reason": reason}, "newer version",
          "Updates, 1 available", ["Failed", "Available"], "Last run failed"),

@@ -344,6 +344,13 @@ def test_progress_and_ended_run_polling_show_current_evidence(served, pds) -> No
         page.clock.run_for(15000)
         expect(page.locator("#pack-state")).to_contain_text("Last run discarded")
 
+        stop = pack_rounds.question("r2-stop", "stopped", "The model stopped.", ["retry", "discard"])
+        job.state |= {"state": "waiting", "questions": [stop], "context": job.state["context"] | {"next": "replay"}}
+        job._save()  # noqa: SLF001
+        page.reload()
+        question = page.get_by_role("article", name="The update stopped")
+        expect(question).to_contain_text("Try again repeats: Calibration replay (with model requests).")
+
 
 REPLAY_NONE = "0 decided rounds, 0 left out; the design judge agreed with the owner 0% as recorded, 0% with this pack"
 

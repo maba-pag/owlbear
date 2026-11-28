@@ -202,20 +202,12 @@ class Job(Steps):
             if q is None:
                 msg = "this question is no longer open; reload the page"
                 raise Stale(msg)
-            if option not in {o["id"] for o in q["options"]}:
-                msg = f"{option!r} is no answer to this question"
-                raise Refused(msg)
-            if option == pack_rounds.RECONSIDER and not note.strip():
-                msg = "asking the challenger to reconsider needs your note"
-                raise Refused(msg)
+            self._check_answer(q, option, note)
             said = f"you answered {q['kind']} {q.get('finding', '')}: {pack_rounds.LABELS[option]}".replace("  ", " ")
             if option == pack_rounds.DISCARD:
                 self._log(said)
                 self._finish("discarded", "discarded by you; nothing changed")
                 return self._copy()
-            if q["kind"] == "stopped" and self._workspace_retained():
-                msg = "Maintenance keeps this run's workspace; discard the update and start it again"
-                raise Refused(msg)
             ctx = self.CONTEXT.model_validate(self.state["context"])
             lp = RoundLoop.model_validate(self.state["loop"])
             left = self._decided(self.state["questions"], q, option, note=note, ctx=ctx, lp=lp)
@@ -237,6 +229,17 @@ class Job(Steps):
         if resumed is not None:
             resumed.start()
         return self.read()
+
+    def _check_answer(self, q: dict[str, Any], option: str, note: str) -> None:
+        if option not in {o["id"] for o in q["options"]}:
+            msg = f"{option!r} is no answer to this question"
+            raise Refused(msg)
+        if option == pack_rounds.RECONSIDER and not note.strip():
+            msg = "asking the challenger to reconsider needs your note"
+            raise Refused(msg)
+        if q["kind"] == "stopped" and option != pack_rounds.DISCARD and self._workspace_retained():
+            msg = "Maintenance keeps this run's workspace; discard the update and start it again"
+            raise Refused(msg)
 
     def discard(self, run: str) -> dict[str, Any]:
         """End the waiting run shown to the owner without activating anything.

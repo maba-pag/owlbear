@@ -1917,6 +1917,7 @@ def test_golden_pages_that_differ_go_to_the_updater_and_still_differing_after_it
     state = run(job)
 
     assert (state["state"], results(state)["golden"], results(state)["update"]) == ("waiting", "waiting", "completed")
+    assert state["progress"]["next"]["retry"] == {"label": "Golden pages on the candidate", "model_requests": False}
     assert "golden pages differ: bad.html (source): missing glow" in state["reason"]
     [q] = state["questions"]
     assert (q["kind"], q["text"], [o["id"] for o in q["options"]]) == ("stopped", state["reason"], ["retry", "discard"])
@@ -1969,7 +1970,7 @@ def assert_maintenance_keeps_stopped_workspace(job, run_session, monkeypatch, se
     lease = hold(workspace)
     boot += 1
     ledger.recover(lease, rebooted=True)
-    with pytest.raises(pack_job.Refused, match="Maintenance keeps this run's workspace; discard .* start it again"):
+    with pytest.raises(pack_job.Refused, match="Maintenance keeps this run's workspace; discard the update"):
         job.answer(question["id"], "retry")
     assert job.read()["questions"] == [question]
     assert witness.read_bytes() == contents

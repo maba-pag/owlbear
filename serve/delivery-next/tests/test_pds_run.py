@@ -540,6 +540,7 @@ def test_spent_updater_budget_reports_remaining_browser_failure(tmp_path, checko
         ("more-updater", "Run one more updater session"),
         ("discard", "Discard the update"),
     ]
+    assert state["progress"]["next"]["retry"] == {"label": "Updater session on the pages", "model_requests": True}
     assert "spent its 1 updater session(s)" in state["reason"]
     assert "tests/test_machine_pages.py::test_menu" in state["reason"]
     assert fakes.calls.count("update") == 1

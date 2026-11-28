@@ -150,6 +150,13 @@ function choose(run, q, answers, lead) {
       busy: own.busy.startsWith(`${q.id}:`), disabled: Boolean(own.busy) })}</div>`;
 }
 
+function retryLine(run, option) {
+  if (option?.id === "more-updater") return `${option.label} uses model requests. Earlier work is kept.`;
+  const retry = run.progress.next?.retry;
+  return retry ? `Try again repeats: ${retry.label}${retry.model_requests ? " (with model requests)" : ""
+    }. Earlier work is kept.` : "The work so far is kept.";
+}
+
 function question(run, q, lead, discardControl) {
   let field = nothing;
   if (q.kind === "dispute") {
@@ -172,12 +179,11 @@ function question(run, q, lead, discardControl) {
   const title = f ? `Finding ${f.id}, raised in round ${f.raised}` : q.kind === "unsure"
     ? `A change to ${q.path} the challenger could not judge` : KINDS[q.kind] ?? sentence(q.kind);
   const stopped = q.kind === "stopped";
-  const reason = q.lead ? q.text.slice(q.lead.length + 1) : q.text;
   const head = `pack-q-${q.id.replaceAll(/[^\w-]/g, "-")}`;
   return html`<article class="pack-question" aria-labelledby=${head}>
     ${stopped ? html`<p-heading size="sm"><h3 id=${head}>${title}</h3></p-heading>`
       : html`<p-heading size="sm"><h5 id=${head}>${title}</h5></p-heading>`}
-    ${stopped ? html`<p-text>${q.lead || "The work so far is kept."}</p-text>` : asked(run, q)}
+    ${stopped ? html`<p-text>${retryLine(run, answers[0])}</p-text>` : asked(run, q)}
     ${q.diff ? diff(q.diff) : nothing}
     ${field}
     ${!answers.length ? nothing : !priority ? choose(run, q, answers, lead) : html`<div class="row"
@@ -185,7 +191,7 @@ function question(run, q, lead, discardControl) {
         { variant: lead ? emphasis(q, o) : "secondary", busy: own.busy === `${q.id}:${o.id}`,
           disabled: Boolean(own.busy) }))}</div>`}
     ${actionError(q.id)}
-    ${stopped ? html`${discardControl}<pre class="pack-detail pack-reason">${reason}</pre>` : nothing}
+    ${stopped ? html`${discardControl}<pre class="pack-detail pack-reason">${q.text}</pre>` : nothing}
   </article>`;
 }
 

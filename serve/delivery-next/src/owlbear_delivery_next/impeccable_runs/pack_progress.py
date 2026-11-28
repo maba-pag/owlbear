@@ -227,8 +227,13 @@ def _next(
 ) -> dict[str, Any] | None:
     """The controller's next step after now: fixed by the run, by a session's verdict, or by the owner's answer."""
     if state["state"] == "waiting":
-        options = list(dict.fromkeys(o["label"] for q in state.get("questions") or [] for o in q.get("options", [])))
-        return {"operation": "", "by": "owner", "label": "Your answer decides what runs next", "options": options}
+        questions = state.get("questions") or []
+        options = list(dict.fromkeys(o["label"] for q in questions for o in q.get("options", [])))
+        next_ = {"operation": "", "by": "owner", "label": "Your answer decides what runs next", "options": options}
+        action = actions.get((state.get("context") or {}).get("next"))
+        if action and any(q["kind"] == "stopped" for q in questions):
+            next_["retry"] = {"label": OPERATIONS[action], "model_requests": action in SESSIONS or action == "replay"}
+        return next_
     current = next((i for i in reversed(invocations) if i["result"] == "running"), None)
     if state["state"] != "running" or current is None:
         return None
