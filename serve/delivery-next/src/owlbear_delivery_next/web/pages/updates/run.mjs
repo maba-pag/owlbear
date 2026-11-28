@@ -60,6 +60,7 @@ function todo(u, questions) {
   if (u.state === "running") return "Nothing for now: it runs by itself and asks here when it needs you.";
   if (u.state === "waiting") {
     if (!questions.length) return "Nothing to answer; you can discard it.";
+    if (stoppedQuestion(u)) return "Answer the question above.";
     const n = questions.length;
     return `Answer ${n === 1 ? "the question" : `the ${n} questions`} below.`;
   }
@@ -180,7 +181,8 @@ function question(run, q, lead, discardControl) {
   const stopped = q.kind === "stopped";
   const head = `pack-q-${q.id.replaceAll(/[^\w-]/g, "-")}`;
   return html`<article class="pack-question" aria-labelledby=${head}>
-    <p-heading size="sm"><h5 id=${head}>${title}</h5></p-heading>
+    ${stopped ? html`<p-heading size="sm"><h3 id=${head}>${title}</h3></p-heading>`
+      : html`<p-heading size="sm"><h5 id=${head}>${title}</h5></p-heading>`}
     ${stopped ? html`<p-text>The work so far is kept.</p-text>` : asked(run, q)}
     ${q.diff ? diff(q.diff) : nothing}
     ${field}
@@ -288,18 +290,20 @@ export function runPart(run) {
     ${button(d.label, () => discard(run, d), { id: "pack-discard", icon: "close",
       busy: own.busy === "discard" || own.busy === `${d.q?.id}:discard`, disabled: Boolean(own.busy) })}
   </div>` : nothing;
+  const ask = html`<div id="pack-ask" class="pack-ask" ?hidden=${!questions.length && !d}>
+    ${stopped ? nothing : html`<p-heading size="sm"><h4 id="pack-ask-title">Waiting for you</h4></p-heading>`}
+    <div id="pack-questions">${questions.map((q, i) => question(run, q, i === 0, discardControl))}</div>
+    ${stopped ? nothing : discardControl}
+  </div>`;
   return html`<div id="pack-run" class="pack-run">
+    ${stopped ? ask : nothing}
     ${summary(run, questions)}
     ${!why ? nothing : run.state === "failed" ? html`<pre id="pack-reason" class="pack-detail pack-reason">${why}</pre>`
       : html`<p-text id="pack-reason" size="sm">${why}</p-text>`}
     ${p?.commit ? html`<p-text id="pack-pushed" size="sm">Commit ${p.commit.slice(0, 12)} on ${p.branch}${p.url
       ? html`, <a href=${p.url} target="_blank" rel="noopener">pull request #${p.number}</a>` : nothing}${p.merged
       ? `, merged into main as ${p.merged.slice(0, 12)}` : p.url ? ", not merged yet" : ""}.</p-text>` : nothing}
-    <div id="pack-ask" class="pack-ask" ?hidden=${!questions.length && !d}>
-      <p-heading size="sm"><h4 id="pack-ask-title">Waiting for you</h4></p-heading>
-      <div id="pack-questions">${questions.map((q, i) => question(run, q, i === 0, discardControl))}</div>
-      ${stopped ? nothing : discardControl}
-    </div>
+    ${stopped ? nothing : ask}
     <div class="pack-steps">
       <p-heading size="sm"><h4 id="pack-progress-title">Progress</h4></p-heading>
       ${progress(run)}

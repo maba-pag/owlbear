@@ -2194,17 +2194,18 @@ def retry_stopped_pds(page, url: str, reason: str, resume) -> None:
     page.route("**/pds/update/answer", answering)
     viewport = page.viewport_size
     page.set_viewport_size({"width": 390, "height": 800})
-    page.evaluate("window.scrollTo(0, 0)")
     question = page.get_by_role("article", name="The update stopped")
     detail = question.locator("pre.pack-detail")
     expect(detail).to_be_visible()
     assert detail.text_content() == reason
     assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+    page.evaluate("window.scrollTo({top: 0, behavior: 'instant'})")
     retry = question.get_by_role("button", name="Try again")
     box = retry.bounding_box()
     assert box is not None
     assert min(box["width"], box["height"]) >= 24
-    assert 0 <= box["y"] and box["y"] + box["height"] <= 800
+    assert box["y"] >= 0
+    assert box["y"] + box["height"] <= 800
     retry.click()
     expect(question).to_have_count(0)
     expect(page.locator("#pack-state")).to_contain_text("Running since")
