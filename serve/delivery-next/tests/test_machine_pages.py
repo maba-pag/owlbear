@@ -2242,14 +2242,15 @@ def pds_menu_state(page, level, tags) -> None:
 
 def pds_update_actions(page, pds, base: str, phase: str, stopped) -> None:
     if phase == "idle":
-        expect(page.locator("#pack-update")).to_be_enabled()
+        start = page.get_by_role("button", name="Start update", exact=True)
+        expect(start).to_be_enabled()
         for holder in ("check for deprecations", "calibration replay", "Impeccable update"):
             fd = machine_lock.take(local_home.root() / pack_state.MACHINE_LOCK, holder, lambda: None)
             try:
                 page.reload()
-                expect(page.locator("#pack-update")).to_be_disabled()
                 notice = page.locator("#pack-lock")
                 expect(notice).to_have_text(f"The {holder} runs; one runs at a time on this machine.")
+                expect(start).to_be_disabled()
                 link = notice.get_by_role("link")
                 if holder == "Impeccable update":
                     expect(link).to_have_attribute("href", "/updates/impeccable")
