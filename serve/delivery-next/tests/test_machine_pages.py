@@ -2191,7 +2191,8 @@ def scroll_pds_diagnostic(page, label: str, reason: str) -> None:
     height, viewport, audit = page.evaluate("""[
         document.documentElement.scrollHeight, window.innerHeight, document.querySelector('#check').offsetTop
     ]""")
-    assert audit < 3 * viewport and height < 4 * viewport, (height, viewport, audit)
+    assert audit < 3 * viewport, (audit, viewport)
+    assert height < 4 * viewport, (height, viewport)
     detail.focus()
     expect(detail).to_be_focused()
     page.keyboard.press("PageDown")
