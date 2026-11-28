@@ -896,19 +896,17 @@ def test_an_owner_stop_shows_his_gate_now_with_its_options_next_and_a_discard_en
 
 def publication_read_fails_once(job, github, state, monkeypatch):
     """Admit the saved pull request, then lose the first publication read, not the admission listing."""
-    read = github.read_pull_request
     pub = state["published"]
-    opened = read("maba-pag/owlbear", pub["number"])
+    opened = github.read_pull_request("maba-pag/owlbear", pub["number"])
     error = ProviderError(FailureCode.UNAVAILABLE, "read_pull_request", "connection lost\nwhile reading the saved PR",
                           retry_safe=True)  # fmt: skip
 
     def unavailable(*_args):
-        monkeypatch.setattr(github, "read_pull_request", read)
         raise error
 
     with monkeypatch.context() as patch:
         patch.setattr(github, "open_pull_requests", lambda *_args: (opened,))
-        monkeypatch.setattr(github, "read_pull_request", unavailable)
+        patch.setattr(github, "read_pull_request", unavailable)
         waiting = answered(job, "retry")
     assert (waiting["state"], waiting["run"], waiting["published"]) == ("waiting", state["run"], pub)
     [question] = waiting["questions"]
