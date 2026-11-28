@@ -146,20 +146,20 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_impeccable_p
         ask = page.locator("#pack-ask")
         expect(ask).to_be_visible()
         state = page.locator("#pack-state")
-        expect(state).to_contain_text("The update waits for your answers below. Started ")
+        expect(state).to_contain_text("The update waits for your answers. Started ")
         expect(state).not_to_contain_text("ended")
         # waiting()'s record is from before invocations: its stages alone, with no history made up for it
         expect(page.locator("#pack-stages li")).to_have_count(len(pack_job.STAGES))
         expect(page.locator("#pack-progress")).to_have_count(0)
         expect(page.locator("#pack-next")).to_have_count(0)
-        expect(page.locator("#pack-state")).to_contain_text("The update waits for your answers below.")
+        expect(page.locator("#pack-state")).to_contain_text("The update waits for your answers.")
         expect(page.get_by_role("button", name="Update Impeccable")).to_be_disabled()
         expect(page.locator("#pack-update")).to_have_attribute("variant", "secondary")  # the answer leads instead
         first, second = ask.locator(".pack-question").first, ask.locator(".pack-question").last
         facts = first.locator(".pack-facts dd")  # from the finding's record, not the host's sentence
         expect(facts).to_have_text(["owlbear-design-review: glow 1 - fix: say so", "upstream dropped it",
                                     "upstream still names it"])  # fmt: skip
-        expect(page.locator("#pack-todo")).to_have_text("Answer the 2 questions below.")
+        expect(page.locator("#pack-todo")).to_have_text("Answer the 2 questions in 'Waiting for you'.")
         sent: list[str] = []
         page.on("request", lambda r: sent.append(r.url) if r.url.endswith("/impeccable/update/answer") else None)
         expect(page.locator('#pack p-button[variant="primary"]')).to_have_text(["Send answer"])  # the first's

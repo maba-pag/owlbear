@@ -14,7 +14,7 @@ const TAGS = { pending: "secondary", running: "info", passed: "success", failed:
   discarded: "secondary", stopped: "warning", "not-reached": "secondary" };
 const ENDINGS = { idle: "Never run.", passed: "Last run passed: its pull request was merged into main.",
   failed: "Last run failed.", "up-to-date": "Last run: already up to date.",
-  waiting: "The update waits for your answers below.", discarded: "Last run discarded: nothing changed." };
+  waiting: "The update waits for your answers.", discarded: "Last run discarded: nothing changed." };
 
 // The run's state in a word, for its tag.
 const STATES = { running: ["running", "info"], waiting: ["waiting for you", "warning"], passed: ["passed", "success"],
@@ -60,9 +60,9 @@ function todo(u, questions) {
   if (u.state === "running") return "Nothing for now: it runs by itself and asks here when it needs you.";
   if (u.state === "waiting") {
     if (!questions.length) return "Nothing to answer; you can discard it.";
-    if (stoppedQuestion(u)) return "Answer the question above.";
+    if (stoppedQuestion(u)) return `Choose an answer under '${KINDS.stopped}'.`;
     const n = questions.length;
-    return `Answer ${n === 1 ? "the question" : `the ${n} questions`} below.`;
+    return `Answer ${n === 1 ? "the question" : `the ${n} questions`} in 'Waiting for you'.`;
   }
   if (u.state === "passed") return `Nothing. ${own.kind.merged}`;
   if (u.state === "failed") return "Read why below, fix the cause, then start a new update.";

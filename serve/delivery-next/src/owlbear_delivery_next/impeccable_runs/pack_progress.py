@@ -212,7 +212,7 @@ def _now(
         gate = next((i for i in reversed(invocations or []) if i["result"] == "waiting"), None)
         n = len(state.get("questions") or [])
         return {"phase": title(gate) if gate else "", "operation": OWNER, "since": gate["started_at"] if gate else "",
-                "label": f"Waiting for your answer to {n} question(s) below"}  # fmt: skip
+                "label": f"Waiting for you: {n} open {'question' if n == 1 else 'questions'}"}  # fmt: skip
     if state["state"] != "running":
         return None
     if invocations is None:  # a legacy record: its running stage, nothing more

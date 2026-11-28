@@ -2199,6 +2199,7 @@ def retry_stopped_pds(page, url: str, reason: str, resume) -> None:
     viewport = page.viewport_size
     page.set_viewport_size({"width": 390, "height": 800})
     question = page.get_by_role("article", name="The update stopped")
+    expect(page.locator("#pack-todo")).to_have_text("Choose an answer under 'The update stopped'.")
     detail = question.locator("pre.pack-detail")
     expect(detail).to_be_visible()
     assert detail.text_content() == reason
