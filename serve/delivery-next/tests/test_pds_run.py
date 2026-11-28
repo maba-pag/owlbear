@@ -401,7 +401,7 @@ def test_current_release_never_downloads_or_starts_work(tmp_path, checkout):
         ({"browsers": [browser.Unrunnable("the PDS CDN did not answer, so the browser tests prove nothing")]},
          "the PDS CDN did not answer", ["audit", "update", "audit", "browser"]),
         ({"browsers": [browser.Result(0, 0, 0, 0, (), 5, "no tests ran")]},
-         "browser tests: 0 browser test(s) ran, 0 failed, 0 errored, 0 skipped (exit 5)",
+         "browser tests did not finish: 0 browser test(s) ran, 0 failed, 0 errored, 0 skipped (exit 5)\nno tests ran",
          ["audit", "update", "audit", "browser"]),
         ({"browsers": [failing("tests/test_x.py::t"), failing("tests/test_x.py::t")]},
          "browser tests fail on main as well: tests/test_x.py::t", ["audit", "update", "audit", "browser", "browser"]),
