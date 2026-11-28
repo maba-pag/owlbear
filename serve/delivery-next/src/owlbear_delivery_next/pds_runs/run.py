@@ -106,7 +106,8 @@ def prepare(job: Job, version: str) -> tuple[Context, pin.Release, bytes | None]
         raise Stopped(msg)
     ctx = Context(
         version=version, old=old.version, why=f"PDS: {old.version} to {version}", diff="",
-        checkout={"root": str(src.root), "repository": src.repository, "base": src.base, "package": pin.PREFIX.rstrip("/")},
+        checkout={"root": str(src.root), "repository": src.repository, "base": src.base,
+                  "package": pin.PREFIX.rstrip("/")},
         candidate=tree.digest(tree.protected(at)), removed=sorted(p for p, d in files.items() if d is None),
         vendored=_vendored(old.files, release.pin().files),
     )  # fmt: skip
