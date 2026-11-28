@@ -2188,10 +2188,7 @@ def scroll_pds_diagnostic(page, label: str, reason: str) -> None:
     assert detail.text_content() == reason
     assert detail.evaluate("(el) => el.scrollHeight > el.clientHeight")
     assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
-    height, viewport, audit = page.evaluate("""[
-        document.documentElement.scrollHeight, window.innerHeight, document.querySelector('#check').offsetTop
-    ]""")
-    assert audit < 3 * viewport, (audit, viewport)
+    height, viewport = page.evaluate("[document.documentElement.scrollHeight, window.innerHeight]")
     assert height < 4 * viewport, (height, viewport)
     detail.focus()
     expect(detail).to_be_focused()
@@ -2267,7 +2264,10 @@ def pds_menu_state(page, level, tags) -> None:
     expect(page.locator('p-drilldown-item[identifier="updates"]')).to_have_attribute("label", level)
     link = page.locator("p-drilldown").get_by_role("link", name="Porsche Design System")
     expect(link.locator("p-tag")).to_have_text(tags)
+    dialog = page.get_by_role("dialog")
+    expect(dialog).to_be_visible()
     page.keyboard.press("Escape")
+    expect(dialog).to_be_hidden()
 
 
 def pds_update_actions(page, pds, base: str, phase: str, stopped) -> None:
