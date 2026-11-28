@@ -21,7 +21,7 @@ from owlbear_delivery_next.change_contracts.round_records import PDS, RoundLoop
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files, pack_git
 from owlbear_delivery_next.impeccable_runs import pack_activation, pack_publish, pack_repair, pack_rounds, pack_run
-from owlbear_delivery_next.impeccable_runs.pack_run import Stopped, UpdaterSessionsSpent
+from owlbear_delivery_next.impeccable_runs.pack_run import Stopped
 from owlbear_delivery_next.pds_runs import audit, checks, diff, pin, publish, repair, sessions, tree
 from owlbear_delivery_next.pds_runs.context import CANDIDATE, NEXT, UPDATER, Action, Context
 from owlbear_delivery_next.runtimes import session_result
@@ -299,7 +299,7 @@ def _update(job: Job, ctx: Context, lp: RoundLoop) -> Action:
     if ctx.sessions >= allowed:
         left = [*ctx.findings, *ctx.failures, *(f"{f.id}: {f.text}" for f in pack_rounds.addressing(lp))]
         msg = f"the update spent its {allowed} updater session(s) with these still open: {'; '.join(left)}"
-        raise UpdaterSessionsSpent(msg)
+        raise Stopped(msg, retry=pack_rounds.MORE_UPDATER)
     at, cand = job.workspace / UPDATER, candidate(job)
     start = tree.copy(cand, at, job.live.git)
     answering = bool(pack_rounds.addressing(lp))

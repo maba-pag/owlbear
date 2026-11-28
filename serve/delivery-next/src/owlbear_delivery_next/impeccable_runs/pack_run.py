@@ -53,21 +53,15 @@ NEXT: dict[str, Action] = {
 class Stopped(Exception):  # noqa: N818 - how a stage ends the run
     """A stage stopped with a reason: up to date, terminal, or retryable once the context is saved."""
 
-    retry = pack_rounds.RETRY
-
-    def __init__(self, reason: str, *, current: bool = False, terminal: bool = False, lead: str = "") -> None:
-        """Keep the reason and whether the run must end rather than wait."""
+    def __init__(
+        self, reason: str, *, current: bool = False, terminal: bool = False, lead: str = "", retry: str = pack_rounds.RETRY
+    ) -> None:
+        """Keep the reason, whether the run must end and how it can retry."""
         if lead:
             reason = f"{lead}\n{reason}"
         super().__init__(reason)
         self.reason, self.current, self.terminal = reason, current, terminal
-        self.lead = lead
-
-
-class UpdaterSessionsSpent(Stopped):
-    """The updater cannot run again without a higher allowance."""
-
-    retry = pack_rounds.MORE_UPDATER
+        self.lead, self.retry = lead, retry
 
 
 class Context(BaseModel):
