@@ -6,10 +6,11 @@ in the run's state with the stage's latest result, and logged. A failure ends th
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import json
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.impeccable_runs import pack_progress
+from owlbear_delivery_next.impeccable_runs import pack_progress, pack_repair
 from owlbear_delivery_next.impeccable_runs.pack_run import Stopped
 from owlbear_delivery_next.impeccable_runs.pack_state import LOG
 from owlbear_delivery_next.impeccable_runs.pack_state import now as _now
@@ -24,9 +25,22 @@ class Steps:
 
     lock: threading.Lock
     state: dict[str, Any]
+    ACTIONS: ClassVar[dict[str, str]]
 
     def _save(self) -> None:
         raise NotImplementedError
+
+    def read(self) -> dict[str, Any]:
+        """The current or last run, as the page shows it: without the run's context."""
+        with self.lock:
+            return self._copy()
+
+    def _copy(self) -> dict[str, Any]:
+        shown = {k: v for k, v in self.state.items() if k != "context"} | {
+            "progress": pack_progress.progress(self.state, self.ACTIONS),  # from the context, which the page never gets
+            "repair": pack_repair.view(self.state.get("context")),
+        }
+        return json.loads(json.dumps(shown))
 
     def log(self, line: str) -> None:
         """One line of the run's log, kept with its state."""

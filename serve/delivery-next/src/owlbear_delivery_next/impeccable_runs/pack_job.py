@@ -154,18 +154,6 @@ class Job(Steps):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.version = version_of(atomic_write(self.path, json.dumps(self.state, indent=1) + "\n"))
 
-    def read(self) -> dict[str, Any]:
-        """The current or last run, as the page shows it: without the run's context."""
-        with self.lock:
-            return self._copy()
-
-    def _copy(self) -> dict[str, Any]:
-        shown = {k: v for k, v in self.state.items() if k != "context"} | {
-            "progress": pack_progress.progress(self.state, self.ACTIONS),  # from the context, which the page never gets
-            "repair": pack_repair.view(self.state.get("context")),
-        }
-        return json.loads(json.dumps(shown))
-
     def busy(self) -> bool:
         """Whether an update's thread or a tracked calibration replay runs now."""
         return self.replays > 0 or (self.thread is not None and self.thread.is_alive())

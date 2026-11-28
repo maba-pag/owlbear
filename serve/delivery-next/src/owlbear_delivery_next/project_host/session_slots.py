@@ -200,12 +200,10 @@ def interrupted(job: Job, key: str) -> None:
             if current and not run["workspace"]:  # the file holds its own rewrite at that version: receipted to it
                 notes = (maintenance.receipt_note(key, pack_state.digest(job.version), run["generation"]),)
             _hold(maintenance, key, run["workspace"] or str(legacy), run["generation"], notes=notes)  # one save
-    elif job.version == "":
-        maintenance.adopt_uncertain(f"{key}:unreadable", key, "pack", workspace=str(legacy))
-    elif "workspace" not in job.state and (legacy.is_dir() or pack_job.legacy_uncertain(job.state)):
-        _adopt_legacy(maintenance, key, legacy, job.state, job.version)
+    else:
+        _restore_pack(maintenance, key, legacy, job.state, job.version)
     if not current:
-        restore(maintenance, key, job.store.root, seen)
+        _restore_pack(maintenance, key, legacy, *seen)
 
 
 def _identity(
@@ -260,15 +258,19 @@ def unloaded(maintenance: Maintenance, key: str, repo: Path) -> None:
     restore(maintenance, key, root)
 
 
-def restore(maintenance: Maintenance, key: str, root: Path, seen: tuple[dict[str, Any], str] | None = None) -> None:
-    """Hold the uncertain pack work the run file in *root* records, as *seen* read it, else as read now; never write.
-
-    *seen* is a whole, stable read by ``pack_state.read_version``: "absent" when there was no file, "" when it could
-    not be read. A record that cannot be read is held too: unreadable ownership is never taken for none (TD-242).
-    """
+def restore(maintenance: Maintenance, key: str, root: Path) -> None:
+    """Hold uncertain update work from a former project's records without rewriting either record."""
     _restore_pds(maintenance, key, root)
-    legacy = root / pack_run.UPDATER
-    kept, version = seen if seen is not None else pack_state.read_version(root / pack_state.FILE)
+    _restore_pack(maintenance, key, root / pack_run.UPDATER, *pack_state.read_version(root / pack_state.FILE))
+
+
+def _host_stopped(record: dict[str, Any]) -> bool:
+    """A startup rewrite is not proof that the ledger took custody before the host stopped again."""
+    return record.get("state") == "failed" and record.get("reason") == pack_state.HOST_STOPPED
+
+
+def _restore_pack(maintenance: Maintenance, key: str, legacy: Path, kept: dict[str, Any], version: str) -> None:
+    """Hold from one stable read; unreadable ownership is never taken for none."""
     if version == "":
         maintenance.adopt_uncertain(f"{key}:unreadable", key, "pack", workspace=str(legacy))
         return
@@ -276,11 +278,12 @@ def restore(maintenance: Maintenance, key: str, root: Path, seen: tuple[dict[str
         if legacy.is_dir():
             _adopt_legacy(maintenance, key, legacy, {}, "absent")
         return
-    if kept.get("state") == "running":
-        if kept.get("workspace") and maintenance.owns(str(kept["workspace"])):
+    workspace = kept.get("workspace")
+    if kept.get("state") == "running" or (workspace and _host_stopped(kept)):
+        if workspace and maintenance.owns(str(workspace)):
             return  # a modern run the ledger already owns; the same record is not a second hold
         generation, started = _identity(maintenance, key, kept, version)
-        _hold(maintenance, key, str(kept.get("workspace") or legacy), generation, started)
+        _hold(maintenance, key, str(workspace or legacy), generation, started)
     elif "workspace" not in kept and (legacy.is_dir() or pack_job.legacy_uncertain(kept)):
         _adopt_legacy(maintenance, key, legacy, kept, version)
 
@@ -350,8 +353,10 @@ def pds_packed(host: SlotOwner, job: pds_job.Job) -> pds_job.Job:
         live, session=lambda store, cfg: owned(host, job.log, lambda bound: live.session(store, bound), "pds")(cfg)
     )
     job.maintenance = host.maintenance
-    if job.maintenance is not None and job.interrupted:
-        _hold_pds(job.maintenance, host.key, job.store.root, job.interrupted)
+    if job.maintenance is not None:
+        if job.interrupted:
+            _hold_pds(job.maintenance, host.key, job.store.root, job.interrupted)
+        _restore_pds(job.maintenance, host.key, job.store.root)
     return job
 
 
@@ -361,7 +366,7 @@ def _restore_pds(maintenance: Maintenance, key: str, root: Path) -> None:
     except OSError, ValueError:
         maintenance.adopt_uncertain(f"{key}:pds-unreadable", key, "pds", workspace=str(root / pds_run_record.RUNS))
         return
-    if seen is not None and seen[0].get("state") == "running":
+    if seen is not None and (seen[0].get("state") == "running" or _host_stopped(seen[0])):
         _hold_pds(maintenance, key, root, pack_state.interrupted(*seen))
 
 
