@@ -282,7 +282,9 @@ def _browser(job: Job, ctx: Context) -> Action:
         ctx.browsed, ctx.failures = pages, []
         return ctx.after
     ctx.browsed = ""
-    head, said = ("What the report says of them:", r.told) if r.told else ("Their output's tail:", r.output[-6000:])
+    head, said = (
+        ("What the report says of them:", r.told[:6000]) if r.told else ("Their output's tail:", r.output[-4000:])
+    )
     ctx.failures = [f"- {i}" for i in r.failed] + ["", head, "```", said, "```"]
     return "update"
 

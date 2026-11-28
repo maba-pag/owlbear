@@ -55,10 +55,13 @@ class Stopped(Exception):  # noqa: N818 - how a stage ends the run
 
     retry = pack_rounds.RETRY
 
-    def __init__(self, reason: str, *, current: bool = False, terminal: bool = False) -> None:
+    def __init__(self, reason: str, *, current: bool = False, terminal: bool = False, lead: str = "") -> None:
         """Keep the reason and whether the run must end rather than wait."""
+        if lead:
+            reason = f"{lead}\n{reason}"
         super().__init__(reason)
         self.reason, self.current, self.terminal = reason, current, terminal
+        self.lead = lead
 
 
 class UpdaterSessionsSpent(Stopped):

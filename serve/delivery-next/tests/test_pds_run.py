@@ -401,7 +401,8 @@ def test_current_release_never_downloads_or_starts_work(tmp_path, checkout):
         ({"browsers": [browser.Unrunnable("the PDS CDN did not answer, so the browser tests prove nothing")]},
          "the PDS CDN did not answer", ["audit", "update", "audit", "browser"]),
         ({"browsers": [browser.Result(0, 0, 0, 0, (), 5, "no tests ran")]},
-         ("browser tests did not finish (first pass): 0 browser test(s) ran, 0 failed, 0 errored, 0 skipped "
+         ("The browser tests did not finish (first pass). Try again if the machine was busy.\n"
+          "0 browser test(s) ran, 0 failed, 0 errored, 0 skipped "
           "(exit 5)\nno tests ran"),
          ["audit", "update", "audit", "browser"]),
         ({"browsers": [failing("tests/test_x.py::t"), failing("tests/test_x.py::t")]},
@@ -467,7 +468,8 @@ def test_candidate_release_failure_keeps_whole_reason(tmp_path, monkeypatch, who
 def test_browser_reruns_discriminate_flake_base_failure_and_skips(tmp_path, checkout, outcome):
     a, b, c = ("tests/test_a.py::t", "tests/test_b.py::t", "tests/test_c.py::t")
     three = failing(a, b, c)
-    mixed = browser.Result(3, 1, 0, 1, (a,), 1, "1 failed, 1 passed, 1 skipped", passed_ids=(b,))
+    reported = f"tests.test_a::t\nAssertionError: main's page failed\nTraceback follows\n{'frame\n' * 1100}Last frame"
+    mixed = browser.Result(3, 1, 0, 1, (a,), 1, "1 failed, 1 passed, 1 skipped", told=reported, passed_ids=(b,))
     partial = browser.Result(3, 0, 0, 1, (), 0, "2 passed, 1 skipped", passed_ids=(a, b))
     reruns = {
         "flake": [PASS, PASS],
@@ -481,7 +483,9 @@ def test_browser_reruns_discriminate_flake_base_failure_and_skips(tmp_path, chec
             checks.browsed(job, ctx, job.workspace / context.CANDIDATE)
         failed, passed = (a, b) if outcome == "base-failure" else ("none named", f"{a}, {b}")
         assert f"Failed: {failed}.\nPassed on main: {passed}. Did not run on main: {c}." in str(raised.value)
-        assert "Try again if the machine was busy; if main is broken" in str(raised.value)
+        assert "Try again if the machine was busy; if main is broken" in raised.value.lead
+        if outcome == "base-failure":
+            assert str(raised.value).endswith(reported)
     else:
         result = checks.browsed(job, ctx, job.workspace / context.CANDIDATE)
         assert result.passed is (outcome == "flake")
@@ -503,7 +507,8 @@ def test_an_interrupted_browser_pass_names_the_pass_in_the_saved_stop_and_log(tm
     failed = failing("tests/test_a.py::t")
     if report:
         stopped = browser.Result(1, 1, 0, 0, failed.failed, 2, "Interrupted")
-        reason = f"browser tests did not finish ({attempt}): {stopped.said()} (exit 2)\nInterrupted"
+        lead = f"The browser tests did not finish ({attempt}). Try again if the machine was busy."
+        reason = f"{lead}\n{stopped.said()} (exit 2)\nInterrupted"
     else:
         stopped = browser.Unrunnable("the browser tests left no report (exit 2): Interrupted")
         reason = f"Unrunnable: {stopped}\nBrowser pass: {attempt}"
@@ -517,6 +522,8 @@ def test_an_interrupted_browser_pass_names_the_pass_in_the_saved_stop_and_log(tm
     assert state["state"] == "waiting"
     assert reason in state["reason"]
     assert reason in state["questions"][0]["text"]
+    if report:
+        assert state["questions"][0]["lead"] == lead
     assert any(reason in line for line in state["log"])
     assert len(fakes.browsed) == len(before) + 1
     assert not fakes.sessions
@@ -1030,11 +1037,14 @@ def test_browser_invocation_reads_real_reports_on_target_code(tmp_path, browsers
     assert (env["NODE_EXTRA_CA_CERTS"], env["https_proxy"]) == ("/ca/interception.pem", "http://proxy:3128")
     assert runner.given["args"][3:6] == ["tests/test_a.py::t", "-m", "browser"]
     assert "-rfEp" in runner.given["args"]
-    case = '<testcase classname="tests.test_v" name="t"><failure message="TimeoutError: 30000ms">trace</failure>'
+    trace = "first frame\n" + "next frame\n" * 550 + "last frame"
+    case = f'<testcase classname="tests.test_v" name="t"><failure message="TimeoutError: 30000ms">{trace}</failure>'
     xml = f'<testsuites><testsuite tests="2" failures="1">{case}</testcase></testsuite></testsuites>'
-    r = browser.run(at, runner=Runner(xml, 1, "FAILED tests/test_v.py::t\n" + "DeprecationWarning\n" * 400))
+    output = "KeyboardInterrupt: stopped by the runner\nFAILED tests/test_v.py::t\n" + "DeprecationWarning\n" * 400
+    r = browser.run(at, runner=Runner(xml, 2, output))
+    assert r.output == output.rstrip()
     assert r.failed == ("tests/test_v.py::t",)
-    assert r.told == "tests.test_v::t\nTimeoutError: 30000ms\ntrace"
+    assert r.told == f"tests.test_v::t\nTimeoutError: 30000ms\n{trace}"
 
 
 @pytest.mark.parametrize(

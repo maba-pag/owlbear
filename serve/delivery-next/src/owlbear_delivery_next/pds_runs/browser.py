@@ -44,7 +44,7 @@ class Unrunnable(Exception):  # noqa: N818 - says why the gate cannot run, never
 
 @dataclass(frozen=True)
 class Result:
-    """One run: tests counted, failing node ids, the exit code, the output's tail and what each failure said."""
+    """One run: tests counted, failing node ids, the exit code, the output and what each failure said."""
 
     tests: int
     failures: int
@@ -127,15 +127,15 @@ def _read(report: Path, code: int, output: str) -> Result:
     suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
     count = {k: sum(int(s.get(k, "0")) for s in suites) for k in ("tests", "failures", "errors", "skipped")}
     failed = tuple(dict.fromkeys(SUMMARY.findall(output)))
-    return Result(**count, failed=failed, code=code, output=output.strip()[-4000:], told=_told(root),
+    return Result(**count, failed=failed, code=code, output=output.strip(), told=_told(root),
                   passed_ids=tuple(PASSED.findall(output)))  # fmt: skip
 
 
 def _told(root: ET.Element) -> str:
-    """What the report says of each failing or erroring case, each cut to its last lines."""
+    """What the report says of each failing or erroring case."""
     said = []
     for case in root.iter("testcase"):
         for bad in (*case.iter("failure"), *case.iter("error")):
             text = f"{bad.get('message', '')}\n{(bad.text or '').strip()}".strip()
-            said.append(f"{case.get('classname', '')}::{case.get('name', '')}\n{text[-1500:]}")
-    return "\n\n".join(said)[:6000]
+            said.append(f"{case.get('classname', '')}::{case.get('name', '')}\n{text}")
+    return "\n\n".join(said)

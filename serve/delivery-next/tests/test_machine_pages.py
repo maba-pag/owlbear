@@ -2202,11 +2202,15 @@ def retry_stopped_pds(page, url: str, reason: str, resume) -> None:
     expect(page.locator("#pack-todo")).to_have_text("Choose an answer under 'The update stopped'.")
     detail = question.locator("pre.pack-detail")
     expect(detail).to_be_visible()
-    assert detail.text_content() == reason
+    lead, _, rest = reason.partition("\n")
+    assert detail.text_content() == rest
     assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
     page.evaluate("window.scrollTo({top: 0, behavior: 'instant'})")
     expect(page.locator("#pack ~ #check")).to_have_count(1)
     retry = question.get_by_role("button", name="Try again")
+    guidance = question.get_by_text(lead, exact=True)
+    expect(guidance).to_be_in_viewport(ratio=1)
+    assert guidance.evaluate("(el) => el.getBoundingClientRect().bottom") <= retry.bounding_box()["y"]
     box = retry.bounding_box()
     assert box is not None
     assert min(box["width"], box["height"]) >= 24
@@ -2315,8 +2319,12 @@ def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_wa
         (update_home.root() / pds_run_record.FILE).write_text(json.dumps(record))
 
     held = None
-    reason = "The browser tests timed out.\npytest output:\n" + "x" * 430
-    asked = pack_rounds.question("r1-stop", "stopped", reason, ["retry", "discard"])
+    lead = (
+        "The browser rerun on main did not clear the failures. Try again if the machine was busy; "
+        "if main is broken, fix it, discard this update and start a new one."
+    )
+    reason = f"{lead}\npytest output:\n" + "x" * 6430
+    asked = pack_rounds.question("r1-stop", "stopped", reason, ["retry", "discard"], lead=lead)
 
     def resume() -> None:
         nonlocal held

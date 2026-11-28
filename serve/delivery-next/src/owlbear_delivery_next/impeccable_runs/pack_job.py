@@ -298,10 +298,14 @@ class Job(Steps):
         with self.lock:
             self._hold(ctx, reason)
 
-    def _hold(self, ctx: pack_run.Context, reason: str, *, retry: str = "") -> None:
+    def _hold(self, ctx: pack_run.Context, reason: str, *, retry: str = "", lead: str = "") -> None:
         if retry:
             question = pack_rounds.question(
-                f"{self.state['run']}-stopped-{uuid.uuid4().hex}", "stopped", reason, [retry, pack_rounds.DISCARD]
+                f"{self.state['run']}-stopped-{uuid.uuid4().hex}",
+                "stopped",
+                reason,
+                [retry, pack_rounds.DISCARD],
+                **({"lead": lead} if lead else {}),
             )
             match ctx.next:
                 case "challenge" | "recheck" | "reconsider" | "wait":
@@ -443,7 +447,7 @@ class Job(Steps):
                 kept = self.state.get("context")
                 if kept and not (exc.current or exc.terminal):
                     ctx = self.CONTEXT.model_validate(kept)
-                    self._hold(ctx, exc.reason, retry=exc.retry)
+                    self._hold(ctx, exc.reason, retry=exc.retry, lead=exc.lead)
                 else:
                     self._log(exc.reason)
                     self._finish("up-to-date" if exc.current else "failed", exc.reason)

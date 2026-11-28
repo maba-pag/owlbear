@@ -73,12 +73,17 @@ def browsed(job: Job, ctx: Context, at: Path) -> browser.Result:
     if not main.cleared(r.failed):
         passed = [test for test in r.failed if test in main.passed_ids]
         absent = [test for test in r.failed if test not in main.failed and test not in main.passed_ids]
-        msg = (
-            f"browser rerun on main did not clear the failures. Failed: {', '.join(main.failed) or 'none named'}.\n"
-            f"Passed on main: {', '.join(passed) or 'none'}. Did not run on main: {', '.join(absent) or 'none'}.\n"
-            "Try again if the machine was busy; if main is broken, fix it, discard this update and start a new one"
+        lead = (
+            "The browser rerun on main did not clear the failures. Try again if the machine was busy; "
+            "if main is broken, fix it, discard this update and start a new one."
         )
-        raise Stopped(msg)
+        msg = (
+            f"Failed: {', '.join(main.failed) or 'none named'}.\n"
+            f"Passed on main: {', '.join(passed) or 'none'}. Did not run on main: {', '.join(absent) or 'none'}."
+        )
+        if main.told:
+            msg += f"\n\n{main.told}"
+        raise Stopped(msg, lead=lead)
     candidate = _completed(job, at, r.failed, "rerun on the candidate")
     return r.flake() if candidate.cleared(r.failed) else r  # D-01M6BFK5YF5GYYN7QCDDPBEZH2
 
@@ -90,8 +95,9 @@ def _completed(job: Job, at: Path, ids: tuple[str, ...], attempt: str) -> browse
         exc.add_note(f"Browser pass: {attempt}")
         raise
     if result.code not in (0, 1):
-        msg = f"browser tests did not finish ({attempt}): {result.said()} (exit {result.code})\n{result.output}"
-        raise Stopped(msg)
+        lead = f"The browser tests did not finish ({attempt}). Try again if the machine was busy."
+        msg = f"{result.said()} (exit {result.code})\n{result.output}"
+        raise Stopped(msg, lead=lead)
     return result
 
 
