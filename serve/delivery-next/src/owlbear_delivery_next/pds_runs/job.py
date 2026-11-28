@@ -3,7 +3,8 @@
 It shares the Impeccable update's job (``pack_job``): its record, its machine lock and its admission of pull requests,
 with PDS's own record, branches and stages. Its stages: notice, candidate and diff here, then the audit, the updater,
 the browser tests and the challenger's rounds (``run``), and the way into ``main`` (``publish``). Until the merge
-nothing in ``main`` changes, and the running checkout never does.
+nothing in ``main`` changes, and the running checkout never does. A stop before the context is saved ends the run.
+A retryable stop after that keeps the workspace so the owner can try the stopped action again or discard.
 """
 
 from __future__ import annotations

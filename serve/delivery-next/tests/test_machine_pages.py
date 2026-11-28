@@ -2172,6 +2172,34 @@ def test_updates_owlbear_and_impeccable_show_a_failed_updates_and_installs_whole
         assert said == []
 
 
+def retry_stopped_pds(page, url: str, reason: str, resume) -> None:
+    """The page shows the whole multi-line stop and asks the run that stopped to resume."""
+    answers = []
+
+    def answering(route) -> None:
+        answers.append((route.request.url, route.request.post_data_json))
+        resume()
+        route.fulfill(json={})
+
+    page.route("**/pds/update/answer", answering)
+    viewport = page.viewport_size
+    page.set_viewport_size({"width": 390, "height": 800})
+    question = page.get_by_role("article", name="The update stopped")
+    detail = question.locator("pre.pack-detail")
+    expect(detail).to_be_visible()
+    assert detail.text_content() == reason
+    assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+    retry = question.get_by_role("button", name="Try again")
+    box = retry.bounding_box()
+    assert box is not None
+    assert min(box["width"], box["height"]) >= 24
+    retry.click()
+    expect(question).to_have_count(0)
+    expect(page.locator("#pack-state")).to_contain_text("Running since")
+    assert answers == [(url, {"question": "r1-stop", "option": "retry", "note": ""})]
+    page.set_viewport_size(viewport)
+
+
 @pytest.mark.browser
 @pytest.mark.timeout(150)  # a real browser through five run states with the menu opened in each
 def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_waiting_failed_merged_and_current(
@@ -2179,8 +2207,6 @@ def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_wa
 ) -> None:
     """#777: a newer PDS release counts until an update takes it; the page and the menu say its run's state; a merged
     one is not counted and waits for OwlBear's release; the installed pin reaching it is up to date."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     found = {"success": {"at": "2026-10-17T04:00:00+00:00", "newer": True, "current": "4.9.0", "latest": "4.10.1",
                          "detail": ""}, "failures": 0, "attempt_at": "2026-10-17T04:00:00+00:00"}  # fmt: skip
     monkeypatch.setattr(update_checks.Checks, "_restored", lambda _self: {"pds": found})
@@ -2197,14 +2223,21 @@ def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_wa
         (project_home.home(alpha.id) / pds_run_record.FILE).write_text(json.dumps(record))
 
     held = machine_lock.take(local_home.root() / pack_state.MACHINE_LOCK, alpha.id, lambda: None)  # its run holds it
-    asked = pack_rounds.question("r1:end:1", "end", "The rounds ended.", ["activate", "discard"])
+    reason = "The browser tests timed out.\npytest output:\n" + "x" * 430
+    asked = pack_rounds.question("r1-stop", "stopped", reason, ["retry", "discard"])
+
+    def resume() -> None:
+        nonlocal held
+        held = machine_lock.take(local_home.root() / pack_state.MACHINE_LOCK, alpha.id, lambda: None)
+        ran("running", stage="browser")
+
     merged = {"commit": "a" * 40, "branch": "pds/r1", "url": "https://github.com/o/r/pull/9", "number": 9,
               "merged": "b" * 40}  # fmt: skip
     journey = [
         (None, "newer version", "Updates, 1 available", ["Available"], "No project has run a PDS update yet."),
         ({"state": "running"}, "update running", "Updates", ["Running"], "Running since"),
-        ({"state": "waiting", "questions": [asked]}, "update waiting for you", "Updates", ["Waiting for you"],
-         "waits for your answers"),
+        ({"state": "waiting", "questions": [asked], "reason": reason}, "update waiting for you", "Updates",
+         ["Waiting for you"], "waits for your answers"),
         ({"state": "failed", "reason": "audit: the auditor submitted no report"}, "newer version",
          "Updates, 1 available", ["Failed", "Available"], "Last run failed"),
         ({"state": "passed", "published": merged}, "merged, not released yet", "Updates", [], "Last run passed"),
@@ -2226,6 +2259,8 @@ def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_wa
                 link = page.locator("p-drilldown").get_by_role("link", name="Porsche Design System")
                 expect(link.locator("p-tag")).to_have_text(tags)
                 page.keyboard.press("Escape")
+                if record and record["state"] == "waiting":
+                    retry_stopped_pds(page, f"{base}/p/{alpha.id}/api/next/pds/update/answer", reason, resume)
             expect(page.locator("#pack-summary")).to_have_css("display", "grid")  # the run view's shared styles
             expect(page.locator(".pack-facts")).to_have_css("display", "grid")
             expect(page.locator("#check-latest")).to_contain_text(f"4.10.1 ({update_checks.MERGED})")

@@ -1,11 +1,11 @@
-"""The Settings page's Impeccable update (TD-101, TD-220, TD-256): one host job at a time, its stages, its last run.
+"""The Updates page's Impeccable update (TD-101, TD-220, TD-256): one host job at a time, its stages, its last run.
 
-Stages run in order and the first that fails stops the run with its reason: notice, candidate, diff, golden pages, then
-the updater's and the challenger's rounds with the calibration replay (``pack_run``), then the way into ``main``
-(``pack_publish``): commit, push, pull request, CI and merge. Until the merge nothing in ``main`` changes, and the
-running checkout never does. A run whose rounds or publication need the owner waits for his answers on the Settings
-page; its state is kept under the store, so a waiting run survives a host restart. A run the host stopped during
-reads as failed, except during publication: it waits for the owner, and trying again reconciles with GitHub first.
+Stages run in order: notice, candidate, diff, golden pages, then the updater's and the challenger's rounds with
+the calibration replay (``pack_run``), then the way into ``main`` (``pack_publish``): commit, push, pull request, CI
+and merge. Until the merge nothing in ``main`` changes, and the running checkout never does. A stop before the
+context is saved ends the run. A retryable stop after that keeps the workspace and waits for the owner on the
+Updates page. A waiting run survives a host restart. A host stop ends a running update as failed, except during
+publication: it waits for the owner, and trying again reconciles with GitHub first.
 """
 
 from __future__ import annotations
@@ -306,20 +306,35 @@ class Job(Steps):
         with self.lock:
             self._hold(ctx, reason)
 
-    def _hold(self, ctx: pack_run.Context, reason: str) -> None:
-        pub = ctx.publication
-        link = f" ({pub.url})" if pub and pub.url else ""
-        repair = [pack_rounds.REPAIR] if pack_repair.offered(ctx) else []  # CI failed on its own pull request
-        options = [pack_rounds.RETRY, *repair, pack_rounds.DISCARD]
-        question = {"id": f"{self.state['run']}-publish", "kind": "publish", "text": f"{reason}{link}",
-                    "options": pack_rounds.published(options, opened=bool(pub and pub.number))}  # fmt: skip
-        ctx.next = "wait"
+    def _hold(self, ctx: pack_run.Context, reason: str, *, retry: str = "") -> None:
+        if retry:
+            question = pack_rounds.question(
+                f"{self.state['run']}-stopped-{uuid.uuid4().hex}", "stopped", reason, [retry, pack_rounds.DISCARD]
+            )
+            match ctx.next:
+                case "challenge" | "recheck" | "reconsider" | "wait":
+                    fallback = "challenger"
+                case "activate" | "publish":
+                    fallback = "commit"
+                case action:
+                    fallback = action
+        else:
+            pub = ctx.publication
+            link = f" ({pub.url})" if pub and pub.url else ""
+            repair = [pack_rounds.REPAIR] if pack_repair.offered(ctx) else []  # CI failed on its own pull request
+            options = [pack_rounds.RETRY, *repair, pack_rounds.DISCARD]
+            question = {"id": f"{self.state['run']}-publish", "kind": "publish", "text": f"{reason}{link}",
+                        "options": pack_rounds.published(options, opened=bool(pub and pub.number))}  # fmt: skip
+            ctx.next = "wait"
+            fallback = "merge"
         stage = next((s for s in self.state["stages"] if s["result"] in {"running", "failed"}), None)
+        if stage is None and retry:
+            stage = next(s for s in self.state["stages"] if s["name"] == fallback)
         if stage is not None:
             stage["result"], stage["detail"] = "waiting", reason
         if self.state.get("invocations") is not None:
             pack_progress.stopped(self.state["invocations"], reason)
-            pack_progress.asked(self.state["invocations"], stage["name"] if stage else "merge", [question])
+            pack_progress.asked(self.state["invocations"], stage["name"] if stage else fallback, [question])
         self.state |= {"state": "waiting", "stage": "", "questions": [question], "reason": reason}
         self.state["context"] = ctx.model_dump(mode="json")
         self._log(f"waiting for you: {reason}")
@@ -434,8 +449,14 @@ class Job(Steps):
         try:
             reason = work()
         except Stopped as exc:
-            self.log(exc.reason)
-            self._end("up-to-date" if exc.current else "failed", exc.reason)
+            with self.lock:
+                kept = self.state.get("context")
+                if kept and not (exc.current or exc.terminal):
+                    ctx = self.CONTEXT.model_validate(kept)
+                    self._hold(ctx, exc.reason, retry=exc.retry)
+                else:
+                    self._log(exc.reason)
+                    self._finish("up-to-date" if exc.current else "failed", exc.reason)
         except Exception as exc:  # noqa: BLE001 - the page must learn how the run ended
             reason = failure(exc)
             self.log(reason)

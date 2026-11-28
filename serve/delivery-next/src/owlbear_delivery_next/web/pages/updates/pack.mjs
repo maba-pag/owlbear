@@ -33,7 +33,8 @@ export const IMPECCABLE = {
       + "the files the updater changed, opens a pull request to main and merges it once CI passes. It asks you here "
       + "before changed golden evidence counts and before a glue change goes into the pull request, and when the "
       + "rounds end without a pass or the challenger upholds a finding the updater rejected.",
-    after: "Later visual rounds use the new pack. If a stage fails, nothing changes and this page says why.",
+    after: "Later visual rounds use the new pack. If the update stops, this page says why and offers a retry "
+      + "when the stopped stage can run again.",
     instead: "The current pack stays active.",
   },
   activate: { title: "Activate the pack without a passing challenge?",
@@ -166,11 +167,11 @@ export async function discard(run, d) {
   }
 }
 
-// A primary only where one answer has priority: activating at the end, or trying again once a cause is fixed when
-// no repair is offered beside it. Alternatives without one are chosen and sent with one button instead (run.mjs).
+// Activating at the end, granting one updater session or retrying without a repair beside it has priority.
+// Other alternatives are chosen and sent with one button instead (run.mjs).
 export function emphasis(q, o) {
   const repair = q.options.some((x) => x.id === "repair");
-  return o.id === "activate" || (o.id === "retry" && !repair) ? "primary" : "secondary";
+  return o.id === "activate" || o.id === "more-updater" || (o.id === "retry" && !repair) ? "primary" : "secondary";
 }
 
 export async function start() {

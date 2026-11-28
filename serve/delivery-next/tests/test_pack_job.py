@@ -20,7 +20,7 @@ from playwright import sync_api
 
 from owlbear_delivery_next.change_contracts import dispute_tools, pack_tools, tools
 from owlbear_delivery_next.change_contracts.models import Brief, Change
-from owlbear_delivery_next.change_contracts.round_records import RoundFinding, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_contracts.round_records import PACK, RoundFinding, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import disputes
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.gh import GhProvider
@@ -1629,7 +1629,7 @@ def test_a_premise_the_updater_reports_stops_for_the_owner(tmp_path, checkout, c
 
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
-    assert (state["state"], results(state)["update"]) == ("failed", "failed")
+    assert (state["state"], results(state)["update"]) == ("waiting", "waiting")
     assert "the updater asks the owner: golden page glow.html must change (g)" in state["reason"]
     assert "challenger" not in fakes.calls
     assert snapshot(checkout) == before
@@ -1641,7 +1641,7 @@ def test_a_missing_tool_the_updater_reports_stops_with_its_words(tmp_path, check
 
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
-    assert (state["state"], results(state)["update"]) == ("failed", "failed")
+    assert (state["state"], results(state)["update"]) == ("waiting", "waiting")
     assert "the updater lacks shell: run git diff (" in state["reason"]
     assert state["reason"].endswith(" no shell tool)")
 
@@ -1656,14 +1656,15 @@ def noted(error: Exception) -> Exception:
     return error
 
 
-def stage_failed(state: dict, stage: str, said: str) -> None:
-    """The run failed in *stage* saying *said*: its reason, its stage's, its last invocation's and its log's."""
+def stage_failed(state: dict, stage: str, said: str, *, waiting: bool = False) -> None:
+    """The run stopped in *stage* saying *said*, whether it failed or waits for the owner."""
     reason = f"{stage}: {said}"
-    assert (state["state"], state["reason"]) == ("failed", reason)
+    assert (state["state"], state["reason"]) == ("waiting" if waiting else "failed", reason)
     assert next(s for s in state["stages"] if s["name"] == stage)["detail"] == reason
-    assert state["invocations"][-1]["detail"] == reason
+    assert state["invocations"][-2 if waiting else -1]["detail"] == reason
     logged = [line.split(" ", 1)[1] for line in state["log"]]
-    assert logged[-3:] == [f"{stage}: running", f"{stage}: failed: {reason}", reason]
+    assert logged[-3:] == [f"{stage}: running", f"{stage}: failed: {reason}", f"waiting for you: {reason}"
+                           if waiting else reason]  # fmt: skip
 
 
 @pytest.mark.parametrize("cause", ["git", "updater", "challenger", "reconsideration", "outside-a-stage"])
@@ -1719,6 +1720,7 @@ def test_a_failed_pack_stage_keeps_and_logs_its_whole_error(  # noqa: PLR0913, P
             f"committed: PackError: git rev-parse failed: CalledProcessError: Command '{ran[0]}' returned non-zero "
             f"exit status 128.\nstderr:\n{whole_error}\nstdout:\n{OUT}"
         ),
+        waiting=cause != "git",
     )
 
 
@@ -1812,10 +1814,10 @@ def test_an_unverified_session_end_says_its_problems_whole(tmp_path, checkout, c
         return
     name, who = ("update", "updater") if stage == "updater" else ("challenger", "challenger")
     reason = f"{name}: PackError: the {who} {seen[0]} may still be running; stop it before updating again; {why}"
-    assert (state["state"], state["reason"]) == ("failed", reason)
+    assert (state["state"], state["reason"]) == ("waiting", reason)
     assert next(s for s in state["stages"] if s["name"] == name)["detail"] == reason
-    assert state["invocations"][-1]["detail"] == reason
-    assert logged[-3:] == [f"{name}: running", f"{name}: failed: {reason}", reason]
+    assert state["invocations"][-2]["detail"] == reason
+    assert logged[-3:] == [f"{name}: running", f"{name}: failed: {reason}", f"waiting for you: {reason}"]
 
 
 def test_a_hold_stops_a_running_invocation_with_its_whole_reason(whole_error) -> None:
@@ -1872,13 +1874,42 @@ def test_golden_pages_that_differ_go_to_the_updater_and_still_differing_after_it
     fakes.wrong_after = WRONG
     before = snapshot(checkout)
 
-    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    state = run(job)
 
-    assert (state["state"], results(state)["golden"], results(state)["update"]) == ("failed", "failed", "completed")
+    assert (state["state"], results(state)["golden"], results(state)["update"]) == ("waiting", "waiting", "completed")
     assert "golden pages differ: bad.html (source): missing glow" in state["reason"]
+    [q] = state["questions"]
+    assert (q["kind"], q["text"], [o["id"] for o in q["options"]]) == ("stopped", state["reason"], ["retry", "discard"])
+    assert job.workspace.is_dir()
     assert "## Golden pages with the package's expectations\ngolden pages differ" in fakes.updates[0].message
     assert fakes.calls[-2:] == ["update", "golden"]
     assert snapshot(checkout) == before
+    called = len(fakes.calls)
+    fakes.wrong_after = {}
+    state = answered(job, "retry")
+    assert state["state"] == "passed", state["reason"]
+    assert fakes.calls[called:] == ["golden", "replay", "challenger"]
+    assert [(i["round"], i["result"]) for i in state["invocations"] if i["operation"] == "candidate-golden"] == [
+        (1, "failed"),
+        (1, "passed"),
+    ]
+
+
+def test_retrying_a_stopped_action_cannot_select_activation():
+    ctx = pack_run.Context(
+        tag="new", why="Impeccable", diff="", golden="", pins={}, manifest="", notice="", baseline={},
+        checkout={}, start={}, sid="s1", next="golden",
+    )  # fmt: skip
+    lp = RoundLoop(subject=PACK, policy=RoundPolicy())
+    q = pack_rounds.question("r1-stop", "stopped", "golden stopped", ["retry"], identity="not approved")
+
+    assert pack_run.decided([q], q, "retry", note="", ctx=ctx, lp=lp) == []
+    assert (ctx.next, ctx.accepted, ctx.publication) == ("golden", "", None)
+    unknown = q | {"kind": "unknown"}
+    with pytest.raises(ValueError, match=r"r1-stop.*unknown.*retry"):
+        pack_run.decided([unknown], unknown, "retry", note="", ctx=ctx, lp=lp)
+    assert (ctx.next, ctx.accepted, ctx.publication) == ("golden", "", None)
 
 
 def changed_expectations(checkout: Path) -> str:
@@ -2111,7 +2142,7 @@ def test_a_passing_challenger_whose_processes_are_not_confirmed_gone_never_passe
 
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
-    assert (state["state"], results(state)["challenger"]) == ("failed", "failed")
+    assert (state["state"], results(state)["challenger"]) == ("waiting", "waiting")
     assert "may still be running" in state["reason"]
     assert snapshot(checkout) == before
 
@@ -2142,16 +2173,21 @@ def test_a_failing_stage_stops_before_activation_and_changes_nothing(  # noqa: P
     fakes = Fakes(clone, **fakes_kw)
     before = snapshot(checkout)
 
-    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    state = run(job)
 
-    assert state["state"] == "failed"
+    assert state["state"] == "waiting"
     assert said in state["reason"]
     at = NAMES.index(stage)
-    assert results(state) == dict.fromkeys(NAMES[:at], "passed") | {"update": "completed", stage: "failed"} | (
-        dict.fromkeys(NAMES[at + 1 :], "not-reached")
+    assert results(state) == dict.fromkeys(NAMES[:at], "passed") | {"update": "completed", stage: "waiting"} | (
+        dict.fromkeys(NAMES[at + 1 :], "pending")
     )
     assert fakes.calls[-1] == stage
     assert snapshot(checkout) == before
+    workspace = job.workspace
+    assert workspace.is_dir()
+    assert answered(job, "discard")["state"] == "discarded"
+    assert not workspace.exists()
 
 
 def test_a_refused_push_waits_for_the_owner_and_trying_again_reconciles_with_github(tmp_path, checkout, clone):

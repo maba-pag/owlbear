@@ -39,13 +39,13 @@ def publish(job: Job, ctx: Context, lp: RoundLoop) -> str | None:
     expected = ctx.accepted or (lp.head if lp.ended == "clean" else "")
     if not expected or tree.identity(ctx.candidate, pages) != expected:
         msg = "the candidate is not what the challenger passed or you accepted; run the update again"
-        raise Stopped(msg)
+        raise Stopped(msg, terminal=True)
     if not ctx.audited == ctx.browsed == pages or not set(ctx.follow_ups) <= set(ctx.followed):
         msg = "the candidate's pages are not the ones the audit and browser tests passed; run the update again"
-        raise Stopped(msg)
+        raise Stopped(msg, terminal=True)
     if tree.digest(tree.protected(at)) != ctx.candidate:
         msg = "the candidate's release files changed; run the update again"
-        raise Stopped(msg)
+        raise Stopped(msg, terminal=True)
     if checking:
         return _repaired(job, ctx, lp, pages)
     if ctx.publication is None:
@@ -60,7 +60,7 @@ def publish(job: Job, ctx: Context, lp: RoundLoop) -> str | None:
             files[path] = data.decode("utf-8")
         except UnicodeDecodeError as exc:
             msg = f"a file to commit is not UTF-8 text ({path}): {failure(exc)}; run the update again"
-            raise Stopped(msg) from exc
+            raise Stopped(msg, terminal=True) from exc
     return _published(job, ctx, lp, files | dict.fromkeys(ctx.removed))
 
 

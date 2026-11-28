@@ -27,7 +27,8 @@ const KINDS = { end: "The challenge rounds ended without a pass", evidence: "Cha
   code: "A change to the detector's glue", scope: "Changes the updater may not make",
   unsure: "A change the challenger is unsure about",
   "follow-ups": "Manual follow-ups from the deprecation audit",
-  publish: "Publication stopped", "repair-config": "The CI repair was held before its push",
+  stopped: "The update stopped", publish: "Publication stopped",
+  "repair-config": "The CI repair was held before its push",
   "repair-approval": "The CI repair changed protected content" };
 
 function runLine(u) {
@@ -123,7 +124,8 @@ function asked(run, q) {
       ${lp.findings?.length ? html`<ul class="pack-found">${lp.findings.map((x) => html`<li>${x.id}, ${FOUND[x.state]
         ?? x.state}: ${x.text}</li>`)}</ul>` : nothing}`;
   }
-  return html`<p-text size="sm">${q.text}</p-text>`;
+  return q.kind === "stopped" ? html`<pre class="pack-detail">${q.text}</pre>`
+    : html`<p-text size="sm">${q.text}</p-text>`;
 }
 
 // The change as a diff, its + and - lines marked.
@@ -281,7 +283,7 @@ export function runPart(run) {
   }
   const to = reach(run), questions = run.state === "waiting" ? run.questions ?? [] : [];
   const p = run.published, found = run.loop?.findings ?? [], d = discarding(run, questions);
-  const why = run.state !== "running" ? run.reason : "";
+  const why = run.state !== "running" && !questions.some((q) => q.kind === "stopped") ? run.reason : "";
   return html`<div id="pack-run" class="pack-run">
     ${summary(run, questions, to)}
     ${why ? html`<p-text id="pack-reason" size="sm">${why}</p-text>` : nothing}

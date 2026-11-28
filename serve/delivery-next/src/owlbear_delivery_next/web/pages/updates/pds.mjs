@@ -26,8 +26,8 @@ own.kind = {
       + `change on the way, ${CHECKS} and the challenger run again first. It asks you here about the audit's manual `
       + "follow-ups, when the rounds end without a pass and when the challenger upholds a finding the updater "
       + "rejected.",
-    after: "The pages load the new release once this machine takes the OwlBear version that carries it. If a stage "
-      + "fails, nothing changes and this page says why.",
+    after: "The pages load the new release once this machine takes the OwlBear version that carries it. "
+      + "If the update stops, this page says why and offers a retry when the stopped stage can run again.",
     instead: "The pages keep the release they load.",
   },
   activate: { title: "Publish the update without a passing challenge?",
