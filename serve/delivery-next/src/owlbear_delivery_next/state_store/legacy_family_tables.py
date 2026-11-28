@@ -19,7 +19,7 @@ CURRENT_MODULES = (
     ("commands/cli.py", "9029f2265242f8a4f833be76c9f141ffb5a4447af3ddc9659150179dfe5adf6c"),
     ("commands/dispatch.py", "8af7e2e296eae5cd7a70dd441af65472745988da535b558121d8ab3ccbc3851c"),
     ("commands/mcp_server.py", "4cf57a152ece10e5446ca04039ffd49af2318f24bb93bab7e7342b8a7e542fc0"),
-    ("commands/project_commands.py", "ada33b1001a4e29a2f357619f365ae94ff8577fb1f4eb6c9a5fb55986072f254"),
+    ("commands/project_commands.py", "ee6fa39f472658655462826908044ea26e5639ce77390b6dc246dbbe747761d8"),
     ("commands/runner.py", "607231478301b5d49cb8c762b619a6609f949426eeb40432632fc896b3264bdf"),
     ("commands/setup.py", "330aadda34be1b8540a89cbf8d7f1798bb44cbd0c1d55466148054284046d380"),
     ("local_system/data_place.py", "fd570508a80abee600b03d5d706d68c83620e948d7796a7eef5416b2dfa9d67a"),
