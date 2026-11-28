@@ -461,9 +461,16 @@ def test_candidate_release_failure_keeps_whole_reason(tmp_path, monkeypatch, who
     PACK.stage_failed(state, "candidate", f"PinError: {said}")
 
 
-@pytest.mark.parametrize("outcome", ["flake", "base-failure", "base-skip", "candidate-skip"])
+@pytest.mark.parametrize("outcome", ["flake", "base-failure", "base-skip", "candidate-skip", "interrupted"])
 def test_browser_reruns_discriminate_flake_base_failure_and_skips(tmp_path, checkout, outcome):
     two = failing("tests/test_a.py::t", "tests/test_b.py::t")
+    if outcome == "interrupted":
+        stopped = browser.Result(1, 1, 0, 0, two.failed[:1], 2, "Interrupted")
+        fakes, job, ctx = browser_job(tmp_path, checkout, stopped, PASS, PASS)
+        with pytest.raises(pack_job.Stopped, match=r"browser tests did not finish: .* \(exit 2\)\nInterrupted"):
+            checks.browsed(job, ctx, job.workspace / context.CANDIDATE)
+        assert fakes.browsed == [("candidate", ())]
+        return
     half = browser.Result(tests=2, failures=0, errors=0, skipped=1, failed=(), code=0, output="1 passed, 1 skipped")
     reruns = {
         "flake": [PASS, PASS],

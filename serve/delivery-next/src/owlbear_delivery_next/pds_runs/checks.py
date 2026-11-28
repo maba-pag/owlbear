@@ -61,9 +61,12 @@ def browsed(job: Job, ctx: Context, at: Path) -> browser.Result:
 
     Raises:
         browser.Unrunnable: They cannot run, or the PDS CDN did not answer.
-        Stopped: They failed without naming a test, or a failing test does not pass on main either.
+        Stopped: The suite did not finish, it failed without naming a test, or a failing test also fails on main.
     """
     r = job.live.browser(at, ())
+    if r.code not in (0, 1):
+        msg = f"browser tests did not finish: {r.said()} (exit {r.code})\n{r.output}"
+        raise Stopped(msg)
     if r.passed:
         return r
     if not r.failed:
