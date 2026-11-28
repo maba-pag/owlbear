@@ -151,7 +151,8 @@ export async function discard(run, d) {
     await act(`${d.q.id}:discard`, () => call(`${own.kind.update}/answer`,
       { machine: true, body: { question: d.q.id, option: "discard", note: "" }, timeout: WRITE }));
   } else {
-    await act("discard", () => call(`${own.kind.update}/discard`, { machine: true, method: "POST", timeout: WRITE }));
+    await act("discard", () => call(`${own.kind.update}/discard`,
+      { machine: true, body: { run: run.run }, timeout: WRITE }));
   }
 }
 

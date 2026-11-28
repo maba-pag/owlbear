@@ -234,13 +234,16 @@ class Job(Steps):
             resumed.start()
         return self.read()
 
-    def discard(self) -> dict[str, Any]:
-        """End a waiting run without activating anything.
+    def discard(self, run: str) -> dict[str, Any]:
+        """End the waiting run shown to the owner without activating anything.
 
         Raises:
-            Stale: No run waits for the owner.
+            Stale: The run shown to the owner is no longer waiting.
         """
         with self.lock:
+            if self.state["run"] != run:
+                msg = "this update is no longer the one shown; reload the page"
+                raise Stale(msg)
             if self.state["state"] != "waiting" or self.busy():
                 msg = f"no {self.ADMISSION.title} update waits for you"
                 raise Stale(msg)

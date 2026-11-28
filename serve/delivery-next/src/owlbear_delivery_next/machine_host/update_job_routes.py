@@ -46,6 +46,14 @@ class AnswerBody(BaseModel):
     note: str = Field(default="", max_length=2000)
 
 
+class DiscardBody(BaseModel):
+    """The run shown in the owner's discard confirmation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    run: str = Field(max_length=200)
+
+
 @contextmanager
 def admitted(updates: Updates) -> Iterator[None]:
     """Return a refusal rather than starting work behind the machine's fence."""
@@ -105,9 +113,9 @@ def router(updates: Updates, job: pack_job.Job, prefix: str) -> APIRouter:
             raise HTTPException(422, str(exc)) from exc
 
     @routes.post(f"{path}/discard", dependencies=OWNER)
-    def discard() -> dict[str, Any]:
+    def discard(body: DiscardBody) -> dict[str, Any]:
         try:
-            return job.discard()
+            return job.discard(body.run)
         except pack_job.Stale as exc:
             raise HTTPException(409, str(exc)) from exc
 

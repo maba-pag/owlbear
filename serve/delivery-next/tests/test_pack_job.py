@@ -2782,12 +2782,16 @@ def test_the_answer_routes_take_only_an_open_questions_options(tmp_path):
     bare = c.post(url, json={"question": qid, "option": "reconsider", "note": "  "})
     assert (bare.status_code, bare.json()["detail"]) == (422, "asking the challenger to reconsider needs your note")
     assert c.post(url, json={"question": qid, "option": "drop", "extra": 1}).status_code == 422
+    discard_url = "/api/next/impeccable/update/discard"
+    body = {"run": waiting["run"]}
     bare_client = TestClient(c.app, base_url="http://127.0.0.1")
-    assert bare_client.post("/api/next/impeccable/update/discard").status_code == 401  # guarded like every route
+    assert bare_client.post(discard_url, json=body).status_code == 401
+    stale = c.post(discard_url, json={"run": "old"})
+    assert (stale.status_code, stale.json()["detail"]) == (409, "this update is no longer the one shown; reload the page")
     assert c.get("/api/next/impeccable/update").json()["state"] == "waiting"  # nothing above changed it
 
-    assert c.post("/api/next/impeccable/update/discard").json()["state"] == "discarded"
-    gone = c.post("/api/next/impeccable/update/discard")
+    assert c.post(discard_url, json=body).json()["state"] == "discarded"
+    gone = c.post(discard_url, json=body)
     assert (gone.status_code, gone.json()["detail"]) == (409, "no Impeccable update waits for you")
 
 
