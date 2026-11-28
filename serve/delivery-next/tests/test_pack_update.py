@@ -561,21 +561,21 @@ def test_cli_replay_uses_machine_host_without_a_project(monkeypatch, capsys, run
 
     monkeypatch.setattr(pack_replay, "replay", ran_here)
     running_host(200, {"ok": True, "report": "calibration replay: 3 decided rounds, 0 left out"})
-    assert cli.main(["replay"]) == 0
+    assert cli.main(["impeccable", "--replay"]) == 0
     assert capsys.readouterr().out == "calibration replay: 3 decided rounds, 0 left out\n"
     assert _Answers.seen == ["/api/next/impeccable/replay Bearer tok cli"]
     _Answers.seen.clear()
     running_host(200, {"ok": False, "report": "calibration replay: 9 decided rounds; below the margin"})
-    assert cli.main(["replay"]) == 1
+    assert cli.main(["impeccable", "--replay"]) == 1
     assert capsys.readouterr().out == "calibration replay: 9 decided rounds; below the margin\n"
     running_host(409, {"detail": "an Impeccable update is running: wait for it to finish"})
-    assert cli.main(["replay"]) == 1
+    assert cli.main(["impeccable", "--replay"]) == 1
     assert capsys.readouterr().out == "an Impeccable update is running: wait for it to finish\n"
     assert len(_Answers.seen) == 2
     assert all(seen.split()[0] == "/api/next/impeccable/replay" for seen in _Answers.seen)
     _Answers.seen.clear()
     running_host(404, {"detail": "Not Found"})
-    assert cli.main(["replay"]) == 1
+    assert cli.main(["impeccable", "--replay"]) == 1
     assert capsys.readouterr().out == "Not Found\n"
     assert _Answers.seen == ["/api/next/impeccable/replay Bearer tok cli"]
 
