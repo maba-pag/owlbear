@@ -2788,7 +2788,10 @@ def test_the_answer_routes_take_only_an_open_questions_options(tmp_path):
     bare_client = TestClient(c.app, base_url="http://127.0.0.1")
     assert bare_client.post(discard_url, json=body).status_code == 401
     stale = c.post(discard_url, json={"run": "old"})
-    assert (stale.status_code, stale.json()["detail"]) == (409, "this update is no longer the one shown; reload the page")
+    assert (stale.status_code, stale.json()["detail"]) == (
+        409,
+        "this update is no longer the one shown; reload the page",
+    )
     assert c.get("/api/next/impeccable/update").json()["state"] == "waiting"  # nothing above changed it
 
     assert c.post(discard_url, json=body).json()["state"] == "discarded"
