@@ -401,8 +401,8 @@ def test_current_release_never_downloads_or_starts_work(tmp_path, checkout):
         ({"browsers": [browser.Unrunnable("the PDS CDN did not answer, so the browser tests prove nothing")]},
          "the PDS CDN did not answer", ["audit", "update", "audit", "browser"]),
         ({"browsers": [browser.Result(0, 0, 0, 0, (), 5, "no tests ran")]},
-         "browser tests did not finish (first pass): 0 browser test(s) ran, 0 failed, 0 errored, 0 skipped "
-         "(exit 5)\nno tests ran",
+         ("browser tests did not finish (first pass): 0 browser test(s) ran, 0 failed, 0 errored, 0 skipped "
+          "(exit 5)\nno tests ran"),
          ["audit", "update", "audit", "browser"]),
         ({"browsers": [failing("tests/test_x.py::t"), failing("tests/test_x.py::t")]},
          "Failed: tests/test_x.py::t.", ["audit", "update", "audit", "browser", "browser"]),
@@ -510,7 +510,8 @@ def test_an_interrupted_browser_pass_names_the_pass_in_the_saved_stop_and_log(tm
 
     reason = f"browser tests did not finish ({attempt}): {stopped.said()} (exit 2)\nInterrupted"
     assert state["state"] == "waiting"
-    assert reason in state["reason"] and reason in state["questions"][0]["text"]
+    assert reason in state["reason"]
+    assert reason in state["questions"][0]["text"]
     assert any(reason in line for line in state["log"])
     assert len(fakes.browsed) == len(before) + 1
     assert not fakes.sessions
