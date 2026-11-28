@@ -6,7 +6,7 @@ import { defined, machineState } from "/assets/ui.mjs";
 import { auditPart, followAudit, readAudit } from "./audit.mjs";
 import { frame, framed } from "./frame.mjs";
 import { SETTINGS, follow, own, readPack } from "./pack.mjs";
-import { oldWaiting, runPart, startPart } from "./run.mjs";
+import { oldWaiting, runPart, startPart, stoppedQuestion } from "./run.mjs";
 
 const CHECKS = "the deprecation audit and the browser tests";
 own.kind = {
@@ -41,14 +41,18 @@ own.kind = {
 };
 
 function show() {
-  const r = own.runs;
-  render(html`${frame("pds", { running: "Pages load" })}
+  const r = own.runs, stopped = stoppedQuestion(r?.run);
+  const versions = frame("pds", { running: "Pages load" });
+  const last = r ? html`<div class="part">${runPart(r.run)}${oldWaiting(r)}</div>` : own.unread.runs ? nothing
+    : html`<p-text size="sm">Reading the last PDS update…</p-text>`;
+  render(html`${stopped ? nothing : versions}
     ${machineState() ? html`<section id="pack" class="panel" aria-labelledby="pack-title">
       <p-heading size="lg"><h2 id="pack-title">The update</h2></p-heading>
+      ${stopped ? last : nothing}
       ${startPart()}
-      ${r ? html`<div class="part">${runPart(r.run)}${oldWaiting(r)}</div>` : own.unread.runs ? nothing
-        : html`<p-text size="sm">Reading the last PDS update…</p-text>`}
+      ${stopped ? nothing : last}
     </section>
+    ${stopped ? versions : nothing}
     ${auditPart()}` : nothing}`, document.getElementById("page"));
 }
 

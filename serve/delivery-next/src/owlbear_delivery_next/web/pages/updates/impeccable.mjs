@@ -6,7 +6,7 @@ import { defined, machineState } from "/assets/ui.mjs";
 import { readChecks, update } from "./checks.mjs";
 import { frame, framed, sentence, when } from "./frame.mjs";
 import { button, follow, own, readPack, replay } from "./pack.mjs";
-import { historyUnread, oldWaiting, runPart, startPart } from "./run.mjs";
+import { historyUnread, oldWaiting, runPart, startPart, stoppedQuestion } from "./run.mjs";
 
 function installed(i) {  // a missing pack is the running version's; one installing or failed names its version
   const whose = i.version ? `Impeccable of OwlBear ${i.version}` : "An Impeccable pack";
@@ -71,21 +71,25 @@ function stands() {
 }
 
 function view() {
-  const r = own.runs;
-  return html`${frame("impeccable", { running: "Pinned upstream" })}
+  const r = own.runs, stopped = stoppedQuestion(r?.run);
+  const versions = frame("impeccable", { running: "Pinned upstream" });
+  const last = r ? html`<div class="part">${runPart(r.run)}${oldWaiting(r)}</div>` : own.unread.runs ? nothing
+    : html`<p-text size="sm">Reading the last Impeccable update…</p-text>`;
+  return html`${stopped ? nothing : versions}
     ${machineState() ? html`<section id="pack" class="panel" aria-labelledby="pack-title">
       <p-heading size="lg"><h2 id="pack-title">The pack</h2></p-heading>
+      ${stopped ? last : nothing}
       ${stands()}
       ${startPart()}
-      ${r ? html`<div class="part">${runPart(r.run)}${oldWaiting(r)}</div>` : own.unread.runs ? nothing
-        : html`<p-text size="sm">Reading the last Impeccable update…</p-text>`}
+      ${stopped ? nothing : last}
       <div class="part row">
         ${button("Replay OwlBear's decided rounds", replay, { id: "pack-replay", busy: own.busy === "replay",
       disabled: !r || historyUnread() || Boolean(r.holder || own.busy || own.awaiting)
         || ["running", "waiting"].includes(r.run?.state) })}
         <p-text role="status">${own.replayed ?? ""}</p-text>
       </div>
-    </section>` : nothing}`;
+    </section>
+    ${stopped ? versions : nothing}` : nothing}`;
 }
 
 function show() {

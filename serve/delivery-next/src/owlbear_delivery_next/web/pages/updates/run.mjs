@@ -41,6 +41,10 @@ export function historyUnread() {
   return Boolean(own.unread.runs || own.runs?.error);
 }
 
+export function stoppedQuestion(run) {
+  return run?.state === "waiting" && run.questions?.some((q) => q.kind === "stopped");
+}
+
 // What runs now, from the run's invocations, or from its stage list in a record from before them.
 function nowOf(u) {
   if (u.state !== "running" || u.interrupted) return "";
@@ -119,8 +123,7 @@ function asked(run, q) {
       ${lp.findings?.length ? html`<ul class="pack-found">${lp.findings.map((x) => html`<li>${x.id}, ${FOUND[x.state]
         ?? x.state}: ${x.text}</li>`)}</ul>` : nothing}`;
   }
-  return q.kind === "stopped" ? html`<pre class="pack-detail">${q.text}</pre>`
-    : html`<p-text size="sm">${q.text}</p-text>`;
+  return html`<p-text size="sm">${q.text}</p-text>`;
 }
 
 // The change as a diff, its + and - lines marked.
@@ -153,7 +156,7 @@ function choose(run, q, answers, lead) {
       busy: own.busy.startsWith(`${q.id}:`), disabled: Boolean(own.busy) })}</div>`;
 }
 
-function question(run, q, lead) {
+function question(run, q, lead, discardControl) {
   let field = nothing;
   if (q.kind === "dispute") {
     const label = "Your note (guides the updater; needed to ask the challenger again)";
@@ -174,16 +177,18 @@ function question(run, q, lead) {
   const f = q.kind === "dispute" ? (run.loop?.findings ?? []).find((x) => x.id === q.finding) : null;
   const title = f ? `Finding ${f.id}, raised in round ${f.raised}` : q.kind === "unsure"
     ? `A change to ${q.path} the challenger could not judge` : KINDS[q.kind] ?? sentence(q.kind);
+  const stopped = q.kind === "stopped";
   const head = `pack-q-${q.id.replaceAll(/[^\w-]/g, "-")}`;
   return html`<article class="pack-question" aria-labelledby=${head}>
     <p-heading size="sm"><h5 id=${head}>${title}</h5></p-heading>
-    ${asked(run, q)}
+    ${stopped ? html`<p-text>The work so far is kept.</p-text>` : asked(run, q)}
     ${q.diff ? diff(q.diff) : nothing}
     ${field}
     ${!answers.length ? nothing : !priority ? choose(run, q, answers, lead) : html`<div class="row"
       role="group" aria-label="Your answer">${answers.map((o) => button(o.label, () => answer(run, q, o),
         { variant: lead ? emphasis(q, o) : "secondary", busy: own.busy === `${q.id}:${o.id}`,
           disabled: Boolean(own.busy) }))}</div>`}
+    ${stopped ? html`${discardControl}<pre class="pack-detail pack-reason">${q.text}</pre>` : nothing}
   </article>`;
 }
 
@@ -275,21 +280,24 @@ export function runPart(run) {
   }
   const questions = run.state === "waiting" ? run.questions ?? [] : [];
   const p = run.published, found = run.loop?.findings ?? [], d = discarding(run, questions);
-  const why = run.state !== "running" && !questions.some((q) => q.kind === "stopped") ? run.reason : "";
+  const stopped = stoppedQuestion(run);
+  const why = run.state !== "running" && !stopped ? run.reason : "";
+  const discardControl = d ? html`<div id="pack-discard-area" class="pack-discard">
+    <p-text size="sm" color="contrast-medium">Or end this update without activating anything.</p-text>
+    ${button(d.label, () => discard(run, d), { id: "pack-discard", icon: "close",
+      busy: own.busy === "discard" || own.busy === `${d.q?.id}:discard`, disabled: Boolean(own.busy) })}
+  </div>` : nothing;
   return html`<div id="pack-run" class="pack-run">
     ${summary(run, questions)}
-    ${why ? html`<p-text id="pack-reason" size="sm">${why}</p-text>` : nothing}
+    ${!why ? nothing : run.state === "failed" ? html`<pre id="pack-reason" class="pack-detail pack-reason">${why}</pre>`
+      : html`<p-text id="pack-reason" size="sm">${why}</p-text>`}
     ${p?.commit ? html`<p-text id="pack-pushed" size="sm">Commit ${p.commit.slice(0, 12)} on ${p.branch}${p.url
       ? html`, <a href=${p.url} target="_blank" rel="noopener">pull request #${p.number}</a>` : nothing}${p.merged
       ? `, merged into main as ${p.merged.slice(0, 12)}` : p.url ? ", not merged yet" : ""}.</p-text>` : nothing}
     <div id="pack-ask" class="pack-ask" ?hidden=${!questions.length && !d}>
       <p-heading size="sm"><h4 id="pack-ask-title">Waiting for you</h4></p-heading>
-      <div id="pack-questions">${questions.map((q, i) => question(run, q, i === 0))}</div>
-      ${d ? html`<div id="pack-discard-area" class="pack-discard">
-        <p-text size="sm" color="contrast-medium">Or end this update without activating anything.</p-text>
-        ${button(d.label, () => discard(run, d), { id: "pack-discard", icon: "close",
-          busy: own.busy === "discard" || own.busy === `${d.q?.id}:discard`, disabled: Boolean(own.busy) })}
-      </div>` : nothing}
+      <div id="pack-questions">${questions.map((q, i) => question(run, q, i === 0, discardControl))}</div>
+      ${stopped ? nothing : discardControl}
     </div>
     <div class="pack-steps">
       <p-heading size="sm"><h4 id="pack-progress-title">Progress</h4></p-heading>

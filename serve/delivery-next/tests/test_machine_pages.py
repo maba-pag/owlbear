@@ -2194,6 +2194,7 @@ def retry_stopped_pds(page, url: str, reason: str, resume) -> None:
     page.route("**/pds/update/answer", answering)
     viewport = page.viewport_size
     page.set_viewport_size({"width": 390, "height": 800})
+    page.evaluate("window.scrollTo(0, 0)")
     question = page.get_by_role("article", name="The update stopped")
     detail = question.locator("pre.pack-detail")
     expect(detail).to_be_visible()
@@ -2203,6 +2204,7 @@ def retry_stopped_pds(page, url: str, reason: str, resume) -> None:
     box = retry.bounding_box()
     assert box is not None
     assert min(box["width"], box["height"]) >= 24
+    assert 0 <= box["y"] and box["y"] + box["height"] <= 800
     retry.click()
     expect(question).to_have_count(0)
     expect(page.locator("#pack-state")).to_contain_text("Running since")
@@ -2249,6 +2251,14 @@ def pds_update_actions(page, pds, base: str, phase: str, stopped) -> None:
         url = f"{base}/api/next/pds/update/answer"
         discard_pds(page, pds, url)
         retry_stopped_pds(page, url, *stopped)
+    elif phase == "failed":
+        viewport = page.viewport_size
+        page.set_viewport_size({"width": 390, "height": 800})
+        detail = page.locator("pre#pack-reason")
+        expect(detail).to_be_visible()
+        assert detail.text_content() == stopped[0]
+        assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+        page.set_viewport_size(viewport)
 
 
 @pytest.mark.browser
@@ -2288,7 +2298,7 @@ def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_wa
         ({"state": "running"}, "update running", "Updates", ["Running"], "Running since"),
         ({"state": "waiting", "questions": [asked], "reason": reason}, "update waiting for you", "Updates",
          ["Waiting for you"], "waits for your answers"),
-        ({"state": "failed", "reason": "audit: the auditor submitted no report"}, "newer version",
+        ({"state": "failed", "reason": reason}, "newer version",
          "Updates, 1 available", ["Failed", "Available"], "Last run failed"),
         ({"state": "passed", "published": merged}, "merged, not released yet", "Updates", [], "Last run passed"),
     ]  # fmt: skip
