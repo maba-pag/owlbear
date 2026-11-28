@@ -54,7 +54,13 @@ class Stopped(Exception):  # noqa: N818 - how a stage ends the run
     """A stage stopped with a reason: up to date, terminal, or retryable once the context is saved."""
 
     def __init__(
-        self, reason: str, *, current: bool = False, terminal: bool = False, lead: str = "", retry: str = pack_rounds.RETRY
+        self,
+        reason: str,
+        *,
+        current: bool = False,
+        terminal: bool = False,
+        lead: str = "",
+        retry: str = pack_rounds.RETRY,
     ) -> None:
         """Keep the reason, whether the run must end and how it can retry."""
         if lead:
