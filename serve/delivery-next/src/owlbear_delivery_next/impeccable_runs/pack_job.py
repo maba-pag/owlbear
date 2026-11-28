@@ -300,13 +300,8 @@ class Job(Steps):
 
     def _hold(self, ctx: pack_run.Context, reason: str, *, retry: str = "", lead: str = "") -> None:
         if retry:
-            question = pack_rounds.question(
-                f"{self.state['run']}-stopped-{uuid.uuid4().hex}",
-                "stopped",
-                reason,
-                [retry, pack_rounds.DISCARD],
-                **({"lead": lead} if lead else {}),
-            )
+            qid = f"{self.state['run']}-stopped-{uuid.uuid4().hex}"
+            question = pack_rounds.question(qid, "stopped", reason, [retry, pack_rounds.DISCARD], lead=lead)
             match ctx.next:
                 case "challenge" | "recheck" | "reconsider" | "wait":
                     fallback = "challenger"
