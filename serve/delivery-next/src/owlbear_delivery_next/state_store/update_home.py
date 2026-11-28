@@ -16,13 +16,12 @@ def root() -> Path:
 
 
 def checkouts() -> set[Path]:
-    """Keep both the working checkout and the publication checkout of every open update."""
+    """Keep the saved checkout of every open update."""
     kept = set()
     for read in (pack_run_record.read_only, pds_run_record.read_only):
         record = read(root())
         if record and record["state"] in {"running", "waiting"}:
             context = record.get("context") or {}
-            for key in ("checkout", "publication"):
-                if path := (context.get(key) or {}).get("root"):
-                    kept.add(Path(path).resolve())
+            if path := (context.get("checkout") or {}).get("root"):
+                kept.add(Path(path).resolve())
     return kept
