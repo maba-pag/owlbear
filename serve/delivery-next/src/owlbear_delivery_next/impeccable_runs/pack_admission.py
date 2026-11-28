@@ -40,22 +40,10 @@ class Refused(Exception):  # noqa: N818 - the claim's answer, not a fault
     """The claim may not be taken now; the text says why."""
 
 
-@dataclass(frozen=True)
-class Seen:
-    """The machine's record and its file's version."""
-
-    record: dict[str, Any] | None
-    version: str
-
-    @property
-    def state(self) -> str:
-        """The record's state; "idle" without a record."""
-        return str((self.record or {}).get("state") or "idle")
-
-
 def fresh(root: Path, github: Provider, kind: Kind = IMPECCABLE) -> None:
     """Start only if this kind has no open update or pull request."""
-    if (state := _seen(root, kind).state) in OPEN:
+    record, _ = _seen(root, kind)
+    if (state := record.get("state")) in OPEN:
         doing = "waits for answers" if state == "waiting" else "runs"
         msg = f"{kind.an} update {doing}; one is open at a time on this machine"
         raise Refused(msg)
@@ -74,9 +62,8 @@ def resumed(  # noqa: PLR0913 - the run's project, its identity and its branch, 
     Raises:
         Refused: Its record changed, something cannot be read, or another pull request is open.
     """
-    mine = _seen(root, kind)
-    record = mine.record or {}
-    if (record.get("run"), record.get("state"), mine.version) != (run, "waiting", version):
+    record, observed_version = _seen(root, kind)
+    if (record.get("run"), record.get("state"), observed_version) != (run, "waiting", version):
         msg = "this update's record changed since the page loaded it; reload the page"
         raise Refused(msg)
     found = pulls(github, kind)
@@ -88,14 +75,14 @@ def resumed(  # noqa: PLR0913 - the run's project, its identity and its branch, 
         raise Refused(msg)
 
 
-def _seen(root: Path, kind: Kind) -> Seen:
+def _seen(root: Path, kind: Kind) -> tuple[dict[str, Any], str]:
     try:
         got = kind.reader(root)
     except (OSError, ValueError) as exc:
         why = failure(exc)
         msg = f"the machine's {kind.title} run record cannot be read ({why}); unreadable is never idle, repair it first"
         raise Refused(msg) from None
-    return Seen(None, "absent") if got is None else Seen(*got)
+    return ({}, "absent") if got is None else got
 
 
 def pulls(github: Provider, kind: Kind = IMPECCABLE) -> tuple[PullRequest, ...]:
