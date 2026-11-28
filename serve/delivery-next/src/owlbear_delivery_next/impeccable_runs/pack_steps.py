@@ -6,6 +6,7 @@ in the run's state with the stage's latest result, and logged. A failure ends th
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -17,13 +18,17 @@ from owlbear_delivery_next.impeccable_runs.pack_state import now as _now
 
 if TYPE_CHECKING:
     import threading
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
+
+    from owlbear_delivery_next.change_contracts.round_records import RoundLoop
+    from owlbear_delivery_next.impeccable_runs.pack_run import Context
 
 
 class Steps:
     """The job's record of its steps; the job keeps the state and saves it."""
 
     lock: threading.Lock
+    thread: threading.Thread | None
     state: dict[str, Any]
     ACTIONS: ClassVar[dict[str, str]]
 
@@ -50,6 +55,35 @@ class Steps:
 
     def _log(self, line: str) -> None:
         self.state["log"] = [*self.state["log"], f"{_now()} {line}"][-LOG:]
+
+    def wait(
+        self, ctx: Context, lp: RoundLoop | None, questions: list[dict[str, Any]], stage: str = "challenger"
+    ) -> None:
+        """Stop the run for the owner's answers; it goes on when he has answered every question."""
+        with self.lock:
+            ctx.next = "wait"
+            self.state |= {"state": "waiting", "stage": "", "questions": questions}
+            self.state["context"] = ctx.model_dump(mode="json")
+            if lp is not None:
+                self.state["loop"] = lp.model_dump(mode="json")
+            next(s for s in self.state["stages"] if s["name"] == stage)["result"] = "waiting"
+            if self.state.get("invocations") is not None:
+                pack_progress.asked(self.state["invocations"], stage, questions)
+            self._log(f"waiting for you: {len(questions)} question(s)")
+            self._save()
+
+    @contextlib.contextmanager
+    def _answer_lock(self) -> Iterator[None]:
+        with self.lock:
+            worker = self.thread
+            if self.state["state"] == "waiting" and worker is not None and worker.is_alive():
+                # The worker must take this lock to release the machine claim before it exits.
+                self.lock.release()
+                try:
+                    worker.join(timeout=1)
+                finally:
+                    self.lock.acquire()
+            yield
 
     def stage(self, name: str, result: str, detail: str = "") -> None:
         """One stage's latest result, also logged; invocations keep each run of the stage."""

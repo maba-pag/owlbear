@@ -196,7 +196,7 @@ class Job(Steps):
             Refused: The option is not one of the question's, or a reconsideration lacks its note.
             Busy: The last answer would resume the run, but it is no longer itself or alone (``pack_admission``).
         """
-        with self.lock:
+        with self._answer_lock():
             asked = self.state["questions"] if self.state["state"] == "waiting" and not self.busy() else []
             q = next((q for q in asked if q["id"] == question), None)
             if q is None:
@@ -244,7 +244,7 @@ class Job(Steps):
         Raises:
             Stale: The run shown to the owner is no longer waiting.
         """
-        with self.lock:
+        with self._answer_lock():
             if self.state["run"] != run:
                 msg = "this update is no longer the one shown; reload the page"
                 raise Stale(msg)
@@ -278,22 +278,6 @@ class Job(Steps):
             self.state["context"] = ctx.model_dump(mode="json")
             if lp is not None:
                 self.state["loop"] = lp.model_dump(mode="json")
-            self._save()
-
-    def wait(
-        self, ctx: pack_run.Context, lp: RoundLoop | None, questions: list[dict[str, Any]], stage: str = "challenger"
-    ) -> None:
-        """Stop the run for the owner's answers; it goes on when he has answered every question."""
-        with self.lock:
-            ctx.next = "wait"
-            self.state |= {"state": "waiting", "stage": "", "questions": questions}
-            self.state["context"] = ctx.model_dump(mode="json")
-            if lp is not None:
-                self.state["loop"] = lp.model_dump(mode="json")
-            next(s for s in self.state["stages"] if s["name"] == stage)["result"] = "waiting"
-            if self.state.get("invocations") is not None:
-                pack_progress.asked(self.state["invocations"], stage, questions)
-            self._log(f"waiting for you: {len(questions)} question(s)")
             self._save()
 
     def hold(self, ctx: pack_run.Context, reason: str) -> None:

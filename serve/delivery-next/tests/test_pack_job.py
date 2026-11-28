@@ -1989,6 +1989,50 @@ def test_maintenance_keeps_a_stopped_impeccable_updater_workspace(tmp_path, chec
     assert_maintenance_keeps_stopped_workspace(job, run, monkeypatch, "update")
 
 
+def test_an_answer_waits_for_the_worker_to_release_its_claim(tmp_path, checkout, clone, monkeypatch):
+    fakes = Fakes(clone)
+    fakes.wrong_after = WRONG
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    releasing, finish, joining = threading.Event(), threading.Event(), threading.Event()
+    release = job._release  # noqa: SLF001 - pause after publishing the question, before relinquishing the claim
+
+    def paused_release():
+        releasing.set()
+        assert finish.wait(5)
+        release()
+
+    monkeypatch.setattr(job, "_release", paused_release)
+    job.start()
+    worker = job.thread
+    replies = []
+    try:
+        assert releasing.wait(5)
+        [question] = job.read()["questions"]
+        join = worker.join
+
+        def observed_join(timeout=None):
+            joining.set()
+            join(timeout)
+
+        monkeypatch.setattr(worker, "join", observed_join)
+        fakes.wrong_after = {}
+
+        def answer():
+            try:
+                replies.append(job.answer(question["id"], "retry")["state"])
+            except pack_job.Stale:
+                replies.append("stale")
+
+        responder = threading.Thread(target=answer)
+        responder.start()
+        assert joining.wait(2), replies
+    finally:
+        finish.set()
+    responder.join(5)
+    assert replies in (["running"], ["passed"])
+    assert settled(job)["state"] == "passed"
+
+
 def test_retrying_a_stopped_action_cannot_select_activation():
     ctx = pack_run.Context(
         tag="new", why="Impeccable", diff="", golden="", pins={}, manifest="", notice="", baseline={},
