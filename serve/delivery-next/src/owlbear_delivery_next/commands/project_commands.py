@@ -294,12 +294,6 @@ def impeccable(  # noqa: PLR0913 - one parameter per option
 app.command(impeccable, name="design-pack", show=False)
 
 
-@app.command
-def replay() -> Namespace:
-    """Replay OwlBear's decided rounds on the machine host without a project (costs requests)."""
-    return impeccable(replay=True)
-
-
 @backlog.command
 def add(
     *,

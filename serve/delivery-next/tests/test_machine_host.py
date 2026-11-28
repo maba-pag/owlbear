@@ -472,7 +472,7 @@ def test_a_manual_replay_of_another_project_waits_for_a_failed_projects_legacy_p
     monkeypatch.setattr(replay_client.host, "running_at", lambda _root: machine.record)
     loopback = Loopback(http)
     monkeypatch.setattr(replay_client, "_LOCAL", loopback)
-    assert cli.main(["replay"]) == 1
+    assert cli.main(["impeccable", "--replay"]) == 1
     assert capsys.readouterr().out.splitlines()[-1] == reason  # the host's own log lines come first
 
     assert machine.slots.counts(bad.id)[2] == 1  # the reservation stays
