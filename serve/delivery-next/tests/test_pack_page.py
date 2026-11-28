@@ -58,9 +58,11 @@ def waiting(store: update_jobs.Source, lp: RoundLoop | None = None) -> pack_job.
         "manifest": "{}", "notice": "", "baseline": {}, "checkout": {}, "start": {}, "sid": "pack-update-1",
         "next": "wait",
     }  # fmt: skip
+    questions, invocations = pack_rounds.questions(lp, "r1", "x"), []
+    pack_progress.asked(invocations, "challenger", questions)
     job.state = pack_job._blank() | {  # noqa: SLF001 - a run as the job leaves it waiting
         "state": "waiting", "started_at": NOW.isoformat(), "run": "r1", "loop": lp.model_dump(mode="json"),
-        "questions": pack_rounds.questions(lp, "r1", "x"), "context": context,
+        "questions": questions, "invocations": invocations, "context": context,
     }  # fmt: skip
     job._save()  # noqa: SLF001
     return job
@@ -148,10 +150,8 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_impeccable_p
         state = page.locator("#pack-state")
         expect(state).to_contain_text("The update waits for your answers. Started ")
         expect(state).not_to_contain_text("ended")
-        # waiting()'s record is from before invocations: its stages alone, with no history made up for it
-        expect(page.locator("#pack-stages li")).to_have_count(len(pack_job.STAGES))
-        expect(page.locator("#pack-progress")).to_have_count(0)
-        expect(page.locator("#pack-next")).to_have_count(0)
+        expect(page.locator("#pack-progress .pack-step-head")).to_have_text("Your answer waiting for you")
+        expect(page.locator("#pack-next")).to_contain_text("Your answer decides what runs next")
         expect(page.locator("#pack-state")).to_contain_text("The update waits for your answers.")
         expect(page.get_by_role("button", name="Update Impeccable")).to_be_disabled()
         expect(page.locator("#pack-update")).to_have_attribute("variant", "secondary")  # the answer leads instead
@@ -313,7 +313,6 @@ def test_progress_and_ended_run_polling_show_current_evidence(served, pds) -> No
         expect(second.get_by_text("out of date")).to_have_count(0)
         options = "; ".join(pack_rounds.LABELS[o] for o in ("fix", "reconsider", "drop"))
         expect(page.locator("#pack-next")).to_have_text(f"Your answer decides what runs next ({options})")
-        expect(page.locator("#pack-stages")).to_have_count(0)  # no slot per stage beside them
         job.state |= {"state": "running", "questions": []}
         pack_progress.opened(job.state["invocations"], "challenger", "full-challenge", round_=2, identity="b")
         job._save()  # noqa: SLF001
@@ -504,7 +503,8 @@ def test_a_start_admitted_after_its_timeout_shows_its_run_without_a_reload_or_a_
         requested.set()
         assert release.wait(5), "the test did not release admission after the browser timeout"
         job.state = pack_job._blank() | {"state": "waiting", "run": "r2", "started_at": datetime.now(UTC).isoformat(),  # noqa: SLF001
-                                         "questions": [CI_FAILED | {"id": "r2-publish"}]}  # fmt: skip
+                                         "questions": [CI_FAILED | {"id": "r2-publish"}],
+                                         "invocations": []}  # fmt: skip
         job._save()  # noqa: SLF001
         saved.set()
         return job.read()

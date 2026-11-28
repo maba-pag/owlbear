@@ -184,5 +184,5 @@ def test_legacy_stages_survive_without_invented_history(tmp_path):
     (tmp_path / pack_state.FILE).write_text(json.dumps(record))
     state = pack_job.Job(Store(tmp_path), pack_job.Live()).read()
     assert "invocations" not in state
-    assert state["progress"] == {"legacy": True, "phases": [], "now": None, "next": None}
+    assert state["progress"] == {"phases": [], "now": None, "next": None}
     assert [s["result"] for s in state["stages"]] == ["passed"] * 6 + ["failed"] + ["not-reached"] * 4

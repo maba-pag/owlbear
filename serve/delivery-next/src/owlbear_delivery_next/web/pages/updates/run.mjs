@@ -5,10 +5,6 @@ import { live } from "/assets/lit-html/3.3.3/directives/live.js";
 import { sentence, when } from "./frame.mjs";
 import { ADMIT, FOUND, SETTINGS, answer, button, discard, discarding, emphasis, own, start } from "./pack.mjs";
 
-const RESULTS = { pending: "not run", running: "running", passed: "passed", failed: "failed", skipped: "skipped",
-  returned: "findings back to the updater", waiting: "waiting for you", completed: "session completed",
-  findings: "findings", reused: "reused for this identity", answered: "answered by you",
-  discarded: "discarded by you", stopped: "stopped", "not-reached": "not reached" };
 const TAGS = { pending: "secondary", running: "info", passed: "success", failed: "error", skipped: "secondary",
   returned: "warning", waiting: "warning", completed: "info", findings: "warning", reused: "info", answered: "info",
   discarded: "secondary", stopped: "warning", "not-reached": "secondary" };
@@ -45,13 +41,11 @@ export function stoppedQuestion(run) {
   return run?.state === "waiting" && run.questions?.some((q) => q.kind === "stopped");
 }
 
-// What runs now, from the run's invocations, or from its stage list in a record from before them.
+// What runs now, from the run's invocations.
 function nowOf(u) {
   if (u.state !== "running" || u.interrupted) return "";
-  const p = u.progress;
-  if (p && !p.legacy) return p.now ? `${p.now.phase ? `${p.now.phase}, ` : ""}${p.now.label}` : "Starting the update";
-  const at = (u.stages ?? []).findIndex((s) => s.name === u.stage);
-  return at < 0 ? "Starting the update" : `Stage ${at + 1} of ${u.stages.length}: ${u.stages[at].label}`;
+  const now = u.progress.now;
+  return now ? `${now.phase ? `${now.phase}, ` : ""}${now.label}` : "Starting the update";
 }
 
 // What the owner has to do, in one sentence.
@@ -71,8 +65,7 @@ function todo(u, questions) {
 
 function summary(u, questions) {
   const [word, tone] = u.interrupted ? ["host stopped", "warning"] : STATES[u.state] ?? [u.state, "secondary"];
-  const open = ["running", "waiting"].includes(u.state), now = nowOf(u), next = u.progress?.legacy
-    ? null : u.progress?.next;
+  const open = ["running", "waiting"].includes(u.state), now = nowOf(u), next = u.progress.next;
   return html`<div id="pack-summary" class="pack-summary">
     <div class="heading-row">
       <p-heading size="md"><h3 id="pack-run-title">${own.unread.runs ? "Last read update"
@@ -221,16 +214,8 @@ function step(i) {
 }
 
 function progress(u) {
-  const p = u.progress;
-  if (!p || p.legacy) {
-    return html`<ol id="pack-stages" aria-label="Update stages">${(u.stages ?? []).map((s) => html`<li
-      class="pack-step"><span class="pack-step-head"><span>${s.label}</span> <p-tag variant=${TAGS[s.result]
-        ?? "secondary"} compact="true">${RESULTS[s.result] ?? s.result}</p-tag></span>${s.detail
-        ? html`<pre class="pack-detail">${detailOf({ operation: s.name, detail: s.detail })}</pre>`
-        : nothing}</li>`)}</ol>`;
-  }
   return html`<div id="pack-progress">
-    ${p.phases.map((ph) => html`<section class="pack-phase" aria-labelledby=${`pack-phase-${ph.key}`}>
+    ${u.progress.phases.map((ph) => html`<section class="pack-phase" aria-labelledby=${`pack-phase-${ph.key}`}>
       <h5 id=${`pack-phase-${ph.key}`}>${ph.label}</h5>
       <ol aria-labelledby=${`pack-phase-${ph.key}`}>${ph.invocations.map(step)}</ol>
     </section>`)}

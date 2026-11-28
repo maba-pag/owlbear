@@ -52,7 +52,7 @@ class Steps:
         self.state["log"] = [*self.state["log"], f"{_now()} {line}"][-LOG:]
 
     def stage(self, name: str, result: str, detail: str = "") -> None:
-        """One stage's latest result, shown with a legacy record's stages and logged; invocations keep each run."""
+        """One stage's latest result, also logged; invocations keep each run of the stage."""
         self._step(None, name, result, detail)
 
     def _step(self, inv: dict[str, Any] | None, name: str, result: str, detail: str = "", identity: str = "") -> None:

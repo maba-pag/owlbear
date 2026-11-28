@@ -35,7 +35,7 @@ def test_machine_view_reads_its_own_run_and_lists_only_old_waiting_runs(tmp_path
         (project_home.home(name) / pack_job.FILE).write_text(text)
     before = (project_home.home("alpha") / pack_job.FILE).read_bytes()
     update_home.root().mkdir()
-    (update_home.root() / pack_job.FILE).write_text(json.dumps(left))
+    (update_home.root() / pack_job.FILE).write_text(json.dumps(left | {"invocations": []}))
 
     got = client().get("/api/next/maintenance/pack/runs").json()
 
@@ -43,7 +43,8 @@ def test_machine_view_reads_its_own_run_and_lists_only_old_waiting_runs(tmp_path
     assert (run["run"], run["state"]) == ("r-machine", "running")
     assert run["interrupted"] is True  # no host holds the machine's lock for it
     assert "context" not in run
-    assert run["progress"]["legacy"] is True  # a record without invocations keeps its stages
+    assert "stages" not in run
+    assert run["progress"]["phases"] == []
     assert got["old_waiting"] == [{"name": "alpha", **pr}]
     assert "gamma: the update record" in got["errors"][0]
     assert (project_home.home("alpha") / pack_job.FILE).read_bytes() == before  # read, never settled by a Job

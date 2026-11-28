@@ -2307,8 +2307,10 @@ def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_wa
     stages = [{"name": n, "label": label, "result": "pending", "detail": ""} for n, label in pds_job.STAGES]
 
     def ran(state: str, **more) -> None:
-        record = pack_state.blank() | {"stages": stages, "state": state, "run": "r1", "release": "4.10.1",
-                                       "started_at": datetime.now(UTC).isoformat()} | more  # fmt: skip
+        record = pack_state.blank() | {
+            "stages": stages, "invocations": [], "state": state, "run": "r1", "release": "4.10.1",
+            "started_at": datetime.now(UTC).isoformat(),
+        } | more  # fmt: skip
         update_home.root().mkdir(parents=True, exist_ok=True)
         (update_home.root() / pds_run_record.FILE).write_text(json.dumps(record))
 
@@ -2370,6 +2372,7 @@ def test_the_machine_run_is_answerable_from_any_project_and_from_all_projects(tm
     question = pack_rounds.question("r1:end:1", "end", "The rounds ended.", ["activate", "discard"])
     job.state = pack_job._blank() | {  # noqa: SLF001 - a run waiting for the owner
         "state": "waiting", "started_at": datetime.now(UTC).isoformat(), "run": "r1", "questions": [question],
+        "invocations": [],
     }  # fmt: skip
     job._save()  # noqa: SLF001
     answered: list[tuple[str, dict]] = []
@@ -2417,6 +2420,7 @@ def test_a_discard_from_all_projects_goes_to_the_machine(monkeypatch, pds, optio
     questions = [pack_rounds.question("r1-stop", "stopped", reason, options)] if options else []
     job.state = pack_job._blank() | {  # noqa: SLF001 - a run waiting for the owner
         "state": "waiting", "started_at": datetime.now(UTC).isoformat(), "run": "r1", "questions": questions,
+        "invocations": [],
     }  # fmt: skip
     job._save()  # noqa: SLF001
     sent: list[str] = []

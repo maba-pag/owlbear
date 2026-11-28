@@ -65,6 +65,6 @@ def _read(root: Path, reader: Callable[[Path], dict[str, Any] | None]) -> tuple[
 def _shown(record: dict[str, Any] | None, holder: str | None, actions: dict[str, str]) -> dict[str, Any] | None:
     if not record or not record.get("started_at"):
         return None
-    shown = {k: v for k, v in record.items() if k != "context"} | {"progress": pack_progress.progress(record, actions)}
+    shown = {k: v for k, v in record.items() if k not in {"context", "stages"}}
     stopped = record["state"] == "running" and holder is None
-    return shown | {"interrupted": stopped}
+    return shown | {"progress": pack_progress.progress(record, actions), "interrupted": stopped}

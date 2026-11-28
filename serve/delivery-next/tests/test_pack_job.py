@@ -2889,7 +2889,7 @@ def test_updates_impeccable_shows_the_update_and_settings_and_maintenance_only_l
     assert 'label: "Update Impeccable"' in page  # the kind's words (pack.mjs), on the shared button (run.mjs)
     assert 'button(own.kind.label, start, { id: "pack-update", icon: "refresh"' in page  # lit-html
     assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite">${runLine(u)}</p-text>' in page
-    assert '<ol id="pack-stages" aria-label="Update stages">' in page
+    assert '<div id="pack-progress">' in page
     assert "commits impeccable.json, skills/NOTICE.md and " in page  # the Update dialog says what it commits
     settings = page_source(c, "/config")
     assert 'id="pack-update"' not in settings  # the update is OwlBear's, not a project setting

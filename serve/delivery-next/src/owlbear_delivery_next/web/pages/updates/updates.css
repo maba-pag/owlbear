@@ -43,7 +43,7 @@
 .pack-phase { gap: var(--p-spacing-static-xs); }
 .pack-phase h5 { margin: 0; font-size: var(--p-typescale-sm); font-weight: var(--p-font-weight-semibold, 600);
   color: var(--p-color-contrast-high); }
-.pack-phase ol, #pack-stages { display: grid; gap: var(--p-spacing-static-xs); margin: 0;
+.pack-phase ol { display: grid; gap: var(--p-spacing-static-xs); margin: 0;
   padding-inline-start: 1.5rem; }
 .pack-step-head { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--p-spacing-static-sm);
   min-block-size: 24px; }
