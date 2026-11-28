@@ -190,6 +190,7 @@ function question(run, q, lead, discardControl) {
       role="group" aria-label="Your answer">${answers.map((o) => button(o.label, () => answer(run, q, o),
         { variant: lead ? emphasis(q, o) : "secondary", busy: own.busy === `${q.id}:${o.id}`,
           disabled: Boolean(own.busy) }))}</div>`}
+    ${actionError(q.id)}
     ${stopped ? html`${discardControl}<pre class="pack-detail pack-reason">${q.text}</pre>` : nothing}
   </article>`;
 }
@@ -240,6 +241,11 @@ function article(name) {
   return `${/^[AEIOU]/.test(name) ? "an" : "a"} ${name}`;
 }
 
+function actionError(target) {
+  return own.error?.target === target ? html`<p-inline-notification id="pack-error" state="error"
+    dismiss-button="false">${sentence(own.error.message)}</p-inline-notification>` : nothing;
+}
+
 // Starting a machine update, and the result of its admission.
 export function startPart() {
   const r = own.runs, run = r?.run, open = run && ["running", "waiting"].includes(run.state);
@@ -267,8 +273,7 @@ export function startPart() {
       Whether the update started is unknown: Delivery did not answer, and no new run appeared within
       ${ADMIT / 1000} s. It was not sent again. Reload the page to see Delivery's state before you start another.
       ${button("Reload", () => location.reload(), { id: "pack-reload" })}</p-inline-notification>` : nothing}
-    ${own.error ? html`<p-inline-notification id="pack-error" state="error" dismiss-button="false">${
-      sentence(own.error)}</p-inline-notification>` : nothing}
+    ${actionError(null)}
     ${historyUnread() ? html`<p-inline-notification id="pack-runs-error" state="error" dismiss-button="false">
       Could not read the ${own.kind.name} update: ${own.unread.runs || own.runs.error}.</p-inline-notification>`
       : nothing}
@@ -276,10 +281,12 @@ export function startPart() {
 }
 
 export function runPart(run) {
+  const target = own.error?.target;
   if (!run) {
     return html`<p-text id="pack-state" size="sm">${historyUnread()
       ? `The last ${own.kind.name} update is not known because run history could not be read completely.`
-      : `This machine has not run ${article(own.kind.name)} update yet.`}</p-text>`;
+      : `This machine has not run ${article(own.kind.name)} update yet.`}</p-text>
+      ${typeof target === "string" ? actionError(target) : nothing}`;
   }
   const questions = run.state === "waiting" ? run.questions ?? [] : [];
   const p = run.published, found = run.loop?.findings ?? [], d = discarding(run, questions);
@@ -289,6 +296,7 @@ export function runPart(run) {
     <p-text size="sm" color="contrast-medium">Or end this update without activating anything.</p-text>
     ${button(d.label, () => discard(run, d), { id: "pack-discard", icon: "close",
       busy: own.busy === "discard" || own.busy === `${d.q?.id}:discard`, disabled: Boolean(own.busy) })}
+    ${actionError("")}
   </div>` : nothing;
   const ask = html`<div id="pack-ask" class="pack-ask" ?hidden=${!questions.length && !d}>
     ${stopped ? nothing : html`<p-heading size="sm"><h4 id="pack-ask-title">Waiting for you</h4></p-heading>`}
@@ -304,6 +312,8 @@ export function runPart(run) {
       ? html`, <a href=${p.url} target="_blank" rel="noopener">pull request #${p.number}</a>` : nothing}${p.merged
       ? `, merged into main as ${p.merged.slice(0, 12)}` : p.url ? ", not merged yet" : ""}.</p-text>` : nothing}
     ${stopped ? nothing : ask}
+    ${typeof target === "string" && !(target ? questions.some((q) => q.id === target) : d)
+      ? actionError(target) : nothing}
     <div class="pack-steps">
       <p-heading size="sm"><h4 id="pack-progress-title">Progress</h4></p-heading>
       ${progress(run)}

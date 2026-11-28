@@ -45,7 +45,7 @@ export const IMPECCABLE = {
     + "machine keeps the pack it has.",
 };
 
-export const own = { kind: IMPECCABLE, pinned: null, runs: null, unread: { pinned: "", runs: "" }, error: "",
+export const own = { kind: IMPECCABLE, pinned: null, runs: null, unread: { pinned: "", runs: "" }, error: null,
   notes: new Map(), choices: new Map(), unchosen: "", missing: "", busy: "", polling: null, reading: 0,
   awaiting: null, lost: false, show: () => {} };
 
@@ -86,16 +86,17 @@ function key(run) {
   return run ? `${run.run}:${run.started_at}` : "";
 }
 
-async function act(name, work) {
+async function act(name, work, target = null) {
   own.busy = name;
-  own.error = "";
+  own.error = null;
   own.show();
   try {
     await work();
   } catch (e) {
-    own.error = e instanceof Slow ? e.reread : e.message;  // a timed-out action is never sent again: read back
+    own.error = { target, message: e instanceof Slow ? e.reread : e.message };
   }
   own.busy = "";
+  own.show();
   await readPack();
 }
 
@@ -127,7 +128,7 @@ export async function answer(run, q, o) {
       { machine: true, body: { question: q.id, option: o.id, note }, timeout: WRITE });
     own.notes.delete(q.id);
     own.choices.delete(q.id);
-  });
+  }, q.id);
 }
 
 // The stop's one Discard: the answer its question offers, else the run's own discard while it waits.
@@ -150,10 +151,10 @@ export async function discard(run, d) {
   if (!sure) return;
   if (d.q) {
     await act(`${d.q.id}:discard`, () => call(`${own.kind.update}/answer`,
-      { machine: true, body: { question: d.q.id, option: "discard", note: "" }, timeout: WRITE }));
+      { machine: true, body: { question: d.q.id, option: "discard", note: "" }, timeout: WRITE }), "");
   } else {
     await act("discard", () => call(`${own.kind.update}/discard`,
-      { machine: true, body: { run: run.run }, timeout: WRITE }));
+      { machine: true, body: { run: run.run }, timeout: WRITE }), "");
   }
 }
 

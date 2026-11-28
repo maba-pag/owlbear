@@ -2185,9 +2185,13 @@ def test_updates_owlbear_and_impeccable_show_a_failed_updates_and_installs_whole
 def retry_stopped_pds(page, url: str, reason: str, resume) -> None:
     """The page shows the whole multi-line stop and asks the run that stopped to resume."""
     answers = []
+    refusal = pack_job.Job.BUSY.format(who="The check for deprecations")
 
     def answering(route) -> None:
         answers.append((route.request.url, route.request.post_data_json))
+        if len(answers) == 1:
+            route.fulfill(status=409, json={"detail": refusal})
+            return
         resume()
         route.fulfill(json={})
 
@@ -2207,9 +2211,16 @@ def retry_stopped_pds(page, url: str, reason: str, resume) -> None:
     assert box["y"] >= 0
     assert box["y"] + box["height"] <= 800
     retry.click()
+    notification = question.locator("#pack-error")
+    expect(notification).to_have_text(refusal)
+    expect(notification).to_be_in_viewport(ratio=1)
+    expect(retry).to_be_in_viewport(ratio=1)
+    expect(page.locator("#pack-error")).to_have_count(1)
+    retry.click()
     expect(question).to_have_count(0)
     expect(page.locator("#pack-state")).to_contain_text("Running since")
-    assert answers == [(url, {"question": "r1-stop", "option": "retry", "note": ""})]
+    assert answers == [(url, {"question": "r1-stop", "option": "retry", "note": ""})] * 2
+    expect(page.locator("#pack-error")).to_have_count(0)
     page.set_viewport_size(viewport)
 
 
