@@ -11,7 +11,6 @@ import subprocess
 import threading
 import time
 from datetime import UTC, datetime
-from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -33,9 +32,10 @@ from owlbear_delivery_next.impeccable_runs import (
 )
 from owlbear_delivery_next.local_system import git_run, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.machine_host import app, update_jobs
+from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import pack_run_record, registry
+from owlbear_delivery_next.state_store import pack_run_record, registry, update_home
 from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
@@ -44,18 +44,7 @@ if TYPE_CHECKING:
 NOW = datetime(2026, 10, 17, 2, tzinfo=UTC)
 
 
-class Host:
-    maintenance = None
-    wake = type("W", (), {"set": staticmethod(lambda: None)})()
-    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
-    paused = staticmethod(lambda: False)
-    draining = staticmethod(lambda: False)
-    closed = staticmethod(lambda: False)
-    updating = staticmethod(lambda: "")
-    launching = threading.Lock()
-
-
-def waiting(store: Store, lp: RoundLoop | None = None) -> pack_job.Job:
+def waiting(store: update_jobs.Source, lp: RoundLoop | None = None) -> pack_job.Job:
     """A run waiting for the owner; by default on two findings the challenger upheld against the updater."""
     found = [
         RoundFinding(id=f"F{i}", text=f"owlbear-design-review: glow {i} - fix: say so", raised=1, state="escalated",
@@ -69,26 +58,30 @@ def waiting(store: Store, lp: RoundLoop | None = None) -> pack_job.Job:
         "manifest": "{}", "notice": "", "baseline": {}, "checkout": {}, "start": {}, "sid": "pack-update-1",
         "next": "wait",
     }  # fmt: skip
+    questions, invocations = pack_rounds.questions(lp, "r1", "x"), []
+    pack_progress.asked(invocations, "challenger", questions)
     job.state = pack_job._blank() | {  # noqa: SLF001 - a run as the job leaves it waiting
         "state": "waiting", "started_at": NOW.isoformat(), "run": "r1", "loop": lp.model_dump(mode="json"),
-        "questions": pack_rounds.questions(lp, "r1", "x"), "context": context,
+        "questions": questions, "invocations": invocations, "context": context,
     }  # fmt: skip
     job._save()  # noqa: SLF001
     return job
 
 
 @pytest.fixture
-def served(tmp_path: Path) -> Iterator[Callable[..., tuple[pack_job.Job, str]]]:
+def served(monkeypatch) -> Iterator[Callable[..., tuple[pack_job.Job, str]]]:
     servers = []
 
     def serve(lp: RoundLoop | None = None, job: pack_job.Job | None = None) -> tuple[pack_job.Job, str]:
-        job = job or waiting(Store(tmp_path), lp)
+        job = job or waiting(update_jobs.Source(), lp)
         sock = socket.socket()
         try:
             sock.bind(("127.0.0.1", 0))
-            server = uvicorn.Server(
-                uvicorn.Config(api.create_app(job.store, "tok", Host(), pack=job), log_level="warning")
-            )
+            base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+            monkeypatch.setattr(update_home, "root", lambda: job.store.root)
+            machine = Machine(HostRecord(url=base + "/", token="tok", pid=1, started_at=NOW, code=CURRENT))  # noqa: S106
+            machine.updates.pack = job
+            server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning"))
             thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
             thread.start()
         except BaseException:
@@ -155,20 +148,18 @@ def test_the_owner_answers_each_upheld_finding_with_his_note_on_the_impeccable_p
         ask = page.locator("#pack-ask")
         expect(ask).to_be_visible()
         state = page.locator("#pack-state")
-        expect(state).to_contain_text("The update waits for your answers below. Started ")
+        expect(state).to_contain_text("The update waits for your answers. Started ")
         expect(state).not_to_contain_text("ended")
-        # waiting()'s record is from before invocations: its stages alone, with no history made up for it
-        expect(page.locator("#pack-stages li")).to_have_count(len(pack_job.STAGES))
-        expect(page.locator("#pack-progress")).to_have_count(0)
-        expect(page.locator("#pack-next")).to_have_count(0)
-        expect(page.locator("#pack-state")).to_contain_text("The update waits for your answers below.")
+        expect(page.locator("#pack-progress .pack-step-head")).to_have_text("Your answer waiting for you")
+        expect(page.locator("#pack-next")).to_contain_text("Your answer decides what runs next")
+        expect(page.locator("#pack-state")).to_contain_text("The update waits for your answers.")
         expect(page.get_by_role("button", name="Update Impeccable")).to_be_disabled()
         expect(page.locator("#pack-update")).to_have_attribute("variant", "secondary")  # the answer leads instead
         first, second = ask.locator(".pack-question").first, ask.locator(".pack-question").last
         facts = first.locator(".pack-facts dd")  # from the finding's record, not the host's sentence
         expect(facts).to_have_text(["owlbear-design-review: glow 1 - fix: say so", "upstream dropped it",
                                     "upstream still names it"])  # fmt: skip
-        expect(page.locator("#pack-todo")).to_have_text("Answer the 2 questions below.")
+        expect(page.locator("#pack-todo")).to_have_text("Answer the 2 questions in 'Waiting for you'.")
         sent: list[str] = []
         page.on("request", lambda r: sent.append(r.url) if r.url.endswith("/impeccable/update/answer") else None)
         expect(page.locator('#pack p-button[variant="primary"]')).to_have_text(["Send answer"])  # the first's
@@ -322,7 +313,6 @@ def test_progress_and_ended_run_polling_show_current_evidence(served, pds) -> No
         expect(second.get_by_text("out of date")).to_have_count(0)
         options = "; ".join(pack_rounds.LABELS[o] for o in ("fix", "reconsider", "drop"))
         expect(page.locator("#pack-next")).to_have_text(f"Your answer decides what runs next ({options})")
-        expect(page.locator("#pack-stages")).to_have_count(0)  # no slot per stage beside them
         job.state |= {"state": "running", "questions": []}
         pack_progress.opened(job.state["invocations"], "challenger", "full-challenge", round_=2, identity="b")
         job._save()  # noqa: SLF001
@@ -333,7 +323,7 @@ def test_progress_and_ended_run_polling_show_current_evidence(served, pds) -> No
             expect(page.locator("#pack-todo")).to_contain_text("Nothing for now")
             expect(page.locator("#pack-ask")).to_be_hidden()  # no Discard while it runs
         page.clock.run_for(2000)
-        expect(page.locator("#pack-state")).to_contain_text("Its host stopped while it ran")
+        expect(page.locator("#pack-state")).to_contain_text("The machine host stopped during the update.")
         job.state |= {
             "state": "passed",
             "questions": [],
@@ -354,6 +344,13 @@ def test_progress_and_ended_run_polling_show_current_evidence(served, pds) -> No
         page.clock.run_for(15000)
         expect(page.locator("#pack-state")).to_contain_text("Last run discarded")
 
+        stop = pack_rounds.question("r2-stop", "stopped", "The model stopped.", ["retry", "discard"])
+        job.state |= {"state": "waiting", "questions": [stop], "context": job.state["context"] | {"next": "replay"}}
+        job._save()  # noqa: SLF001
+        page.reload()
+        question = page.get_by_role("article", name="The update stopped")
+        expect(question).to_contain_text("Try again repeats: Calibration replay (with model requests).")
+
 
 REPLAY_NONE = "0 decided rounds, 0 left out; the design judge agreed with the owner 0% as recorded, 0% with this pack"
 
@@ -364,22 +361,28 @@ def test_a_ci_failed_publish_stop_fits_a_phone_and_says_no_calibration_evidence_
     inv = history()
     replay = pack_progress.opened(inv, "replay", "replay", round_=2, identity="b")
     pack_progress.closed(inv, replay, "passed", REPLAY_NONE + " (advisory: too few rounds)")
-    log = "\n".join(f"line {i}: " + "x" * 200 for i in range(3))
+    log = "\n".join(f"line {i}: " + "x" * 200 for i in range(35))
     pack_progress.closed(inv, pack_progress.opened(inv, "merge", "merge"), "failed", log)
     long_diff = DIFF + "+" + "y" * 400 + "\n"
     job.state |= {"invocations": inv, "questions": [CI_FAILED | {"diff": long_diff}], "published": PUBLISHED}
     job._save()  # noqa: SLF001
     with opened(base, pds) as page:
-        page.set_viewport_size({"width": 375, "height": 800})
+        page.set_viewport_size({"width": 390, "height": 800})
         expect(page.locator("#pack-questions p-radio-group-option")).to_have_count(2)
         expect(page.locator("#pack-pushed").get_by_role("link")).to_have_text("pull request #7")
         step = page.locator(".pack-step", has_text="Calibration replay").last
         expect(step.locator(".pack-step-head p-tag")).to_have_text("no calibration evidence")
         expect(step).not_to_contain_text("0%")
         ci = page.locator(".pack-step").last
-        expect(ci.locator("pre.pack-detail")).to_be_hidden()  # a multi-line detail, folded until asked for
+        detail = ci.get_by_role("region", name="CI and merge: details", include_hidden=True)
+        expect(detail).to_be_hidden()  # a multi-line detail, folded until asked for
         ci.locator("summary").click()
-        expect(ci.locator("pre.pack-detail")).to_be_visible()
+        expect(detail).to_be_visible()
+        assert detail.text_content() == log
+        detail.focus()
+        expect(detail).to_be_focused()
+        page.keyboard.press("PageDown")
+        page.wait_for_function("(el) => el.scrollTop > 0", arg=detail.element_handle())
         expect(page.locator(".pack-diff .pack-add").first).to_have_text("+new line")  # its markers kept
         assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
         small = page.evaluate("""[...document.querySelectorAll('#pack p-button, #pack summary')]
@@ -446,10 +449,8 @@ def test_failed_stage_reaches_record_page_and_log_whole(served, pds, tmp_path, m
 
 
 @pytest.mark.browser
-def test_an_unreadable_registry_shows_whole_in_the_runs_and_in_a_refused_start(
-    served, pds, monkeypatch, whole_error
-) -> None:
-    """#971: the machine's registry error reaches the runs list and the start's refusal whole."""
+def test_an_unreadable_registry_shows_whole_but_does_not_disable_start(served, pds, monkeypatch, whole_error) -> None:
+    """The old-runs advisory reports registry errors without blocking the machine's update."""
     job, base = served()
     job.state |= {"state": "passed", "questions": [], "ended_at": NOW.isoformat()}
     job._save()  # noqa: SLF001
@@ -462,55 +463,30 @@ def test_an_unreadable_registry_shows_whole_in_the_runs_and_in_a_refused_start(
     monkeypatch.setattr(registry, "load", unreadable)
     whole = f"RegistryError: {whole_error}\na note added on the way up"
     with opened(base, pds) as page:
-        said: list[str] = []
-        page.on("console", lambda m: said.append(f"{m.text} {m.location['url']}") if m.type == "error" else None)
-        page.on("pageerror", lambda e: said.append(str(e)))
         page.reload()
-        line = page.locator("#pack-runs > p-text")
-        expect(line).to_have_count(1)
-        assert (
-            line.text_content()
-            == f"The machine's registry cannot be read, so other projects' runs are not shown: {whole}."
-        )
-        expect(page.locator("#pack-published")).to_contain_text("Not known across all projects.")
-        page.get_by_role("button", name="Update Impeccable").click()
-        pds.answer(page, "Update")
-        refused = page.locator("#pack-error")
-        expect(refused).to_be_visible()
-        assert refused.text_content() == (
-            f"The machine's registry cannot be read, so other projects' updates cannot be ruled out: {whole}"
-        )
-        answered = "Failed to load resource: the server responded with a status of"
-        assert set(said) == {  # a project host alone lists no projects; the refused start
-            f"{answered} 404 (Not Found) {base}/api/next/projects",
-            f"{answered} 409 (Conflict) {base}/api/next/impeccable/update",
-        }
+        expect(page.get_by_text("the machine's registry cannot be read", exact=False)).to_contain_text(whole)
+        expect(page.locator("#pack-published")).to_contain_text("Nothing yet")
+        expect(page.get_by_role("button", name="Update Impeccable")).to_be_enabled()
 
 
 @pytest.mark.browser
-def test_a_sole_unreadable_run_record_shows_whole_in_the_runs(served, pds, tmp_path, monkeypatch, whole_error) -> None:
-    """#971: a readable registry and one project whose run record cannot be read still list that project's error."""
-    _job, base = served()
+def test_an_unreadable_machine_run_record_shows_whole_and_disables_start(served, pds, monkeypatch, whole_error) -> None:
+    job, base = served()
     error = OSError(whole_error)
     error.add_note("a note added on the way up")
     real = pack_run_record.observed
 
     def unreadable(root, *rest):
-        if os.path.realpath(root) != os.path.realpath(tmp_path):
+        if root != job.store.root:
             return real(root, *rest)
         raise error
 
     monkeypatch.setattr(pack_run_record, "observed", unreadable)
     with opened(base, pds) as page:
         page.reload()
-        page.get_by_text("Each project's last Impeccable run").click()
-        listed = page.locator("#pack-runs li")
-        expect(listed).to_have_count(1)
-        expect(listed).to_be_visible()
-        expect(page.locator("#pack-state")).not_to_contain_text("No project has run")
-        assert listed.text_content() == (
-            f"{tmp_path.name}: Its run record cannot be read (OSError: {whole_error}\na note added on the way up)"
-        )
+        shown = page.locator("#pack-runs-error")
+        expect(shown).to_contain_text(f"OSError: {whole_error}\na note added on the way up")
+        expect(page.get_by_role("button", name="Update Impeccable")).to_be_disabled()
 
 
 @pytest.mark.browser
@@ -521,7 +497,7 @@ def test_an_unreadable_section_says_what_could_not_be_read(served, pds) -> None:
         page.route("**/maintenance/pack/runs", lambda r: r.fulfill(status=500, json={"detail": "the disk said no"}))
         page.route("**/maintenance/pack", lambda r: r.fulfill(status=500, json={"detail": "no pin today"}))
         page.reload()
-        said = "Could not read the Impeccable runs: the disk said no"
+        said = "Could not read the Impeccable update: the disk said no"
         expect(page.locator("#pack-runs-error")).to_contain_text(said)
         expect(page.locator("#pack-read-error")).to_contain_text("Could not read Impeccable: no pin today")
         expect(page.locator("#pack-run")).to_have_count(0)  # nothing made up in its place
@@ -540,7 +516,8 @@ def test_a_start_admitted_after_its_timeout_shows_its_run_without_a_reload_or_a_
         requested.set()
         assert release.wait(5), "the test did not release admission after the browser timeout"
         job.state = pack_job._blank() | {"state": "waiting", "run": "r2", "started_at": datetime.now(UTC).isoformat(),  # noqa: SLF001
-                                         "questions": [CI_FAILED | {"id": "r2-publish"}]}  # fmt: skip
+                                         "questions": [CI_FAILED | {"id": "r2-publish"}],
+                                         "invocations": []}  # fmt: skip
         job._save()  # noqa: SLF001
         saved.set()
         return job.read()

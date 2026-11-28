@@ -20,8 +20,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-    from owlbear_delivery_next.state_store.store import Store
-
 # the last run, under the store; named before the Impeccable rename, as older versions read it
 FILE = "design-pack-update.json"
 OPEN = frozenset({"pending", "running", "waiting"})
@@ -119,10 +117,10 @@ def read_only(root: Path) -> dict[str, Any] | None:
     return None if got is None else got[0]
 
 
-def last(store: Store) -> dict[str, Any] | None:
+def last(root: Path) -> dict[str, Any] | None:
     """The last run's state, ending and times, for the Maintenance page; None when it never ran or cannot be read."""
     try:
-        fd = open_record(store.root / FILE)
+        fd = open_record(root / FILE)
     except OSError, ValueError:
         return None
     try:

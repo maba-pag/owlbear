@@ -1,14 +1,7 @@
-"""The machine's Impeccable update as Maintenance's OwlBear section shows it, the same in every project.
-
-The pack is the machine's, so one update is open at a time across its projects (``pack_admission``); the run is kept in
-the project that started it, whose labels, calibration and spend it uses. This view reads every registered project's
-run record, and the serving project's own, without writing: never through a Job, which would settle a run its host
-left running. A record that cannot be read is said per project, never taken for an idle one.
-"""
+"""Read a machine update and any old project updates that still wait for answers."""
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -16,13 +9,10 @@ from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.impeccable_runs import pack_progress
 from owlbear_delivery_next.impeccable_runs.pack_state import running_for
-from owlbear_delivery_next.state_store import pack_run_record, project_home, registry
+from owlbear_delivery_next.state_store import pack_run_record, project_home, registry, update_home
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-OPEN = frozenset({"running", "waiting"})
-TRIES = 3  # reads of a record a writer replaced meanwhile, before it is said to be unreadable
 
 
 def pinned() -> dict[str, Any]:
@@ -36,79 +26,45 @@ def pinned() -> dict[str, Any]:
 
 
 def runs(
-    own: tuple[str, Path] | None = None,
-    *,
     reader: Callable[[Path], dict[str, Any] | None] = pack_run_record.read_only,
     actions: dict[str, str] = pack_progress.ACTIONS,
 ) -> dict[str, Any]:
-    """Every project's last Impeccable run, and the one to show: the open one, else the latest started.
-
-    *reader* and *actions* are the kind's: a PDS update's record and its actions read the same way.
-
-    *own* is the serving project's name and store root, its run marked ``own``; the machine host has none.
-    ``holder`` names the project whose update holds the machine's lock now; a record that says running while none
-    does was left by a host that stopped.
-    """
-    seen, unread = records(own, reader=reader)
-    started = [s for s in seen if s["record"] and s["record"].get("started_at")]
-    open_ = [s for s in started if s["state"] in OPEN]
-    focus = open_[0] if open_ else max(started, key=lambda s: str(s["record"]["started_at"]), default=None)
+    """The machine's last run, its lock holder and a list of old runs that cannot be continued."""
     holder = running_for()
+    record, error = _read(update_home.root(), reader)
+    old, unread = _old_waiting(reader)
     return {
-        "holder": holder, "registry": unread,
-        "runs": [{k: s[k] for k in ("pid", "name", "own", "state", "error")} | _times(s["record"]) for s in seen],
-        "run": _shown(focus, holder, actions) if focus else None,
+        "holder": holder, "run": _shown(record, holder, actions), "error": "".join(error),
+        "old_waiting": old, "errors": unread,
     }  # fmt: skip
 
 
-def records(
-    own: tuple[str, Path] | None = None, *, reader: Callable[[Path], dict[str, Any] | None] = pack_run_record.read_only
-) -> tuple[list[dict[str, Any]], str]:
-    """Each project's last run of the kind *reader* reads, its record whole; why other projects' are unread."""
-    places, unread = _places(own)
-    return [_seen(pid, name, root, reader) | {"own": here} for pid, name, root, here in places], unread
-
-
-def _places(own: tuple[str, Path] | None) -> tuple[list[tuple[str, str, Path, bool]], str]:
-    """Each project as (id, name, store root): the serving one first, then the registry's; why that is unread."""
+def _old_waiting(reader: Callable[[Path], dict[str, Any] | None]) -> tuple[list[dict[str, Any]], list[str]]:
     try:
         listed = registry.load().projects
-        unread = ""
     except registry.RegistryError as exc:
-        listed = []
-        unread = f"the machine's registry cannot be read, so other projects' runs are not shown: {failure(exc)}"
-    places: dict[str, list[Any]] = {}
-    if own is not None:
-        places[os.path.realpath(own[1])] = ["", own[0], own[1], True]
+        return [], [f"the machine's registry cannot be read, so old waiting runs are not shown: {failure(exc)}"]
+    waiting, errors = [], []
     for p in listed:
-        root = project_home.home(p.id)
-        if (key := os.path.realpath(root)) in places:
-            places[key][0] = p.id  # the serving project, by its registry id
-        else:
-            places[key] = [p.id, Path(p.path).name, root, False]
-    return [(pid, name, root, here) for pid, name, root, here in places.values()], unread
+        name = Path(p.path).name
+        record, unread = _read(project_home.home(p.id), reader)
+        errors.extend(f"{name}: {text}" for text in unread)
+        if record and record.get("state") == "waiting":
+            pr = (record.get("context") or {}).get("publication") or record.get("published") or {}
+            waiting.append({"name": name, "number": pr.get("number"), "url": pr.get("url")})
+    return waiting, errors
 
 
-def _seen(pid: str, name: str, root: Path, reader: Callable[[Path], dict[str, Any] | None]) -> dict[str, Any]:
-    error = ""
-    for _ in range(TRIES):
-        try:
-            record = reader(root)
-        except (OSError, ValueError) as exc:
-            error = f"its run record cannot be read ({failure(exc)})"
-            continue
-        state = str(record.get("state") or "idle") if record else "idle"
-        return {"pid": pid, "name": name, "state": state, "error": "", "record": record}
-    return {"pid": pid, "name": name, "state": "unreadable", "error": error, "record": None}
+def _read(root: Path, reader: Callable[[Path], dict[str, Any] | None]) -> tuple[dict[str, Any] | None, list[str]]:
+    try:
+        return reader(root), []
+    except (OSError, ValueError) as exc:
+        return None, [f"the update record in {root} cannot be read: {failure(exc)}"]
 
 
-def _times(record: dict[str, Any] | None) -> dict[str, Any]:
-    return {k: (record or {}).get(k) for k in ("started_at", "ended_at", "reason")}
-
-
-def _shown(s: dict[str, Any], holder: str | None, actions: dict[str, str]) -> dict[str, Any]:
-    """The run as the section shows it: its record without the context, its progress, and where it was started."""
-    record = s["record"]
-    shown = {k: v for k, v in record.items() if k != "context"} | {"progress": pack_progress.progress(record, actions)}
+def _shown(record: dict[str, Any] | None, holder: str | None, actions: dict[str, str]) -> dict[str, Any] | None:
+    if not record or not record.get("started_at"):
+        return None
+    shown = {k: v for k, v in record.items() if k not in {"context", "stages"}}
     stopped = record["state"] == "running" and holder is None
-    return shown | {k: s[k] for k in ("pid", "name", "own")} | {"interrupted": stopped}
+    return shown | {"progress": pack_progress.progress(record, actions), "interrupted": stopped}

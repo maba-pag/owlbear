@@ -3,7 +3,8 @@
 It shares the Impeccable update's job (``pack_job``): its record, its machine lock and its admission of pull requests,
 with PDS's own record, branches and stages. Its stages: notice, candidate and diff here, then the audit, the updater,
 the browser tests and the challenger's rounds (``run``), and the way into ``main`` (``publish``). Until the merge
-nothing in ``main`` changes, and the running checkout never does.
+nothing in ``main`` changes, and the running checkout never does. A stop before the context is saved ends the run.
+A retryable stop after that keeps the workspace so the owner can try the stopped action again or discard.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from __future__ import annotations
 import contextlib
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
@@ -25,12 +27,11 @@ from owlbear_delivery_next.workflow_steps import sessions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from owlbear_delivery_next.github.provider import Provider
     from owlbear_delivery_next.runtimes.sdk_adapter import Session
     from owlbear_delivery_next.runtimes.session_result import Run
-    from owlbear_delivery_next.state_store.store import Store
+    from owlbear_delivery_next.state_store.update_source import UpdateSource
 
 STAGES = (
     ("notice", "Notice: newer release on npm"),
@@ -55,7 +56,7 @@ class Live:
     package: Path = field(default_factory=pin.package)
     fetch: Callable[[str, float], bytes] = pack_files.fetch
     browser: Callable[[Path, tuple[str, ...]], browser.Result] = browser.run
-    session: Callable[[Store, Session], Run] = sessions.run
+    session: Callable[[UpdateSource, Session], Run] = sessions.run
     git: pack_git.Git = pack_git.git
     github: Callable[[Path], Provider] = lambda path: GhProvider(
         path, writer=Writer.rule(path)
@@ -66,17 +67,16 @@ class Live:
 
 
 class Job(pack_job.Job):
-    """The project's PDS update: start one, answer it, read its state."""
+    """The machine's PDS update: start one, answer it, read its state."""
 
     FILE, RUNS, STAGES, KIND = pds_run_record.FILE, pds_run_record.RUNS, STAGES, "pds"
     CONTEXT = Context
     ADMISSION = PDS
     REPAIR = repair.PDS
     ACTIONS = pack_progress.PDS_ACTIONS
-    HOLDER = " (PDS update)"
-    BUSY = "an update runs for {who}; one update runs at a time on this machine"
+    HOLDER = "PDS update"
 
-    def __init__(self, store: Store, live: Live | None = None) -> None:
+    def __init__(self, store: UpdateSource, live: Live | None = None) -> None:
         """Read the last run, as an Impeccable update's job does, with PDS's own reach outside."""
         super().__init__(store, live or Live())
 
@@ -124,7 +124,9 @@ class Job(pack_job.Job):
         return not any(self.maintenance.retained(str(p)) for p in kept)
 
     def _finish(self, state: str, reason: str, *, keep: bool = False) -> None:
+        context = self.state.get("context")
+        root = Path(context["checkout"]["root"]) if context else self.live.package.resolve()
         super()._finish(state, reason, keep=keep)
         if not self.workspace.exists():  # the records of its worktrees go with it
             with contextlib.suppress(pack_files.PackError, OSError):
-                self.live.git(self.live.package.resolve(), ["worktree", "prune"])
+                self.live.git(root, ["worktree", "prune"])

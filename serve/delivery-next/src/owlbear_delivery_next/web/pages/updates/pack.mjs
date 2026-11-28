@@ -1,12 +1,10 @@
-// An update's state and actions (D-01M63C5VGFVT3DVCC888B78K2A): Impeccable's by default, or the kind a page sets in
-// own.kind (pds.mjs: the Porsche Design System's). Each is kept in the project that started it, whose endpoints its
-// actions go to from whichever project the page shows, or from All projects. Its view is run.mjs; Updates ▸
-// Impeccable (impeccable.mjs) and Updates ▸ Porsche Design System (pds.mjs) show both.
+// The machine's update state and actions, shared by Impeccable and Porsche Design System.
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
-import { Slow, call, machineState, project } from "/assets/ui.mjs";
+import { Slow, call, machineState } from "/assets/ui.mjs";
 
 const WRITE = 60000;  // an answer may commit and push: a network round trip
 export const ADMIT = 90000;  // a start that timed out may still be admitted: its pull request lookup can take a while
+export const SETTINGS = "It runs on the machine's settings and its spend counts for the machine.";
 const LOOK = 2500;  // how often the page looks for that run meanwhile
 const IDLE = 15000;  // how often it looks for a run started or answered elsewhere
 // TD-220: what became of each finding of the update's challenge rounds, in words.
@@ -18,7 +16,8 @@ export const FOUND = { open: "to fix", fixed: "fixed by the updater",
 
 // What differs between the kinds: where the runs are read and the update is answered, and what the dialogs say.
 export const IMPECCABLE = {
-  name: "Impeccable", uses: "labels, calibration and spend", label: "Update Impeccable",
+  name: "Impeccable", label: "Update Impeccable",
+  peer: { path: "/updates/pds", holders: ["PDS update", "check for deprecations"] },
   intro: "An update takes the newest upstream pack and validates it with model requests. Only if every stage "
     + "passes, or if you accept it after its challenge rounds end without a pass, it commits it on its own branch, "
     + "opens a pull request to main and merges it once CI passes.",
@@ -27,13 +26,13 @@ export const IMPECCABLE = {
     title: "Update Impeccable?", yes: "Update", no: "Keep the current pack",
     now: "Delivery takes the newest upstream pack, detector pins and design skills together; an updater session "
       + "brings the skills, golden pages and detector glue in line, then the golden pages, calibration replay and a "
-      + "challenger check it. The challenger's findings go back to the updater. It runs on this project's labels, "
-      + "calibration and AI credits.",
+      + `challenger check it. The replay uses OwlBear's decided rounds. ${SETTINGS}`,
     then: "Only if every stage passes, it activates the pack: it commits impeccable.json, skills/NOTICE.md and "
       + "the files the updater changed, opens a pull request to main and merges it once CI passes. It asks you here "
       + "before changed golden evidence counts and before a glue change goes into the pull request, and when the "
       + "rounds end without a pass or the challenger upholds a finding the updater rejected.",
-    after: "Later visual rounds use the new pack. If a stage fails, nothing changes and this page says why.",
+    after: "Later visual rounds use the new pack. If the update stops, this page says why and offers a retry "
+      + "when the stopped stage can run again.",
     instead: "The current pack stays active.",
   },
   activate: { title: "Activate the pack without a passing challenge?",
@@ -46,7 +45,7 @@ export const IMPECCABLE = {
     + "machine keeps the pack it has.",
 };
 
-export const own = { kind: IMPECCABLE, pinned: null, runs: null, unread: { pinned: "", runs: "" }, error: "",
+export const own = { kind: IMPECCABLE, pinned: null, runs: null, unread: { pinned: "", runs: "" }, error: null,
   notes: new Map(), choices: new Map(), unchosen: "", missing: "", busy: "", polling: null, reading: 0,
   awaiting: null, lost: false, show: () => {} };
 
@@ -59,6 +58,7 @@ export function follow(show) {
 // The pack and its runs are the machine's: read from the host itself, so a shown project that is not loaded (failed,
 // replaced, removed meanwhile) hides neither.
 export async function readPack() {
+  if (!machineState()) return;
   const generation = ++own.reading;
   const k = own.kind;
   const [pinned, runs] = await Promise.allSettled([
@@ -83,33 +83,30 @@ export async function readPack() {
 
 // Which run a record is: a start that went through shows another one.
 function key(run) {
-  return run ? `${run.pid}:${run.run}:${run.started_at}` : "";
+  return run ? `${run.run}:${run.started_at}` : "";
 }
 
-// Where the run's actions go: the project that started it, from any project the page shows or from All projects,
-// while the machine host has it loaded. None on a clone's own host for another project's run: only the machine host
-// reaches that one.
-export function reach(run) {
-  const bar = machineState();
-  if (!bar) return run.own ? { of: project } : null;
-  return bar.projects.some((p) => p.id === run.pid && p.state === "loaded") ? { of: run.pid } : null;
-}
-
-async function act(name, work) {
+async function act(name, work, target = null) {
   own.busy = name;
-  own.error = "";
+  own.error = null;
   own.show();
   try {
     await work();
   } catch (e) {
-    own.error = e instanceof Slow ? e.reread : e.message;  // a timed-out action is never sent again: read back
+    own.error = { target, message: e instanceof Slow ? e.reread : e.message };
   }
   own.busy = "";
+  own.show();
+  if (own.error) {
+    const notice = document.getElementById("pack-error");
+    await notice?.componentOnReady?.();
+    notice?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
   await readPack();
 }
 
 export async function answer(run, q, o) {
-  const to = reach(run), note = own.notes.get(q.id) ?? "";
+  const note = own.notes.get(q.id) ?? "";
   if (o.id === "reconsider" && !note.trim()) {  // the host refuses it too; said here before anything is sent
     own.missing = q.id;
     own.show();
@@ -132,10 +129,11 @@ export async function answer(run, q, o) {
     instead: "The update keeps waiting; you can still discard it.",
   }))) return;
   await act(`${q.id}:${o.id}`, async () => {
-    await call(`${own.kind.update}/answer`, { ...to, body: { question: q.id, option: o.id, note }, timeout: WRITE });
+    await call(`${own.kind.update}/answer`,
+      { machine: true, body: { question: q.id, option: o.id, note }, timeout: WRITE });
     own.notes.delete(q.id);
     own.choices.delete(q.id);
-  });
+  }, q.id);
 }
 
 // The stop's one Discard: the answer its question offers, else the run's own discard while it waits.
@@ -146,12 +144,10 @@ export function discarding(run, questions) {
 }
 
 export async function discard(run, d) {
-  // Where it goes is fixed before asking: should the run's project unload meanwhile, it must not fall to this page's.
-  const to = reach(run), p = run.published;
-  if (!to) return;
+  const p = run.published;
   const sure = await ask({
     title: own.kind.discard.title, yes: d.label, no: "Keep it waiting", destructive: true,
-    now: `The update started in ${run.name} ends here as discarded.`,
+    now: "The machine's update ends here as discarded.",
     then: own.kind.discard.then,
     after: p?.url ? `Its pull request #${p.number} stays open; close it on GitHub if you no longer want it.`
       : "Start a new update when you want one.",
@@ -160,17 +156,18 @@ export async function discard(run, d) {
   if (!sure) return;
   if (d.q) {
     await act(`${d.q.id}:discard`, () => call(`${own.kind.update}/answer`,
-      { ...to, body: { question: d.q.id, option: "discard", note: "" }, timeout: WRITE }));
+      { machine: true, body: { question: d.q.id, option: "discard", note: "" }, timeout: WRITE }), "");
   } else {
-    await act("discard", () => call(`${own.kind.update}/discard`, { ...to, method: "POST", timeout: WRITE }));
+    await act("discard", () => call(`${own.kind.update}/discard`,
+      { machine: true, body: { run: run.run }, timeout: WRITE }), "");
   }
 }
 
-// A primary only where one answer has priority: activating at the end, or trying again once a cause is fixed when
-// no repair is offered beside it. Alternatives without one are chosen and sent with one button instead (run.mjs).
+// Activating at the end, granting one updater session or retrying without a repair beside it has priority.
+// Other alternatives are chosen and sent with one button instead (run.mjs).
 export function emphasis(q, o) {
   const repair = q.options.some((x) => x.id === "repair");
-  return o.id === "activate" || (o.id === "retry" && !repair) ? "primary" : "secondary";
+  return o.id === "activate" || o.id === "more-updater" || (o.id === "retry" && !repair) ? "primary" : "secondary";
 }
 
 export async function start() {
@@ -180,11 +177,26 @@ export async function start() {
   own.lost = false;
   await act("start", async () => {
     try {
-      await call(own.kind.update, { method: "POST", timeout: 10000 });
+      await call(own.kind.update, { machine: true, method: "POST", timeout: 10000 });
     } catch (e) {
       if (!(e instanceof Slow && e.sent)) throw e;
       own.awaiting = { before, until: Date.now() + ADMIT };  // its admission may still be under way
     }
+  });
+}
+
+export async function replay() {
+  const sure = await ask({
+    title: "Replay OwlBear's decided rounds?", yes: "Replay", no: "Do not replay",
+    now: "The design judge runs again on OwlBear's decided rounds using the installed pack.",
+    then: `${SETTINGS} No pack files change.`,
+    instead: "No replay runs and no credits are spent.",
+  });
+  if (!sure) return;
+  own.replayed = "";
+  await act("replay", async () => {
+    const result = await call("/impeccable/replay", { machine: true, method: "POST", timeout: 3600000 });
+    own.replayed = result.report;
   });
 }
 

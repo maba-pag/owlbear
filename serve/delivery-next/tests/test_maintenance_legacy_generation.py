@@ -1,4 +1,4 @@
-"""A pre-ledger pack run is held once per its proven identity; a restart after recovery never holds it again."""
+"""One hold per uncertain update, whether a project record is read or the machine rewrites its run at startup."""
 
 import fcntl
 import json
@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import threading
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,9 +20,10 @@ from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import project
 from owlbear_delivery_next.machine_host.machine import UNPROVEN_PACK, Machine
+from owlbear_delivery_next.pds_runs.job import Job as PdsJob
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host, HostRecord
-from owlbear_delivery_next.state_store import pack_run_record, project_home, registry
+from owlbear_delivery_next.state_store import pack_run_record, project_home, registry, update_home
 from owlbear_delivery_next.state_store.store import Store
 
 REPLAY_UNCERTAIN = (
@@ -29,6 +31,7 @@ REPLAY_UNCERTAIN = (
 )
 STARTED = "2026-10-25T00:00:00+00:00"
 UNPROVABLE = [{"run": "legacy-run"}, {"started_at": STARTED}]  # empty identity joins the later-run journey
+UPDATES = update_home.KEY
 
 
 def clone(path: Path) -> Path:
@@ -45,7 +48,7 @@ def machines(monkeypatch):
     monkeypatch.setattr(Host, "_spawn", lambda _self, slug: pytest.fail(f"no runner starts in these tests ({slug})"))
     made: list[Machine] = []
 
-    def make() -> Machine:
+    def make(*, slots: int = 1) -> Machine:
         record = HostRecord(
             url="http://127.0.0.1:9/",
             token="t",  # noqa: S106
@@ -54,13 +57,27 @@ def machines(monkeypatch):
             code=codebase.CURRENT,
         )
         m = Machine(record)
-        m.slots.total = lambda: 1
+        m.slots.total = lambda: slots
         made.append(m)
         return m
 
     yield make
     for m in made:
         m.stop_all()
+
+
+@pytest.fixture
+def update_folder() -> Path:
+    folder = update_home.root()
+    folder.mkdir()
+    return folder
+
+
+def start_updates(machines, *, slots: int = 1) -> Machine:
+    """Start the machine through its update constructors and open admission."""
+    m = machines(slots=slots)
+    m.load_all()
+    return m
 
 
 def store_too_new(tmp_path: Path, name: str):
@@ -431,15 +448,17 @@ def test_an_incomplete_running_record_replaced_after_recovery_gets_a_new_hold_an
     shared, _remote = shared_repo
     bad, folder = project_with_legacy_run(tmp_path, shared, loaded=loaded)
     write_pack(folder, {"state": "running"})
+    before = (folder / pack_job.FILE).read_bytes()
     first = machines()
     first.load_all()
+    assert (live_folder(bad, folder, loaded=loaded) / pack_job.FILE).read_bytes() == before
     assert len(held(first, bad.id)) == 1, sessions_of(first, bad.id)
     reboot_then_recover(first, held(first, bad.id)[0]["id"])
 
     untouched = machines()
     untouched.load_all()
     assert held(untouched, bad.id) == [], "an untouched recovered record was held again"
-    assert len(sessions_of(untouched, bad.id)) == 1, "the constructor's rewrite duplicated the reservation"
+    assert len(sessions_of(untouched, bad.id)) == 1, "reading the old project record duplicated the reservation"
 
     write_pack(folder, {"state": "running"})  # a real replacement of the same incomplete record
     replaced = machines()
@@ -468,13 +487,11 @@ def test_a_project_whose_host_lock_another_host_holds_leaves_that_hosts_record_b
 
 @pytest.mark.parametrize("historical", [False, True], ids=["atomic-replacement", "historical-finish"])
 def test_a_foreign_replacement_landing_after_the_constructors_own_rewrite_gets_its_own_hold(
-    tmp_path, machines, shared_repo, monkeypatch, historical
+    update_folder, machines, monkeypatch, historical
 ):
-    shared, _remote = shared_repo
-    good, folder = open_project(tmp_path, shared, "good")
-    write_pack(folder, {"state": "running"})
-    original = (folder / pack_job.FILE).read_text(encoding="utf-8")
-    record = live_folder(good, folder, loaded=True) / pack_job.FILE
+    write_pack(update_folder, {"state": "running"})
+    record = update_folder / pack_job.FILE
+    original = record.read_text(encoding="utf-8")
     real_write, seams = pack_job.atomic_write, []
 
     def replace_after_own_rewrite(path, text):
@@ -487,24 +504,21 @@ def test_a_foreign_replacement_landing_after_the_constructors_own_rewrite_gets_i
         return own
 
     monkeypatch.setattr(pack_job, "atomic_write", replace_after_own_rewrite)
-    first = machines()
-    first.load_all()
+    first = start_updates(machines)
     assert seams, "the constructor's own rewrite never ran"
-    assert len(held(first, good.id)) == 2, sessions_of(first, good.id)  # A, and the replacement held at once
-    reboot_then_recover(first, held(first, good.id)[0]["id"])
+    assert len(held(first, UPDATES)) == 2, sessions_of(first, UPDATES)  # A, and the replacement held at once
+    reboot_then_recover(first, held(first, UPDATES)[0]["id"])
     first.stop_all()
     monkeypatch.setattr(pack_job, "atomic_write", real_write)
 
-    restarted = machines()
-    restarted.load_all()
-    assert [s["state"] for s in sessions_of(restarted, good.id)] == ["recovered", "held"], (
+    restarted = start_updates(machines)
+    assert [s["state"] for s in sessions_of(restarted, UPDATES)] == ["recovered", "held"], (
         "a foreign replacement after the constructor's own rewrite was bound to the old run"
     )
     restarted.stop_all()
 
-    again = machines()
-    again.load_all()
-    assert [s["state"] for s in sessions_of(again, good.id)] == ["recovered", "held"], (
+    again = start_updates(machines)
+    assert [s["state"] for s in sessions_of(again, UPDATES)] == ["recovered", "held"], (
         "the constructor's own rewrite duplicated the foreign reservation on restart"
     )
 
@@ -666,54 +680,60 @@ def test_a_main_failure_after_a_confirmed_session_or_outside_any_session_holds_n
 
 
 def test_a_running_record_without_identity_keeps_one_lease_when_its_hold_is_interrupted_by_a_crash(
-    tmp_path, machines, shared_repo
+    update_folder, machines
 ):
     """Review 4373927978: the hold and the receipt for the constructor's own rewrite are one ledger save.
 
     A crash right after that save, or a failed save, leaves exactly one lease across restarts; after its recovery none
     is held, and a later running record is held anew.
     """
-    shared, _remote = shared_repo
-    good, folder = open_project(tmp_path, shared, "good")
-    write_pack(folder, {"state": "running"})  # no run id and no start: its identity is its file
-    first = machines()
+    write_pack(update_folder, {"state": "running"})  # no run id and no start: its identity is its file
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(Slots, "restore_one", crash_once(Slots.restore_one))  # the process dies after the save
-        first.load_all()
-    assert (first.projects[good.id].state, len(sessions_of(first, good.id))) == ("failed", 1)
-    first.stop_all()
+        with pytest.raises(RuntimeError, match="synthetic crash after the hold was saved"):
+            start_updates(machines)
+    with maintenance.Maintenance.locked() as ledger:
+        [lease] = ledger.sessions
+        assert (lease.project, lease.state) == (UPDATES, "held")
+        assert any(":receipt:" in mark for mark in ledger.imported)
     for _ in range(2):
-        again = machines()
-        again.load_all()
-        assert (again.projects[good.id].state, len(sessions_of(again, good.id))) == ("loaded", 1)
+        again = start_updates(machines)
+        assert [s["id"] for s in sessions_of(again, UPDATES)] == [lease.id]
         again.stop_all()
-    [lease] = held(again, good.id)
-    reboot_then_recover(again, lease["id"])
-    after = machines()
-    after.load_all()
-    assert (held(after, good.id), len(sessions_of(after, good.id))) == ([], 1)
+    reboot_then_recover(again, lease.id)
+    after = start_updates(machines)
+    assert (held(after, UPDATES), len(sessions_of(after, UPDATES))) == ([], 1)
     after.stop_all()
-    write_pack(project_home.home(good.id), {"state": "running"})  # a later run, again without identity
-    later = machines()
-    later.load_all()
-    assert (len(held(later, good.id)), len(sessions_of(later, good.id))) == (1, 2)
+    write_pack(update_folder, {"state": "running"})  # a later run, again without identity
+    later = start_updates(machines)
+    assert (len(held(later, UPDATES)), len(sessions_of(later, UPDATES))) == (1, 2)
 
 
+@pytest.mark.parametrize(("kind", "modern"), [("pack", False), ("pack", True), ("pds", True)])
 def test_a_failed_hold_save_after_the_constructors_rewrite_leaves_no_lease_and_the_next_start_holds_once(
-    tmp_path, machines, shared_repo
+    update_folder, machines, kind, modern
 ):
-    shared, _remote = shared_repo
-    good, folder = open_project(tmp_path, shared, "good")
-    write_pack(folder, {"state": "running"})
-    first = machines()
+    filename = pack_job.FILE if kind == "pack" else PdsJob.FILE
+    workspace = update_folder / (pack_job.RUNS if kind == "pack" else PdsJob.RUNS) / "modern-run"
+    if modern:
+        workspace.mkdir(parents=True)
+        run = {"state": "running", "run": "modern-run", "started_at": STARTED, "workspace": str(workspace)}
+        (update_folder / filename).write_text(json.dumps(pack_state.blank() | run), encoding="utf-8")
+    else:
+        workspace = write_pack(update_folder, {"state": "running"})
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(maintenance.Maintenance, "_save", fail_save_once(maintenance.Maintenance._save))  # noqa: SLF001
-        first.load_all()
-    first.stop_all()
+        with pytest.raises(maintenance.MaintenanceError, match="the ledger could not be saved"):
+            start_updates(machines)
+    with maintenance.Maintenance.locked() as ledger:
+        assert ledger.sessions == []
+    current = json.loads((update_folder / filename).read_text())
+    assert (current["state"], current["reason"], workspace.is_dir()) == ("failed", pack_state.HOST_STOPPED, True)
     for _ in range(2):
-        again = machines()
-        again.load_all()
-        assert (len(held(again, good.id)), len(sessions_of(again, good.id))) == (1, 1)
+        again = start_updates(machines)
+        [lease] = sessions_of(again, UPDATES)
+        assert (lease["state"], lease["kind"], lease["workspace"]) == ("held", kind, str(workspace))
+        assert again.slots.take("other", "probe", 1, 1) == 0
         again.stop_all()
 
 
@@ -734,7 +754,7 @@ def fail_save_once(real):
     failed: list[bool] = []
 
     def save(self, ledger) -> None:
-        if any(s.kind == "pack" for s in ledger.sessions) and not failed:
+        if ledger.sessions and not failed:
             failed.append(True)
             msg = "synthetic: the ledger could not be saved"
             raise maintenance.MaintenanceError(msg)
@@ -763,58 +783,42 @@ def receipt_fault_once(real, *, saved: bool):
 @pytest.mark.parametrize("recovered", [False, True], ids=["held", "recovered"])
 @pytest.mark.parametrize("saved", [False, True], ids=["before-save", "after-save"])
 def test_an_existing_hold_keeps_its_one_lease_when_the_receipt_for_the_constructors_rewrite_fails(
-    tmp_path, machines, shared_repo, recovered, saved
+    update_folder, machines, recovered, saved
 ):
     """Review on 8dfa: the rewrite carries its run's generation, so the lease survives a failed receipt either way.
 
-    The project's store first could not open, so its running record without identity was held read-only as A. Once it
-    opens, its Job rewrites that record and the receipt fails: the project falls back to the read-only path, and every
-    later start still finds A alone, held or recovered. A later running record is held anew.
+    A running record without identity was held read-only as A. The machine's Job rewrites it and the receipt fails:
+    admission never opens on that start, and every restart still finds A alone, held or recovered. A later running
+    record is held anew.
     """
-    shared, _remote = shared_repo
-    good, _clone_folder = open_project(tmp_path, shared, "good")
-    other = registry.register(clone(tmp_path / "other"))
-    settled = machines()
-    settled.load_all()  # the store moves to its home folder, where every later read finds this record
-    settled.stop_all()
-    live = project_home.current(Path(good.path))
-    fmt = live / "format"
-    opens = fmt.read_text()
-    fmt.write_text("99\n")  # this store will not open for now
-    write_pack(live, {"state": "running"})  # no run id and no start: its identity is its file
     first = machines()
-    first.load_all()
-    [a] = held(first, good.id)
-    assert first.projects[good.id].state == "failed"
+    write_pack(update_folder, {"state": "running"})  # no run id and no start: its identity is its file
+    session_slots.restore(first.maintenance, UPDATES, update_folder)
+    [a] = held(first, UPDATES)
     if recovered:
         reboot_then_recover(first, a["id"])
     first.stop_all()
-    fmt.write_text(opens)
-
-    faulted = machines()
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(maintenance.Maintenance, "_save", receipt_fault_once(maintenance.Maintenance._save, saved=saved))  # noqa: SLF001
-        faulted.load_all()
-    rewritten = json.loads((live / pack_job.FILE).read_text())
-    assert (faulted.projects[good.id].state, rewritten["state"], rewritten["reason"]) == (
-        "failed", "failed", pack_state.HOST_STOPPED,
-    )  # fmt: skip
+        with pytest.raises(maintenance.MaintenanceError, match="synthetic fault noting the receipt"):
+            start_updates(machines)
+    rewritten = json.loads((update_folder / pack_job.FILE).read_text())
+    assert (rewritten["state"], rewritten["reason"]) == ("failed", pack_state.HOST_STOPPED)
     state = "recovered" if recovered else "held"
-    assert [(s["id"], s["state"]) for s in sessions_of(faulted, good.id)] == [(a["id"], state)]
-    faulted.stop_all()
+    with maintenance.Maintenance.locked() as ledger:
+        assert [(s.id, s.state) for s in ledger.sessions] == [(a["id"], state)]
+        assert any(":receipt:" in mark for mark in ledger.imported) is saved
     for _ in range(2):
-        again = machines()
-        again.load_all()
-        assert [(s["id"], s["state"]) for s in sessions_of(again, good.id)] == [(a["id"], state)]
-        assert (again.slots.take(other.id, "probe", 1, 1), again.maintenance.pending("pack")) == (
+        again = start_updates(machines)
+        assert [(s["id"], s["state"]) for s in sessions_of(again, UPDATES)] == [(a["id"], state)]
+        assert (again.slots.take("other", "probe", 1, 1), again.maintenance.pending("pack")) == (
             (1, False) if recovered else (0, True)
         )
-        again.slots.give(other.id, "probe")
+        again.slots.give("other", "probe")
         again.stop_all()
-    write_pack(live, {"state": "running"})  # a later run, again without identity
-    later = machines()
-    later.load_all()
-    assert [s["state"] for s in sessions_of(later, good.id)] == [state, "held"]
+    write_pack(update_folder, {"state": "running"})  # a later run, again without identity
+    later = start_updates(machines)
+    assert [s["state"] for s in sessions_of(later, UPDATES)] == [state, "held"]
 
 
 def test_the_carried_generation_counts_only_in_the_shape_of_this_hosts_own_rewrite():
@@ -842,10 +846,10 @@ def test_a_failed_projects_pack_record_that_is_a_fifo_is_held_at_once_and_anothe
     assert (m.slots.take(other.id, "probe", 1, 1), m.maintenance.pending("pack")) == (0, True)
 
 
-def overwritten_after_publish(record: dict) -> pytest.MonkeyPatch:
+@contextmanager
+def overwritten_after_publish(record: dict):
     """The run file is overwritten in place, same inode, right after the Job's rewrite is renamed into place."""
     real_replace = Path.replace
-    patch = pytest.MonkeyPatch()
 
     def replace(self: Path, target: Path) -> Path:
         done = real_replace(self, target)
@@ -855,117 +859,81 @@ def overwritten_after_publish(record: dict) -> pytest.MonkeyPatch:
                 same.truncate()
         return done
 
-    patch.setattr(Path, "replace", replace)
-    return patch
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(Path, "replace", replace)
+        yield
 
 
 @pytest.mark.parametrize("recovered", [False, True], ids=["a-held", "a-recovered"])
-def test_a_loaded_projects_run_written_over_its_rewrite_is_held_before_another_project_is_admitted(
-    tmp_path, machines, shared_repo, recovered
+def test_a_machine_run_written_over_its_rewrite_is_held_before_a_project_is_admitted(
+    update_folder, machines, recovered
 ):
-    """Review 4378036659: a loaded project never takes the unloaded path, so its own restoration holds B there.
+    """A is held or recovered. As the machine's Job rewrites A, B overwrites the file in place.
 
-    A, an interrupted run with its identity, is held or already recovered. As its Job rewrites A, B overwrites the
-    file in place: no receipt names B for A, A keeps its state, and B is held at once. At two slots another project
-    gets what A's state leaves, and no unloaded read is needed to find B.
+    B cannot borrow A's receipt and must be held before project admission. At two slots a project gets what
+    A's state leaves.
     """
-    shared, _remote = shared_repo
-    good, _clone_folder = open_project(tmp_path, shared, "good")
-    other = registry.register(clone(tmp_path / "other"))
     a_run = {"state": "running", "run": "legacy-a", "started_at": STARTED, "stage": "update"}
-    settled = machines()
-    settled.load_all()  # the store moves to its home folder
-    settled.stop_all()
-    live = project_home.current(Path(good.path))
-    write_pack(live, a_run)
-    first = machines()
-    first.load_all()
-    [a] = held(first, good.id)
+    write_pack(update_folder, a_run)
+    first = start_updates(machines)
+    [a] = held(first, UPDATES)
     if recovered:
         reboot_then_recover(first, a["id"])
     first.stop_all()
-    write_pack(live, a_run)  # A running again, as a stale copy leaves it
-    m = machines()
-    m.slots.total = lambda: 2
-    patch = overwritten_after_publish({"state": "running", "stage": "update"})  # B: no identity
-    try:
-        with pytest.MonkeyPatch.context() as no_unloaded:
-            no_unloaded.setattr(session_slots, "unloaded", lambda *_a: pytest.fail("a loaded project read unloaded"))
-            m.load_all()
-    finally:
-        patch.undo()
-    sessions = sessions_of(m, good.id)
-    assert (m.projects[good.id].state, [s["state"] for s in sessions if s["id"] == a["id"]]) == (
-        "loaded", ["recovered" if recovered else "held"],
-    )  # fmt: skip
+    write_pack(update_folder, a_run)  # A running again, as a stale copy leaves it
+    with overwritten_after_publish({"state": "running", "stage": "update"}):  # B: no identity
+        m = start_updates(machines, slots=2)
+    sessions = sessions_of(m, UPDATES)
+    assert [s["state"] for s in sessions if s["id"] == a["id"]] == ["recovered" if recovered else "held"]
     assert [s["state"] for s in sessions if s["id"] != a["id"]] == ["held"]
-    assert m.slots.take(other.id, "probe", 1, 1) == (1 if recovered else 0)
+    assert m.slots.take("other", "probe", 1, 1) == (1 if recovered else 0)
 
 
-def test_a_loaded_projects_own_rewrite_of_its_interrupted_run_adds_no_hold_beside_it(tmp_path, machines, shared_repo):
+def test_the_machines_own_rewrite_of_its_interrupted_run_adds_no_hold_beside_it(update_folder, machines):
     """Control: with nothing written over it, the rewrite keeps A's one lease, and a restart adds none."""
-    shared, _remote = shared_repo
-    good, _clone_folder = open_project(tmp_path, shared, "good")
-    settled = machines()
-    settled.load_all()
-    settled.stop_all()
-    write_pack(project_home.current(Path(good.path)), {"state": "running", "run": "legacy-a", "started_at": STARTED})
+    write_pack(update_folder, {"state": "running", "run": "legacy-a", "started_at": STARTED})
     for _ in range(2):
-        m = machines()
-        m.load_all()
-        assert len(sessions_of(m, good.id)) == 1
+        m = start_updates(machines)
+        assert m.updates.pack.read()["state"] == "failed"
+        assert len(sessions_of(m, UPDATES)) == 1
         m.stop_all()
 
 
-def modern_run_owned(machines, tmp_path, shared_repo, *, recovered: bool):
-    """A loaded project whose last run is modern A: its own workspace, whose lease the ledger holds or recovered."""
-    shared, _remote = shared_repo
-    good, _clone_folder = open_project(tmp_path, shared, "good")
+def modern_run_owned(machines, folder: Path, *, recovered: bool) -> str:
+    """The machine's last run is modern A: its own workspace, whose lease the ledger holds or recovered."""
     settled = machines()
-    settled.load_all()  # the store moves to its home folder
-    live = project_home.current(Path(good.path))
-    workspace = live / pack_job.RUNS / "modern-a"
+    workspace = folder / pack_job.RUNS / "modern-a"
     workspace.mkdir(parents=True)
-    lease = settled.maintenance.begin(good.id, "pack:modern-a", "pack", str(workspace))
+    lease = settled.maintenance.begin(UPDATES, "pack:modern-a", "pack", str(workspace))
     settled.maintenance.failed(lease, "RuntimeError: synthetic: the session ended without termination proof")
     if recovered:
         reboot_then_recover(settled, lease)
     settled.stop_all()
-    write_pack(live, {"state": "running", "run": "modern-a", "started_at": STARTED, "workspace": str(workspace)})
-    return good, lease
+    write_pack(folder, {"state": "running", "run": "modern-a", "started_at": STARTED, "workspace": str(workspace)})
+    return lease
 
 
 @pytest.mark.parametrize("recovered", [False, True], ids=["a-held", "a-recovered"])
-def test_a_run_written_over_a_modern_owned_runs_rewrite_is_held_before_another_project_is_admitted(
-    tmp_path, machines, shared_repo, recovered
+def test_a_run_written_over_a_modern_owned_runs_rewrite_is_held_before_a_project_is_admitted(
+    update_folder, machines, recovered
 ):
     """A modern A, its workspace owned by its lease, is not imported again; what was written over its rewrite is."""
-    good, a = modern_run_owned(machines, tmp_path, shared_repo, recovered=recovered)
-    other = registry.register(clone(tmp_path / "other"))
-    m = machines()
-    m.slots.total = lambda: 2
-    patch = overwritten_after_publish({"state": "running", "stage": "update"})  # B: no identity
-    try:
-        with pytest.MonkeyPatch.context() as no_unloaded:
-            no_unloaded.setattr(session_slots, "unloaded", lambda *_a: pytest.fail("a loaded project read unloaded"))
-            m.load_all()
-    finally:
-        patch.undo()
-    sessions = sessions_of(m, good.id)
-    assert (m.projects[good.id].state, [s["state"] for s in sessions if s["id"] == a]) == (
-        "loaded", ["recovered" if recovered else "held"],
-    )  # fmt: skip
+    a = modern_run_owned(machines, update_folder, recovered=recovered)
+    with overwritten_after_publish({"state": "running", "stage": "update"}):  # B: no identity
+        m = start_updates(machines, slots=2)
+    sessions = sessions_of(m, UPDATES)
+    assert [s["state"] for s in sessions if s["id"] == a] == ["recovered" if recovered else "held"]
     assert [s["state"] for s in sessions if s["id"] != a] == ["held"]
-    assert m.slots.take(other.id, "probe", 1, 1) == (1 if recovered else 0)
+    assert m.slots.take("other", "probe", 1, 1) == (1 if recovered else 0)
 
 
-def test_a_modern_owned_runs_own_rewrite_adds_no_hold_beside_it(tmp_path, machines, shared_repo):
+def test_a_modern_owned_runs_own_rewrite_adds_no_hold_beside_it(update_folder, machines):
     """Control: with nothing written over it, the modern run keeps its one lease across loads."""
-    good, a = modern_run_owned(machines, tmp_path, shared_repo, recovered=False)
+    a = modern_run_owned(machines, update_folder, recovered=False)
     for _ in range(2):
-        m = machines()
-        m.load_all()
-        assert [s["id"] for s in sessions_of(m, good.id)] == [a]
+        m = start_updates(machines)
+        assert m.updates.pack.read()["state"] == "failed"
+        assert [s["id"] for s in sessions_of(m, UPDATES)] == [a]
         m.stop_all()
 
 
@@ -980,50 +948,29 @@ PUBLISHING = {  # a run main stopped while it published: the Job's startup retur
 }  # fmt: skip
 
 
-def publishing_project(machines, tmp_path, shared_repo):
-    shared, _remote = shared_repo
-    good, _clone_folder = open_project(tmp_path, shared, "good")
-    settled = machines()
-    settled.load_all()  # the store moves to its home folder
-    settled.stop_all()
-    live = project_home.current(Path(good.path))
-    write_pack(live, PUBLISHING)
-    shutil.rmtree(live / pack_run.UPDATER)  # a publication's folder is gone: no legacy folder holds on its own
-    return good, live
-
-
-def test_a_run_written_over_a_publication_the_job_returns_to_its_owner_is_held_before_another_project_is_admitted(
-    tmp_path, machines, shared_repo
+def test_a_run_written_over_a_publication_the_job_returns_to_its_owner_is_held_before_a_project_is_admitted(
+    update_folder, machines
 ):
-    """Review 4379379502: the startup rewrite that sets a stopped publication waiting is checked as every other one.
-
-    B overwrites the file right after that rewrite; the loaded project holds B at once, and the publication waits.
-    """
-    good, _live = publishing_project(machines, tmp_path, shared_repo)
-    other = registry.register(clone(tmp_path / "other"))
-    m = machines()
-    m.slots.total = lambda: 2
-    patch = overwritten_after_publish({"state": "running", "stage": "update"})  # B: no identity
-    try:
-        with pytest.MonkeyPatch.context() as no_unloaded:
-            no_unloaded.setattr(session_slots, "unloaded", lambda *_a: pytest.fail("a loaded project read unloaded"))
-            m.load_all()
-    finally:
-        patch.undo()
-    assert (m.projects[good.id].state, [s["state"] for s in sessions_of(m, good.id)]) == ("loaded", ["held"])
-    assert (m.slots.take(other.id, "probe", 1, 1), m.slots.take(other.id, "probe2", 1, 2)) == (1, 0)
+    """B overwrites the machine's rewrite of a stopped publication. B is held, and the publication waits."""
+    write_bare(update_folder, pack_state.blank() | PUBLISHING)
+    with overwritten_after_publish({"state": "running", "stage": "update"}):  # B: no identity
+        m = start_updates(machines, slots=2)
+    kept, version = pack_state.read_version(update_folder / pack_job.FILE)
+    with maintenance.Maintenance.locked() as ledger:
+        [lease] = ledger.sessions
+        generation, _started = pack_state.generation(kept, version)
+        assert (lease.project, lease.state, lease.generation) == (UPDATES, "held", generation)
+    assert (m.updates.pack.read()["state"], kept["stage"]) == ("waiting", "update")
+    assert (m.slots.take("other", "probe", 1, 1), m.slots.take("other", "probe2", 1, 2)) == (1, 0)
 
 
-def test_a_publication_the_job_returns_to_its_owner_holds_nothing_and_keeps_its_context(
-    tmp_path, machines, shared_repo
-):
+def test_a_publication_the_job_returns_to_its_owner_holds_nothing_and_keeps_its_context(update_folder, machines):
     """Control: with nothing written over it, the publication waits for its owner, whole, and holds no slot."""
-    good, live = publishing_project(machines, tmp_path, shared_repo)
+    write_bare(update_folder, pack_state.blank() | PUBLISHING)
     for _ in range(2):
-        m = machines()
-        m.load_all()
-        kept = json.loads((live / pack_job.FILE).read_text())
-        assert (sessions_of(m, good.id), kept["state"], kept["context"]["publication"]["body"]) == (
+        m = start_updates(machines)
+        kept = json.loads((update_folder / pack_job.FILE).read_text())
+        assert (sessions_of(m, UPDATES), kept["state"], kept["context"]["publication"]["body"]) == (
             [], "waiting", "the PR text",
         )  # fmt: skip
         assert [q["kind"] for q in kept["questions"]] == ["publish"]

@@ -1,4 +1,4 @@
-"""A project's last PDS update run record (#777), read without writing, as ``pack_run_record`` reads Impeccable's."""
+"""A PDS update run record, read without writing, as ``pack_run_record`` reads Impeccable's."""
 
 from __future__ import annotations
 

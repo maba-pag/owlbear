@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from owlbear_delivery_next.runtimes.session_result import Run
-    from owlbear_delivery_next.state_store.store import Store
+    from owlbear_delivery_next.state_store.update_source import UpdateSource
 
 LABEL = "pack-update"
 UPSTREAM_DIFF = "upstream/skill.diff"  # upstream's skill text from the pinned tag, laid out for the updater
@@ -153,7 +153,7 @@ def repair(lines: list[str]) -> str:
 
 
 def config(  # noqa: PLR0913 - one session: its worktree, id, message, resume, fallback, replacement and keys
-    store: Store,
+    store: UpdateSource,
     at: Path,
     sid: str,
     message: str,

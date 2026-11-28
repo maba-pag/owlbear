@@ -11,13 +11,9 @@ from typing import TYPE_CHECKING, Any, Protocol
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
-from owlbear_delivery_next.impeccable_runs import pack_progress
 from owlbear_delivery_next.project_host import decision_routes, pack_overview
-from owlbear_delivery_next.state_store import pds_run_record
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from owlbear_delivery_next.local_system import maintenance
 
 
@@ -35,25 +31,13 @@ class RecoverBody(BaseModel):
     rebooted: bool
 
 
-def router(host: Holder | None, own: tuple[str, Path] | None = None) -> APIRouter:
-    """Held sessions and their recovery, a host without maintenance has none to show; and the machine's pack update.
-
-    Recovery is the owner's act on the page: a chat tool's call is refused, as the decisions' writes are. *own* is the
-    serving project's name and store root, whose run record is read beside the registry's projects'.
-    """
+def router(host: Holder | None) -> APIRouter:
+    """Read the pinned pack and held sessions. Only the owner can recover a session."""
     routes = APIRouter()
 
     @routes.get("/maintenance/pack")
     def pack() -> dict[str, Any]:
         return pack_overview.pinned()
-
-    @routes.get("/maintenance/pack/runs")
-    def pack_runs() -> dict[str, Any]:
-        return pack_overview.runs(own)
-
-    @routes.get("/maintenance/pds/runs")
-    def pds_runs() -> dict[str, Any]:
-        return pack_overview.runs(own, reader=pds_run_record.read_only, actions=pack_progress.PDS_ACTIONS)
 
     @routes.get("/maintenance/sessions")
     def sessions() -> dict[str, list[dict[str, Any]]]:

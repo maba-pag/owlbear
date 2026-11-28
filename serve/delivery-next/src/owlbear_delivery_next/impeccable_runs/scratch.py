@@ -13,12 +13,13 @@ if TYPE_CHECKING:
 
 
 @contextlib.contextmanager
-def scratch(prefix: str, keep: Callable[[Path], bool] | None = None) -> Iterator[Path]:
+def scratch(root: Path, prefix: str, keep: Callable[[Path], bool] | None = None) -> Iterator[Path]:
     """Yield a new directory and remove it on exit, unless *keep* says its session is unproven.
 
     The ledger records a session's outcome before the session's call returns or raises, so *keep* is read after that.
     """
-    at = Path(tempfile.mkdtemp(prefix=prefix))
+    root.mkdir(parents=True, exist_ok=True)
+    at = Path(tempfile.mkdtemp(dir=root, prefix=prefix))
     try:
         yield at
     finally:

@@ -6,6 +6,7 @@ import json
 import shutil
 import subprocess
 import time
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -23,15 +24,14 @@ from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay
 from owlbear_delivery_next.local_system import local_home, maintenance, processes
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import curation
+from owlbear_delivery_next.machine_host import curation, update_jobs
 from owlbear_delivery_next.project_host import session_slots
-from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes import loop_owner, maintained, sdk_adapter, sdk_teardown
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import config, roles
 from owlbear_delivery_next.settings.config import GlobalLayer
-from owlbear_delivery_next.state_store import settings_carry
-from owlbear_delivery_next.state_store.store import Store, update_layer
+from owlbear_delivery_next.state_store import settings_carry, update_home
+from owlbear_delivery_next.state_store.store import update_layer
 
 OWNER = contextvars.ContextVar("owner", default="none")
 
@@ -354,19 +354,13 @@ def design_look() -> design_tools.DesignLook:
 
 
 @pytest.fixture
-def replay_store(tmp_path, shared_repo):
-    """A project whose calibration rounds live in the shared repository, with the machine's maintenance bound."""
+def replay_store(shared_repo):
+    """OwlBear's calibration rounds and the machine's maintenance lane."""
     (Path(local_home.root()) / "data.json").write_text(json.dumps({"repository": str(shared_repo[0])}))
-    project = tmp_path / "shop"
-    git(tmp_path, "init", "-q", "-b", "main", str(project))
-    git(project, "commit", "--allow-empty", "-qm", "start")
-    git(project, "remote", "add", "origin", "git@github.com:acme/shop-site.git")
-    store = Store.open(project)
+    store = update_jobs.Source()
     slots = Slots(lambda: 1)
-    host = Host(store, tmp_path / "host", spawn=lambda _s: None, members=lambda _ids: {})
-    host.slots = slots
-    host.maintenance = maintenance.Maintenance(slots, boot=lambda: 10.0, observe=lambda *_a: False)
-    return store, host
+    ledger = maintenance.Maintenance(slots, boot=lambda: 10.0, observe=lambda *_a: False)
+    return store, session_slots.SlotOwner(update_home.KEY, slots, ledger, lambda: 1, nullcontext, lambda: False)
 
 
 def seed_design_round(store, tmp_path, role: roles.RoleModel) -> None:
@@ -407,7 +401,7 @@ def judge_world(make, store, *, resistant, absent):
 
 
 def replay_through_entry(store, host):
-    """The calibration replay as Impeccable starts it: owned by a project slot, with the real judge entry."""
+    """The calibration replay owns a machine slot and uses the real judge entry."""
     live = session_slots.pack_live(host, pack_job.Live(), lambda _text: None)
     return live.replay(store, None, keep=lambda path: host.maintenance.retained(str(path)))
 
@@ -434,9 +428,8 @@ def test_a_replay_judge_whose_deadline_is_unknown_keeps_its_scratch_and_lease_ac
     fresh = maintenance.Maintenance(Slots(lambda: 1, closed=True), boot=lambda: 10.0, observe=lambda *_a: None)
     fresh.slots.open()
     assert fresh.retained(str(work))
-    project = session_slots.project(host)
-    assert fresh.slots.counts(project) == (1, 1, 1)
-    assert fresh.slots.take(project, "pack:next", 1, 1) == 0  # the held judge keeps the machine's one slot
+    assert fresh.slots.counts(host.key) == (1, 1, 1)
+    assert fresh.slots.take(host.key, "pack:next", 1, 1) == 0  # the held judge keeps the machine's one slot
 
 
 def test_a_replay_judge_confirmed_gone_releases_its_lease_and_removes_its_scratch(bridge, replay_store, tmp_path):

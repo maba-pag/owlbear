@@ -4,17 +4,17 @@ The run is a loop of actions: the updater, the golden pages on its candidate, th
 challenger's rounds, a reconsideration, the owner and the activation (``pack_activation``). The owner also decides each
 change outside the pack, to its expected evidence or its code, and each one the challenger is unsure the upgrade needs
 (``pack_gates``). The context, the loop and the owner's questions are kept in the job's state file, and the updater's
-repository and the candidate's skills under the store, so a run that waits for the owner survives a host restart. A
-session that fails ends the run, as before. An agent's CI repair of the pull request that changes protected pack
-content is laid into the candidate, its whole protected content as its commit holds it, and checked the same way, from
-the golden pages on, before Delivery pushes it (``pack_repair``): its findings go to the owner, never back to the
-updater.
+repository and the candidate's skills under the store, so a run that waits for the owner survives a host restart.
+A stopped action can be retried from its saved context. An agent's CI repair of the pull request that changes protected
+pack content is laid into the candidate as its commit holds it, and checked the same way, from the golden pages on,
+before Delivery pushes it (``pack_repair``): its findings go to the owner, never back to the updater.
 """
 
 from __future__ import annotations
 
 import hashlib
 import shutil
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -37,8 +37,6 @@ from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.settings import rounds
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from owlbear_delivery_next.impeccable.calibration import Replay
     from owlbear_delivery_next.impeccable_runs.pack_job import Job
     from owlbear_delivery_next.runtimes.session_result import Run
@@ -53,12 +51,23 @@ NEXT: dict[str, Action] = {
 
 
 class Stopped(Exception):  # noqa: N818 - how a stage ends the run
-    """A stage ended the run: up to date, or failed with a reason."""
+    """A stage stopped with a reason: up to date, terminal, or retryable once the context is saved."""
 
-    def __init__(self, reason: str, *, current: bool = False) -> None:
-        """Keep the reason; *current* ends the run as up to date rather than failed."""
+    def __init__(
+        self,
+        reason: str,
+        *,
+        current: bool = False,
+        terminal: bool = False,
+        lead: str = "",
+        retry: str = pack_rounds.RETRY,
+    ) -> None:
+        """Keep the reason, whether the run must end and how it can retry."""
+        if lead:
+            reason = f"{lead}\n{reason}"
         super().__init__(reason)
-        self.reason, self.current = reason, current
+        self.reason, self.current, self.terminal = reason, current, terminal
+        self.lead, self.retry = lead, retry
 
 
 class Context(BaseModel):
@@ -74,7 +83,7 @@ class Context(BaseModel):
     manifest: str
     notice: str
     baseline: dict[str, str]  # the package's files the update may rewrite, by package path: their digests at the start
-    checkout: dict[str, str]  # the package's checkout: its root, repository and the base pinned for the commit
+    checkout: dict[str, str]  # the checkout root, package path, repository and base pinned for the commit
     publication: pack_publish.Publication | None = None  # set once the update goes into main
     start: dict[str, str]  # the updater repository's files as laid out
     sid: str
@@ -93,6 +102,11 @@ class Context(BaseModel):
     undo: list[str] = Field(default_factory=list)  # the paths the owner had undone, restored before the next session
     repair: pack_repair.Repair = Field(default_factory=pack_repair.Repair)  # the agent's CI repairs of the pull request
     next: Action = "update"
+
+    @property
+    def package(self) -> Path:
+        """The package in the checkout this run started from."""
+        return Path(self.checkout["root"]) / self.checkout["package"]
 
 
 def sha(data: bytes) -> str:
@@ -117,7 +131,8 @@ def begin(  # noqa: PLR0913 - the job, the candidate, its checkout and the evide
     ctx = Context(
         tag=c.tag, why=why, diff=diff, golden=golden, pins=c.pins, manifest=c.manifest, notice=c.notice,
         baseline=c.inputs | pack_gates.baseline(package),  # what the candidate was made from, never a later read
-        checkout={"root": str(src.root), "repository": src.repository, "base": src.base},
+        checkout={"root": str(src.root), "repository": src.repository, "base": src.base,
+                  "package": package.relative_to(src.root).as_posix()},
         start=start, sid=pack_updater.new_id(),
     )  # fmt: skip
     lp = RoundLoop(subject=PACK, policy=rounds.policy(job.store.settings(), PACK, "updater"))
@@ -134,8 +149,8 @@ def rebuilt(job: Job, ctx: Context) -> pack_candidate.Candidate:
     installed = pack_files.installed(ctx.pins)
     if installed is None:
         msg = f"the candidate {ctx.pins['pack']} is no longer installed on this machine; run the update again"
-        raise Stopped(msg)
-    package = job.live.package.resolve()
+        raise Stopped(msg, terminal=True)
+    package = ctx.package
     unchanged(package, ctx)
     baseline = {n: (package / skill_path(n)).read_bytes() for n in ctx.pins["skills"]}
     return pack_candidate.Candidate(
@@ -153,7 +168,7 @@ def unchanged(package: Path, ctx: Context) -> None:
         if not (package / path).is_file() or sha((package / path).read_bytes()) != digest:
             name = path.removeprefix(f"{preload.ROOT}/").removesuffix("/SKILL.md")
             msg = f"{name} changed in the package during the update; run the update again"
-            raise Stopped(msg)
+            raise Stopped(msg, terminal=True)
 
 
 def updater_edits(job: Job, ctx: Context) -> dict[str, bytes | None]:
@@ -173,7 +188,7 @@ def advance(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) 
         match ctx.next:
             case "update":  # a repair's findings go to the owner, never the updater
                 ctx.next = "wait" if ctx.repair.phase == "checking" else _update(job, c, ctx, lp)
-            case "golden":  # a CI repair's check: a new round of the repaired candidate
+            case "golden":  # the updater or a CI repair made the candidate for the next round
                 ctx.next = _golden(job, c, ctx, lp.round + 1)
             case "replay":
                 ctx.next = _replay(job, c, ctx)
@@ -189,19 +204,15 @@ def advance(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) 
                 return pack_activation.activate(job, c, ctx, lp)
             case other:
                 msg = f"the run's next action {other!r} is unknown; run the update again"
-                raise Stopped(msg)
+                raise Stopped(msg, terminal=True)
         job.keep(ctx, lp)
 
 
 def _update(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -> Action:
-    """One updater session, its edits taken into the candidate, then the golden pages on the candidate (TD-177).
-
-    Raises:
-        Stopped: The golden pages differ from the candidate's expectations.
-    """
+    """One updater session, its edits taken into the candidate before the golden pages run."""
     at, live, store = job.workspace, job.live, job.store
     if ctx.undo:  # what the owner had undone, restored before the updater adjusts the rest
-        pack_gates.restore(at, ctx.undo, live.package.resolve(), c)
+        pack_gates.restore(at, ctx.undo, ctx.package, c)
         if any(p.startswith("upstream/") for p in ctx.undo):
             pack_updater.upstream(at, c, live.clone)
         ctx.undo = []
@@ -236,10 +247,10 @@ def _update(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) 
     ctx.after = NEXT[pack_rounds.revised(lp, {r.finding: r.reason for r in result.rejected}, identity)]
     if bad:
         return "wait"  # the owner first: undo or discard (TD-194)
-    return _golden(job, c, ctx)
+    return "golden"
 
 
-def _golden(job: Job, c: pack_candidate.Candidate, ctx: Context, round_: int | None = None) -> Action:
+def _golden(job: Job, c: pack_candidate.Candidate, ctx: Context, round_: int) -> Action:
     """The golden pages on the candidate (TD-177); its changed evidence goes to the owner first.
 
     Raises:
@@ -290,7 +301,7 @@ def _challenge(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoo
     """
     at, keys = job.workspace, tuple(f.id for f in pack_rounds.pending(lp))
     edits = updater_edits(job, ctx)
-    changed = None if recheck else pack_gates.diffs(c, at, job.live.package.resolve(), edits)
+    changed = None if recheck else pack_gates.diffs(c, at, ctx.package, edits)
     text = pack_candidate.message(
         c, ctx.diff, ctx.golden, ctx.replayed, updated=ctx.summary,
         rounds=pack_rounds.challenge_lines(lp, recheck=recheck), changed=changed,
@@ -356,11 +367,11 @@ def _asked(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -
         return [pack_gates.scope(run, bad)], "update"
     edits = updater_edits(job, ctx)
     if mark := unaccepted(job, ctx):
-        shown = pack_gates.diffs(c, at, job.live.package.resolve(), edits)
+        shown = pack_gates.diffs(c, at, ctx.package, edits)
         diff = "\n".join(s for p, s in shown.items() if p.startswith(GOLDEN))
         return [pack_gates.evidence(run, diff, ctx.reason, ctx.golden, mark)], "golden"
     if ctx.unsure:
-        shown = pack_gates.diffs(c, at, job.live.package.resolve(), edits)
+        shown = pack_gates.diffs(c, at, ctx.package, edits)
         return [
             pack_gates.unsure(run, p, said, shown.get(p, "(unchanged)"), pack_gates.content(c, at, p))
             for p, said in ctx.unsure.items()
@@ -440,8 +451,13 @@ def decided(  # noqa: PLR0913 - the open questions, the answered one, the answer
         return []
     if q["kind"] in pack_gates.KINDS:
         return gated(asked, q, option, ctx, lp)
-    if option == pack_rounds.ANOTHER:
+    if q["kind"] == "stopped":
+        pack_rounds.retry_stopped(lp, option)
+    elif q["kind"] == "end" and option == pack_rounds.ANOTHER:
         lp.extra, lp.ended, ctx.next = lp.extra + 1, "", "challenge"
+    elif q["kind"] == "end" and option == pack_rounds.ACTIVATE:
+        ctx.accepted, ctx.next = q["identity"], "activate"
     else:
-        lp.ended, ctx.accepted, ctx.next = lp.ended, q["identity"], "activate"
+        msg = f"cannot answer Impeccable update question {q['id']!r} of kind {q['kind']!r} with {option!r}"
+        raise ValueError(msg)
     return []

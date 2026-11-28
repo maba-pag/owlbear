@@ -73,6 +73,7 @@ project's Changes while that project's VS Code window is closed.
 | `owlbear update` | Runs updates now |
 | `owlbear versions [--prepare]` | The version it runs and the one it would take next; `--prepare` installs and checks that one without switching |
 | `owlbear impeccable [--install]` | Shows the Impeccable this version pins; `--install` downloads and verifies what is missing. `owlbear design-pack` is its old name, kept so versions from before the rename can install it |
+| `owlbear impeccable --replay` | Replays OwlBear's decided Impeccable rounds on the running machine host. It uses AI credits and does not require a project |
 | `owlbear audit-replay` | Replays the private fixed audit corpus locally against historical commits available in the current clone. Prints a pass/fail report without writing into shared data, contacting a model or starting the host. Scripted judgment does not prove live audit quality |
 | `owlbear autostart on` or `off` | Starts OwlBear at login, or not; `on` saves this shell's PATH and `COPILOT_CLI_PATH` as they are now, so run it again after adding or removing a tool or Node version |
 | `owlbear setup --repo PATH` | Checks a project's readiness, confirms its profile and registers its chat server; the **Add a project** dialog does the same from the Projects page, and repairs use this command |
@@ -401,6 +402,12 @@ again. If another machine changed the global settings meanwhile, nothing is undo
 page names the shared repository, where you publish or undo this machine's change by hand.
 
 ## Upgrading OwlBear
+
+On **Updates**, start or continue a Porsche Design System or Impeccable update without choosing a
+project. **Check for deprecations** on the Porsche Design System page also runs on the machine.
+These jobs use the machine's settings and count toward its AI spend. Older project updates that
+still wait for an answer appear as notices; they cannot continue here. Close their pull requests
+on GitHub if they have one.
 
 OwlBear's versions are Git tags such as `v1.0`. OwlBear installs a new version beside the running
 one, checks it, and switches only while nothing runs; it never moves to an older version.

@@ -2,15 +2,13 @@
 
 A stage that runs again starts a new invocation; it never overwrites an earlier one. An invocation another one has
 superseded is stale: a re-run of the same operation in its phase supersedes that earlier run and everything after it
-there, and a candidate that changed in the rounds supersedes the evidence about the one before it. A record from
-before invocations has none: it shows its stages alone, with no history made up for it.
+there, and a candidate that changed in the rounds supersedes the evidence about the one before it.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from owlbear_delivery_next.impeccable_runs.pack_state import STAGES
 from owlbear_delivery_next.state_store.pack_run_record import now
 
 PREPARE, CHALLENGE, PUBLISH = "prepare", "challenge", "publish"
@@ -188,17 +186,15 @@ def words(op: str, result: str) -> str:
 def progress(state: dict[str, Any], actions: dict[str, str] = ACTIONS) -> dict[str, Any]:
     """What the page shows of the run's progress: its phases with their invocations in order, now and next.
 
-    A record from before invocations is ``legacy``: no phases, its stages shown as they are. *actions* maps the run's
-    next action to the operation it starts: Impeccable's, or a PDS run's.
+    *actions* maps the run's next action to the operation it starts: Impeccable's, or a PDS run's.
     """
-    invocations = state.get("invocations")
+    invocations = state.get("invocations") or []
     shown: dict[str, dict[str, Any]] = {}
-    for inv in invocations or []:
+    for inv in invocations:
         group = shown.setdefault(key(inv), {"key": key(inv), "label": title(inv), "invocations": []})
         op = inv["operation"]
         group["invocations"].append(inv | {"label": OPERATIONS.get(op, op), "outcome": words(op, inv["result"])})
     return {
-        "legacy": invocations is None,
         "phases": list(shown.values()),
         "now": _now(state, invocations, actions),
         "next": _next(state, invocations, actions),
@@ -206,19 +202,15 @@ def progress(state: dict[str, Any], actions: dict[str, str] = ACTIONS) -> dict[s
 
 
 def _now(
-    state: dict[str, Any], invocations: list[dict[str, Any]] | None, actions: dict[str, str] = ACTIONS
+    state: dict[str, Any], invocations: list[dict[str, Any]], actions: dict[str, str] = ACTIONS
 ) -> dict[str, Any] | None:
     if state["state"] == "waiting":
-        gate = next((i for i in reversed(invocations or []) if i["result"] == "waiting"), None)
+        gate = next((i for i in reversed(invocations) if i["result"] == "waiting"), None)
         n = len(state.get("questions") or [])
         return {"phase": title(gate) if gate else "", "operation": OWNER, "since": gate["started_at"] if gate else "",
-                "label": f"Waiting for your answer to {n} question(s) below"}  # fmt: skip
+                "label": f"Waiting for you: {n} open {'question' if n == 1 else 'questions'}"}  # fmt: skip
     if state["state"] != "running":
         return None
-    if invocations is None:  # a legacy record: its running stage, nothing more
-        labels = {s.get("name"): s.get("label") for s in state.get("stages") or ()} or dict(STAGES)
-        label = labels.get(state.get("stage") or "") or "Running"
-        return {"phase": "", "operation": state.get("stage") or "", "label": label, "since": ""}
     current = next((i for i in reversed(invocations) if i["result"] == "running"), None)
     if current is not None:
         op = current["operation"]
@@ -231,13 +223,18 @@ def _now(
 
 
 def _next(
-    state: dict[str, Any], invocations: list[dict[str, Any]] | None, actions: dict[str, str] = ACTIONS
+    state: dict[str, Any], invocations: list[dict[str, Any]], actions: dict[str, str] = ACTIONS
 ) -> dict[str, Any] | None:
     """The controller's next step after now: fixed by the run, by a session's verdict, or by the owner's answer."""
     if state["state"] == "waiting":
-        options = list(dict.fromkeys(o["label"] for q in state.get("questions") or [] for o in q.get("options", [])))
-        return {"operation": "", "by": "owner", "label": "Your answer decides what runs next", "options": options}
-    current = next((i for i in reversed(invocations or []) if i["result"] == "running"), None)
+        questions = state.get("questions") or []
+        options = list(dict.fromkeys(o["label"] for q in questions for o in q.get("options", [])))
+        next_ = {"operation": "", "by": "owner", "label": "Your answer decides what runs next", "options": options}
+        action = actions.get((state.get("context") or {}).get("next"))
+        if action and any(q["kind"] == "stopped" for q in questions):
+            next_["retry"] = {"label": OPERATIONS[action], "model_requests": action in SESSIONS or action == "replay"}
+        return next_
+    current = next((i for i in reversed(invocations) if i["result"] == "running"), None)
     if state["state"] != "running" or current is None:
         return None
     op, by = current["operation"], "run"

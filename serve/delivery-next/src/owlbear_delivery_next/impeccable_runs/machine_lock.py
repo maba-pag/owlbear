@@ -1,4 +1,4 @@
-"""Impeccable's one machine lock: an exclusive flock held through an open descriptor until the caller closes it."""
+"""The lock shared by machine updates, replay and the PDS hand audit."""
 
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
+    from owlbear_delivery_next.local_system.maintenance import Kind, Maintenance
+
 # A holder check takes the flock shared for an instant, and a child forked by another thread holds a copy until its
 # exec: both are brief, while an update holds the lock for minutes (#805).
 SETTLE = 0.5
@@ -18,11 +20,17 @@ STEP = 0.01
 
 
 class HeldError(Exception):
-    """Another project holds the machine's lock; ``who`` names it."""
+    """Other work holds the machine's lock; ``who`` names it."""
 
     def __init__(self, who: str) -> None:
         super().__init__(who)
         self.who = who
+
+
+def unproven(ownership: Maintenance, key: str) -> str:
+    """Whose earlier session still holds the updates lane, even after the job released its lock."""
+    kinds: tuple[tuple[Kind, str], ...] = (("pack", "Impeccable"), ("pds", "PDS"), ("audit", "PDS"))
+    return next((name for kind, name in kinds if key in ownership.holding(kind)), "")
 
 
 def take(path: Path, owner: str, verify: Callable[[], None]) -> int:
@@ -43,12 +51,12 @@ def take(path: Path, owner: str, verify: Callable[[], None]) -> int:
         except BlockingIOError:
             if time.monotonic() >= until:
                 os.close(fd)
-                raise HeldError(path.read_text(encoding="utf-8").strip() or "another project") from None
+                raise HeldError(path.read_text(encoding="utf-8").strip() or "another update") from None
             time.sleep(STEP)
     try:
-        verify()
         os.ftruncate(fd, 0)
         os.write(fd, owner.encode())
+        verify()
     except BaseException:
         os.close(fd)
         raise

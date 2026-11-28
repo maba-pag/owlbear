@@ -30,13 +30,12 @@ from owlbear_delivery_next.impeccable_runs import pack_job, pack_replay, pack_st
 from owlbear_delivery_next.local_system import local_home, maintenance, processes
 from owlbear_delivery_next.local_system.data_repo import DataRepo
 from owlbear_delivery_next.local_system.slots import PACK, Slots
-from owlbear_delivery_next.project_host import pack_routes, session_slots
-from owlbear_delivery_next.project_host.admission import admitted
+from owlbear_delivery_next.machine_host import update_job_routes, update_jobs
+from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host, RunnerRecord
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.settings import config
-from owlbear_delivery_next.state_store import machine_settings
+from owlbear_delivery_next.state_store import update_home
 from owlbear_delivery_next.state_store.store import Store
 
 NOW = datetime(2026, 10, 10, 12, tzinfo=UTC)
@@ -103,13 +102,29 @@ def replay_host(tmp_path, shared_repo):
     return fake, store, host, slots
 
 
+def replay_route(host, replay, stopping=lambda: False):
+    machine = SimpleNamespace(
+        lock=threading.Lock(), slots=host.slots, maintenance=host.maintenance,
+        stopping=SimpleNamespace(is_set=stopping), ending=False, updating="",
+    )  # fmt: skip
+    updates = update_jobs.Updates(machine)
+    owner = session_slots.SlotOwner(
+        update_home.KEY, host.slots, host.maintenance, lambda: 1, updates.admitted, stopping
+    )
+    job = updates.pack
+    job.live = session_slots.pack_live(owner, pack_job.Live(replay=replay), job.log)
+    http = TestClient(FastAPI())
+    http.app.include_router(update_job_routes.replay_routes(updates))
+    return job, http, machine
+
+
 def released(job, host):
     assert job.replays == 0
     assert not job.busy()
     assert job.held is None
     assert not any(key.startswith(PACK) for _project, key in host.slots.waiting)
     assert host.slots.held == {}
-    assert host.slots.counts(session_slots.project(host))[2] == 0
+    assert host.slots.counts(update_home.KEY)[2] == 0
     fd = os.open(local_home.root() / pack_state.MACHINE_LOCK, os.O_RDWR)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -155,17 +170,14 @@ def test_replay_waits_while_shared_tick_releases_last_slot(replay_host, monkeypa
         assert result.termination.confirmed
         return SimpleNamespace(ok=True, advisory=False, rounds=3, left_out=0, before=0.5, after=0.6, pack="")
 
-    job = pack_job.Job(store, pack_job.Live(replay=replay))
-    session_slots.packed(host, job)
-    http = TestClient(FastAPI())
-    http.app.include_router(pack_routes.router(store, job, lambda: admitted(host), host))
+    job, http, machine = replay_route(host, replay)
 
     result: dict[str, object] = {}
     post = threading.Thread(target=lambda: result.update(r=http.post("/impeccable/replay")))
     post.start()
     try:
         assert queued.wait(WAIT), "the replay did not queue for a session slot"
-        assert any(k[0] == project and k[1].startswith(PACK) for k in slots.waiting)
+        assert any(k[0] == update_home.KEY and k[1].startswith(PACK) for k in slots.waiting)
         assert not entered
 
         fake.live.clear()  # the runner exits; the shared host's tick must observe it and let go of the slot
@@ -178,8 +190,8 @@ def test_replay_waits_while_shared_tick_releases_last_slot(replay_host, monkeypa
 
         assert sdk_entered.wait(WAIT), "the replay did not enter the SDK once its slot was free"
         assert job.busy()
-        assert host.launching.acquire(timeout=2), "the replay held the launch lock while its session ran"
-        host.launching.release()
+        assert machine.lock.acquire(timeout=2), "the replay held the admission lock while its session ran"
+        machine.lock.release()
     finally:
         release.set()
         post.join(WAIT)
@@ -191,9 +203,8 @@ def test_replay_waits_while_shared_tick_releases_last_slot(replay_host, monkeypa
 
 
 def test_grant_then_stop_refuses_sdk_and_releases_slot(replay_host, monkeypatch):
-    fake, store, host, slots = replay_host
+    fake, _store, host, slots = replay_host
     stopping = threading.Event()
-    host.draining = stopping.is_set
     entered = []
     monkeypatch.setattr(pack_replay, "sdk_run", entered.append)
 
@@ -211,10 +222,7 @@ def test_grant_then_stop_refuses_sdk_and_releases_slot(replay_host, monkeypatch)
         run(session(fake.worktree))
         return SimpleNamespace(ok=True, advisory=False, rounds=3, left_out=0, before=0.5, after=0.6, pack="")
 
-    job = pack_job.Job(store, pack_job.Live(replay=replay))
-    session_slots.packed(host, job)
-    http = TestClient(FastAPI())
-    http.app.include_router(pack_routes.router(store, job, lambda: admitted(host), host))
+    job, http, _machine = replay_route(host, replay, stopping.is_set)
 
     response = http.post("/impeccable/replay")
 
@@ -226,12 +234,9 @@ def test_grant_then_stop_refuses_sdk_and_releases_slot(replay_host, monkeypatch)
 
 
 def test_drain_cancels_public_replay_wait_and_cleans_claims(replay_host, monkeypatch):
-    fake, store, host, slots = replay_host
-    monkeypatch.setattr(config, "BASE", None)
-    monkeypatch.setattr(machine_settings, "BASE", None)
-    assert session_slots.limit(host) == 0
+    fake, _store, host, slots = replay_host
+    slots.total = lambda: 0
     drained = threading.Event()
-    host.draining = drained.is_set
     calls, entries = [], []
     waiting, turn = threading.Event(), threading.Event()
     real_wait = turn.wait
@@ -248,10 +253,7 @@ def test_drain_cancels_public_replay_wait_and_cleans_claims(replay_host, monkeyp
         calls.append(True)
         return run(session(fake.worktree))
 
-    job = pack_job.Job(store, pack_job.Live(replay=replay))
-    session_slots.packed(host, job)
-    http = TestClient(FastAPI())
-    http.app.include_router(pack_routes.router(store, job, lambda: admitted(host), host))
+    job, http, _machine = replay_route(host, replay, drained.is_set)
     result = {}
     post = threading.Thread(target=lambda: result.update(response=http.post("/impeccable/replay")))
     post.start()

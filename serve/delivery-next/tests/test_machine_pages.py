@@ -97,6 +97,7 @@ from owlbear_delivery_next.state_store import (
     pds_run_record,
     project_home,
     registry,
+    update_home,
     watch_reports,
 )
 from owlbear_delivery_next.state_store.store import Store, StoreError
@@ -877,21 +878,21 @@ def test_every_page_shows_the_impeccable_banners_and_install_says_refused_runnin
 
 
 @pytest.mark.browser
-def test_updates_impeccable_with_no_project_answers_a_loaded_projects_run_with_its_project_named(
+def test_updates_impeccable_with_no_project_offers_start_and_then_shows_the_waiting_run(
     tmp_path: Path, monkeypatch, pds
 ) -> None:
-    """D-01M63C5VGFVT3DVCC888B78K2A: the page is the same in every project; on the machine host a run whose project is
-    loaded is answered from All projects too, while starting one still needs a project."""
+    """All projects offers the machine's start action and shows its waiting run."""
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     monkeypatch.setattr(Host, "_launch", lambda _self, _slug: False)
     path = clone(tmp_path / "alpha")
-    registry.register(path)
-    job = pack_job.Job(Store.open(path), pack_job.Live())
+    old = registry.register(path)
     question = pack_rounds.question("r1:end:1", "end", "The rounds ended.", ["activate", "discard"])
-    job.state = pack_job._blank() | {  # noqa: SLF001 - a run waiting for the owner
-        "state": "waiting", "started_at": datetime.now(UTC).isoformat(), "run": "r1", "questions": [question],
+    old_run = pack_job.Job(SimpleNamespace(root=project_home.home(old.id)))
+    old_run.state |= {
+        "state": "waiting", "started_at": datetime.now(UTC).isoformat(),
+        "published": {"number": 17, "url": "https://github.com/o/r/pull/17"},
     }  # fmt: skip
-    job._save()  # noqa: SLF001
+    old_run._save()  # noqa: SLF001 - an old project's saved run
     with serve() as (machine, _server, base):
         failed = {"state": "failed", "version": "v0.3", "pack": "", "detail": "cannot download", "at": None}
         unread = {
@@ -902,12 +903,21 @@ def test_updates_impeccable_with_no_project_answers_a_loaded_projects_run_with_i
         with page_at(base, pds) as page:
             page.goto(f"{base}/updates/impeccable#token=t")
             assert "project=" not in page.url  # no project picked for the owner
-            expect(page.locator("#pack-project")).to_contain_text("Started in alpha")
-            expect(page.locator("#pack-project")).not_to_contain_text("choose a project above")
+            expect(page.get_by_role("button", name="Update Impeccable")).to_be_enabled()
+            advisory = page.locator("#pack-old-waiting li")
+            expect(advisory).to_contain_text("alpha: This update started before updates belonged to the machine")
+            expect(advisory.get_by_role("link", name="pull request #17")).to_have_attribute(
+                "href", "https://github.com/o/r/pull/17"
+            )
+            job = machine.updates.pack
+            job.state = pack_job._blank() | {  # noqa: SLF001 - a run waiting for the owner
+                "state": "waiting", "started_at": datetime.now(UTC).isoformat(), "run": "r1", "questions": [question],
+            }  # fmt: skip
+            job._save()  # noqa: SLF001
+            page.reload()
             expect(page.locator("#pack-questions .pack-question")).to_have_count(1)  # shown,
             expect(page.locator("#pack p-button", has_text="Activate")).to_have_count(1)  # and answerable here
             expect(page.get_by_role("button", name="Update Impeccable")).to_be_disabled()
-            expect(page.locator("#pack")).to_contain_text("Choose a project above to start one")
             expect(page.locator("#pack-install-state")).to_have_text(
                 "Impeccable of OwlBear v0.3 failed to install on this machine: cannot download."
             )
@@ -1165,10 +1175,10 @@ def test_updates_say_update_checks_that_could_not_be_kept_set_or_looked_at_whole
 
 
 @pytest.mark.browser
-def test_updates_pds_says_a_newer_release_whose_projects_runs_could_not_be_read_whole(
+def test_updates_pds_says_a_newer_release_whose_machine_run_could_not_be_read_whole(
     monkeypatch, capsys, pds, whole_error
 ) -> None:
-    """#971: a newer PDS whose projects' updates could not be read says why whole beside it on Updates ▸ PDS and in
+    """#971: a newer PDS whose machine update could not be read says why whole beside it on Updates ▸ PDS and in
     the host's log."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
@@ -1180,7 +1190,7 @@ def test_updates_pds_says_a_newer_release_whose_projects_runs_could_not_be_read_
 
     newer = {"newer": True, "current": "3.0.0", "latest": "999.0.0", "detail": ""}
     monkeypatch.setitem(update_checks.CHECKS, "pds", lambda: newer)
-    monkeypatch.setattr(update_checks, "_pds_runs", raising)  # the PDS page's own run list reads them apart
+    monkeypatch.setattr(update_checks, "_pds_runs", raising)  # the PDS page reads the last run separately
     monkeypatch.setattr(project.readiness, "ready", lambda _store, _repo, **_kwargs: [])
     with serve() as (machine, _server, base):
         assert machine.checks.start("pds")
@@ -1192,7 +1202,7 @@ def test_updates_pds_says_a_newer_release_whose_projects_runs_could_not_be_read_
             expect(shown).to_be_visible()
             text = shown.text_content()
     whole = f"OSError: {whole_error}\na note on the failure"
-    assert text == f"999.0.0 (whether a project already takes it could not be read: {whole})"
+    assert text == f"999.0.0 (the machine's last update could not be read: {whole})"
     assert said == []
     line = r"^\d\d:\d\d:\d\dZ (update checks.*?)\n(?=\d\d:\d\d:\d\dZ |\Z)"
     lines = re.findall(line, capsys.readouterr().out, re.MULTILINE | re.DOTALL)
@@ -2172,40 +2182,174 @@ def test_updates_owlbear_and_impeccable_show_a_failed_updates_and_installs_whole
         assert said == []
 
 
+def scroll_pds_diagnostic(page, label: str, reason: str) -> None:
+    detail = page.get_by_role("region", name=label)
+    expect(detail).to_be_visible()
+    assert detail.text_content() == reason
+    assert detail.evaluate("(el) => el.scrollHeight > el.clientHeight")
+    assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
+    height, viewport = page.evaluate("[document.documentElement.scrollHeight, window.innerHeight]")
+    assert height < 4 * viewport, (height, viewport)
+    detail.focus()
+    expect(detail).to_be_focused()
+    page.keyboard.press("PageDown")
+    until(page, lambda: detail.evaluate("(el) => el.scrollTop > 0"))
+
+
+def retry_stopped_pds(page, url: str, reason: str, resume) -> None:
+    """The page shows the whole multi-line stop and asks the run that stopped to resume."""
+    answers = []
+    refusal = pack_job.Job.BUSY.format(who="The check for deprecations")
+
+    def answering(route) -> None:
+        answers.append((route.request.url, route.request.post_data_json))
+        if len(answers) == 1:
+            route.fulfill(status=409, json={"detail": refusal})
+            return
+        resume()
+        route.fulfill(json={})
+
+    page.route("**/pds/update/answer", answering)
+    viewport = page.viewport_size
+    page.set_viewport_size({"width": 390, "height": 800})
+    question = page.get_by_role("article", name="The update stopped")
+    expect(page.locator("#pack-todo")).to_have_text("Choose an answer under 'The update stopped'.")
+    scroll_pds_diagnostic(page, "Why the update stopped", reason)
+    page.evaluate("window.scrollTo({top: 0, behavior: 'instant'})")
+    expect(page.locator("#pack ~ #check")).to_have_count(1)
+    retry = question.get_by_role("button", name="Try again")
+    guidance = question.get_by_text("Try again repeats: Browser tests on the candidate. Earlier work is kept.")
+    expect(guidance).to_be_in_viewport(ratio=1)
+    assert guidance.evaluate("(el) => el.getBoundingClientRect().bottom") <= retry.bounding_box()["y"]
+    box = retry.bounding_box()
+    assert box is not None
+    assert min(box["width"], box["height"]) >= 24
+    assert box["y"] >= 0
+    assert box["y"] + box["height"] <= 800
+    retry.click()
+    notification = question.locator("#pack-error")
+    expect(notification).to_have_text(refusal)
+    expect(notification).to_be_in_viewport(ratio=1)
+    expect(retry).to_be_in_viewport(ratio=1)
+    expect(page.locator("#pack-error")).to_have_count(1)
+    retry.click()
+    expect(question).to_have_count(0)
+    expect(page.locator("#pack-state")).to_contain_text("Running since")
+    assert answers == [(url, {"question": "r1-stop", "option": "retry", "note": ""})] * 2
+    expect(page.locator("#pack-error")).to_have_count(0)
+    page.set_viewport_size(viewport)
+
+
+def discard_pds(page, pds, url: str) -> None:
+    sent = []
+
+    def discarding(route) -> None:
+        sent.append((route.request.url, route.request.post_data_json))
+        route.fulfill(json={})
+
+    page.route("**/pds/update/answer", discarding)
+    button = page.locator("#pack-discard")
+    expect(button).to_be_visible()
+    label = button.inner_text()
+    button.click()
+    pds.answer(page, label)
+    until(page, lambda: sent)
+    assert sent == [(url, {"question": "r1-stop", "option": "discard", "note": ""})]
+    page.unroute("**/pds/update/answer", discarding)
+
+
+def pds_menu_state(page, level, tags) -> None:
+    expect(page.locator("#menu-dot")).to_have_count(1 if "available" in level else 0)
+    page.get_by_role("button", name=re.compile(r"^Menu")).click()
+    expect(page.locator('p-drilldown-item[identifier="updates"]')).to_have_attribute("label", level)
+    link = page.locator("p-drilldown").get_by_role("link", name="Porsche Design System")
+    expect(link.locator("p-tag")).to_have_text(tags)
+    dialog = page.get_by_role("dialog")
+    expect(dialog).to_be_visible()
+    page.keyboard.press("Escape")
+    expect(dialog).to_be_hidden()
+
+
+def pds_update_actions(page, pds, base: str, phase: str, stopped) -> None:
+    if phase == "idle":
+        start = page.get_by_role("button", name="Start update", exact=True)
+        expect(start).to_be_enabled()
+        for holder in ("check for deprecations", "calibration replay", "Impeccable update"):
+            fd = machine_lock.take(local_home.root() / pack_state.MACHINE_LOCK, holder, lambda: None)
+            try:
+                page.reload()
+                notice = page.locator("#pack-lock")
+                expect(notice).to_have_text(f"The {holder} runs; one runs at a time on this machine.")
+                expect(start).to_be_disabled()
+                link = notice.get_by_role("link")
+                if holder == "Impeccable update":
+                    expect(link).to_have_attribute("href", "/updates/impeccable")
+                else:
+                    expect(link).to_have_count(0)
+            finally:
+                os.close(fd)
+    elif phase == "running":
+        page.goto(f"{base}/updates/impeccable#token=t")
+        notice = page.locator("#pack-lock")
+        expect(notice).to_have_text("The PDS update runs; one runs at a time on this machine.")
+        expect(notice.get_by_role("link", name="PDS update")).to_have_attribute("href", "/updates/pds")
+        expect(page.get_by_role("button", name="Update Impeccable")).to_be_disabled()
+    elif phase == "waiting":
+        url = f"{base}/api/next/pds/update/answer"
+        discard_pds(page, pds, url)
+        retry_stopped_pds(page, url, *stopped)
+    elif phase == "failed":
+        viewport = page.viewport_size
+        page.set_viewport_size({"width": 390, "height": 800})
+        scroll_pds_diagnostic(page, "Why the update failed", stopped[0])
+        page.set_viewport_size(viewport)
+
+
 @pytest.mark.browser
 @pytest.mark.timeout(150)  # a real browser through five run states with the menu opened in each
 def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_waiting_failed_merged_and_current(
-    tmp_path: Path, monkeypatch, pds
+    monkeypatch, pds
 ) -> None:
     """#777: a newer PDS release counts until an update takes it; the page and the menu say its run's state; a merged
     one is not counted and waits for OwlBear's release; the installed pin reaching it is up to date."""
-    from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
-
     found = {"success": {"at": "2026-10-17T04:00:00+00:00", "newer": True, "current": "4.9.0", "latest": "4.10.1",
                          "detail": ""}, "failures": 0, "attempt_at": "2026-10-17T04:00:00+00:00"}  # fmt: skip
     monkeypatch.setattr(update_checks.Checks, "_restored", lambda _self: {"pds": found})
     monkeypatch.setattr(update_checks.Checks, "start", lambda _self, _name: False)  # no check overwrites it
     installed = ["4.9.0"]
     monkeypatch.setitem(update_checks.INSTALLED, "pds", lambda: installed[0])
-    alpha = registry.register(clone(tmp_path / "alpha"))
     stages = [{"name": n, "label": label, "result": "pending", "detail": ""} for n, label in pds_job.STAGES]
 
     def ran(state: str, **more) -> None:
-        record = pack_state.blank() | {"stages": stages, "state": state, "run": "r1", "release": "4.10.1",
-                                       "started_at": datetime.now(UTC).isoformat()} | more  # fmt: skip
-        project_home.home(alpha.id).mkdir(parents=True, exist_ok=True)
-        (project_home.home(alpha.id) / pds_run_record.FILE).write_text(json.dumps(record))
+        record = pack_state.blank() | {
+            "stages": stages, "invocations": [], "state": state, "run": "r1", "release": "4.10.1",
+            "started_at": datetime.now(UTC).isoformat(),
+        } | more  # fmt: skip
+        update_home.root().mkdir(parents=True, exist_ok=True)
+        (update_home.root() / pds_run_record.FILE).write_text(json.dumps(record))
 
-    held = machine_lock.take(local_home.root() / pack_state.MACHINE_LOCK, alpha.id, lambda: None)  # its run holds it
-    asked = pack_rounds.question("r1:end:1", "end", "The rounds ended.", ["activate", "discard"])
+    held = None
+    lead = (
+        "The browser rerun on main did not clear the failures. Try again if the machine was busy; "
+        "if main is broken, fix it, discard this update and start a new one."
+    )
+    reason = f"{lead}\npytest output:\n" + "\n".join(f"Failure {n}: " + "x" * 220 for n in range(35))
+    asked = pack_rounds.question("r1-stop", "stopped", reason, ["retry", "discard"], lead=lead)
+
+    def resume() -> None:
+        nonlocal held
+        held = machine_lock.take(local_home.root() / pack_state.MACHINE_LOCK, "PDS update", lambda: None)
+        ran("running", stage="browser")
+
     merged = {"commit": "a" * 40, "branch": "pds/r1", "url": "https://github.com/o/r/pull/9", "number": 9,
               "merged": "b" * 40}  # fmt: skip
     journey = [
-        (None, "newer version", "Updates, 1 available", ["Available"], "No project has run a PDS update yet."),
+        (None, "newer version", "Updates, 1 available", ["Available"], "This machine has not run a PDS update yet"),
         ({"state": "running"}, "update running", "Updates", ["Running"], "Running since"),
-        ({"state": "waiting", "questions": [asked]}, "update waiting for you", "Updates", ["Waiting for you"],
-         "waits for your answers"),
-        ({"state": "failed", "reason": "audit: the auditor submitted no report"}, "newer version",
+        ({"state": "waiting", "questions": [asked], "reason": reason, "context": {"next": "browser"}},
+         "update waiting for you", "Updates",
+         ["Waiting for you"], "waits for your answers"),
+        ({"state": "failed", "reason": reason}, "newer version",
          "Updates, 1 available", ["Failed", "Available"], "Last run failed"),
         ({"state": "passed", "published": merged}, "merged, not released yet", "Updates", [], "Last run passed"),
     ]  # fmt: skip
@@ -2214,18 +2358,16 @@ def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_wa
             for record, state, level, tags, run in journey:
                 if record:
                     ran(**record)
+                if record and record["state"] == "running":
+                    held = machine_lock.take(local_home.root() / pack_state.MACHINE_LOCK, "PDS update", lambda: None)
                 if record and record["state"] != "running" and held is not None:
                     os.close(held)
                     held = None
                 page.goto(f"{base}/updates/pds#token=t")
                 expect(page.locator("#check-state")).to_have_text(state)
                 expect(page.locator("#pack-state")).to_contain_text(run)
-                expect(page.locator("#menu-dot")).to_have_count(1 if "available" in level else 0)
-                page.get_by_role("button", name=re.compile(r"^Menu")).click()
-                expect(page.locator('p-drilldown-item[identifier="updates"]')).to_have_attribute("label", level)
-                link = page.locator("p-drilldown").get_by_role("link", name="Porsche Design System")
-                expect(link.locator("p-tag")).to_have_text(tags)
-                page.keyboard.press("Escape")
+                pds_menu_state(page, level, tags)
+                pds_update_actions(page, pds, base, record["state"] if record else "idle", (reason, resume))
             expect(page.locator("#pack-summary")).to_have_css("display", "grid")  # the run view's shared styles
             expect(page.locator(".pack-facts")).to_have_css("display", "grid")
             expect(page.locator("#check-latest")).to_contain_text(f"4.10.1 ({update_checks.MERGED})")
@@ -2239,20 +2381,17 @@ def test_updates_pds_and_the_menu_follow_its_update_from_available_to_running_wa
 
 
 @pytest.mark.browser
-def test_a_run_started_in_one_project_is_answered_from_another_and_from_all_projects(
-    tmp_path: Path, monkeypatch, pds
-) -> None:
-    """D-01M63C5VGFVT3DVCC888B78K2A: Updates ▸ Impeccable is the same in every project: a run alpha started waits for
-    the owner on beta's page, on a replaced project's page and under All projects, and his answer goes to alpha."""
+def test_the_machine_run_is_answerable_from_any_project_and_from_all_projects(tmp_path: Path, monkeypatch, pds) -> None:
+    """The owner can answer the machine's update from a project, a replaced project or All projects."""
     from playwright.sync_api import expect  # noqa: PLC0415 - the optional browser runtime
 
-    alpha = registry.register(clone(tmp_path / "alpha"))
     beta = registry.register(clone(tmp_path / "beta"))
     old = replaced(tmp_path / "delta")  # not loaded: its own API answers nothing
-    job = pack_job.Job(Store.open(Path(alpha.path)), pack_job.Live())
+    job = pack_job.Job(SimpleNamespace(root=update_home.root()), pack_job.Live())
     question = pack_rounds.question("r1:end:1", "end", "The rounds ended.", ["activate", "discard"])
     job.state = pack_job._blank() | {  # noqa: SLF001 - a run waiting for the owner
         "state": "waiting", "started_at": datetime.now(UTC).isoformat(), "run": "r1", "questions": [question],
+        "invocations": [],
     }  # fmt: skip
     job._save()  # noqa: SLF001
     answered: list[tuple[str, dict]] = []
@@ -2266,7 +2405,7 @@ def test_a_run_started_in_one_project_is_answered_from_another_and_from_all_proj
         for shown in (f"?project={beta.id}", f"?project={old.id}", ""):
             answered.clear()
             page.goto(f"{base}/updates/impeccable{shown}#token=t")
-            expect(page.locator("#pack-project")).to_contain_text("Started in alpha")
+            expect(page.locator("#pack-state")).to_contain_text("waits for your answers")
             page.get_by_role("button", name="Menu").click()
             impeccable = page.locator("p-drilldown").get_by_role("link", name="Impeccable")
             expect(impeccable.locator("p-tag")).to_have_text(["Waiting for you"])
@@ -2278,10 +2417,10 @@ def test_a_run_started_in_one_project_is_answered_from_another_and_from_all_proj
             pds.answer(page, "Activate")
             until(page, lambda: answered)
             [(url, body)] = answered
-            assert url == f"{base}/p/{alpha.id}/api/next/impeccable/update/answer"
+            assert url == f"{base}/api/next/impeccable/update/answer"
             assert body == {"question": "r1:end:1", "option": "activate", "note": ""}
 
-        def stopped(route) -> None:  # alpha's host stopped while it ran
+        def stopped(route) -> None:  # the machine host stopped while it ran
             run = route.fetch().json()["run"] | {"state": "running", "interrupted": True}
             route.fulfill(json={"run": run})
 
@@ -2292,18 +2431,15 @@ def test_a_run_started_in_one_project_is_answered_from_another_and_from_all_proj
 
 
 @pytest.mark.browser
-@pytest.mark.parametrize("options", [["activate", "discard"], None], ids=["answered", "alone"])
-def test_a_discard_confirmed_after_its_project_unloaded_never_goes_to_the_shown_project(
-    tmp_path: Path, monkeypatch, pds, options
-) -> None:
-    """Discard's destination is fixed before its dialog: alpha unloading while it is open sends the confirmed discard
-    to alpha, which answers for itself, never to beta, the project the page shows, whose run it is not."""
-    alpha = registry.register(clone(tmp_path / "alpha"))
-    beta = registry.register(clone(tmp_path / "beta"))
-    job = pack_job.Job(Store.open(Path(alpha.path)), pack_job.Live())
-    questions = [pack_rounds.question("r1:end:1", "end", "The rounds ended.", options)] if options else []
+@pytest.mark.parametrize("options", [["retry", "discard"], None], ids=["answered", "alone"])
+def test_a_discard_from_all_projects_goes_to_the_machine(monkeypatch, pds, options) -> None:
+    """Both a question's discard and the standalone discard go to the machine."""
+    job = pack_job.Job(SimpleNamespace(root=update_home.root()), pack_job.Live())
+    reason = "The golden pages did not finish.\n" + "x" * 430
+    questions = [pack_rounds.question("r1-stop", "stopped", reason, options)] if options else []
     job.state = pack_job._blank() | {  # noqa: SLF001 - a run waiting for the owner
         "state": "waiting", "started_at": datetime.now(UTC).isoformat(), "run": "r1", "questions": questions,
+        "invocations": [],
     }  # fmt: skip
     job._save()  # noqa: SLF001
     sent: list[str] = []
@@ -2312,20 +2448,29 @@ def test_a_discard_confirmed_after_its_project_unloaded_never_goes_to_the_shown_
         sent.append(route.request.url)
         route.fulfill(json={})
 
-    with browsing(monkeypatch, pds) as (page, base):
+    with browsing(monkeypatch, pds, width=390) as (page, base):
         page.route(re.compile(r".*/impeccable/update/(answer|discard)$"), sending)
-        page.goto(f"{base}/updates/impeccable?project={beta.id}#token=t")
+        page.goto(f"{base}/updates/impeccable#token=t")
+        if options:
+            expect(page.locator("#pack ~ #check")).to_be_visible()
+            retry = page.get_by_role("button", name="Try again")
+            expect(retry).to_be_in_viewport(ratio=1)
+            box = retry.bounding_box()
+            assert box is not None
+            assert min(box["width"], box["height"]) >= 24
         discard = page.locator("#pack-discard")
         page.wait_for_function("() => document.querySelector('#pack-discard')?.innerText.trim()")
         label = discard.inner_text()
         discard.click()
         pds.modal(page).wait_for()
-        unload = "async id => (await import('/assets/ui.mjs')).machineState().projects.find(p => p.id === id).state"
-        page.evaluate(f"{unload} = 'failed'", alpha.id)  # what the next poll shows once alpha's host fails
+        page.keyboard.press("Escape")
+        expect(page.get_by_role("dialog")).to_have_count(0)
+        page.wait_for_function("document.activeElement?.id === 'pack-discard'")
+        discard.click()
         pds.answer(page, label)
         until(page, lambda: sent)
     end = "answer" if options else "discard"
-    assert sent == [f"{base}/p/{alpha.id}/api/next/impeccable/update/{end}"]
+    assert sent == [f"{base}/api/next/impeccable/update/{end}"]
 
 
 @pytest.mark.browser

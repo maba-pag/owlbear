@@ -21,7 +21,6 @@ import uvicorn
 from fastapi.testclient import TestClient
 
 from owlbear_delivery_next.change_contracts import chat_contract, tools
-from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.decision_records import DecisionBaseline
 from owlbear_delivery_next.change_contracts.memory_curation_tools import MemoryCurationResult
 from owlbear_delivery_next.change_contracts.models import Change, Environment, Step, StepKind
@@ -40,7 +39,14 @@ from owlbear_delivery_next.project_host import api, session_slots
 from owlbear_delivery_next.project_host.host import ENDING, Host, HostRecord, RunnerRecord, running
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.state_store import decision_store, profile_share, project_home, registry, spotter_test
+from owlbear_delivery_next.state_store import (
+    decision_store,
+    profile_share,
+    project_home,
+    registry,
+    spotter_test,
+    update_home,
+)
 from owlbear_delivery_next.state_store.store import Store, StoreError
 
 AUTH = {"authorization": "Bearer t"}
@@ -458,17 +464,15 @@ def test_a_manual_replay_of_another_project_waits_for_a_failed_projects_legacy_p
     assert machine.slots.counts(bad.id)[2] == 1  # one slot is held
     assert machine.slots.counts(good.id)[1] == 2  # one slot still free
 
-    refused = http.post(f"/p/{good.id}/api/next/impeccable/replay")
+    refused = http.post("/api/next/impeccable/replay")
     assert refused.status_code == 409
     reason = "an earlier Impeccable session is unproven; recover it on the Maintenance page first"
     assert refused.json()["detail"] == reason
 
-    monkeypatch.setattr(replay_client.project_home, "clone_id", lambda _dir: good.id)
-    record = HostFound(url="http://127.0.0.1:9/", token="t", pid=1, started_at=datetime.now(UTC), project=good.id)  # noqa: S106
-    monkeypatch.setattr(replay_client.host, "running_at", lambda _root, _model: record)
+    monkeypatch.setattr(replay_client.host, "running_at", lambda _root: machine.record)
     loopback = Loopback(http)
     monkeypatch.setattr(replay_client, "_LOCAL", loopback)
-    assert cli.main(["--repo", str(good.path), "impeccable", "--replay"]) == 1
+    assert cli.main(["impeccable", "--replay"]) == 1
     assert capsys.readouterr().out.splitlines()[-1] == reason  # the host's own log lines come first
 
     assert machine.slots.counts(bad.id)[2] == 1  # the reservation stays
@@ -488,16 +492,9 @@ def test_a_manual_replay_of_a_project_whose_legacy_pack_finished_is_not_refused_
     machine.load_all()
     assert machine.slots.counts(bad.id)[2] == 0
 
-    reached = http.post(f"/p/{good.id}/api/next/impeccable/replay")
+    reached = http.post("/api/next/impeccable/replay")
     assert reached.status_code == 422  # pack_replay's own check: no shared repository, before any SDK session
     assert "shared repository" in reached.json()["detail"]
-    old = http.post(f"/p/{good.id}/api/next/design-pack/replay")  # its name before the Impeccable rename
-    assert (old.status_code, old.json()) == (reached.status_code, reached.json())
-    moved = http.get(f"/p/{good.id}/api/next/design-pack/update?x=1", follow_redirects=False)
-    assert (moved.status_code, moved.headers["location"]) == (
-        307,
-        f"http://127.0.0.1/p/{good.id}/api/next/impeccable/update?x=1",
-    )
     machine.slots.total = lambda: 1
     assert machine.slots.take(good.id, "probe", 1, 1) == 1  # the finished pack leaves the one slot free
 
@@ -530,17 +527,17 @@ def test_a_manual_replay_of_another_project_refuses_an_unloaded_projects_older_f
     machine.load_all()
     assert (machine.projects[bad.id].state, machine.slots.counts(bad.id)[2]) == ("failed", 1)
 
-    refused = http.post(f"/p/{good.id}/api/next/impeccable/replay")
+    refused = http.post("/api/next/impeccable/replay")
     assert (refused.status_code, refused.json()["detail"]) == (409, REFUSED)
     assert machine.slots.counts(bad.id)[2] == 1  # the reservation stays
     assert machine.slots.counts(good.id)[2] == 0
     assert (folder / pack_job.FILE).is_file()
 
 
-def test_a_loaded_projects_older_failed_uncertain_pack_holds_its_slot_and_refuses_its_own_replay(
+def test_a_loaded_projects_older_failed_uncertain_pack_holds_its_slot_and_refuses_machine_replay(
     tmp_path, http, machine, monkeypatch
 ):
-    """The loaded path: the same older record is adopted through the project's job before a replay can start."""
+    """The loaded project's old record is read for custody before the machine can replay."""
     monkeypatch.setattr(pack_replay, "sdk_run", lambda _cfg: pytest.fail("no SDK session starts"))
     good = registry.register(clone(tmp_path / "good"))
     # the store folder, as the project opens it
@@ -549,7 +546,7 @@ def test_a_loaded_projects_older_failed_uncertain_pack_holds_its_slot_and_refuse
     machine.load_all()
     assert (machine.projects[good.id].state, machine.slots.counts(good.id)[2]) == ("loaded", 1)
 
-    refused = http.post(f"/p/{good.id}/api/next/impeccable/replay")
+    refused = http.post("/api/next/impeccable/replay")
     assert (refused.status_code, refused.json()["detail"]) == (409, REFUSED)
 
 
@@ -570,7 +567,7 @@ def test_an_empty_legacy_import_receipt_never_suppresses_repair_of_an_older_fail
     machine.maintenance._save(maintenance.Ledger(imported=[f"{project.id}:legacy"]))  # noqa: SLF001
     machine.slots.total = lambda: 2
     machine.load_all()
-    refused = http.post(f"/p/{good.id}/api/next/impeccable/replay")
+    refused = http.post("/api/next/impeccable/replay")
     assert (refused.status_code, refused.json()["detail"]) == (409, REFUSED)
     assert (machine.slots.counts(project.id)[2], len(machine.maintenance.read()["sessions"])) == (1, 1)
 
@@ -1437,35 +1434,68 @@ def waiting_for(name: str) -> list[str]:
     return [f"{name}: {UNPROVEN_PACK}"]
 
 
+def test_the_machine_waits_for_running_updates_but_not_for_owner_answers(machine, monkeypatch):
+    alive = threading.Event()
+    job = machine.updates.pds
+    job.thread = threading.Thread(target=alive.wait)
+    job.thread.start()
+    try:
+        assert machine.busy() == machine.left() == ["a PDS update"]
+    finally:
+        alive.set()
+        job.thread.join()
+    monkeypatch.setitem(job.state, "state", "waiting")
+    assert machine.busy() == machine.left() == []
+
+
+@pytest.mark.parametrize("gate", ["stop", "idle", "update"])
+def test_machine_admission_refuses_updates_and_answers_behind_its_gates(machine, http, gate):
+    if gate == "stop":
+        machine.closing()
+    elif gate == "idle":
+        assert http.post("/api/next/pause-stop").status_code == 200
+    else:
+        assert machine.fence("Installing OwlBear") == []
+    for kind in ("pds", "impeccable"):
+        start = http.post(f"/api/next/{kind}/update")
+        answer = http.post(f"/api/next/{kind}/update/answer", json={"question": "q", "option": "o"})
+        assert start.status_code == answer.status_code == (409 if gate == "idle" else 503)
+        assert start.json() == answer.json()
+
+
 @pytest.mark.parametrize("run", [IDENTIFIED, UNIDENTIFIED], ids=["identified", "unidentified"])
-def test_a_returned_unconfirmed_pack_session_keeps_the_update_and_the_stop_waiting_after_its_project_goes(
-    tmp_path, machine, http, run
-):
+def test_a_returned_unconfirmed_pack_session_keeps_the_machine_update_and_stop_waiting(tmp_path, machine, http, run):
     machine.maintenance.observe = lambda _pid, _created: True  # synthetic: the session's process is still there
     entry = registry.register(clone(tmp_path / "a"))
     machine.slots.total = lambda: 2
     machine.load_all()
-    loaded = machine.projects[entry.id]
-    job = session_slots.packed(loaded.host, pack_job.Job(loaded.store, pack_job.Live(update=lambda _s, _cfg: run)))
+    job = machine.updates.pack
+    owner = session_slots.SlotOwner(
+        update_home.KEY, machine.slots, machine.maintenance, lambda: 1, machine.updates.admitted, lambda: False
+    )
+    job.live = session_slots.pack_live(owner, pack_job.Live(update=lambda _s, _cfg: run), job.log)
     (root := tmp_path / "wt").mkdir()
-    assert job.live.update(loaded.store, session(root)) is run
-    assert (job.busy(), loaded.working(stopping=True)) == (False, [])  # the job and its project no longer count it
+    assert job.live.update(job.store, session(root)) is run
+    assert not job.busy()  # only its unproven session still counts
     stopped: list[bool] = []
     machine.on_stop = lambda: stopped.append(True)
-    assert machine.busy() == waiting_for("a")  # an update and an automatic update wait for it
-    assert machine.fence("synthetic update") == waiting_for("a")
+    assert machine.busy() == waiting_for("Updates")
+    assert machine.fence("synthetic update") == waiting_for("Updates")
     machine.unfence()
+    refused = http.post("/api/next/pds/update")
+    assert refused.status_code == 409
+    assert "an earlier Impeccable session is unproven" in refused.json()["detail"]
     assert http.post("/api/next/pause-stop").json() == {"paused": True, "ending": True}
-    assert http.get("/api/next/projects").json()["left"] == waiting_for("a")
+    assert http.get("/api/next/projects").json()["left"] == waiting_for("Updates")
     assert (machine.idle_stop(), stopped) == (False, [])
 
     assert http.delete(f"/api/next/projects/{entry.id}").json() == {"removed": entry.id}  # no project is loaded now
-    assert (machine.projects, machine.left(), machine.busy()) == ({}, waiting_for(entry.id), waiting_for(entry.id))
+    assert (machine.projects, machine.left(), machine.busy()) == ({}, waiting_for("Updates"), waiting_for("Updates"))
     assert (machine.idle_stop(), stopped) == (False, [])
 
     machine.maintenance.observe = lambda _pid, _created: False  # every process it could have is gone
     if run is UNIDENTIFIED:  # absence of unidentified processes proves nothing: only a recovery after a reboot does
-        assert (machine.busy(), machine.idle_stop()) == (waiting_for(entry.id), False)
+        assert (machine.busy(), machine.idle_stop()) == (waiting_for("Updates"), False)
         [held] = machine.maintenance.read()["sessions"]
         booted = machine.maintenance.boot
         machine.maintenance.boot = lambda: booted() + 1  # the computer rebooted since the session
@@ -1480,17 +1510,18 @@ def test_a_returned_unconfirmed_pds_session_keeps_the_update_and_the_stop_waitin
 ):
     """#777: a PDS update's sessions are held as the machine's ``pds`` maintenance, as an Impeccable update's are."""
     machine.maintenance.observe = lambda _pid, _created: True  # synthetic: the session's process is still there
-    entry = registry.register(clone(tmp_path / "a"))
     machine.slots.total = lambda: 2
     machine.load_all()
-    loaded = machine.projects[entry.id]
+    owner = session_slots.SlotOwner(
+        update_home.KEY, machine.slots, machine.maintenance, lambda: 1, machine.updates.admitted, lambda: False
+    )
     job = session_slots.pds_packed(
-        loaded.host, pds_job.Job(loaded.store, pds_job.Live(session=lambda _s, _c: IDENTIFIED))
+        owner, pds_job.Job(machine.updates.pds.store, pds_job.Live(session=lambda _s, _c: IDENTIFIED))
     )
     (root := tmp_path / "wt").mkdir()
-    assert job.live.session(loaded.store, session(root)) is IDENTIFIED
-    assert (job.busy(), loaded.working(stopping=True)) == (False, [])
-    held = [f"a: {UNPROVEN['pds']}"]
+    assert job.live.session(job.store, session(root)) is IDENTIFIED
+    assert not job.busy()
+    held = [f"Updates: {UNPROVEN['pds']}"]
     assert (machine.busy(), machine.fence("synthetic update")) == (held, held)
     machine.unfence()
     stopped: list[bool] = []

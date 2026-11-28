@@ -12,20 +12,23 @@ import subprocess
 import threading
 from dataclasses import replace
 from pathlib import Path
+from shutil import copytree
 from types import ModuleType
 
 import pytest
 
 from owlbear_delivery_next.change_contracts import tools
 from owlbear_delivery_next.change_contracts.audit_tools import AuditResult
+from owlbear_delivery_next.change_contracts.round_records import PDS, RoundLoop, RoundPolicy
 from owlbear_delivery_next.impeccable import pack_files
-from owlbear_delivery_next.impeccable_runs import machine_lock, pack_job, pack_repair
+from owlbear_delivery_next.impeccable_runs import machine_lock, pack_job, pack_repair, pack_rounds
 from owlbear_delivery_next.impeccable_runs.pack_state import MACHINE_LOCK
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.pds_runs import audit, audit_markdown, browser, checks, context, pin, sessions, tree
 from owlbear_delivery_next.pds_runs import job as pds_job
 from owlbear_delivery_next.pds_runs.run import _browser as browser_stage
+from owlbear_delivery_next.pds_runs.run import decided
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store import pds_run_record
 from owlbear_delivery_next.state_store.store import Store
@@ -271,12 +274,6 @@ def results(state: dict) -> dict[str, str]:
 class StageJob(pds_job.Job):
     """A stopped-stage witness using the native invocation formatter, final record and log sinks."""
 
-    def stopped(self, work) -> dict:
-        with pytest.raises(pack_job.Stopped) as raised:
-            work()
-        self._end("failed", raised.value.reason)
-        return self.read()
-
     def failed(self, work) -> dict:
         self._steps(work)
         return self.read()
@@ -404,10 +401,12 @@ def test_current_release_never_downloads_or_starts_work(tmp_path, checkout):
         ({"browsers": [browser.Unrunnable("the PDS CDN did not answer, so the browser tests prove nothing")]},
          "the PDS CDN did not answer", ["audit", "update", "audit", "browser"]),
         ({"browsers": [browser.Result(0, 0, 0, 0, (), 5, "no tests ran")]},
-         "browser tests: 0 browser test(s) ran, 0 failed, 0 errored, 0 skipped (exit 5)",
+         ("The browser tests did not finish (first pass). Try again if the machine was busy.\n"
+          "0 browser test(s) ran, 0 failed, 0 errored, 0 skipped "
+          "(exit 5)\nno tests ran"),
          ["audit", "update", "audit", "browser"]),
         ({"browsers": [failing("tests/test_x.py::t"), failing("tests/test_x.py::t")]},
-         "browser tests fail on main as well: tests/test_x.py::t", ["audit", "update", "audit", "browser", "browser"]),
+         "Failed: tests/test_x.py::t.", ["audit", "update", "audit", "browser", "browser"]),
     ],
     ids=["npm-unreachable", "no-audit-result", "cdn-unrunnable", "zero-tests", "failing-on-main-too"],
 )  # fmt: skip
@@ -417,9 +416,11 @@ def test_unjudgeable_candidate_stops_with_reason_before_publication(tmp_path, ch
         assert fakes.calls == calls
     else:
         fakes, job, ctx = browser_job(tmp_path, checkout, *plan["browsers"])
-        state = job.stopped(lambda: browser_stage(job, ctx))
+        ctx.next = "browser"
+        job.keep(ctx, RoundLoop(subject=PDS, policy=RoundPolicy()))
+        state = job.failed(lambda: browser_stage(job, ctx))
         assert fakes.calls == [c for c in calls if c == "browser"]
-    assert state["state"] == "failed"
+    assert state["state"] == ("failed" if plan.get("offline") else "waiting")
     assert said in state["reason"]
     assert (fakes.github.prs, fakes.github.calls) == ({}, [])
 
@@ -465,41 +466,88 @@ def test_candidate_release_failure_keeps_whole_reason(tmp_path, monkeypatch, who
 
 @pytest.mark.parametrize("outcome", ["flake", "base-failure", "base-skip", "candidate-skip"])
 def test_browser_reruns_discriminate_flake_base_failure_and_skips(tmp_path, checkout, outcome):
-    two = failing("tests/test_a.py::t", "tests/test_b.py::t")
-    half = browser.Result(tests=2, failures=0, errors=0, skipped=1, failed=(), code=0, output="1 passed, 1 skipped")
+    a, b, c = ("tests/test_a.py::t", "tests/test_b.py::t", "tests/test_c.py::t")
+    three = failing(a, b, c)
+    reported = f"tests.test_a::t\nAssertionError: main's page failed\nTraceback follows\n{'frame\n' * 1100}Last frame"
+    mixed = browser.Result(3, 1, 0, 1, (a,), 1, "1 failed, 1 passed, 1 skipped", told=reported, passed_ids=(b,))
+    partial = browser.Result(3, 0, 0, 1, (), 0, "2 passed, 1 skipped", passed_ids=(a, b))
     reruns = {
         "flake": [PASS, PASS],
-        "base-failure": [two],
-        "base-skip": [half],
-        "candidate-skip": [PASS, half],
+        "base-failure": [mixed],
+        "base-skip": [partial],
+        "candidate-skip": [PASS, partial],
     }[outcome]
-    fakes, job, ctx = browser_job(tmp_path, checkout, two, *reruns)
+    fakes, job, ctx = browser_job(tmp_path, checkout, three, *reruns)
     if outcome.startswith("base"):
-        with pytest.raises(pack_job.Stopped, match="browser tests fail on main as well: " + ", ".join(two.failed)):
+        with pytest.raises(pack_job.Stopped) as raised:
             checks.browsed(job, ctx, job.workspace / context.CANDIDATE)
+        failed, passed = (a, b) if outcome == "base-failure" else ("none named", f"{a}, {b}")
+        assert f"Failed: {failed}.\nPassed on main: {passed}. Did not run on main: {c}." in str(raised.value)
+        assert "Try again if the machine was busy; if main is broken" in raised.value.lead
+        if outcome == "base-failure":
+            assert str(raised.value).endswith(reported)
     else:
         result = checks.browsed(job, ctx, job.workspace / context.CANDIDATE)
         assert result.passed is (outcome == "flake")
         if outcome == "flake":
-            assert result.said().endswith("passed on a rerun on the candidate and on main: " + ", ".join(two.failed))
+            assert result.said().endswith("passed on a rerun on the candidate and on main: " + ", ".join(three.failed))
         else:
-            assert result == two
+            assert result == three
     assert fakes.browsed == [
         ("candidate", ()),
-        ("base", two.failed),
-        *([] if outcome.startswith("base") else [("candidate", two.failed)]),
+        ("base", three.failed),
+        *([] if outcome.startswith("base") else [("candidate", three.failed)]),
     ]
     assert (fakes.sessions, fakes.github.calls) == ([], [])
 
 
+@pytest.mark.parametrize("attempt", ["first pass", "rerun on main", "rerun on the candidate"])
+@pytest.mark.parametrize("report", [True, False], ids=["with-report", "without-report"])
+def test_an_interrupted_browser_pass_names_the_pass_in_the_saved_stop_and_log(tmp_path, checkout, attempt, report):
+    failed = failing("tests/test_a.py::t")
+    if report:
+        stopped = browser.Result(1, 1, 0, 0, failed.failed, 2, "Interrupted")
+        lead = f"The browser tests did not finish ({attempt}). Try again if the machine was busy."
+        reason = f"{lead}\n{stopped.said()} (exit 2)\nInterrupted"
+    else:
+        stopped = browser.Unrunnable("the browser tests left no report (exit 2): Interrupted")
+        reason = f"Unrunnable: {stopped}\nBrowser pass: {attempt}"
+    before = {"first pass": [], "rerun on main": [failed], "rerun on the candidate": [failed, PASS]}[attempt]
+    fakes, job, ctx = browser_job(tmp_path, checkout, *before, stopped)
+    ctx.next = "browser"
+    job.keep(ctx, RoundLoop(subject=PDS, policy=RoundPolicy()))
+
+    state = job.failed(lambda: browser_stage(job, ctx))
+
+    assert state["state"] == "waiting"
+    assert reason in state["reason"]
+    assert reason in state["questions"][0]["text"]
+    if report:
+        assert state["questions"][0]["lead"] == lead
+    assert any(reason in line for line in state["log"])
+    assert len(fakes.browsed) == len(before) + 1
+    assert not fakes.sessions
+
+
 def test_spent_updater_budget_reports_remaining_browser_failure(tmp_path, checkout):
     broken = failing("tests/test_machine_pages.py::test_menu")
-    fakes, _job, state = started(tmp_path, checkout, updater={"max_rounds": 1}, browsers=[broken, PASS, broken])
+    fakes, job, state = started(tmp_path, checkout, updater={"max_rounds": 1}, browsers=[broken, PASS, broken])
 
-    assert state["state"] == "failed"
+    assert state["state"] == "waiting"
+    [q] = state["questions"]
+    assert q["kind"] == "stopped"
+    assert [(o["id"], o["label"]) for o in q["options"]] == [
+        ("more-updater", "Run one more updater session"),
+        ("discard", "Discard the update"),
+    ]
+    assert state["progress"]["next"]["retry"] == {"label": "Updater session on the pages", "model_requests": True}
     assert "spent its 1 updater session(s)" in state["reason"]
     assert "tests/test_machine_pages.py::test_menu" in state["reason"]
     assert fakes.calls.count("update") == 1
+    before = len(fakes.calls)
+    state = PACK.answered(job, "more-updater")
+    assert state["state"] == "passed", state["reason"]
+    assert fakes.calls[before:] == ["update", "audit", "browser", "challenger"]
 
 
 @pytest.mark.parametrize("added", [False, True], ids=["same-set", "new-follow-up"])
@@ -552,7 +600,7 @@ def test_page_copy_refuses_unauthorized_changes_before_taking_any(tmp_path, edit
     assert tree.files(candidate, REPO) == before
 
 
-def test_a_publication_stop_waits_and_a_retry_merges_the_one_pull_request(tmp_path, checkout):
+def test_a_publication_stop_waits_and_a_retry_merges_the_one_pull_request(tmp_path, checkout, monkeypatch):
     fakes = Fakes(checkout)
     fakes.github.checks = ["failure"]
     job = pds_job.Job(store(tmp_path), fakes.live(checkout))
@@ -560,6 +608,7 @@ def test_a_publication_stop_waits_and_a_retry_merges_the_one_pull_request(tmp_pa
     (q,) = state["questions"]
     assert (state["state"], q["kind"]) == ("waiting", "publish")
     assert "CI failed" in state["reason"]
+    PACK.publication_read_fails_once(job, fakes.github, state, monkeypatch)
     fakes.github.checks = ["success"]
 
     state = PACK.answered(job, "retry")
@@ -687,9 +736,9 @@ def test_a_ci_repair_of_a_workflow_asks_the_owner_with_its_diff_before_it_is_pus
 
 
 def test_machine_update_lock_excludes_both_update_kinds(tmp_path, checkout):
-    held = machine_lock.take(local_home.root() / MACHINE_LOCK, "garage", lambda: None)  # an Impeccable update's holder
+    held = machine_lock.take(local_home.root() / MACHINE_LOCK, "Impeccable update", lambda: None)
     try:
-        with pytest.raises(pack_job.Busy, match="an update runs for garage; one update runs at a time"):
+        with pytest.raises(pack_job.Busy, match="Impeccable update holds the lock; one update runs at a time"):
             pds_job.Job(store(tmp_path), Fakes(checkout).live(checkout)).start()
     finally:
         os.close(held)
@@ -700,13 +749,13 @@ def test_machine_update_lock_excludes_both_update_kinds(tmp_path, checkout):
     job.start()
     try:
         assert fakes.holding.wait(30)
-        with pytest.raises(pack_job.Busy, match=r"an Impeccable update runs for .+ \(PDS update\)"):
+        with pytest.raises(pack_job.Busy, match="PDS update holds the lock"):
             pack_job.Job(Store(tmp_path / "other" / "store"), pack_job.Live()).start()
     finally:
         fakes.hold.set()
     assert job.thread is not None
     job.thread.join(60)
-    assert job.read()["state"] == "failed"
+    assert job.read()["state"] == "waiting"
     assert fakes.calls == ["audit"]
     assert fakes.github.calls == []
     released = machine_lock.take(local_home.root() / MACHINE_LOCK, "other", lambda: None)
@@ -776,10 +825,10 @@ def test_a_failed_pds_stage_keeps_and_logs_its_whole_error(tmp_path, checkout, w
     logged = [line.split(" ", 1)[1] for line in state["log"]]
     if cause == "updater":
         reason = f"update: PackError: the updater ended with error: {whole_error}"
-        assert (state["state"], state["reason"]) == ("failed", reason)
+        assert (state["state"], state["reason"]) == ("waiting", reason)
         assert next(s for s in state["stages"] if s["name"] == "update")["detail"] == reason
         assert [i["detail"] for i in state["invocations"] if i["operation"] == "pds-update"][-1] == reason
-        assert logged[-3:] == ["update: running", f"update: failed: {reason}", reason]
+        assert logged[-3:] == ["update: running", f"update: failed: {reason}", f"waiting for you: {reason}"]
         return
     if cause == "merge-audit":
         said, gate, op = (
@@ -830,11 +879,11 @@ def test_a_failed_reconsideration_keeps_and_logs_its_whole_error(tmp_path, check
     state = PACK.answered(job, "reconsider", "the size is the release's own example")
 
     reason = f"challenger: PackError: the challenger ended with error: {whole_error}"
-    assert (state["state"], state["reason"]) == ("failed", reason)
+    assert (state["state"], state["reason"]) == ("waiting", reason)
     assert next(s for s in state["stages"] if s["name"] == "challenger")["detail"] == reason
-    assert state["invocations"][-1]["detail"] == reason
+    assert state["invocations"][-2]["detail"] == reason
     logged = [line.split(" ", 1)[1] for line in state["log"]]
-    assert logged[-3:] == ["challenger: running", f"challenger: failed: {reason}", reason]
+    assert logged[-3:] == ["challenger: running", f"challenger: failed: {reason}", f"waiting for you: {reason}"]
 
 
 @pytest.mark.parametrize("cause", ["repair-session", "repair-git", "repair-check", "repair-push"])
@@ -976,10 +1025,11 @@ def browsers(tmp_path, monkeypatch) -> Path:
 
 
 def test_browser_invocation_reads_real_reports_on_target_code(tmp_path, browsers):
-    at, runner = tmp_path / "candidate", Runner(suite(4))
+    at, runner = tmp_path / "candidate", Runner(suite(4), output="PASSED tests/test_a.py::t")
     at.mkdir()
     r = browser.run(at, ("tests/test_a.py::t",), runner=runner)
     assert (r.passed, r.said()) == (True, "4 browser test(s) ran, 0 failed, 0 errored, 0 skipped")
+    assert r.passed_ids == ("tests/test_a.py::t",)
     env = runner.given["env"]
     assert (runner.given["cwd"], env["PYTHONPATH"], env["PLAYWRIGHT_BROWSERS_PATH"]) == (
         at, str(at / browser.SOURCE), str(browsers)
@@ -987,11 +1037,15 @@ def test_browser_invocation_reads_real_reports_on_target_code(tmp_path, browsers
     assert "OWLBEAR_SECRET_FOR_TEST" not in env
     assert (env["NODE_EXTRA_CA_CERTS"], env["https_proxy"]) == ("/ca/interception.pem", "http://proxy:3128")
     assert runner.given["args"][3:6] == ["tests/test_a.py::t", "-m", "browser"]
-    case = '<testcase classname="tests.test_v" name="t"><failure message="TimeoutError: 30000ms">trace</failure>'
+    assert "-rfEp" in runner.given["args"]
+    trace = "first frame\n" + "next frame\n" * 550 + "last frame"
+    case = f'<testcase classname="tests.test_v" name="t"><failure message="TimeoutError: 30000ms">{trace}</failure>'
     xml = f'<testsuites><testsuite tests="2" failures="1">{case}</testcase></testsuite></testsuites>'
-    r = browser.run(at, runner=Runner(xml, 1, "FAILED tests/test_v.py::t\n" + "DeprecationWarning\n" * 400))
+    output = "KeyboardInterrupt: stopped by the runner\nFAILED tests/test_v.py::t\n" + "DeprecationWarning\n" * 400
+    r = browser.run(at, runner=Runner(xml, 2, output))
+    assert r.output == output.rstrip()
     assert r.failed == ("tests/test_v.py::t",)
-    assert r.told == "tests.test_v::t\nTimeoutError: 30000ms\ntrace"
+    assert r.told == f"tests.test_v::t\nTimeoutError: 30000ms\n{trace}"
 
 
 @pytest.mark.parametrize(
@@ -1049,7 +1103,7 @@ def test_a_timed_out_browser_gate_keeps_and_logs_its_whole_error(tmp_path, check
         raise timed[-1]
 
     def browse(at: Path, ids: tuple[str, ...]) -> browser.Result:
-        if at.name != where:
+        if at.name != where or timed:
             return real(at, ids)
         fakes.calls.append("browser")
         return browser.run(at, ids, runner=timing_out)
@@ -1057,24 +1111,51 @@ def test_a_timed_out_browser_gate_keeps_and_logs_its_whole_error(tmp_path, check
     fakes.browser = browse
     if where == "head":
         fakes.github.push = {f"{REPO}{PAGE}": DEMO.replace(PLANT, 'size="xs"') + "export const u = 1;\n"}
-    state = run(pds_job.Job(store(tmp_path), fakes.live(checkout)))
+    job = pds_job.Job(store(tmp_path), fakes.live(checkout))
+    state = run(job)
 
     [exc] = timed
     said = (f"Unrunnable: the browser tests did not finish in {browser.SECONDS} s: TimeoutExpired: {exc}\n"
-            f"stderr:\n{whole_error}\nstdout:\n{out}")  # fmt: skip
+            f"stderr:\n{whole_error}\nstdout:\n{out}\nBrowser pass: first pass")  # fmt: skip
     logged = [line.split(" ", 1)[1] for line in state["log"]]
     if where == "candidate":
         reason = f"browser: {said}"
-        assert (state["state"], state["reason"]) == ("failed", reason)
+        assert (state["state"], state["reason"]) == ("waiting", reason)
+        [q] = state["questions"]
+        assert (q["kind"], q["text"], [o["id"] for o in q["options"]]) == ("stopped", reason, ["retry", "discard"])
+        assert job.workspace.is_dir()
+        assert results(state)["browser"] == "waiting"
         assert next(s for s in state["stages"] if s["name"] == "browser")["detail"] == reason
         assert [i["detail"] for i in state["invocations"] if i["operation"] == "browser"][-1] == reason
-        assert logged[-3:] == ["browser: running", f"browser: failed: {reason}", reason]
+        assert logged[-3:] == ["browser: running", f"browser: failed: {reason}", f"waiting for you: {reason}"]
+        assert fakes.calls == ["audit", "update", "audit", "browser"]
+        state = PACK.answered(job, "retry")
+        assert state["state"] == "passed", state["reason"]
+        assert fakes.calls == ["audit", "update", "audit", "browser", "browser", "challenger"]
         return
     reason = f"the merge gate could not judge the head {pr_head(checkout, fakes)[:12]}: {said}"
     assert (state["state"], state["reason"]) == ("waiting", reason)
     assert next(s for s in state["stages"] if s["name"] == "merge")["detail"] == reason
     assert [i["detail"] for i in state["invocations"] if i["operation"] == "merge"][-1] == reason
     assert logged[-2:] == [f"merge: failed: {reason}", f"waiting for you: {reason}"]
+
+
+def test_a_stopped_pds_update_publishes_from_its_original_checkout_after_a_version_switch(tmp_path, checkout):
+    fakes, job, state = started(tmp_path, checkout, browsers=[browser.Unrunnable("browser stopped")])
+    assert state["state"] == "waiting"
+    assert fakes.calls == ["audit", "update", "audit", "browser"]
+    other = tmp_path / "new-version" / REPO
+    copytree(checkout, other)
+
+    def provider(at: Path):
+        assert at == checkout.parents[3]
+        return fakes.github
+
+    job = pds_job.Job(job.store, replace(fakes.live(other), github=provider))
+    state = PACK.answered(job, "retry")
+    assert state["state"] == "passed", state["reason"]
+    assert fakes.calls == ["audit", "update", "audit", "browser", "browser", "challenger"]
+    assert state["published"]["commit"] == landed(checkout)
 
 
 @pytest.mark.parametrize("stage", ["updater", "challenger", "reconsider", "audit", "audit-no-report"])
@@ -1124,8 +1205,27 @@ def test_an_unverified_session_end_says_its_problems_whole(tmp_path, checkout, w
     }[role]
     reason = f"{name}: {said}; termination unverified: processes 9 still present; disconnect failed: RuntimeError: "
     reason += whole_error
-    assert (state["state"], state["reason"]) == ("failed", reason)
+    assert (state["state"], state["reason"]) == ("waiting", reason)
     assert next(s for s in state["stages"] if s["name"] == name)["detail"] == reason
-    assert state["invocations"][-1]["detail"] == reason
+    assert state["invocations"][-2]["detail"] == reason
     logged = [line.split(" ", 1)[1] for line in state["log"]]
-    assert logged[-3:] == [f"{name}: running", f"{name}: failed: {reason}", reason]
+    assert logged[-3:] == [f"{name}: running", f"{name}: failed: {reason}", f"waiting for you: {reason}"]
+
+
+def test_maintenance_keeps_a_stopped_pds_audit_workspace(tmp_path, checkout, monkeypatch):
+    fakes = Fakes(checkout)
+    job = pds_job.Job(store(tmp_path), fakes.live(checkout))
+    PACK.assert_maintenance_keeps_stopped_workspace(job, run, monkeypatch, "session")
+
+
+def test_retrying_a_stopped_action_cannot_select_publication():
+    ctx = context.Context(version=NEW, old=OLD, why="PDS update", diff="", candidate="", checkout={}, next="browser")
+    lp = RoundLoop(subject=PDS, policy=RoundPolicy())
+    q = pack_rounds.question("r1-stop", "stopped", "browser stopped", ["retry"], identity="not approved")
+
+    assert decided([q], q, "retry", note="", ctx=ctx, lp=lp) == []
+    assert (ctx.next, ctx.accepted, ctx.publication) == ("browser", "", None)
+    unknown = q | {"kind": "unknown"}
+    with pytest.raises(ValueError, match=r"r1-stop.*unknown.*retry"):
+        decided([unknown], unknown, "retry", note="", ctx=ctx, lp=lp)
+    assert (ctx.next, ctx.accepted, ctx.publication) == ("browser", "", None)

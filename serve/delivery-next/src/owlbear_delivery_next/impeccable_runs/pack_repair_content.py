@@ -66,11 +66,6 @@ def _refused(package: str, path: str, kept: bool, skills: list[str]) -> bool:  #
     return protected(package, path) and not pack_gates.allowed(updater_path(package, path), kept, skills)
 
 
-def package_at(job: Job, src: pack_git.Source) -> str:
-    """The package's path in the checkout *src*."""
-    return job.live.package.resolve().relative_to(src.root.resolve()).as_posix()
-
-
 def protected(package: str, path: str) -> bool:
     """Whether the repository *path* is the pack's protected content: the detector's glue, pins, golden or skills."""
     files = {f"{package}/{p}" for p in (*pack_gates.GLUE.values(), "impeccable.json")}
@@ -98,7 +93,7 @@ def snapshot(job: Job, ctx: Context, c: Candidate) -> dict[str, bytes]:
     r, pub, run = ctx.repair, ctx.publication, job.live.git
     assert pub is not None  # noqa: S101 - a repair follows publication
     src = pack_git.Source(Path(pub.root), pub.repository, pub.base)
-    package = package_at(job, src)
+    package = ctx.checkout["package"]
     wanted = {f"{package}/{theirs}": ours for ours, theirs in pack_gates.GLUE.items()}
     wanted |= {f"{package}/skills/{n}/SKILL.md": f"skills/{n}/SKILL.md" for n in c.pins["skills"]}
     for entry in filter(None, run(src.root, ["ls-tree", "-z", r.commit, "--", f"{package}/golden/"]).split("\0")):

@@ -41,7 +41,6 @@ from owlbear_delivery_next.impeccable_runs.pack_progress import REPAIR
 from owlbear_delivery_next.impeccable_runs.pack_repair_content import IMPECCABLE, Kind
 from owlbear_delivery_next.impeccable_runs.pack_repair_content import binary as _binary
 from owlbear_delivery_next.impeccable_runs.pack_repair_content import guarded as _guarded
-from owlbear_delivery_next.impeccable_runs.pack_repair_content import package_at as _package
 from owlbear_delivery_next.impeccable_runs.pack_repair_content import quiet as _quiet
 from owlbear_delivery_next.impeccable_runs.pack_repair_edits import asked as _asked
 from owlbear_delivery_next.impeccable_runs.pack_repair_edits import config as _config
@@ -316,7 +315,7 @@ def _made(job: Job, ctx: Context, src: pack_git.Source, gh: Provider) -> Outcome
         r.paths = [p for p, _ in paths]
         r.patch = run(at, ["diff", "--cached", "--binary", r.stop.head])
         job.keep(ctx)
-        package, skills = _package(job, src), kind.pinned(ctx)
+        package, skills = ctx.checkout["package"], kind.pinned(ctx)
         r.held, r.refused, r.reviewed = _held(run, at, r.stop.head, paths, package=package, skills=skills, kind=kind)
         r.suppressions = [line for p in r.paths for line in suppressions(run, at, r.stop.head, p)]
         if asked := _asked(r):  # the diff of what he is asked about, whole, or no push from his question
@@ -351,7 +350,7 @@ def _pushed(job: Job, ctx: Context, src: pack_git.Source) -> Outcome:
         return Outcome("held", f"the agent's repair {r.commit[:12]} changes {held}; pushed nothing")
     try:
         head = run(src.root, ["rev-parse", f"{r.commit}~1"])  # the failed head it was made on, kept after a host stop
-        package = _package(job, src)
+        package = ctx.checkout["package"]
         there = pack_git.remote_head(src, pub.branch, run)
         landed = there != head and (there == r.commit or _holds(src, r.commit, pub.branch, there, run))
         if there != head and not landed:

@@ -1,4 +1,4 @@
-"""The Impeccable update's routes and the Maintenance overview (TD-101, TD-113): reads, and the one update start.
+"""The project's Maintenance overview.
 
 The overview only links each maintenance action to where it lives and shows its last run where Delivery keeps one;
 beside it, each role's use of built-in subagents (TD-376).
@@ -6,69 +6,27 @@ beside it, each role's use of built-in subagents (TD-376).
 
 from __future__ import annotations
 
-import contextlib
-import logging
 import os
 import subprocess
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.audit_runs import record as audit_record
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.impeccable import pack_files, pack_update
-from owlbear_delivery_next.impeccable.detector import DetectorError
-from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_job, pack_replay
-from owlbear_delivery_next.local_system import data_repo, local_home
+from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.project_host import curation_routes, maintenance_routes
 from owlbear_delivery_next.settings import roles
-from owlbear_delivery_next.state_store import curation_runs
+from owlbear_delivery_next.state_store import curation_runs, pack_run_record, update_home
 
-_log = logging.getLogger(__name__)
 EARLIEST = datetime.min.replace(tzinfo=UTC)
 OLD = "/design-pack"  # the routes' prefix before the Impeccable rename
-REPLAY_FAILURES = (
-    pack_files.PackError,
-    DetectorError,
-    data_repo.DataRepoError,
-    subprocess.CalledProcessError,
-    OSError,
-    ValueError,
-)
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-    from contextlib import AbstractContextManager
-
     from owlbear_delivery_next.project_host.host import Host
     from owlbear_delivery_next.state_store.store import Store
-
-
-class AnswerBody(BaseModel):
-    """The owner's answer to one open question of a waiting pack update (TD-193, TD-256)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    question: str = Field(max_length=200)
-    option: str = Field(max_length=40)
-    note: str = Field(default="", max_length=2000)
-
-
-def pack(job: pack_job.Job) -> dict[str, Any]:
-    """The active pack, the last notice of upstream, and the update's current or last run; never online."""
-    pins = pack_files.manifest()
-    return {
-        "pack": pins["pack"],
-        "upstream": pins["upstream"]["tag"],
-        "identity": pack_files.identity(),
-        "status": pack_files.status(),
-        "notice": pack_update.said(pack_update.notice(refresh=False)),
-        "update": job.read(),
-        "machine": pack_job.running_for(),  # TD-290: an update any project runs on this machine
-    }
 
 
 def owner_last(store: Store) -> dict[str, Any] | None:
@@ -143,7 +101,7 @@ def overview(store: Store) -> list[dict[str, Any]]:
         {"name": "Memory curation", "where": "Memory", "href": "/memory", "built": True, "recorded": True,
          "last": memory_last(store), "note": "Approve, edit, resolve or delete agent memory entries."},
         {"name": "Impeccable update", "where": "Updates", "href": "/updates/impeccable", "built": True,
-         "recorded": True, "last": pack_job.last(store),
+         "recorded": True, "last": pack_run_record.last(update_home.root()),
          "note": "Detector and design skills together: diff, golden pages, replay, challenger, then commit and push. "
                  "One runs at a time on this machine; Updates, Impeccable shows it in every project."},
         {"name": "Engine update", "where": "Updates", "href": "/updates/owlbear", "built": True,
@@ -251,44 +209,9 @@ def _moved(request: Request) -> RedirectResponse:
     return RedirectResponse(str(request.url.replace(path=f"{head}/impeccable{tail}")), 307)
 
 
-def router(
-    store: Store,
-    job: pack_job.Job,
-    admitted: Callable[[], AbstractContextManager[None]] = contextlib.nullcontext,
-    host: Host | None = None,
-) -> APIRouter:
-    """Impeccable and maintenance routes, with the host's test review; the caller adds the token check.
-
-    An update and its answers run while Delivery is paused (TD-287); *admitted* refuses them once OwlBear stops or
-    before a stop when idle, and holds the launch lock while one starts.
-    """
+def router(store: Store, host: Host | None = None) -> APIRouter:
+    """Project maintenance routes; the caller adds the token check."""
     routes = APIRouter()
-
-    @routes.get("/impeccable")
-    def read() -> dict[str, Any]:
-        return pack(job)
-
-    @routes.get("/impeccable/update")
-    def update_state() -> dict[str, Any]:
-        return job.read()
-
-    @routes.get("/impeccable/machine")
-    def machine() -> dict[str, str | None]:
-        return {"machine": pack_job.running_for()}  # TD-290: polled while the page is open
-
-    moved(routes, "", "/update", "/machine")
-
-    @routes.post("/impeccable/update")
-    @routes.post(f"{OLD}/update", include_in_schema=False)
-    def update() -> dict[str, Any]:
-        try:
-            with admitted():
-                return job.start()
-        except pack_job.Busy as exc:
-            raise HTTPException(409, str(exc)) from exc
-
-    _answers(routes, job, admitted)
-    _replay(routes, store, job, admitted)
 
     @routes.get("/maintenance")
     def maintenance() -> list[dict[str, Any]]:
@@ -298,57 +221,7 @@ def router(
     def subagents() -> list[dict[str, Any]]:
         return subagent_use(store)
 
-    routes.include_router(maintenance_routes.router(host, (store.name or store.root.name, store.root)))
+    routes.include_router(maintenance_routes.router(host))
     if host is not None:
         routes.include_router(curation_routes.router(store, host))
     return routes
-
-
-def _replay(
-    routes: APIRouter, store: Store, job: pack_job.Job, admitted: Callable[[], AbstractContextManager[None]]
-) -> None:
-    """The installed pack's calibration replay, run by this host's managed job; never a second one at once (TD-177)."""
-
-    @routes.post("/impeccable/replay")
-    @routes.post(f"{OLD}/replay", include_in_schema=False)
-    def replay() -> dict[str, Any]:
-        try:
-            with job.exclusive():
-                with admitted():  # a barrier only: the launch lock is not held while the replay waits for a slot
-                    job.count_replay(1)
-                try:
-                    r = job.live.replay(store, None, keep=job.keeps)
-                finally:
-                    job.count_replay(-1)
-        except pack_job.Busy as exc:
-            raise HTTPException(409, str(exc)) from exc
-        except pack_replay.ReplayError as exc:
-            _log.warning("calibration replay refused: %s", exc)  # the host's log, beside the answer the CLI prints
-            raise HTTPException(409, str(exc)) from exc
-        except REPLAY_FAILURES as exc:
-            _log.warning("calibration replay failed: %s", said := failure(exc), exc_info=True)
-            raise HTTPException(422, said) from exc
-        return {"ok": r.ok, "report": f"calibration replay: {pack_candidate.said_replay(r)}"}
-
-
-def _answers(routes: APIRouter, job: pack_job.Job, admitted: Callable[[], AbstractContextManager[None]]) -> None:
-    """The owner's answers to a waiting update (TD-193, TD-256), and its discard."""
-
-    @routes.post("/impeccable/update/answer")
-    @routes.post(f"{OLD}/update/answer", include_in_schema=False)
-    def answer(body: AnswerBody) -> dict[str, Any]:
-        try:
-            with admitted():  # an answer continues the update's sessions
-                return job.answer(body.question, body.option, body.note)
-        except (pack_job.Stale, pack_job.Busy) as exc:
-            raise HTTPException(409, str(exc)) from exc
-        except pack_job.Refused as exc:
-            raise HTTPException(422, str(exc)) from exc
-
-    @routes.post("/impeccable/update/discard")
-    @routes.post(f"{OLD}/update/discard", include_in_schema=False)
-    def discard() -> dict[str, Any]:
-        try:
-            return job.discard()
-        except pack_job.Stale as exc:
-            raise HTTPException(409, str(exc)) from exc

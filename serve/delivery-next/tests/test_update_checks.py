@@ -22,7 +22,7 @@ from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.machine_host.update_checks import CHECKS, Checks, Failed
 from owlbear_delivery_next.project_host import pages
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import machine_settings, pds_run_record, project_home, registry
+from owlbear_delivery_next.state_store import machine_settings, pds_run_record, registry, update_home
 
 AUTH = {"authorization": "Bearer " + "t"}  # the token of the record below
 FOUND = {"newer": False, "current": "1", "latest": "1", "detail": ""}
@@ -247,8 +247,8 @@ def pds_update(tmp_path: Path, state: str, version: str = "2.0.0", merged: str =
     published = {"merged": merged} if merged else None
     record = pack_state.blank() | {"state": state, "run": "r", "started_at": "2026-10-17T02:00:00+00:00",
                                    "release": version, "published": published}  # fmt: skip
-    project_home.home("p").mkdir(parents=True, exist_ok=True)
-    (project_home.home("p") / pds_run_record.FILE).write_text(json.dumps(record))
+    update_home.root().mkdir(parents=True, exist_ok=True)
+    (update_home.root() / pds_run_record.FILE).write_text(json.dumps(record))
 
 
 def test_a_newer_pds_release_an_update_takes_shows_its_run_and_counts_again_only_if_it_fails(monkeypatch, tmp_path):

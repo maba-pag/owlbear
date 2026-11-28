@@ -106,7 +106,8 @@ def prepare(job: Job, version: str) -> tuple[Context, pin.Release, bytes | None]
         raise Stopped(msg)
     ctx = Context(
         version=version, old=old.version, why=f"PDS: {old.version} to {version}", diff="",
-        checkout={"root": str(src.root), "repository": src.repository, "base": src.base},
+        checkout={"root": str(src.root), "repository": src.repository, "base": src.base,
+                  "package": pin.PREFIX.rstrip("/")},
         candidate=tree.digest(tree.protected(at)), removed=sorted(p for p, d in files.items() if d is None),
         vendored=_vendored(old.files, release.pin().files),
     )  # fmt: skip
@@ -137,7 +138,7 @@ def unchanged(job: Job, ctx: Context) -> None:
     at = candidate(job)
     if not (at / pin.PREFIX / pin.PIN).is_file() or tree.digest(tree.protected(at)) != ctx.candidate:
         msg = "the run's candidate is gone or its release files changed; run the update again"
-        raise Stopped(msg)
+        raise Stopped(msg, terminal=True)
 
 
 def advance(job: Job, ctx: Context, lp: RoundLoop) -> str | None:
@@ -183,7 +184,7 @@ def _step(job: Job, ctx: Context, lp: RoundLoop) -> Action:
             return _reconsider(job, ctx, lp)
         case other:
             msg = f"the run's next action {other!r} is unknown; run the update again"
-            raise Stopped(msg)
+            raise Stopped(msg, terminal=True)
 
 
 def _laid(job: Job, ctx: Context, lp: RoundLoop) -> bool:
@@ -281,7 +282,9 @@ def _browser(job: Job, ctx: Context) -> Action:
         ctx.browsed, ctx.failures = pages, []
         return ctx.after
     ctx.browsed = ""
-    head, said = ("What the report says of them:", r.told) if r.told else ("Their output's tail:", r.output[-6000:])
+    head, said = (
+        ("What the report says of them:", r.told[:6000]) if r.told else ("Their output's tail:", r.output[-4000:])
+    )
     ctx.failures = [f"- {i}" for i in r.failed] + ["", head, "```", said, "```"]
     return "update"
 
@@ -294,9 +297,9 @@ def _update(job: Job, ctx: Context, lp: RoundLoop) -> Action:
     """
     allowed = lp.policy.max_rounds + lp.extra
     if ctx.sessions >= allowed:
-        left = [*ctx.findings, *ctx.failures[:8], *(f"{f.id}: {f.text}" for f in pack_rounds.addressing(lp))]
+        left = [*ctx.findings, *ctx.failures, *(f"{f.id}: {f.text}" for f in pack_rounds.addressing(lp))]
         msg = f"the update spent its {allowed} updater session(s) with these still open: {'; '.join(left)}"
-        raise Stopped(msg[:2000])
+        raise Stopped(msg, retry=pack_rounds.MORE_UPDATER)
     at, cand = job.workspace / UPDATER, candidate(job)
     start = tree.copy(cand, at, job.live.git)
     answering = bool(pack_rounds.addressing(lp))
@@ -317,7 +320,7 @@ def _update(job: Job, ctx: Context, lp: RoundLoop) -> Action:
     try:
         tree.taken(at, start, cand)
     except tree.Outside as exc:
-        raise Stopped(str(exc)) from exc
+        raise Stopped(str(exc), terminal=True) from exc
     ident = identity(ctx, cand)
     job.identified(ident)
     if answering:  # it answered the challenger's findings: the rounds go on from them
@@ -409,8 +412,13 @@ def decided(  # noqa: PLR0913 - the open questions, the answered one, the answer
         pack_repair.decided(q, option, ctx, repair.PDS)
     elif q["kind"] == "follow-ups":
         ctx.followed, ctx.next = list(q["keys"]), "browser"
-    elif option == pack_rounds.ANOTHER:
+    elif q["kind"] == "stopped":
+        pack_rounds.retry_stopped(lp, option)
+    elif q["kind"] == "end" and option == pack_rounds.ANOTHER:
         lp.extra, lp.ended, ctx.next = lp.extra + 1, "", "challenge"
-    else:
+    elif q["kind"] == "end" and option == pack_rounds.ACTIVATE:
         ctx.accepted, ctx.next = q["identity"], "publish"
+    else:
+        msg = f"cannot answer PDS update question {q['id']!r} of kind {q['kind']!r} with {option!r}"
+        raise ValueError(msg)
     return []

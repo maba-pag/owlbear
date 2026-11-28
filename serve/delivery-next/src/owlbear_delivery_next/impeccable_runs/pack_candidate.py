@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from owlbear_delivery_next.impeccable.calibration import Replay
-    from owlbear_delivery_next.state_store.store import Store
+    from owlbear_delivery_next.state_store.update_source import UpdateSource
 
 CLONE = "https://github.com/{repository}.git"
 ENGINE_VERSION = "ENGINE_VERSION"  # upstream's pin of the released engine, at the repository root
@@ -229,11 +229,11 @@ def reconsider_message(c: Candidate, lines: list[str]) -> str:
 
 
 def challenge(  # noqa: PLR0913 - the candidate, its upstream, the message, the runtime and the round's bounds
-    store: Store,
+    store: UpdateSource,
     c: Candidate,
     clone: Path,
     text: str,
-    run: Callable[[Store, sdk_adapter.Session], Run],
+    run: Callable[[UpdateSource, sdk_adapter.Session], Run],
     *,
     rechecks: tuple[str, ...] = (),
     cap: int = MAX_FINDINGS,
@@ -244,7 +244,7 @@ def challenge(  # noqa: PLR0913 - the candidate, its upstream, the message, the 
 ) -> Run:
     """One fresh read-only challenger session over the candidate; *rechecks* are the findings it judges again."""
     role = roles.chosen(store.settings(), label)
-    with scratch("owlbear-pack-", keep) as tmp:
+    with scratch(store.root, "owlbear-pack-", keep) as tmp:
         at = Path(tmp)
         code, said = git_files.probe_in(at)(["git", "init", "-q"])  # the window places its files only in a repository
         if code:

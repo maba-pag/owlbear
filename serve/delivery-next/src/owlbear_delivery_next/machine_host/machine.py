@@ -18,7 +18,7 @@ from owlbear_delivery_next.change_flow.status import RESUME, status
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.local_system import data_repo, maintenance
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.machine_host import cases_job, chats
+from owlbear_delivery_next.machine_host import cases_job, chats, update_jobs
 from owlbear_delivery_next.machine_host.auto_update import Auto
 from owlbear_delivery_next.machine_host.cases_job import CasesJob
 from owlbear_delivery_next.machine_host.curation import Curation
@@ -30,7 +30,7 @@ from owlbear_delivery_next.machine_host.update import Updater
 from owlbear_delivery_next.machine_host.update_checks import Checks
 from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.runtimes import settings_read
-from owlbear_delivery_next.state_store import machine_settings, registry, settings_carry
+from owlbear_delivery_next.state_store import machine_settings, registry, settings_carry, update_home
 from owlbear_delivery_next.state_store.store import StoreError
 
 if TYPE_CHECKING:
@@ -79,6 +79,7 @@ class Machine:
         self.total = 0  # until the machine's total is read; unset, no session starts (2026-10-23)
         self.slots = Slots(self._sessions, closed=True)  # opened once every project's live steps are counted
         self.maintenance = maintenance.Maintenance(self.slots)
+        self.updates = update_jobs.Updates(self)
         self.reads = settings_read.Reader(self.say, lambda: [o.store for o in list(self.projects.values()) if o.store])
         self.updater = Updater(self)
         self.auto = Auto(self)
@@ -299,7 +300,7 @@ class Machine:
 
     def _unproven_packs(self) -> list[str]:
         """Each project whose pack or PDS session the ledger holds, loaded or not: idle once the SDK returns."""
-        names = {pid: p.name for pid, p in list(self.projects.items())}
+        names = {pid: p.name for pid, p in list(self.projects.items())} | {update_home.KEY: "Updates"}
         return [f"{names.get(k, k)}: {said}" for kind, said in UNPROVEN.items() for k in self.maintenance.holding(kind)]
 
     def left(self) -> list[str]:
@@ -312,6 +313,7 @@ class Machine:
             + self.retro.working()
             + self.onboarding.working()
             + self.impeccable.working()
+            + self.updates.working()
             + self._unproven_packs()
         )
 
@@ -335,6 +337,7 @@ class Machine:
             + self.chats.working()
             + self.retro.working()
             + self.onboarding.working()
+            + self.updates.working()
             + self._unproven_packs()
         )
 

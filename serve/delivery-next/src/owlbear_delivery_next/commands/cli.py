@@ -117,7 +117,7 @@ def show_pack(*, install: bool) -> int:
     return 0
 
 
-def update_pack(a: argparse.Namespace, repo: Path) -> int:
+def update_pack(a: argparse.Namespace) -> int:
     """The update tooling (design skill research §3.5): notice, rule diff, golden pages, calibration replay."""
     try:
         if a.diff:
@@ -126,7 +126,7 @@ def update_pack(a: argparse.Namespace, repo: Path) -> int:
         if a.golden:
             return _golden()
         if a.replay:
-            ok, text = replay_client.replay(repo)
+            ok, text = replay_client.replay()
             sys.stdout.write(text + "\n")
             return 0 if ok else 1
         sys.stdout.write(pack_update.said(pack_update.notice(refresh=True)) + "\n")
@@ -321,7 +321,7 @@ def run(a: argparse.Namespace) -> int:  # noqa: PLR0911 - one branch per command
         return code
     if a.command == "impeccable":
         updating = a.check or a.diff or a.golden or a.replay
-        return update_pack(a, a.repo.resolve()) if updating else show_pack(install=a.install)
+        return update_pack(a) if updating else show_pack(install=a.install)
     if a.command == "setup":
         say, repo = lambda t: sys.stdout.write(t + "\n"), a.repo.resolve()
         found = setup.project_folder(repo, a.folder, setup.ask_tty, say)

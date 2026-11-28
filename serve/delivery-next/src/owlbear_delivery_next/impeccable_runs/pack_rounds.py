@@ -22,6 +22,7 @@ ANOTHER, ACTIVATE, DISCARD, RETRY = "another", "activate", "discard", "retry"
 ACCEPT, UNDO, KEEP, APPROVE = "accept", "undo", "keep", "approve"
 REPAIR, APPROVE_REPAIR, PUSH_CONFIG, PUSH_REVIEWED = "repair", "approve-repair", "push-config", "push-reviewed"
 CONTINUE = "continue"
+MORE_UPDATER = "more-updater"
 LABELS = {
     FIX: "Have the updater fix it",
     RECONSIDER: "Ask the challenger to reconsider",
@@ -30,6 +31,7 @@ LABELS = {
     ACTIVATE: "Activate the unreviewed repair",
     DISCARD: "Discard the update",
     RETRY: "Try again",
+    MORE_UPDATER: "Run one more updater session",
     ACCEPT: "Accept the changed evidence",
     UNDO: "Have the updater undo it",
     KEEP: "Keep the change",
@@ -218,6 +220,15 @@ def question(qid: str, kind: str, text: str, options: list[str], **more: object)
     """One question for the owner on the Settings page, with what answering it binds to."""
     shown = [{"id": o, "label": LABELS[o]} for o in options]
     return {"id": qid, "kind": kind, "text": text, "options": shown} | more
+
+
+def retry_stopped(lp: RoundLoop, option: str) -> None:
+    """Retry the saved action, allowing one more session if the updater spent its allowance."""
+    if option == MORE_UPDATER:
+        lp.extra += 1
+    elif option != RETRY:
+        msg = f"{option!r} cannot resume a stopped update"
+        raise ValueError(msg)
 
 
 def undo(lp: RoundLoop, text: str) -> None:

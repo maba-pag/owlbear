@@ -38,17 +38,17 @@ def activate(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop)
     Its changed evidence must be what the owner accepted; a code change waits for his approval first (TD-414). The
     run waits for the owner (None) when publication stops; trying again goes on from where it got.
     """
-    package, at = job.live.package.resolve(), job.workspace
+    package, at = ctx.package, job.workspace
     if ctx.repair.phase == "checking" and not _alike(job, c, ctx):
         return None
     edits = pack_run.updater_edits(job, ctx)
     expected = ctx.accepted or (lp.head if lp.ended == "clean" else "")
     if not expected or pack_gates.identity(c, edits) != expected:
         msg = "the candidate is not what the challenger passed or you accepted; run the update again"
-        raise pack_run.Stopped(msg)
+        raise pack_run.Stopped(msg, terminal=True)
     if pack_updater.outside(at, ctx.start, c.pins["skills"]) or pack_run.unaccepted(job, ctx):
         msg = "the candidate holds changes you did not accept; run the update again"
-        raise pack_run.Stopped(msg)
+        raise pack_run.Stopped(msg, terminal=True)
     if (mark := pack_gates.digest(edits, CODE)) and mark != ctx.code:
         shown = pack_gates.diffs(c, at, package, edits)
         diff = "\n".join(s for p, s in shown.items() if p.startswith(CODE))

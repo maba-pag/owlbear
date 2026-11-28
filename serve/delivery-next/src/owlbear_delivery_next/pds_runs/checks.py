@@ -61,18 +61,44 @@ def browsed(job: Job, ctx: Context, at: Path) -> browser.Result:
 
     Raises:
         browser.Unrunnable: They cannot run, or the PDS CDN did not answer.
-        Stopped: They failed without naming a test, or a failing test does not pass on main either.
+        Stopped: The suite did not finish, it failed without naming a test, or a failing test also fails on main.
     """
-    r = job.live.browser(at, ())
+    r = _completed(job, at, (), "first pass")
     if r.passed:
         return r
     if not r.failed:
         msg = f"browser tests: {r.said()} (exit {r.code})"
         raise Stopped(msg)
-    if not job.live.browser(base(job, ctx), r.failed).cleared(r.failed):
-        msg = f"browser tests fail on main as well: {', '.join(r.failed[:8])}"
-        raise Stopped(msg)
-    return r.flake() if job.live.browser(at, r.failed).cleared(r.failed) else r  # D-01M6BFK5YF5GYYN7QCDDPBEZH2
+    main = _completed(job, base(job, ctx), r.failed, "rerun on main")
+    if not main.cleared(r.failed):
+        passed = [test for test in r.failed if test in main.passed_ids]
+        absent = [test for test in r.failed if test not in main.failed and test not in main.passed_ids]
+        lead = (
+            "The browser rerun on main did not clear the failures. Try again if the machine was busy; "
+            "if main is broken, fix it, discard this update and start a new one."
+        )
+        msg = (
+            f"Failed: {', '.join(main.failed) or 'none named'}.\n"
+            f"Passed on main: {', '.join(passed) or 'none'}. Did not run on main: {', '.join(absent) or 'none'}."
+        )
+        if main.told:
+            msg += f"\n\n{main.told}"
+        raise Stopped(msg, lead=lead)
+    candidate = _completed(job, at, r.failed, "rerun on the candidate")
+    return r.flake() if candidate.cleared(r.failed) else r  # D-01M6BFK5YF5GYYN7QCDDPBEZH2
+
+
+def _completed(job: Job, at: Path, ids: tuple[str, ...], attempt: str) -> browser.Result:
+    try:
+        result = job.live.browser(at, ids)
+    except browser.Unrunnable as exc:
+        exc.add_note(f"Browser pass: {attempt}")
+        raise
+    if result.code not in (0, 1):
+        lead = f"The browser tests did not finish ({attempt}). Try again if the machine was busy."
+        msg = f"{result.said()} (exit {result.code})\n{result.output}"
+        raise Stopped(msg, lead=lead)
+    return result
 
 
 def base(job: Job, ctx: Context) -> Path:

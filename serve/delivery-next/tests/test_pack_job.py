@@ -20,7 +20,7 @@ from playwright import sync_api
 
 from owlbear_delivery_next.change_contracts import dispute_tools, pack_tools, tools
 from owlbear_delivery_next.change_contracts.models import Brief, Change
-from owlbear_delivery_next.change_contracts.round_records import RoundFinding, RoundLoop, RoundPolicy
+from owlbear_delivery_next.change_contracts.round_records import PACK, RoundFinding, RoundLoop, RoundPolicy
 from owlbear_delivery_next.change_flow import disputes
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.gh import GhProvider
@@ -58,11 +58,12 @@ from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.maintenance import Maintenance
 from owlbear_delivery_next.local_system.processes import Termination
 from owlbear_delivery_next.local_system.slots import Slots
+from owlbear_delivery_next.machine_host import app as machine_app
+from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host import api, session_slots
-from owlbear_delivery_next.project_host.admission import STOPPING
-from owlbear_delivery_next.project_host.host import ENDING, HostRecord
+from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.state_store import pack_run_record, project_home, registry
+from owlbear_delivery_next.state_store import pack_run_record, update_home
 from owlbear_delivery_next.state_store.store import Lock, Store
 
 AUTH = {"authorization": "Bearer t"}
@@ -893,6 +894,29 @@ def test_an_owner_stop_shows_his_gate_now_with_its_options_next_and_a_discard_en
     assert all(i["ended_at"] for i in state["invocations"])
 
 
+def publication_read_fails_once(job, github, state, monkeypatch):
+    """Admit the saved pull request, then lose the first publication read, not the admission listing."""
+    pub = state["published"]
+    opened = github.read_pull_request("maba-pag/owlbear", pub["number"])
+    error = ProviderError(FailureCode.UNAVAILABLE, "read_pull_request", "connection lost\nwhile reading the saved PR",
+                          retry_safe=True)  # fmt: skip
+
+    def unavailable(*_args):
+        raise error
+
+    with monkeypatch.context() as patch:
+        patch.setattr(github, "open_pull_requests", lambda *_args: (opened,))
+        patch.setattr(github, "read_pull_request", unavailable)
+        waiting = answered(job, "retry")
+    assert (waiting["state"], waiting["run"], waiting["published"]) == ("waiting", state["run"], pub)
+    [question] = waiting["questions"]
+    assert question["kind"] == "publish"
+    assert [option["id"] for option in question["options"]] == ["retry", "discard"]
+    assert waiting["reason"] == f"ProviderError: {error}"
+    assert job.state["context"]["publication"]["commit"] == pub["commit"]
+    assert job.workspace.is_dir()
+
+
 def test_a_ci_retry_runs_push_pull_request_and_merge_again_and_the_old_merge_is_stale(tmp_path, checkout, clone):
     fakes = Fakes(clone)
     job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
@@ -919,6 +943,20 @@ def test_a_ci_retry_runs_push_pull_request_and_merge_again_and_the_old_merge_is_
     ]  # fmt: skip
     pushed = [i["identity"] for i in state["invocations"] if i["operation"] == "push"]
     assert pushed == [state["published"]["commit"]] * 2  # the same commit pushed again, never a new one
+
+
+def test_a_publication_read_failure_after_admission_keeps_the_impeccable_retry(tmp_path, checkout, clone, monkeypatch):
+    fakes = Fakes(clone)
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    fakes.github.checks = ["failure"]
+    state = run(job)
+
+    publication_read_fails_once(job, fakes.github, state, monkeypatch)
+
+    fakes.github.checks = ["success"]
+    state = answered(job, "retry")
+    assert state["state"] == "passed", state["reason"]
+    assert fakes.github.calls.count("create") == 1
 
 
 DETECTOR = f"src/pkg/{pack_gates.GLUE['code/detector.py']}"  # protected pack content, as a repository path
@@ -1629,7 +1667,7 @@ def test_a_premise_the_updater_reports_stops_for_the_owner(tmp_path, checkout, c
 
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
-    assert (state["state"], results(state)["update"]) == ("failed", "failed")
+    assert (state["state"], results(state)["update"]) == ("waiting", "waiting")
     assert "the updater asks the owner: golden page glow.html must change (g)" in state["reason"]
     assert "challenger" not in fakes.calls
     assert snapshot(checkout) == before
@@ -1641,7 +1679,7 @@ def test_a_missing_tool_the_updater_reports_stops_with_its_words(tmp_path, check
 
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
-    assert (state["state"], results(state)["update"]) == ("failed", "failed")
+    assert (state["state"], results(state)["update"]) == ("waiting", "waiting")
     assert "the updater lacks shell: run git diff (" in state["reason"]
     assert state["reason"].endswith(" no shell tool)")
 
@@ -1656,14 +1694,15 @@ def noted(error: Exception) -> Exception:
     return error
 
 
-def stage_failed(state: dict, stage: str, said: str) -> None:
-    """The run failed in *stage* saying *said*: its reason, its stage's, its last invocation's and its log's."""
+def stage_failed(state: dict, stage: str, said: str, *, waiting: bool = False) -> None:
+    """The run stopped in *stage* saying *said*, whether it failed or waits for the owner."""
     reason = f"{stage}: {said}"
-    assert (state["state"], state["reason"]) == ("failed", reason)
+    assert (state["state"], state["reason"]) == ("waiting" if waiting else "failed", reason)
     assert next(s for s in state["stages"] if s["name"] == stage)["detail"] == reason
-    assert state["invocations"][-1]["detail"] == reason
+    assert state["invocations"][-2 if waiting else -1]["detail"] == reason
     logged = [line.split(" ", 1)[1] for line in state["log"]]
-    assert logged[-3:] == [f"{stage}: running", f"{stage}: failed: {reason}", reason]
+    assert logged[-3:] == [f"{stage}: running", f"{stage}: failed: {reason}", f"waiting for you: {reason}"
+                           if waiting else reason]  # fmt: skip
 
 
 @pytest.mark.parametrize("cause", ["git", "updater", "challenger", "reconsideration", "outside-a-stage"])
@@ -1719,6 +1758,7 @@ def test_a_failed_pack_stage_keeps_and_logs_its_whole_error(  # noqa: PLR0913, P
             f"committed: PackError: git rev-parse failed: CalledProcessError: Command '{ran[0]}' returned non-zero "
             f"exit status 128.\nstderr:\n{whole_error}\nstdout:\n{OUT}"
         ),
+        waiting=cause != "git",
     )
 
 
@@ -1812,10 +1852,10 @@ def test_an_unverified_session_end_says_its_problems_whole(tmp_path, checkout, c
         return
     name, who = ("update", "updater") if stage == "updater" else ("challenger", "challenger")
     reason = f"{name}: PackError: the {who} {seen[0]} may still be running; stop it before updating again; {why}"
-    assert (state["state"], state["reason"]) == ("failed", reason)
+    assert (state["state"], state["reason"]) == ("waiting", reason)
     assert next(s for s in state["stages"] if s["name"] == name)["detail"] == reason
-    assert state["invocations"][-1]["detail"] == reason
-    assert logged[-3:] == [f"{name}: running", f"{name}: failed: {reason}", reason]
+    assert state["invocations"][-2]["detail"] == reason
+    assert logged[-3:] == [f"{name}: running", f"{name}: failed: {reason}", f"waiting for you: {reason}"]
 
 
 def test_a_hold_stops_a_running_invocation_with_its_whole_reason(whole_error) -> None:
@@ -1864,21 +1904,150 @@ WRONG = {"bad.html (source)": {"missing": ["glow"], "unexpected": []}}
 EXPECTED = "golden/expected.json"
 
 
+@pytest.mark.parametrize("switched", [False, True])
 def test_golden_pages_that_differ_go_to_the_updater_and_still_differing_after_its_session_stops(
-    tmp_path, checkout, clone
+    tmp_path, checkout, clone, switched
 ):
     """TD-177: the first golden mismatch is the updater's evidence; on its candidate the check must hold."""
     fakes = Fakes(clone, wrong=WRONG)
     fakes.wrong_after = WRONG
     before = snapshot(checkout)
 
-    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    state = run(job)
 
-    assert (state["state"], results(state)["golden"], results(state)["update"]) == ("failed", "failed", "completed")
+    assert (state["state"], results(state)["golden"], results(state)["update"]) == ("waiting", "waiting", "completed")
+    assert state["progress"]["next"]["retry"] == {"label": "Golden pages on the candidate", "model_requests": False}
     assert "golden pages differ: bad.html (source): missing glow" in state["reason"]
+    [q] = state["questions"]
+    assert (q["kind"], q["text"], [o["id"] for o in q["options"]]) == ("stopped", state["reason"], ["retry", "discard"])
+    assert job.workspace.is_dir()
     assert "## Golden pages with the package's expectations\ngolden pages differ" in fakes.updates[0].message
     assert fakes.calls[-2:] == ["update", "golden"]
     assert snapshot(checkout) == before
+    called = len(fakes.calls)
+    fakes.wrong_after = {}
+    if switched:
+        other = tmp_path / "new-version" / "src" / "pkg"
+        shutil.copytree(checkout, other)
+        job = pack_job.Job(job.store, fakes.live(other))
+    state = answered(job, "retry")
+    assert state["state"] == "passed", state["reason"]
+    assert fakes.calls[called:] == ["golden", "replay", "challenger"]
+    assert state["published"]["commit"] == landed(checkout)
+    assert [(i["round"], i["result"]) for i in state["invocations"] if i["operation"] == "candidate-golden"] == [
+        (1, "failed"),
+        (1, "passed"),
+    ]
+
+
+def assert_maintenance_keeps_stopped_workspace(job, run_session, monkeypatch, session_method):
+    """Run the same stop with a lease acquired after the question, then with a lease already held at the stop."""
+    boot = 1.0
+    ledger = job.maintenance = Maintenance(Slots(lambda: 4), boot=lambda: boot)
+    witnesses = []
+
+    def hold(workspace):
+        lease = ledger.begin(update_home.KEY, f"{job.KIND}:test", job.KIND, str(workspace))
+        ledger.failed(lease, "the session did not confirm termination")
+        return lease
+
+    original = getattr(job.live, session_method)
+
+    def unconfirmed(store, cfg):
+        done = original(store, cfg)
+        witness = next(p for p in sorted(cfg.worktree.rglob("*")) if p.is_file() and ".git" not in p.parts)
+        witnesses.append((cfg.worktree, witness, witness.read_bytes()))
+        if len(witnesses) == 2:
+            hold(cfg.worktree)
+        return dataclasses.replace(done, termination=Termination(confirmed=False))
+
+    monkeypatch.setattr(job.live, session_method, unconfirmed)
+    waiting = run_session(job)
+    [question] = waiting["questions"]
+    assert question["kind"] == "stopped"
+    [(workspace, witness, contents)] = witnesses
+    lease = hold(workspace)
+    boot += 1
+    ledger.recover(lease, rebooted=True)
+    with pytest.raises(pack_job.Refused, match="Maintenance keeps this run's workspace; discard the update"):
+        job.answer(question["id"], "retry")
+    assert job.read()["questions"] == [question]
+    assert witness.read_bytes() == contents
+    assert job.discard(waiting["run"])["state"] == "discarded"
+    assert witness.read_bytes() == contents
+
+    failed = run_session(job)
+    assert (failed["state"], failed["questions"]) == ("failed", [])
+    assert "may still be running" in failed["reason"] or "not proven ended" in failed["reason"]
+    _, witness, contents = witnesses[1]
+    assert witness.read_bytes() == contents
+
+
+def test_maintenance_keeps_a_stopped_impeccable_updater_workspace(tmp_path, checkout, clone, monkeypatch):
+    fakes = Fakes(clone)
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    assert_maintenance_keeps_stopped_workspace(job, run, monkeypatch, "update")
+
+
+def test_an_answer_waits_for_the_worker_to_release_its_claim(tmp_path, checkout, clone, monkeypatch):
+    fakes = Fakes(clone)
+    fakes.wrong_after = WRONG
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    releasing, finish, joining = threading.Event(), threading.Event(), threading.Event()
+    release = job._release  # noqa: SLF001 - pause after publishing the question, before relinquishing the claim
+
+    def paused_release():
+        releasing.set()
+        assert finish.wait(5)
+        release()
+
+    monkeypatch.setattr(job, "_release", paused_release)
+    job.start()
+    worker = job.thread
+    replies = []
+    try:
+        assert releasing.wait(5)
+        [question] = job.read()["questions"]
+        join = worker.join
+
+        def observed_join(timeout=None):
+            joining.set()
+            join(timeout)
+
+        monkeypatch.setattr(worker, "join", observed_join)
+        fakes.wrong_after = {}
+
+        def answer():
+            try:
+                replies.append(job.answer(question["id"], "retry")["state"])
+            except pack_job.Stale:
+                replies.append("stale")
+
+        responder = threading.Thread(target=answer)
+        responder.start()
+        assert joining.wait(2), replies
+    finally:
+        finish.set()
+    responder.join(5)
+    assert replies in (["running"], ["passed"])
+    assert settled(job)["state"] == "passed"
+
+
+def test_retrying_a_stopped_action_cannot_select_activation():
+    ctx = pack_run.Context(
+        tag="new", why="Impeccable", diff="", golden="", pins={}, manifest="", notice="", baseline={},
+        checkout={}, start={}, sid="s1", next="golden",
+    )  # fmt: skip
+    lp = RoundLoop(subject=PACK, policy=RoundPolicy())
+    q = pack_rounds.question("r1-stop", "stopped", "golden stopped", ["retry"], identity="not approved")
+
+    assert pack_run.decided([q], q, "retry", note="", ctx=ctx, lp=lp) == []
+    assert (ctx.next, ctx.accepted, ctx.publication) == ("golden", "", None)
+    unknown = q | {"kind": "unknown"}
+    with pytest.raises(ValueError, match=r"r1-stop.*unknown.*retry"):
+        pack_run.decided([unknown], unknown, "retry", note="", ctx=ctx, lp=lp)
+    assert (ctx.next, ctx.accepted, ctx.publication) == ("golden", "", None)
 
 
 def changed_expectations(checkout: Path) -> str:
@@ -1890,13 +2059,21 @@ def changed_expectations(checkout: Path) -> str:
 def test_changed_evidence_waits_for_the_owner_and_once_accepted_lands_with_the_pack(tmp_path, checkout, clone):
     """TD-177: a golden change is asked about with its diff before the replay; accepted, it is published."""
     fakes = Fakes(clone, wrong=WRONG)
+    fakes.wrong_after = WRONG
     new = changed_expectations(checkout)
     fakes.edits, fakes.evidence = [{EXPECTED: new, "golden/glow.html": "<div>glow</div>\n"}], "glow is a new rule"
     job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
 
     state = run(job)
+    assert state["questions"][0]["kind"] == "stopped"
+    reason = state["reason"]
+    fakes.wrong_after = {}
+    state = answered(job, "retry")
 
     assert (state["state"], results(state)["golden"]) == ("waiting", "waiting")
+    assert state["reason"] == ""
+    assert any(reason in line for line in state["log"])
+    assert any(i["detail"] == reason for i in state["invocations"])
     (q,) = state["questions"]
     assert (q["kind"], [o["id"] for o in q["options"]]) == ("evidence", ["accept", "undo", "discard"])
     assert "Its reason: glow is a new rule." in q["text"]
@@ -2111,7 +2288,7 @@ def test_a_passing_challenger_whose_processes_are_not_confirmed_gone_never_passe
 
     state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
 
-    assert (state["state"], results(state)["challenger"]) == ("failed", "failed")
+    assert (state["state"], results(state)["challenger"]) == ("waiting", "waiting")
     assert "may still be running" in state["reason"]
     assert snapshot(checkout) == before
 
@@ -2142,16 +2319,21 @@ def test_a_failing_stage_stops_before_activation_and_changes_nothing(  # noqa: P
     fakes = Fakes(clone, **fakes_kw)
     before = snapshot(checkout)
 
-    state = run(pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout)))
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    state = run(job)
 
-    assert state["state"] == "failed"
+    assert state["state"] == "waiting"
     assert said in state["reason"]
     at = NAMES.index(stage)
-    assert results(state) == dict.fromkeys(NAMES[:at], "passed") | {"update": "completed", stage: "failed"} | (
-        dict.fromkeys(NAMES[at + 1 :], "not-reached")
+    assert results(state) == dict.fromkeys(NAMES[:at], "passed") | {"update": "completed", stage: "waiting"} | (
+        dict.fromkeys(NAMES[at + 1 :], "pending")
     )
     assert fakes.calls[-1] == stage
     assert snapshot(checkout) == before
+    workspace = job.workspace
+    assert workspace.is_dir()
+    assert answered(job, "discard")["state"] == "discarded"
+    assert not workspace.exists()
 
 
 def test_a_refused_push_waits_for_the_owner_and_trying_again_reconciles_with_github(tmp_path, checkout, clone):
@@ -2422,7 +2604,7 @@ def test_the_source_must_be_owlbears_repository_on_main(checkout):
         pack_git.source(checkout)
 
 
-def test_it_refuses_a_dirty_checkout_and_a_package_outside_git_before_any_download(tmp_path, checkout):
+def test_it_refuses_a_dirty_checkout_and_a_package_outside_git_before_any_download(tmp_path, checkout, monkeypatch):
     (checkout / "skills" / "NOTICE.md").write_text("edited by hand\n")
     fakes = Fakes(tmp_path / "impeccable")  # never cloned: the source check stops the run before the sync
 
@@ -2435,6 +2617,7 @@ def test_it_refuses_a_dirty_checkout_and_a_package_outside_git_before_any_downlo
 
     loose = tmp_path / "loose"
     shutil.copytree(checkout, loose)
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", str(tmp_path))
     state = run(pack_job.Job(Store(tmp_path / "store2"), Fakes(tmp_path / "impeccable").live(loose)))
     assert "is not a git checkout" in state["reason"]
     assert (loose / "impeccable.json").read_bytes() == (checkout / "impeccable.json").read_bytes()
@@ -2457,32 +2640,51 @@ class Host:
         self.store = SimpleNamespace(root=Path("/project"), settings=lambda: SimpleNamespace(sessions=2))
 
 
+def update_machine(job):
+    machine = Machine(
+        HostRecord(
+            url="http://127.0.0.1:9/",
+            token="t",  # noqa: S106 - a loopback test token
+            pid=1,
+            started_at=datetime.now(UTC),
+            code=CURRENT,
+        )
+    )
+    machine.updates.pack = job
+    return machine
+
+
 def test_a_pause_holds_no_update_but_a_stop_holds_its_start_and_answers(tmp_path, checkout, clone):
     job, _, state = upheld(tmp_path, checkout, clone)
-    stopped = Host()
-    stopped.paused = lambda: True  # TD-287: the owner's update runs while paused
-    c = TestClient(api.create_app(job.store, "t", stopped, pack=job), base_url="http://127.0.0.1", headers=AUTH)
+    stopped = update_machine(job)
+    c = TestClient(machine_app.create(stopped), base_url="http://127.0.0.1", headers=AUTH)
     assert "waits for your answers" in c.post("/api/next/impeccable/update").json()["detail"]
     answer = {"question": state["questions"][0]["id"], "option": "drop"}
-    for flag, code, said in (("draining", 409, ENDING), ("closed", 503, STOPPING)):
-        setattr(stopped, flag, lambda: True)
+    for mode, said in (
+        ("ending", "OwlBear stops once nothing runs"),
+        ("updating", "switching versions"),
+        ("stopping", "OwlBear is stopping"),
+    ):
+        if mode == "stopping":
+            stopped.stopping.set()
+        else:
+            setattr(stopped, mode, said)
         for path, body in (("/api/next/impeccable/update", None), ("/api/next/impeccable/update/answer", answer)):
             refused = c.post(path, json=body)
-            assert (refused.status_code, refused.json()["detail"]) == (code, said)
+            assert (refused.status_code, refused.json()["detail"]) == (409 if mode == "ending" else 503, said)
     assert c.get("/api/next/impeccable/update").json()["state"] == "waiting"
 
 
-def test_every_project_sees_an_update_running_on_the_machine_and_for_whom(tmp_path):
-    """TD-290: the lock's holder names its project; the pack section of every project reads it."""
+def test_the_machine_lock_names_the_update_holding_it(tmp_path):
     store = Store(tmp_path / "store")
     store.name = "shop"
     job = pack_job.Job(store)
     assert pack_job.running_for() is None
     job._claim(job._alone)  # noqa: SLF001 - what a starting run takes
     try:
-        c = TestClient(api.create_app(Store(tmp_path / "other"), "t", Host()), base_url="http://127.0.0.1")
+        c = TestClient(machine_app.create(update_machine(job)), base_url="http://127.0.0.1")
         assert (pack_job.running_for(), c.get("/api/next/impeccable", headers=AUTH).json()["machine"]) == (
-            "shop", "shop"
+            "Impeccable update", "Impeccable update"
         )  # fmt: skip
     finally:
         os.close(job.held)
@@ -2548,6 +2750,7 @@ def test_a_successor_claim_is_never_erased_by_a_release_paused_after_its_close(t
     job._release()  # noqa: SLF001 - idle: nothing held, nothing to close
     with job.exclusive():
         assert job.held is not None
+        assert pack_job.running_for() == "calibration replay"
     assert job.held is None
     failure = RuntimeError("the replay failed")
     with pytest.raises(RuntimeError), job.exclusive():
@@ -2599,7 +2802,7 @@ def test_one_run_at_a_time_and_the_api_refuses_a_second(tmp_path, checkout, clon
     fakes = Fakes(clone)
     fakes.hold = threading.Event()
     job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
-    c = TestClient(api.create_app(Store(tmp_path / "store"), "t", Host(), pack=job), base_url="http://127.0.0.1")
+    c = TestClient(machine_app.create(update_machine(job)), base_url="http://127.0.0.1")
     assert c.post("/api/next/impeccable/update").status_code == 401  # guarded like every route
 
     started = c.post("/api/next/impeccable/update", headers=AUTH)
@@ -2618,59 +2821,47 @@ def test_one_run_at_a_time_and_the_api_refuses_a_second(tmp_path, checkout, clon
     assert fakes.calls.count("challenger") == 1
 
 
-def test_one_update_runs_at_a_time_on_the_machine_whichever_project_starts_it(tmp_path, checkout, clone):
+def test_one_update_runs_at_a_time_on_the_machine(tmp_path, checkout, clone):
     fakes = Fakes(clone)
     fakes.hold = threading.Event()
-    first = pack_job.Job(Store(tmp_path / "a", None, "alpha"), fakes.live(checkout))
-    second = pack_job.Job(Store(tmp_path / "b", None, "beta"), fakes.live(checkout))
+    first = pack_job.Job(Store(tmp_path / "updates"), fakes.live(checkout))
     first.start()
     assert fakes.waiting.wait(10)
-    with pytest.raises(pack_job.Busy, match="runs for alpha; one runs at a time on this machine"):
-        second.start()
-    assert second.read()["state"] == "idle"
+    with pytest.raises(pack_job.Busy, match="an Impeccable update is already running"):
+        first.start()
+    assert first.read()["state"] == "running"
     fakes.hold.set()
     first.thread.join(30)
-    assert second.start()["state"] == "running"  # the lock went with the first run's thread
-    second.thread.join(30)
-
-
-def registered(tmp_path: Path, *names: str) -> list[Store]:
-    """Projects in this machine's registry (under the isolated HOME), each store where the registry places it."""
-    projects = [registry.Project(id=n, path=str(tmp_path / n), added_at=datetime.now(UTC)) for n in names]
-    with registry.locked():
-        registry.save(registry.Machine(projects=projects))
-    return [Store(project_home.home(n), None, n) for n in names]
+    fakes.github.prs.clear()
+    assert first.start()["state"] == "running"  # the lock went with the first run's thread
+    first.thread.join(30)
 
 
 @pytest.mark.parametrize("phase", ["rounds", "publication"])
-def test_a_run_waiting_in_one_project_refuses_a_fresh_start_in_another_and_goes_on_itself_after_a_restart(
-    tmp_path, checkout, clone, phase
-):
-    """P7: a waiting run holds no lock, so a claim reads every project's record; the run goes on only as itself."""
+def test_a_waiting_run_refuses_a_fresh_start_and_goes_on_itself_after_a_restart(tmp_path, checkout, clone, phase):
+    """A waiting run releases the lock but remains the only run of its kind."""
     fakes = Fakes(clone)
     if phase == "rounds":
         fakes.verdicts, fakes.rejects, fakes.upheld = ["fix"], [[], ["F1"]], True
-    alpha, beta = registered(tmp_path, "alpha", "beta")
+    store = Store(tmp_path / "updates")
     fakes.live(checkout)
     fakes.github.checks = ["failure"]  # publication waits on its own pull request's CI
-    assert run(pack_job.Job(alpha, fakes.live(checkout)))["state"] == "waiting"
+    assert run(pack_job.Job(store, fakes.live(checkout)))["state"] == "waiting"
     assert bool(fakes.github.prs) is (phase == "publication")
 
-    other = pack_job.Job(beta, fakes.live(checkout))
-    with pytest.raises(pack_job.Busy, match="an Impeccable update waits for answers in alpha"):
-        other.start()
-    assert (other.read()["state"], (beta.root / pack_job.FILE).exists()) == ("idle", False)
-
-    restarted = pack_job.Job(alpha, fakes.live(checkout))  # a host restart reads the waiting run back
+    restarted = pack_job.Job(store, fakes.live(checkout))
+    with pytest.raises(pack_job.Busy, match="waits for your answers"):
+        restarted.start()
+    assert restarted.read()["state"] == "waiting"
     fakes.github.checks = ["success"]
     state = answered(restarted, "drop" if phase == "rounds" else "retry")
     assert state["state"] == "passed", state["reason"]
 
 
-def test_two_projects_starting_at_once_get_exactly_one_update(tmp_path, checkout, clone):
+def test_two_requests_starting_at_once_get_exactly_one_update(tmp_path, checkout, clone):
     fakes = Fakes(clone)
     fakes.hold = threading.Event()
-    jobs = [pack_job.Job(s, fakes.live(checkout)) for s in registered(tmp_path, "alpha", "beta")]
+    job = pack_job.Job(Store(tmp_path / "updates"), fakes.live(checkout))
     gate, said = threading.Barrier(2), []
 
     def start(job: pack_job.Job) -> None:
@@ -2680,16 +2871,15 @@ def test_two_projects_starting_at_once_get_exactly_one_update(tmp_path, checkout
         except pack_job.Busy as exc:
             said.append(str(exc))
 
-    starters = [threading.Thread(target=start, args=(job,)) for job in jobs]
+    starters = [threading.Thread(target=start, args=(job,)) for _ in range(2)]
     for t in starters:
         t.start()
     for t in starters:
         t.join(30)
     fakes.hold.set()
-    [winner] = [job for job in jobs if job.thread is not None]
-    winner.thread.join(30)
+    job.thread.join(30)
     assert said.count("running") == 1, said
-    assert [job.read()["state"] for job in jobs if job is not winner] == ["idle"]
+    assert "an Impeccable update is already running" in said
 
 
 def test_an_unread_pull_request_list_refuses_a_start_and_leaves_the_waiting_question_open(tmp_path, checkout, clone):
@@ -2722,7 +2912,7 @@ def test_the_answer_routes_take_only_an_open_questions_options(tmp_path):
     store.root.mkdir(parents=True)
     (store.root / pack_job.FILE).write_text(json.dumps(waiting))
     job = pack_job.Job(store)
-    c = TestClient(api.create_app(job.store, "t", Host(), pack=job), base_url="http://127.0.0.1", headers=AUTH)
+    c = TestClient(machine_app.create(update_machine(job)), base_url="http://127.0.0.1", headers=AUTH)
     qid, url = waiting["questions"][0]["id"], "/api/next/impeccable/update/answer"
 
     stale = c.post(url, json={"question": "old:dispute:F1", "option": "drop"})
@@ -2732,12 +2922,19 @@ def test_the_answer_routes_take_only_an_open_questions_options(tmp_path):
     bare = c.post(url, json={"question": qid, "option": "reconsider", "note": "  "})
     assert (bare.status_code, bare.json()["detail"]) == (422, "asking the challenger to reconsider needs your note")
     assert c.post(url, json={"question": qid, "option": "drop", "extra": 1}).status_code == 422
+    discard_url = "/api/next/impeccable/update/discard"
+    body = {"run": waiting["run"]}
     bare_client = TestClient(c.app, base_url="http://127.0.0.1")
-    assert bare_client.post("/api/next/impeccable/update/discard").status_code == 401  # guarded like every route
+    assert bare_client.post(discard_url, json=body).status_code == 401
+    stale = c.post(discard_url, json={"run": "old"})
+    assert (stale.status_code, stale.json()["detail"]) == (
+        409,
+        "this update is no longer the one shown; reload the page",
+    )
     assert c.get("/api/next/impeccable/update").json()["state"] == "waiting"  # nothing above changed it
 
-    assert c.post("/api/next/impeccable/update/discard").json()["state"] == "discarded"
-    gone = c.post("/api/next/impeccable/update/discard")
+    assert c.post(discard_url, json=body).json()["state"] == "discarded"
+    gone = c.post(discard_url, json=body)
     assert (gone.status_code, gone.json()["detail"]) == (409, "no Impeccable update waits for you")
 
 
@@ -2757,7 +2954,7 @@ def test_the_last_run_survives_a_host_restart_and_a_run_cut_short_reads_failed(t
     again = pack_job.Job(store).read()
     assert {k: again[k] for k in ended if k != "context"} == {k: v for k, v in ended.items() if k != "context"}
     assert "up to date" in again["log"][-1]
-    assert pack_job.last(store) == {k: ended[k] for k in ("state", "started_at", "ended_at", "reason")}
+    assert pack_job.last(store.root) == {k: ended[k] for k in ("state", "started_at", "ended_at", "reason")}
 
     cut = json.loads((store.root / pack_job.FILE).read_text()) | {
         "state": "running",
@@ -2784,7 +2981,7 @@ def test_updates_impeccable_shows_the_update_and_settings_and_maintenance_only_l
     assert 'label: "Update Impeccable"' in page  # the kind's words (pack.mjs), on the shared button (run.mjs)
     assert 'button(own.kind.label, start, { id: "pack-update", icon: "refresh"' in page  # lit-html
     assert '<p-text id="pack-state" size="sm" role="status" aria-live="polite">${runLine(u)}</p-text>' in page
-    assert '<ol id="pack-stages" aria-label="Update stages">' in page
+    assert '<div id="pack-progress">' in page
     assert "commits impeccable.json, skills/NOTICE.md and " in page  # the Update dialog says what it commits
     settings = page_source(c, "/config")
     assert 'id="pack-update"' not in settings  # the update is OwlBear's, not a project setting
@@ -2796,7 +2993,10 @@ def test_updates_impeccable_shows_the_update_and_settings_and_maintenance_only_l
     assert (pinned["pack"], pinned["upstream"], pinned["identity"]) == (
         OLD["pack"], OLD["upstream"]["tag"], pack_files.identity()
     )  # fmt: skip
-    got = c.get("/api/next/impeccable").json()
+    assert c.get("/api/next/impeccable").status_code == 404
+    machine = update_machine(pack_job.Job(Store(tmp_path)))
+    client = TestClient(machine_app.create(machine), base_url="http://127.0.0.1", headers=AUTH)
+    got = client.get("/api/next/impeccable").json()
     assert (got["pack"], got["upstream"]) == (OLD["pack"], OLD["upstream"]["tag"])
     assert got["identity"] == pack_files.identity()
     assert got["notice"] == f"Impeccable ({OLD['pack']}): releases upstream unknown"  # never online
@@ -2831,7 +3031,8 @@ def test_the_maintenance_page_links_each_action_and_shows_what_is_not_built(tmp_
     assert got["Impeccable update"]["where"] == got["Engine update"]["where"] == "Updates"
     assert (got["Review Tests"]["built"], got["Review Tests"]["href"]) == (True, "#tests")  # started on this page
     assert (got["Backlog triage"]["href"], got["Backlog triage"]["recorded"]) == ("/backlog", False)
-    (store.root / pack_job.FILE).write_text(
+    update_home.root().mkdir(parents=True, exist_ok=True)
+    (update_home.root() / pack_job.FILE).write_text(
         json.dumps(pack_job._blank() | {"state": "failed", "started_at": "2026-10-15T10:00:00+00:00",  # noqa: SLF001
                                         "ended_at": "2026-10-15T10:05:00+00:00", "reason": "golden pages differ"})
     )  # fmt: skip
@@ -2885,7 +3086,10 @@ def test_a_record_whose_descriptor_cannot_be_read_as_text_shows_as_unread_on_the
     """Review on 6dde: a failed handover of the opened record is shown like any unreadable record, never a 500."""
     store = Store(tmp_path)
     c = TestClient(api.create_app(store, "t", Host()), base_url="http://127.0.0.1", headers=AUTH)
-    (store.root / pack_job.FILE).write_text(json.dumps(pack_job._blank() | {"started_at": "2026-10-15T10:00:00+00:00"}))  # noqa: SLF001
+    update_home.root().mkdir()
+    (update_home.root() / pack_job.FILE).write_text(
+        json.dumps(pack_job._blank() | {"started_at": "2026-10-15T10:00:00+00:00"})  # noqa: SLF001
+    )
     spy = RecordDescriptors(fault)
     with pytest.MonkeyPatch.context() as patch:
         spy.patch(patch)

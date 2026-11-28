@@ -1,11 +1,11 @@
-"""The Settings page's Impeccable update (TD-101, TD-220, TD-256): one host job at a time, its stages, its last run.
+"""The machine's Impeccable update: one job at a time, its stages and its last run.
 
-Stages run in order and the first that fails stops the run with its reason: notice, candidate, diff, golden pages, then
-the updater's and the challenger's rounds with the calibration replay (``pack_run``), then the way into ``main``
-(``pack_publish``): commit, push, pull request, CI and merge. Until the merge nothing in ``main`` changes, and the
-running checkout never does. A run whose rounds or publication need the owner waits for his answers on the Settings
-page; its state is kept under the store, so a waiting run survives a host restart. A run the host stopped during
-reads as failed, except during publication: it waits for the owner, and trying again reconciles with GitHub first.
+Stages run in order: notice, candidate, diff, golden pages, then the updater's and the challenger's rounds with
+the calibration replay (``pack_run``), then the way into ``main`` (``pack_publish``): commit, push, pull request, CI
+and merge. Until the merge nothing in ``main`` changes, and the running checkout never does. A stop before the
+context is saved ends the run. A retryable stop after that keeps the workspace and waits for the owner on the
+Updates page. A waiting run survives a host restart. A host stop ends a running update as failed, except during
+publication: it waits for the owner, and trying again reconciles with GitHub first.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ from owlbear_delivery_next.impeccable_runs import (
     pack_rounds,
     pack_run,
 )
-from owlbear_delivery_next.impeccable_runs.machine_lock import HeldError, take
+from owlbear_delivery_next.impeccable_runs.machine_lock import HeldError, take, unproven
 from owlbear_delivery_next.impeccable_runs.pack_live import Live
 from owlbear_delivery_next.impeccable_runs.pack_run import CANDIDATE, UPDATER, Stopped
 from owlbear_delivery_next.impeccable_runs.pack_state import (
@@ -69,13 +69,13 @@ from owlbear_delivery_next.impeccable_runs.pack_state import (
 from owlbear_delivery_next.impeccable_runs.pack_steps import Steps
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.state_store import spend_ledger
+from owlbear_delivery_next.state_store import spend_ledger, update_home
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
     from owlbear_delivery_next.local_system.maintenance import Maintenance
-    from owlbear_delivery_next.state_store.store import Store
+    from owlbear_delivery_next.state_store.update_source import UpdateSource
 
 __all__ = ["CANDIDATE", "FILE", "STAGES", "Busy", "Job", "Live", "Refused", "Stale", "Stopped", "last", "running_for"]
 
@@ -93,7 +93,7 @@ class Refused(Exception):  # noqa: N818 - the route's answer, not a fault
 
 
 class Job(Steps):
-    """The project's Impeccable update: start one, answer it, read its state.
+    """The machine's Impeccable update: start one, answer it, read its state.
 
     The class attributes are the kind's: a PDS update (``pds_runs.job``) overrides them and the stages; Impeccable's
     are the defaults.
@@ -104,10 +104,10 @@ class Job(Steps):
     ADMISSION = pack_admission.IMPECCABLE  # its title, records and pull requests
     REPAIR = pack_repair_content.IMPECCABLE  # what its CI repairs check again or never push
     ACTIONS = pack_progress.ACTIONS
-    HOLDER = ""  # after the project's name in the machine lock
-    BUSY = "an Impeccable update runs for {who}; one runs at a time on this machine"
+    HOLDER = "Impeccable update"
+    BUSY = "{who} holds the lock; one update runs at a time on this machine"
 
-    def __init__(self, store: Store, live: Live | None = None) -> None:
+    def __init__(self, store: UpdateSource, live: Live | None = None) -> None:
         """Read the last run; one the host stopped during reads as failed, one waiting for the owner still waits."""
         self.store, self.live, self.lock = store, live or Live(), threading.Lock()
         self.thread: threading.Thread | None = None
@@ -154,18 +154,6 @@ class Job(Steps):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.version = version_of(atomic_write(self.path, json.dumps(self.state, indent=1) + "\n"))
 
-    def read(self) -> dict[str, Any]:
-        """The current or last run, as the page shows it: without the run's context."""
-        with self.lock:
-            return self._copy()
-
-    def _copy(self) -> dict[str, Any]:
-        shown = {k: v for k, v in self.state.items() if k != "context"} | {
-            "progress": pack_progress.progress(self.state, self.ACTIONS),  # from the context, which the page never gets
-            "repair": pack_repair.view(self.state.get("context")),
-        }
-        return json.loads(json.dumps(shown))
-
     def busy(self) -> bool:
         """Whether an update's thread or a tracked calibration replay runs now."""
         return self.replays > 0 or (self.thread is not None and self.thread.is_alive())
@@ -179,7 +167,7 @@ class Job(Steps):
         """Start a run on its own thread and return its first state.
 
         Raises:
-            Busy: A run is in progress or waits for the owner's answers, here or in another project on this machine,
+            Busy: A run is in progress or waits for the owner's answers,
                 or an Impeccable pull request is open or cannot be ruled out.
         """
         with self.lock:
@@ -208,18 +196,13 @@ class Job(Steps):
             Refused: The option is not one of the question's, or a reconsideration lacks its note.
             Busy: The last answer would resume the run, but it is no longer itself or alone (``pack_admission``).
         """
-        with self.lock:
+        with self._answer_lock():
             asked = self.state["questions"] if self.state["state"] == "waiting" and not self.busy() else []
             q = next((q for q in asked if q["id"] == question), None)
             if q is None:
                 msg = "this question is no longer open; reload the page"
                 raise Stale(msg)
-            if option not in {o["id"] for o in q["options"]}:
-                msg = f"{option!r} is no answer to this question"
-                raise Refused(msg)
-            if option == pack_rounds.RECONSIDER and not note.strip():
-                msg = "asking the challenger to reconsider needs your note"
-                raise Refused(msg)
+            self._check_answer(q, option, note)
             said = f"you answered {q['kind']} {q.get('finding', '')}: {pack_rounds.LABELS[option]}".replace("  ", " ")
             if option == pack_rounds.DISCARD:
                 self._log(said)
@@ -237,6 +220,7 @@ class Job(Steps):
                 pack_progress.answered(self.state["invocations"], said, last=not left)
             if not left:
                 self.state["state"] = "running"
+                self.state["reason"] = ""
                 for s in self.state["stages"]:  # the stop he answered holds nothing any more
                     s["result"] = "answered" if s["result"] == "waiting" else s["result"]
                 self.thread = threading.Thread(target=self._run, args=(self._resume,), name=self._thread, daemon=True)
@@ -246,13 +230,27 @@ class Job(Steps):
             resumed.start()
         return self.read()
 
-    def discard(self) -> dict[str, Any]:
-        """End a waiting run without activating anything.
+    def _check_answer(self, q: dict[str, Any], option: str, note: str) -> None:
+        if option not in {o["id"] for o in q["options"]}:
+            msg = f"{option!r} is no answer to this question"
+            raise Refused(msg)
+        if option == pack_rounds.RECONSIDER and not note.strip():
+            msg = "asking the challenger to reconsider needs your note"
+            raise Refused(msg)
+        if q["kind"] == "stopped" and option != pack_rounds.DISCARD and self._workspace_retained():
+            msg = "Maintenance keeps this run's workspace; discard the update and start it again"
+            raise Refused(msg)
+
+    def discard(self, run: str) -> dict[str, Any]:
+        """End the waiting run shown to the owner without activating anything.
 
         Raises:
-            Stale: No run waits for the owner.
+            Stale: The run shown to the owner is no longer waiting.
         """
-        with self.lock:
+        with self._answer_lock():
+            if self.state["run"] != run:
+                msg = "this update is no longer the one shown; reload the page"
+                raise Stale(msg)
             if self.state["state"] != "waiting" or self.busy():
                 msg = f"no {self.ADMISSION.title} update waits for you"
                 raise Stale(msg)
@@ -285,41 +283,39 @@ class Job(Steps):
                 self.state["loop"] = lp.model_dump(mode="json")
             self._save()
 
-    def wait(
-        self, ctx: pack_run.Context, lp: RoundLoop | None, questions: list[dict[str, Any]], stage: str = "challenger"
-    ) -> None:
-        """Stop the run for the owner's answers; it goes on when he has answered every question."""
-        with self.lock:
-            ctx.next = "wait"
-            self.state |= {"state": "waiting", "stage": "", "questions": questions}
-            self.state["context"] = ctx.model_dump(mode="json")
-            if lp is not None:
-                self.state["loop"] = lp.model_dump(mode="json")
-            next(s for s in self.state["stages"] if s["name"] == stage)["result"] = "waiting"
-            if self.state.get("invocations") is not None:
-                pack_progress.asked(self.state["invocations"], stage, questions)
-            self._log(f"waiting for you: {len(questions)} question(s)")
-            self._save()
-
     def hold(self, ctx: pack_run.Context, reason: str) -> None:
         """Publication stopped: the owner tries again once he fixed what stopped it, or discards the update."""
         with self.lock:
             self._hold(ctx, reason)
 
-    def _hold(self, ctx: pack_run.Context, reason: str) -> None:
-        pub = ctx.publication
-        link = f" ({pub.url})" if pub and pub.url else ""
-        repair = [pack_rounds.REPAIR] if pack_repair.offered(ctx) else []  # CI failed on its own pull request
-        options = [pack_rounds.RETRY, *repair, pack_rounds.DISCARD]
-        question = {"id": f"{self.state['run']}-publish", "kind": "publish", "text": f"{reason}{link}",
-                    "options": pack_rounds.published(options, opened=bool(pub and pub.number))}  # fmt: skip
-        ctx.next = "wait"
+    def _hold(self, ctx: pack_run.Context, reason: str, *, retry: str = "", lead: str = "") -> None:
+        if retry:
+            qid = f"{self.state['run']}-stopped-{uuid.uuid4().hex}"
+            question = pack_rounds.question(qid, "stopped", reason, [retry, pack_rounds.DISCARD], lead=lead)
+            match ctx.next:
+                case "challenge" | "recheck" | "reconsider" | "wait":
+                    fallback = "challenger"
+                case "activate" | "publish":
+                    fallback = "commit"
+                case action:
+                    fallback = action
+        else:
+            pub = ctx.publication
+            link = f" ({pub.url})" if pub and pub.url else ""
+            repair = [pack_rounds.REPAIR] if pack_repair.offered(ctx) else []  # CI failed on its own pull request
+            options = [pack_rounds.RETRY, *repair, pack_rounds.DISCARD]
+            question = {"id": f"{self.state['run']}-publish", "kind": "publish", "text": f"{reason}{link}",
+                        "options": pack_rounds.published(options, opened=bool(pub and pub.number))}  # fmt: skip
+            ctx.next = "wait"
+            fallback = "merge"
         stage = next((s for s in self.state["stages"] if s["result"] in {"running", "failed"}), None)
+        if stage is None and retry:
+            stage = next(s for s in self.state["stages"] if s["name"] == fallback)
         if stage is not None:
             stage["result"], stage["detail"] = "waiting", reason
         if self.state.get("invocations") is not None:
             pack_progress.stopped(self.state["invocations"], reason)
-            pack_progress.asked(self.state["invocations"], stage["name"] if stage else "merge", [question])
+            pack_progress.asked(self.state["invocations"], stage["name"] if stage else fallback, [question])
         self.state |= {"state": "waiting", "stage": "", "questions": [question], "reason": reason}
         self.state["context"] = ctx.model_dump(mode="json")
         self._log(f"waiting for you: {reason}")
@@ -349,30 +345,30 @@ class Job(Steps):
             return workspace != self.store.root / UPDATER
         return not self.maintenance.retained(str(workspace))
 
-    def _claim(self, admits: Callable[[], None]) -> None:
+    def _workspace_retained(self) -> bool:
+        return self.maintenance is not None and not self._removable(self.workspace)
+
+    def _claim(self, admits: Callable[[], None], *, holder: str | None = None) -> None:
         """Take the machine's one pack lock for the run's thread, if the caller's policy *admits* it under the lock.
 
-        The lock stays held from the policy's reading through the caller's saved claim, so no other project's claim
-        comes between them; the pack is shared by every project.
+        The lock stays held from the policy's reading through the saved claim, so no other update comes between them.
 
         Raises:
-            Busy: Another project's update runs now, an earlier pack session is still unproven, or *admits* refuses.
+            Busy: Another update runs now, an earlier session is still unproven, or *admits* refuses.
         """
         self._unproven()
         try:
             # Verified again while the lock is held: an earlier updater may have released it unconfirmed before this.
-            holder = f"{self._name}{self.HOLDER}"
-            self.held = take(local_home.root() / MACHINE_LOCK, holder, lambda: self._admitted(admits))
+            self.held = take(local_home.root() / MACHINE_LOCK, holder or self.HOLDER, lambda: self._admitted(admits))
         except HeldError as exc:
             msg = self.BUSY.format(who=exc.who)
             raise Busy(msg) from None
 
-    @property
-    def _name(self) -> str:
-        return self.store.name or self.store.root.parent.parent.name
-
     def _admitted(self, admits: Callable[[], None]) -> None:
         self._unproven()
+        if self.maintenance is not None and (earlier := unproven(self.maintenance, update_home.KEY)):
+            msg = f"an earlier {earlier} session is unproven; recover it on the Maintenance page first"
+            raise Busy(msg)
         try:
             admits()
         except pack_admission.Refused as exc:
@@ -380,14 +376,15 @@ class Job(Steps):
 
     def _fresh(self) -> None:
         """A new update's policy: no run open on this machine and no pack pull request open (``pack_admission``)."""
-        pack_admission.fresh(self.store.root, self._name, self.live.github(self.live.package), self.ADMISSION)
+        pack_admission.fresh(self.store.root, self.live.github(self.live.package), self.ADMISSION)
 
     def _resumed(self) -> None:
         """A waiting run's policy, for an answer and a publication retry: it goes on only as itself, with its own PR."""
-        publication = (self.state.get("context") or {}).get("publication") or {}
+        context = self.state["context"]
+        publication = context.get("publication") or {}
         pack_admission.resumed(
-            self.store.root, self._name, run=self.state["run"], version=self.version,
-            branch=str(publication.get("branch") or ""), github=self.live.github(self.live.package),
+            self.store.root, run=self.state["run"], version=self.version,
+            branch=str(publication.get("branch") or ""), github=self.live.github(Path(context["checkout"]["root"])),
             kind=self.ADMISSION,
         )  # fmt: skip
 
@@ -401,7 +398,7 @@ class Job(Steps):
 
     def _run(self, work: Callable[[], str | None]) -> None:
         try:
-            where = spend_ledger.Where.of(self.store, job=f"{self.ADMISSION.title} update")  # its project's spend
+            where = spend_ledger.Where(job=f"{self.ADMISSION.title} update")
             with spend_ledger.at(where):
                 self._steps(work)
         finally:
@@ -418,13 +415,13 @@ class Job(Steps):
         """Hold the machine's pack claim while a manual replay runs, as an update does; uncertain pack work refuses it.
 
         Raises:
-            Busy: An update runs or waits, another project holds the machine's claim, or a pack session is unproven.
+            Busy: An Impeccable update runs or waits, another update holds the lock, or a pack session is unproven.
         """
         with self.lock:
             if self.busy() or self.state["state"] in ("running", "waiting"):
                 msg = "an Impeccable update is running or waits for answers: finish it before a replay"
                 raise Busy(msg)
-            self._claim(self._alone)
+            self._claim(self._alone, holder="calibration replay")
         try:
             yield
         finally:
@@ -434,8 +431,14 @@ class Job(Steps):
         try:
             reason = work()
         except Stopped as exc:
-            self.log(exc.reason)
-            self._end("up-to-date" if exc.current else "failed", exc.reason)
+            with self.lock:
+                kept = self.state.get("context")
+                if kept and not (exc.current or exc.terminal or self._workspace_retained()):
+                    ctx = self.CONTEXT.model_validate(kept)
+                    self._hold(ctx, exc.reason, retry=exc.retry, lead=exc.lead)
+                else:
+                    self._log(exc.reason)
+                    self._finish("up-to-date" if exc.current else "failed", exc.reason)
         except Exception as exc:  # noqa: BLE001 - the page must learn how the run ended
             reason = failure(exc)
             self.log(reason)

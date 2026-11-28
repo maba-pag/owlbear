@@ -7,7 +7,6 @@ import json
 import subprocess
 import threading
 from contextlib import nullcontext
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -19,8 +18,10 @@ from owlbear_delivery_next.impeccable import calibration, pack_files
 from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_job, pack_replay, pack_run
 from owlbear_delivery_next.local_system import maintenance
 from owlbear_delivery_next.local_system.slots import Slots
-from owlbear_delivery_next.project_host import pack_routes, session_slots
+from owlbear_delivery_next.machine_host import update_job_routes
+from owlbear_delivery_next.project_host import session_slots
 from owlbear_delivery_next.project_host.host import Host
+from owlbear_delivery_next.state_store import update_home
 from owlbear_delivery_next.state_store.store import Store
 
 
@@ -45,14 +46,15 @@ def client(replay, lock=None):
         live=SimpleNamespace(replay=replay),
         count_replay=counts.append,
         counts=counts,
+        store=SimpleNamespace(name="owlbear", root=update_home.root()),
     )
     app = FastAPI()
-    store = SimpleNamespace(name="shop", root=Path("/nonexistent/shop"))  # the router names its own project
-    app.include_router(pack_routes.router(store, job))
+    updates = SimpleNamespace(pack=job, machine=SimpleNamespace(lock=threading.Lock()), refusal=lambda: "")
+    app.include_router(update_job_routes.replay_routes(updates))
     return TestClient(app, base_url="http://127.0.0.1"), job
 
 
-def test_managed_replay_and_legacy_routes_count_once_and_redirect_reads():
+def test_managed_replay_counts_once():
     seen = []
 
     def replay(_store, candidate, **kwargs):
@@ -63,17 +65,9 @@ def test_managed_replay_and_legacy_routes_count_once_and_redirect_reads():
     body = http.post("/impeccable/replay").json()
     assert body["ok"] is calibration.replayed([]).ok
     assert body["report"] == f"calibration replay: {pack_candidate.said_replay(calibration.replayed([]))}"
-    assert seen == [("shop", None, job.keeps)]
+    assert seen == [("owlbear", None, job.keeps)]
     assert job.counts == [1, -1], "the replay must count in once and out once"
     assert not job.lock.locked()
-    seen.clear()
-    job.counts.clear()
-    assert http.post("/design-pack/replay").json()["ok"] is calibration.replayed([]).ok
-    assert (seen, job.counts) == ([("shop", None, job.keeps)], [1, -1])
-    assert not job.lock.locked()
-    for old, new in (("/design-pack", "/impeccable"), ("/design-pack/update?x=1", "/impeccable/update?x=1")):
-        moved = http.get(old, follow_redirects=False)
-        assert (moved.status_code, moved.headers["location"]) == (307, f"http://127.0.0.1{new}")
 
 
 @pytest.mark.parametrize("fails", ["busy", "replay", "pack", "noted", "command"])
@@ -115,7 +109,9 @@ def test_replay_refusals_release_job_and_preserve_whole_reason(caplog, whole_err
     http, job = client(replay)
     answer = http.post("/impeccable/replay")
     assert (answer.status_code, answer.json()) == (status, {"detail": said})
-    logged = [(r.levelname, r.getMessage(), bool(r.exc_info)) for r in caplog.records if r.name == pack_routes.__name__]
+    logged = [
+        (r.levelname, r.getMessage(), bool(r.exc_info)) for r in caplog.records if r.name == update_job_routes.__name__
+    ]
     assert logged == [("WARNING", f"calibration replay {message}: {said}", trace)]
     assert job.counts == [1, -1]
     assert not job.lock.locked()
@@ -141,10 +137,15 @@ def legacy_host(tmp_path, state, *, updater_dir):
 
 
 def replay_route(host, store, live):
-    job = pack_job.Job(store, live)
-    session_slots.packed(host, job)
+    session_slots.restore(host.maintenance, session_slots.project(host), store.root)
+    source = SimpleNamespace(root=update_home.root(), name="owlbear")
+    owner = session_slots.SlotOwner(
+        update_home.KEY, host.slots, host.maintenance, lambda: 1, nullcontext, lambda: False
+    )
+    job = session_slots.packed(owner, pack_job.Job(source, live))
     app = FastAPI()
-    app.include_router(pack_routes.router(store, job, nullcontext, host))
+    updates = SimpleNamespace(pack=job, machine=SimpleNamespace(lock=threading.Lock()), refusal=lambda: "")
+    app.include_router(update_job_routes.replay_routes(updates))
     return TestClient(app, base_url="http://127.0.0.1"), job
 
 

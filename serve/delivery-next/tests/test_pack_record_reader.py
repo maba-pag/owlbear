@@ -94,7 +94,7 @@ def test_nonregular_record_is_unreadable_and_holds_work(tmp_path, record_fds, ki
             with pytest.raises((OSError, ValueError)):
                 read()
         assert pack_state.read_version(path) == (pack_state.blank(), "")
-        assert pack_state.last(Store(root)) is None
+        assert pack_state.last(root) is None
         job = pack_job.Job(Store(root))
         assert (job.version, job.state["state"]) == ("", "idle")
         job.maintenance = maintenance.Maintenance(Slots(lambda: 1), boot=lambda: 10.0, observe=lambda *_a: False)
@@ -116,7 +116,7 @@ def test_regular_missing_and_malformed_record_contracts(tmp_path):
     kept, version = pack_state.observed(tmp_path)
     assert kept["reason"] == "the pack was refused"
     assert version
-    assert pack_state.last(Store(tmp_path))["started_at"] == kept["started_at"]
+    assert pack_state.last(tmp_path)["started_at"] == kept["started_at"]
     path.write_text("{")
     with pytest.raises(ValueError, match="Expecting"):
         pack_state.observed(tmp_path)
@@ -160,12 +160,12 @@ def test_record_descriptor_closes_on_failure_and_cancellation(tmp_path, monkeypa
             pack_state.observed(tmp_path)
         if error is Cancelled:
             with pytest.raises(Cancelled):
-                pack_state.last(Store(tmp_path))
+                pack_state.last(tmp_path)
         else:
             assert pack_state.read_version(tmp_path / pack_state.FILE) == (pack_state.blank(), "")
             if boundary != "fstat":
-                assert pack_state.last(Store(tmp_path)) is None
-    assert pack_state.last(Store(tmp_path))["started_at"] == "2026-10-15T10:00:00+00:00"
+                assert pack_state.last(tmp_path) is None
+    assert pack_state.last(tmp_path)["started_at"] == "2026-10-15T10:00:00+00:00"
 
 
 def test_legacy_stages_survive_without_invented_history(tmp_path):
@@ -184,5 +184,5 @@ def test_legacy_stages_survive_without_invented_history(tmp_path):
     (tmp_path / pack_state.FILE).write_text(json.dumps(record))
     state = pack_job.Job(Store(tmp_path), pack_job.Live()).read()
     assert "invocations" not in state
-    assert state["progress"] == {"legacy": True, "phases": [], "now": None, "next": None}
+    assert state["progress"] == {"phases": [], "now": None, "next": None}
     assert [s["result"] for s in state["stages"]] == ["passed"] * 6 + ["failed"] + ["not-reached"] * 4

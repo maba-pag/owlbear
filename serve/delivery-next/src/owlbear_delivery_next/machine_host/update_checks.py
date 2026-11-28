@@ -38,8 +38,8 @@ from owlbear_delivery_next.impeccable import pack_files, pack_update
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.machine_host import impeccable, versions
-from owlbear_delivery_next.project_host import pack_overview, pages
-from owlbear_delivery_next.state_store import machine_settings, pds_run_record, registry
+from owlbear_delivery_next.project_host import pages
+from owlbear_delivery_next.state_store import machine_settings, pds_run_record, registry, update_home
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -158,19 +158,11 @@ def _installed(name: str) -> str:
 
 
 def _pds_runs() -> dict[str, str]:
-    """What the projects' last PDS updates did with each release: running, waiting or merged; failed ones are left out.
-
-    A record that cannot be read says nothing here: Maintenance and the page name it.
-    """
-    taken: dict[str, str] = {}
-    for s in pack_overview.records(reader=pds_run_record.read_only)[0]:
-        record = s["record"] or {}
-        version = str(record.get("release") or "")
-        merged = bool((record.get("published") or {}).get("merged"))
-        state = "merged" if merged else s["state"] if s["state"] in pack_overview.OPEN else ""
-        if version and state and taken.get(version) != "merged":
-            taken[version] = state
-    return taken
+    """What the machine's last PDS update did: running, waiting or merged."""
+    record = pds_run_record.read_only(update_home.root()) or {}
+    version = str(record.get("release") or "")
+    state = "merged" if (record.get("published") or {}).get("merged") else str(record.get("state") or "")
+    return {version: state} if version and state in {"running", "waiting", "merged"} else {}
 
 
 def _ahead(name: str, latest: str, current: str) -> bool:
@@ -386,8 +378,7 @@ class Checks:
 
         ``unrestored`` says why the results kept before the host started were lost, if they were; ``unkept`` why the
         last results could not be written, ``unsettled`` why the machine settings could not be read and ``unticked``
-        why the last look whether a check is due failed; ``runs_unread`` why the projects' PDS updates could not be
-        read, so a newer PDS shows offered whether or not a project already takes it.
+        why the last look whether a check is due failed; ``runs_unread`` why the machine's PDS update could not be read.
         """
         (hours, channel), installed = self._settings(), {n: _installed(n) for n in CHECKS}
         runs_unread = ""

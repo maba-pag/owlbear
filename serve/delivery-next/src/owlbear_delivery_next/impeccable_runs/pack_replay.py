@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.visual_records import VisualRound
     from owlbear_delivery_next.impeccable_runs.pack_candidate import Candidate
     from owlbear_delivery_next.runtimes.session_result import Run
-    from owlbear_delivery_next.state_store.store import Store
+    from owlbear_delivery_next.state_store.update_source import UpdateSource
 
 
 NAME = re.compile(r"(?P<stem>(?P<state>[a-z0-9][a-z0-9-]{0,39})-(?P<width>\d{3,4}))-[AB]\.png")  # home-1280-A.png
@@ -51,12 +51,12 @@ def sdk_run(cfg: sdk_adapter.Session) -> Run:
 
 
 def replay(
-    store: Store,
+    store: UpdateSource,
     candidate: Candidate | None = None,
     run: Callable[[sdk_adapter.Session], Run] | None = None,
     keep: Callable[[Path], bool] | None = None,
 ) -> calibration.Replay:
-    """The design judge, with *candidate* (else the installed pack) and the project's model, on each decided round.
+    """The machine's design judge compares each decided round with *candidate*, or with the installed pack.
 
     A round is replayed with the messages and screenshots it was judged on, and only if its design verdict came from
     the model and effort the replay runs; any other round is left out and counted.
@@ -69,12 +69,12 @@ def replay(
     if store.shared is None:
         msg = "the calibration replay reads the shared repository: set it with `owlbear-next data PATH`"
         raise pack_files.PackError(msg)
-    with spend_ledger.at(spend_ledger.Where.of(store, job="Impeccable replay")):  # its project's spend
+    with spend_ledger.at(spend_ledger.where() if candidate else spend_ledger.Where(job="Impeccable replay")):
         return _replay(store, candidate, run or sdk_run, keep)
 
 
 def _replay(
-    store: Store,
+    store: UpdateSource,
     candidate: Candidate | None,
     run: Callable[[sdk_adapter.Session], Run],
     keep: Callable[[Path], bool] | None,
@@ -86,7 +86,7 @@ def _replay(
     if not root.is_relative_to(store.shared.root.resolve()):
         msg = f"the calibration folder leads outside the shared repository, to {root}"
         raise pack_files.PackError(msg)
-    with scratch("owlbear-replay-", keep) as tmp:
+    with scratch(store.root, "owlbear-replay-", keep) as tmp:
         code, text = git_files.probe_in(Path(tmp))(["git", "init", "-q"])  # the window places its files only in a repo
         if code:
             msg = f"the replay's worktree could not be made a git repository: {text}"

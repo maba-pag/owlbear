@@ -68,7 +68,7 @@ function newest(u) {
   if (u.latest && u.latest !== u.current) {
     const last = standing(u) === "newer" ? "" : ", last known available";
     const unread = u.name === "pds" && checks.all?.runs_unread
-      ? `whether a project already takes it could not be read: ${checks.all.runs_unread}` : "";
+      ? `the machine's last update could not be read: ${checks.all.runs_unread}` : "";
     const said = [u.detail, unread].filter(Boolean).join("; ");
     return `${u.latest}${said ? ` (${said})` : ""}${last}`;
   }
@@ -79,9 +79,9 @@ function newest(u) {
 // The frame of update *name*: its versions and checks; *running* names the version in use.
 export function frame(name, { running = "In use" } = {}) {
   if (!machineState()) {
-    return html`<p-inline-notification id="check-none" state="info" dismiss-button="false" heading="Update checks are
-      the machine host's" heading-tag="h2" description="This page is served by one project's own host. Open the
-      address owlbear status prints to search for updates."></p-inline-notification>`;
+    return html`<p-inline-notification id="check-none" state="info" dismiss-button="false">
+      Start updates on the machine's pages at the address printed by <code>owlbear status</code>.
+    </p-inline-notification>`;
   }
   const u = update(name);
   if (!u) {

@@ -1,6 +1,6 @@
 """The PDS audit started by hand (#777): the installed pages audited against the installed pin, its report kept.
 
-It changes nothing but its report: ``pds-audit.json`` in the project's store, beside the PDS update's record. One runs
+It changes nothing but its report: ``pds-audit.json`` beside the machine's PDS update record. One runs
 at a time, holding the machine's update lock, and never while an earlier PDS session is unproven. The host, never the
 model, writes the version and commit it audited into the saved report.
 """
@@ -19,12 +19,13 @@ from typing import TYPE_CHECKING, Any
 from owlbear_delivery_next.git.command_failure import failure
 from owlbear_delivery_next.impeccable_runs import machine_lock
 from owlbear_delivery_next.impeccable_runs.pack_state import MACHINE_LOCK
+from owlbear_delivery_next.impeccable_runs.scratch import scratch
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
 from owlbear_delivery_next.pds_runs import audit, pin, sessions
 from owlbear_delivery_next.settings import roles
 from owlbear_delivery_next.settings.config import SettingsUnset
-from owlbear_delivery_next.state_store import spend_ledger
+from owlbear_delivery_next.state_store import spend_ledger, update_home
 from owlbear_delivery_next.workflow_steps import sessions as step_sessions
 
 if TYPE_CHECKING:
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.local_system.maintenance import Maintenance
     from owlbear_delivery_next.runtimes.sdk_adapter import Session
     from owlbear_delivery_next.runtimes.session_result import Run
-    from owlbear_delivery_next.state_store.store import Store
+    from owlbear_delivery_next.state_store.update_source import UpdateSource
 
 STATE = "pds-audit.json"
 INTERRUPTED = "OwlBear stopped while the audit ran; start it again"
@@ -54,9 +55,9 @@ def _unbound(_cfg: Session) -> Run:
 
 
 class Hand:
-    """The project's hand audit: its state file, its one thread and the session runner the host binds."""
+    """The machine's hand audit: its state file, its one thread and the session runner the host binds."""
 
-    def __init__(self, store: Store, run: Callable[[Session], Run] = _unbound) -> None:
+    def __init__(self, store: UpdateSource, run: Callable[[Session], Run] = _unbound) -> None:
         self.store, self.run = store, run
         self.maintenance: Maintenance | None = None
         self.lock = threading.Lock()
@@ -68,7 +69,7 @@ class Hand:
         return self.store.root / STATE
 
     def busy(self) -> bool:
-        """Whether an audit runs now: work a project's stop waits for."""
+        """Whether an audit runs now: work the machine host waits for when stopping."""
         return self.thread is not None and self.thread.is_alive()
 
     def read(self) -> dict[str, Any]:
@@ -108,9 +109,9 @@ class Hand:
             except SettingsUnset as exc:
                 raise Busy(str(exc)) from None
             try:
-                held = machine_lock.take(local_home.root() / MACHINE_LOCK, f"{self._name} (PDS audit)", self._unproven)
+                held = machine_lock.take(local_home.root() / MACHINE_LOCK, "check for deprecations", self._unproven)
             except machine_lock.HeldError as exc:
-                msg = f"an update runs for {exc.who}; one runs at a time on this machine"
+                msg = f"{exc.who} holds the lock; one update runs at a time on this machine"
                 raise Busy(msg) from None
             state = {"state": "running", "started_at": datetime.now(UTC).isoformat()}
             try:
@@ -122,18 +123,19 @@ class Hand:
                 raise
             return state
 
-    @property
-    def _name(self) -> str:
-        return self.store.name or self.store.root.parent.parent.name
-
     def _unproven(self) -> None:
-        if self.maintenance is not None and self.maintenance.pending(kind="pds"):
-            msg = "an earlier PDS session is unproven; recover it on the Maintenance page first"
+        if self.maintenance is None:
+            return
+        earlier = (
+            "PDS" if self.maintenance.pending(kind="pds") else machine_lock.unproven(self.maintenance, update_home.KEY)
+        )
+        if earlier:
+            msg = f"an earlier {earlier} session is unproven; recover it on the Maintenance page first"
             raise Busy(msg)
 
     def _work(self, held: int, state: dict[str, Any]) -> None:
         try:
-            with spend_ledger.at(spend_ledger.Where.of(self.store, job="PDS audit")):
+            with spend_ledger.at(spend_ledger.Where(job="PDS audit")):
                 saved = {**state, **self._audit()}
         except Exception as exc:  # noqa: BLE001 - the page must learn how the audit ended
             saved = {**state, "state": "failed", "reason": failure(exc)}
@@ -155,7 +157,7 @@ class Hand:
         def session(at: Path, skills: Path, message: str) -> Run:
             return self.run(sessions.auditor(settings, at, skills, message, memory=memory))
 
-        with self.maintenance.workspace("owlbear-pds-audit-") as at:
+        with scratch(self.store.root, "owlbear-pds-audit-", lambda at: self.maintenance.retained(str(at))) as at:
             done = audit.audit(at, web=package / "web", tree=package / pin.TREE, version=version, session=session)
         v = done.verdict
         return {

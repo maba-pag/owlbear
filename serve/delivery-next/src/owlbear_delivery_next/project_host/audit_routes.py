@@ -10,13 +10,12 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from owlbear_delivery_next.audit_runs import job as audit_job
 from owlbear_delivery_next.audit_runs import suppression_verdicts
-from owlbear_delivery_next.project_host import decision_routes, pack_routes, pds_routes, session_slots
+from owlbear_delivery_next.project_host import decision_routes, pack_routes, session_slots
 from owlbear_delivery_next.project_host.admission import admitted
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from owlbear_delivery_next.impeccable_runs.pack_job import Job
     from owlbear_delivery_next.project_host.host import Host, HostRecord
     from owlbear_delivery_next.state_store.store import Store
 
@@ -114,18 +113,15 @@ def router(audits: audit_job.Audits, host: Host) -> APIRouter:
     return routes
 
 
-def bind(routes: APIRouter, store: Store, host: Host, job: Job, opening: Callable[[], bool]) -> Callable[[], list[str]]:
+def bind(routes: APIRouter, store: Store, host: Host | None, opening: Callable[[], bool]) -> Callable[[], list[str]]:
     """Compose the project's maintenance actions and the work its stop waits for."""
-    routes.include_router(pack_routes.router(store, job, lambda: admitted(host), host))
-    pds = session_slots.pds(host, store)
-    routes.include_router(pds_routes.router(*pds, admitted=lambda: admitted(host)))
+    routes.include_router(pack_routes.router(store, host))
     audits = session_slots.audits(host, store)
     routes.include_router(router(audits, host))
 
     def busy() -> list[str]:
         return [
             *(["a shaping chat opening"] if opening() else []),
-            *session_slots.busy(job, *pds),
             *(["a project audit"] if audits.busy() else []),
         ]
 
