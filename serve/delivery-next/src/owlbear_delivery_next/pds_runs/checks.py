@@ -63,13 +63,13 @@ def browsed(job: Job, ctx: Context, at: Path) -> browser.Result:
         browser.Unrunnable: They cannot run, or the PDS CDN did not answer.
         Stopped: The suite did not finish, it failed without naming a test, or a failing test also fails on main.
     """
-    r = _completed(job.live.browser(at, ()), "first pass")
+    r = _completed(job, at, (), "first pass")
     if r.passed:
         return r
     if not r.failed:
         msg = f"browser tests: {r.said()} (exit {r.code})"
         raise Stopped(msg)
-    main = _completed(job.live.browser(base(job, ctx), r.failed), "rerun on main")
+    main = _completed(job, base(job, ctx), r.failed, "rerun on main")
     if not main.cleared(r.failed):
         passed = [test for test in r.failed if test in main.passed_ids]
         absent = [test for test in r.failed if test not in main.failed and test not in main.passed_ids]
@@ -79,11 +79,16 @@ def browsed(job: Job, ctx: Context, at: Path) -> browser.Result:
             "Try again if the machine was busy; if main is broken, fix it, discard this update and start a new one"
         )
         raise Stopped(msg)
-    candidate = _completed(job.live.browser(at, r.failed), "rerun on the candidate")
+    candidate = _completed(job, at, r.failed, "rerun on the candidate")
     return r.flake() if candidate.cleared(r.failed) else r  # D-01M6BFK5YF5GYYN7QCDDPBEZH2
 
 
-def _completed(result: browser.Result, attempt: str) -> browser.Result:
+def _completed(job: Job, at: Path, ids: tuple[str, ...], attempt: str) -> browser.Result:
+    try:
+        result = job.live.browser(at, ids)
+    except browser.Unrunnable as exc:
+        exc.add_note(f"Browser pass: {attempt}")
+        raise
     if result.code not in (0, 1):
         msg = f"browser tests did not finish ({attempt}): {result.said()} (exit {result.code})\n{result.output}"
         raise Stopped(msg)

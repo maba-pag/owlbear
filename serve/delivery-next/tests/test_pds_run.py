@@ -498,9 +498,15 @@ def test_browser_reruns_discriminate_flake_base_failure_and_skips(tmp_path, chec
 
 
 @pytest.mark.parametrize("attempt", ["first pass", "rerun on main", "rerun on the candidate"])
-def test_an_interrupted_browser_pass_names_the_pass_in_the_saved_stop_and_log(tmp_path, checkout, attempt):
+@pytest.mark.parametrize("report", [True, False], ids=["with-report", "without-report"])
+def test_an_interrupted_browser_pass_names_the_pass_in_the_saved_stop_and_log(tmp_path, checkout, attempt, report):
     failed = failing("tests/test_a.py::t")
-    stopped = browser.Result(1, 1, 0, 0, failed.failed, 2, "Interrupted")
+    if report:
+        stopped = browser.Result(1, 1, 0, 0, failed.failed, 2, "Interrupted")
+        reason = f"browser tests did not finish ({attempt}): {stopped.said()} (exit 2)\nInterrupted"
+    else:
+        stopped = browser.Unrunnable("the browser tests left no report (exit 2): Interrupted")
+        reason = f"Unrunnable: {stopped}\nBrowser pass: {attempt}"
     before = {"first pass": [], "rerun on main": [failed], "rerun on the candidate": [failed, PASS]}[attempt]
     fakes, job, ctx = browser_job(tmp_path, checkout, *before, stopped)
     ctx.next = "browser"
@@ -508,7 +514,6 @@ def test_an_interrupted_browser_pass_names_the_pass_in_the_saved_stop_and_log(tm
 
     state = job.failed(lambda: browser_stage(job, ctx))
 
-    reason = f"browser tests did not finish ({attempt}): {stopped.said()} (exit 2)\nInterrupted"
     assert state["state"] == "waiting"
     assert reason in state["reason"]
     assert reason in state["questions"][0]["text"]
@@ -1100,7 +1105,7 @@ def test_a_timed_out_browser_gate_keeps_and_logs_its_whole_error(tmp_path, check
 
     [exc] = timed
     said = (f"Unrunnable: the browser tests did not finish in {browser.SECONDS} s: TimeoutExpired: {exc}\n"
-            f"stderr:\n{whole_error}\nstdout:\n{out}")  # fmt: skip
+            f"stderr:\n{whole_error}\nstdout:\n{out}\nBrowser pass: first pass")  # fmt: skip
     logged = [line.split(" ", 1)[1] for line in state["log"]]
     if where == "candidate":
         reason = f"browser: {said}"
