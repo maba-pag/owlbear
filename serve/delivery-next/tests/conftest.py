@@ -963,14 +963,23 @@ class Pds:
 
     @classmethod
     def _fetch(cls, r):
-        """The CDN's answer to *r*, fetched up to ``TRIES`` times; None, with each error printed, if none came."""
+        """The CDN's answer to *r*, fetched up to ``TRIES`` times; None if none came.
+
+        Only a CDN that answered no attempt prints the line the PDS update's browser gate reads as an outage. A fetch
+        its test cancelled by closing the page says so in other words, and one a later attempt recovered says nothing.
+        """
         from playwright.sync_api import Error  # noqa: PLC0415 - the optional browser runtime
 
+        errors = []
         for _ in range(cls.TRIES):
             try:
                 return r.fetch(timeout=cls.FETCH_MS)
             except Error as exc:
-                print(f"PDS CDN fetch of {r.request.url} failed: {exc}")  # noqa: T201 - shown with the failed test
+                errors.append(str(exc))
+        cancelled = any("has been closed" in e or "disposed" in e for e in errors)
+        said = "PDS fetch cancelled with its page:" if cancelled else "PDS CDN fetch of"
+        for e in errors:
+            print(f"{said} {r.request.url} failed: {e}")  # noqa: T201 - shown with the failed test
         return None
 
     @classmethod

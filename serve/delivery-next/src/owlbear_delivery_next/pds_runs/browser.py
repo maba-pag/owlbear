@@ -27,7 +27,7 @@ TESTS = "serve/delivery-next/tests"
 SOURCE = "serve/delivery-next/src"
 REPORT = "browser-junit.xml"
 CDN = "PDS CDN fetch of"  # the tests' own words when the PDS CDN did not answer (tests/conftest.py)
-SECONDS = 1800
+SECONDS = 1800  # the gate's one limit on the whole run: the suite's own session limit is switched off for it
 SUMMARY = re.compile(r"^(?:FAILED|ERROR) (\S+)", re.MULTILINE)
 TRUST = ("NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "SSL_CERT_DIR")  # a proxy intercepting TLS needs its CA
 PROXY = tuple(n for v in ("HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY") for n in (v, v.lower()))
@@ -103,7 +103,7 @@ def run(at: Path, ids: tuple[str, ...] = (), *, runner: Runner = subprocess.run)
         "HOME": str(Path.home()), "PYTHONPATH": str(at / SOURCE), "PLAYWRIGHT_BROWSERS_PATH": str(where),
     }  # fmt: skip
     args = [sys.executable, "-m", "pytest", *(ids or (TESTS,)), "-m", "browser", f"--junitxml={report}", "-q",
-            "-rfE", "--color=no", "-p", "no:cacheprovider"]  # fmt: skip
+            "-rfE", "--color=no", "-p", "no:cacheprovider", "-o", "session_timeout="]  # fmt: skip
     try:
         done = runner(args, cwd=at, env=env, capture_output=True, text=True, timeout=SECONDS, check=False)
     except subprocess.TimeoutExpired as exc:
