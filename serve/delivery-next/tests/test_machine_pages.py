@@ -2205,6 +2205,7 @@ def retry_stopped_pds(page, url: str, reason: str, resume) -> None:
     assert detail.text_content() == reason
     assert page.evaluate("document.documentElement.scrollWidth <= document.documentElement.clientWidth")
     page.evaluate("window.scrollTo({top: 0, behavior: 'instant'})")
+    expect(page.locator("#pack ~ #check")).to_have_count(1)
     retry = question.get_by_role("button", name="Try again")
     box = retry.bounding_box()
     assert box is not None
@@ -2408,11 +2409,12 @@ def test_the_machine_run_is_answerable_from_any_project_and_from_all_projects(tm
 
 
 @pytest.mark.browser
-@pytest.mark.parametrize("options", [["activate", "discard"], None], ids=["answered", "alone"])
+@pytest.mark.parametrize("options", [["retry", "discard"], None], ids=["answered", "alone"])
 def test_a_discard_from_all_projects_goes_to_the_machine(monkeypatch, pds, options) -> None:
     """Both a question's discard and the standalone discard go to the machine."""
     job = pack_job.Job(SimpleNamespace(root=update_home.root()), pack_job.Live())
-    questions = [pack_rounds.question("r1:end:1", "end", "The rounds ended.", options)] if options else []
+    reason = "The golden pages did not finish.\n" + "x" * 430
+    questions = [pack_rounds.question("r1-stop", "stopped", reason, options)] if options else []
     job.state = pack_job._blank() | {  # noqa: SLF001 - a run waiting for the owner
         "state": "waiting", "started_at": datetime.now(UTC).isoformat(), "run": "r1", "questions": questions,
     }  # fmt: skip
@@ -2423,14 +2425,25 @@ def test_a_discard_from_all_projects_goes_to_the_machine(monkeypatch, pds, optio
         sent.append(route.request.url)
         route.fulfill(json={})
 
-    with browsing(monkeypatch, pds) as (page, base):
+    with browsing(monkeypatch, pds, width=390) as (page, base):
         page.route(re.compile(r".*/impeccable/update/(answer|discard)$"), sending)
         page.goto(f"{base}/updates/impeccable#token=t")
+        if options:
+            expect(page.locator("#pack ~ #check")).to_be_visible()
+            retry = page.get_by_role("button", name="Try again")
+            expect(retry).to_be_in_viewport(ratio=1)
+            box = retry.bounding_box()
+            assert box is not None
+            assert min(box["width"], box["height"]) >= 24
         discard = page.locator("#pack-discard")
         page.wait_for_function("() => document.querySelector('#pack-discard')?.innerText.trim()")
         label = discard.inner_text()
         discard.click()
         pds.modal(page).wait_for()
+        page.keyboard.press("Escape")
+        expect(page.get_by_role("dialog")).to_have_count(0)
+        page.wait_for_function("document.activeElement?.id === 'pack-discard'")
+        discard.click()
         pds.answer(page, label)
         until(page, lambda: sent)
     end = "answer" if options else "discard"
