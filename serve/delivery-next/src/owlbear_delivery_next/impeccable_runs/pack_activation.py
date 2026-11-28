@@ -38,7 +38,7 @@ def activate(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop)
     Its changed evidence must be what the owner accepted; a code change waits for his approval first (TD-414). The
     run waits for the owner (None) when publication stops; trying again goes on from where it got.
     """
-    package, at = job.live.package.resolve(), job.workspace
+    package, at = ctx.package, job.workspace
     if ctx.repair.phase == "checking" and not _alike(job, c, ctx):
         return None
     edits = pack_run.updater_edits(job, ctx)

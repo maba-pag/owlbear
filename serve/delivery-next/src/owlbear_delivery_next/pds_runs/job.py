@@ -12,6 +12,7 @@ from __future__ import annotations
 import contextlib
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from owlbear_delivery_next.change_contracts.round_records import RoundLoop
@@ -26,7 +27,6 @@ from owlbear_delivery_next.workflow_steps import sessions
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-    from pathlib import Path
 
     from owlbear_delivery_next.github.provider import Provider
     from owlbear_delivery_next.runtimes.sdk_adapter import Session
@@ -125,7 +125,9 @@ class Job(pack_job.Job):
         return not any(self.maintenance.retained(str(p)) for p in kept)
 
     def _finish(self, state: str, reason: str, *, keep: bool = False) -> None:
+        context = self.state.get("context")
+        root = Path(context["checkout"]["root"]) if context else self.live.package.resolve()
         super()._finish(state, reason, keep=keep)
         if not self.workspace.exists():  # the records of its worktrees go with it
             with contextlib.suppress(pack_files.PackError, OSError):
-                self.live.git(self.live.package.resolve(), ["worktree", "prune"])
+                self.live.git(root, ["worktree", "prune"])

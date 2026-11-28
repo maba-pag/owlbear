@@ -384,10 +384,11 @@ class Job(Steps):
 
     def _resumed(self) -> None:
         """A waiting run's policy, for an answer and a publication retry: it goes on only as itself, with its own PR."""
-        publication = (self.state.get("context") or {}).get("publication") or {}
+        context = self.state["context"]
+        publication = context.get("publication") or {}
         pack_admission.resumed(
             self.store.root, run=self.state["run"], version=self.version,
-            branch=str(publication.get("branch") or ""), github=self.live.github(self.live.package),
+            branch=str(publication.get("branch") or ""), github=self.live.github(Path(context["checkout"]["root"])),
             kind=self.ADMISSION,
         )  # fmt: skip
 

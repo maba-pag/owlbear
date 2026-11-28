@@ -1867,8 +1867,9 @@ WRONG = {"bad.html (source)": {"missing": ["glow"], "unexpected": []}}
 EXPECTED = "golden/expected.json"
 
 
+@pytest.mark.parametrize("switched", [False, True])
 def test_golden_pages_that_differ_go_to_the_updater_and_still_differing_after_its_session_stops(
-    tmp_path, checkout, clone
+    tmp_path, checkout, clone, switched
 ):
     """TD-177: the first golden mismatch is the updater's evidence; on its candidate the check must hold."""
     fakes = Fakes(clone, wrong=WRONG)
@@ -1888,9 +1889,14 @@ def test_golden_pages_that_differ_go_to_the_updater_and_still_differing_after_it
     assert snapshot(checkout) == before
     called = len(fakes.calls)
     fakes.wrong_after = {}
+    if switched:
+        other = tmp_path / "new-version" / "src" / "pkg"
+        shutil.copytree(checkout, other)
+        job = pack_job.Job(job.store, fakes.live(other))
     state = answered(job, "retry")
     assert state["state"] == "passed", state["reason"]
     assert fakes.calls[called:] == ["golden", "replay", "challenger"]
+    assert state["published"]["commit"] == landed(checkout)
     assert [(i["round"], i["result"]) for i in state["invocations"] if i["operation"] == "candidate-golden"] == [
         (1, "failed"),
         (1, "passed"),

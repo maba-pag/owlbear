@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import shutil
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -36,8 +37,6 @@ from owlbear_delivery_next.runtimes import session_result
 from owlbear_delivery_next.settings import rounds
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from owlbear_delivery_next.impeccable.calibration import Replay
     from owlbear_delivery_next.impeccable_runs.pack_job import Job
     from owlbear_delivery_next.runtimes.session_result import Run
@@ -81,7 +80,7 @@ class Context(BaseModel):
     manifest: str
     notice: str
     baseline: dict[str, str]  # the package's files the update may rewrite, by package path: their digests at the start
-    checkout: dict[str, str]  # the package's checkout: its root, repository and the base pinned for the commit
+    checkout: dict[str, str]  # the checkout root, package path, repository and base pinned for the commit
     publication: pack_publish.Publication | None = None  # set once the update goes into main
     start: dict[str, str]  # the updater repository's files as laid out
     sid: str
@@ -100,6 +99,11 @@ class Context(BaseModel):
     undo: list[str] = Field(default_factory=list)  # the paths the owner had undone, restored before the next session
     repair: pack_repair.Repair = Field(default_factory=pack_repair.Repair)  # the agent's CI repairs of the pull request
     next: Action = "update"
+
+    @property
+    def package(self) -> Path:
+        """The package in the checkout this run started from."""
+        return Path(self.checkout["root"]) / self.checkout["package"]
 
 
 def sha(data: bytes) -> str:
@@ -124,7 +128,8 @@ def begin(  # noqa: PLR0913 - the job, the candidate, its checkout and the evide
     ctx = Context(
         tag=c.tag, why=why, diff=diff, golden=golden, pins=c.pins, manifest=c.manifest, notice=c.notice,
         baseline=c.inputs | pack_gates.baseline(package),  # what the candidate was made from, never a later read
-        checkout={"root": str(src.root), "repository": src.repository, "base": src.base},
+        checkout={"root": str(src.root), "repository": src.repository, "base": src.base,
+                  "package": package.relative_to(src.root).as_posix()},
         start=start, sid=pack_updater.new_id(),
     )  # fmt: skip
     lp = RoundLoop(subject=PACK, policy=rounds.policy(job.store.settings(), PACK, "updater"))
@@ -142,7 +147,7 @@ def rebuilt(job: Job, ctx: Context) -> pack_candidate.Candidate:
     if installed is None:
         msg = f"the candidate {ctx.pins['pack']} is no longer installed on this machine; run the update again"
         raise Stopped(msg, terminal=True)
-    package = job.live.package.resolve()
+    package = ctx.package
     unchanged(package, ctx)
     baseline = {n: (package / skill_path(n)).read_bytes() for n in ctx.pins["skills"]}
     return pack_candidate.Candidate(
@@ -204,7 +209,7 @@ def _update(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) 
     """One updater session, its edits taken into the candidate before the golden pages run."""
     at, live, store = job.workspace, job.live, job.store
     if ctx.undo:  # what the owner had undone, restored before the updater adjusts the rest
-        pack_gates.restore(at, ctx.undo, live.package.resolve(), c)
+        pack_gates.restore(at, ctx.undo, ctx.package, c)
         if any(p.startswith("upstream/") for p in ctx.undo):
             pack_updater.upstream(at, c, live.clone)
         ctx.undo = []
@@ -293,7 +298,7 @@ def _challenge(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoo
     """
     at, keys = job.workspace, tuple(f.id for f in pack_rounds.pending(lp))
     edits = updater_edits(job, ctx)
-    changed = None if recheck else pack_gates.diffs(c, at, job.live.package.resolve(), edits)
+    changed = None if recheck else pack_gates.diffs(c, at, ctx.package, edits)
     text = pack_candidate.message(
         c, ctx.diff, ctx.golden, ctx.replayed, updated=ctx.summary,
         rounds=pack_rounds.challenge_lines(lp, recheck=recheck), changed=changed,
@@ -359,11 +364,11 @@ def _asked(job: Job, c: pack_candidate.Candidate, ctx: Context, lp: RoundLoop) -
         return [pack_gates.scope(run, bad)], "update"
     edits = updater_edits(job, ctx)
     if mark := unaccepted(job, ctx):
-        shown = pack_gates.diffs(c, at, job.live.package.resolve(), edits)
+        shown = pack_gates.diffs(c, at, ctx.package, edits)
         diff = "\n".join(s for p, s in shown.items() if p.startswith(GOLDEN))
         return [pack_gates.evidence(run, diff, ctx.reason, ctx.golden, mark)], "golden"
     if ctx.unsure:
-        shown = pack_gates.diffs(c, at, job.live.package.resolve(), edits)
+        shown = pack_gates.diffs(c, at, ctx.package, edits)
         return [
             pack_gates.unsure(run, p, said, shown.get(p, "(unchanged)"), pack_gates.content(c, at, p))
             for p, said in ctx.unsure.items()

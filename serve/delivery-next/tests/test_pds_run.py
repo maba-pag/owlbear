@@ -12,6 +12,7 @@ import subprocess
 import threading
 from dataclasses import replace
 from pathlib import Path
+from shutil import copytree
 from types import ModuleType
 
 import pytest
@@ -1099,6 +1100,24 @@ def test_a_timed_out_browser_gate_keeps_and_logs_its_whole_error(tmp_path, check
     assert next(s for s in state["stages"] if s["name"] == "merge")["detail"] == reason
     assert [i["detail"] for i in state["invocations"] if i["operation"] == "merge"][-1] == reason
     assert logged[-2:] == [f"merge: failed: {reason}", f"waiting for you: {reason}"]
+
+
+def test_a_stopped_pds_update_publishes_from_its_original_checkout_after_a_version_switch(tmp_path, checkout):
+    fakes, job, state = started(tmp_path, checkout, browsers=[browser.Unrunnable("browser stopped")])
+    assert state["state"] == "waiting"
+    assert fakes.calls == ["audit", "update", "audit", "browser"]
+    other = tmp_path / "new-version" / REPO
+    copytree(checkout, other)
+
+    def provider(at: Path):
+        assert at == checkout.parents[3]
+        return fakes.github
+
+    job = pds_job.Job(job.store, replace(fakes.live(other), github=provider))
+    state = PACK.answered(job, "retry")
+    assert state["state"] == "passed", state["reason"]
+    assert fakes.calls == ["audit", "update", "audit", "browser", "browser", "challenger"]
+    assert state["published"]["commit"] == landed(checkout)
 
 
 @pytest.mark.parametrize("stage", ["updater", "challenger", "reconsider", "audit", "audit-no-report"])
