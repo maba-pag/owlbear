@@ -93,8 +93,13 @@ def publish(  # noqa: PLR0913 - the job, where it goes, what it commits, its wor
     live, body = job.live, pub.body
     src = pack_git.Source(Path(pub.root), pub.repository, pub.base)
     gh = live.github(src.root)
-    if pub.number and (pr := gh.read_pull_request(pub.repository, pub.number)).merged:  # a lost answer, read back first
-        return _done(job, gh, pub, pr.merge_commit_sha or "", pr.head_sha)
+    if pub.number:  # a lost answer, read back first
+        try:
+            pr = gh.read_pull_request(pub.repository, pub.number)
+        except ProviderError as exc:
+            raise Held(failure(exc)) from exc
+        if pr.merged:
+            return _done(job, gh, pub, pr.merge_commit_sha or "", pr.head_sha)
     if not pub.commit:
         at = job.store.root / WORKTREE
         pub.commit = _held(job, "commit", lambda: pack_git.commit(src, files, f"{title}\n\n{body}", at, live.git),

@@ -568,7 +568,7 @@ def test_page_copy_refuses_unauthorized_changes_before_taking_any(tmp_path, edit
     assert tree.files(candidate, REPO) == before
 
 
-def test_a_publication_stop_waits_and_a_retry_merges_the_one_pull_request(tmp_path, checkout):
+def test_a_publication_stop_waits_and_a_retry_merges_the_one_pull_request(tmp_path, checkout, monkeypatch):
     fakes = Fakes(checkout)
     fakes.github.checks = ["failure"]
     job = pds_job.Job(store(tmp_path), fakes.live(checkout))
@@ -576,6 +576,7 @@ def test_a_publication_stop_waits_and_a_retry_merges_the_one_pull_request(tmp_pa
     (q,) = state["questions"]
     assert (state["state"], q["kind"]) == ("waiting", "publish")
     assert "CI failed" in state["reason"]
+    PACK.publication_read_fails_once(job, fakes.github, state, monkeypatch)
     fakes.github.checks = ["success"]
 
     state = PACK.answered(job, "retry")

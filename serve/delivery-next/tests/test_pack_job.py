@@ -894,6 +894,31 @@ def test_an_owner_stop_shows_his_gate_now_with_its_options_next_and_a_discard_en
     assert all(i["ended_at"] for i in state["invocations"])
 
 
+def publication_read_fails_once(job, github, state, monkeypatch):
+    """Admit the saved pull request, then lose the first publication read, not the admission listing."""
+    read = github.read_pull_request
+    pub = state["published"]
+    opened = read("maba-pag/owlbear", pub["number"])
+    error = ProviderError(FailureCode.UNAVAILABLE, "read_pull_request", "connection lost\nwhile reading the saved PR",
+                          retry_safe=True)  # fmt: skip
+
+    def unavailable(*_args):
+        monkeypatch.setattr(github, "read_pull_request", read)
+        raise error
+
+    with monkeypatch.context() as patch:
+        patch.setattr(github, "open_pull_requests", lambda *_args: (opened,))
+        monkeypatch.setattr(github, "read_pull_request", unavailable)
+        waiting = answered(job, "retry")
+    assert (waiting["state"], waiting["run"], waiting["published"]) == ("waiting", state["run"], pub)
+    [question] = waiting["questions"]
+    assert question["kind"] == "publish"
+    assert [option["id"] for option in question["options"]] == ["retry", "discard"]
+    assert waiting["reason"] == f"ProviderError: {error}"
+    assert job.state["context"]["publication"]["commit"] == pub["commit"]
+    assert job.workspace.is_dir()
+
+
 def test_a_ci_retry_runs_push_pull_request_and_merge_again_and_the_old_merge_is_stale(tmp_path, checkout, clone):
     fakes = Fakes(clone)
     job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
@@ -920,6 +945,20 @@ def test_a_ci_retry_runs_push_pull_request_and_merge_again_and_the_old_merge_is_
     ]  # fmt: skip
     pushed = [i["identity"] for i in state["invocations"] if i["operation"] == "push"]
     assert pushed == [state["published"]["commit"]] * 2  # the same commit pushed again, never a new one
+
+
+def test_a_publication_read_failure_after_admission_keeps_the_impeccable_retry(tmp_path, checkout, clone, monkeypatch):
+    fakes = Fakes(clone)
+    job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
+    fakes.github.checks = ["failure"]
+    state = run(job)
+
+    publication_read_fails_once(job, fakes.github, state, monkeypatch)
+
+    fakes.github.checks = ["success"]
+    state = answered(job, "retry")
+    assert state["state"] == "passed", state["reason"]
+    assert fakes.github.calls.count("create") == 1
 
 
 DETECTOR = f"src/pkg/{pack_gates.GLUE['code/detector.py']}"  # protected pack content, as a repository path
