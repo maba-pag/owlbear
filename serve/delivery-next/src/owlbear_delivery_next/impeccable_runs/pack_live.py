@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.impeccable.calibration import Replay
     from owlbear_delivery_next.runtimes.sdk_adapter import Session
     from owlbear_delivery_next.runtimes.session_result import Run
-    from owlbear_delivery_next.state_store.store import Store
+    from owlbear_delivery_next.state_store.update_source import UpdateSource
 
 __all__ = ["Live"]
 
@@ -38,7 +38,7 @@ class Replays(Protocol):
 
     def __call__(
         self,
-        store: Store,
+        store: UpdateSource,
         candidate: pack_candidate.Candidate | None,
         run: Callable[[Session], Run] | None = None,
         *,
@@ -57,8 +57,8 @@ class Live:
     download: Callable[[str], bytes] = pack_files.fetch
     golden: Callable[..., dict[str, dict[str, list[str]]]] = pack_update.golden  # (installed, folder=None)
     replay: Replays = pack_replay.replay
-    challenge: Callable[[Store, Session], Run] = sessions.run
-    update: Callable[[Store, Session], Run] = sessions.run  # the writing updater (TD-125)
+    challenge: Callable[[UpdateSource, Session], Run] = sessions.run
+    update: Callable[[UpdateSource, Session], Run] = sessions.run  # the writing updater (TD-125)
     git: pack_git.Git = pack_git.git
     github: Callable[[Path], Provider] = lambda path: GhProvider(
         path, writer=Writer.rule(path)

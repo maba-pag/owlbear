@@ -2,6 +2,7 @@
 
 import subprocess
 import threading
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -25,6 +26,7 @@ from owlbear_delivery_next.project_host.host import Host, RunnerRecord
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings.config import Layer
+from owlbear_delivery_next.state_store import update_home
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import sessions
 
@@ -228,11 +230,17 @@ def test_a_session_under_a_grant_of_0_is_refused_before_any_adapter_and_stops_th
     )
 
 
-def test_a_pack_updates_sessions_hold_the_projects_slots_and_its_wait_is_logged(store, tmp_path):
+def update_owner(fake):
+    return session_slots.SlotOwner(
+        update_home.KEY, fake.host.slots, fake.host.maintenance, lambda: 1, nullcontext, fake.host.stopped.is_set
+    )
+
+
+def test_a_pack_updates_sessions_hold_the_machine_slots_and_its_wait_is_logged(store, tmp_path):
     fake = Fake(store, tmp_path, Slots(lambda: 1))
-    assert fake.host.slots.take("p", "c1", 1, 2) == 1  # a step of the same project holds the only slot
+    assert fake.host.slots.take("p", "c1", 1, 2) == 1  # another project holds the only machine slot
     notes, ran = [], threading.Event()
-    live = session_slots.pack_live(fake.host, Live(update=lambda *_a: ran.set() or DONE), notes.append)
+    live = session_slots.pack_live(update_owner(fake), Live(update=lambda *_a: ran.set() or DONE), notes.append)
     worker = threading.Thread(target=lambda: live.update(store, pack_session(tmp_path)))
     worker.start()
     worker.join(0.3)
@@ -240,14 +248,14 @@ def test_a_pack_updates_sessions_hold_the_projects_slots_and_its_wait_is_logged(
     fake.host.slots.give("p", "c1")
     worker.join(5)
     assert ran.is_set()
-    assert fake.host.slots.counts("p") == (0, 1, 0)  # given back once the session call returned
+    assert fake.host.slots.counts(update_home.KEY) == (0, 1, 0)  # given back once the session call returned
 
 
 def test_a_pack_update_waiting_when_owlbear_stops_gives_up_its_place(store, tmp_path):
     fake = Fake(store, tmp_path, Slots(lambda: 1))
     fake.host.slots.take("q", "q1", 1, 1)
     fake.host.stopped.set()
-    live = session_slots.pack_live(fake.host, Live(challenge=lambda *_a: pytest.fail("ran")), lambda _n: None)
+    live = session_slots.pack_live(update_owner(fake), Live(challenge=lambda *_a: pytest.fail("ran")), lambda _n: None)
     with pytest.raises(PackError, match="did not get a session slot"):
         live.challenge(store, pack_session(tmp_path))
     assert fake.host.slots.waiting == {}

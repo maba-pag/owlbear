@@ -2,15 +2,15 @@
 // Search for updates and the settings link; the one update of this machine that brings the pages to a newer release
 // (pack.mjs acts, run.mjs shows it), and the check of the pages for deprecated use (audit.mjs).
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
-import { defined } from "/assets/ui.mjs";
+import { defined, machineState } from "/assets/ui.mjs";
 import { auditPart, followAudit, readAudit } from "./audit.mjs";
 import { frame, framed } from "./frame.mjs";
-import { follow, own, readPack } from "./pack.mjs";
-import { others, runPart, startPart } from "./run.mjs";
+import { SETTINGS, follow, own, readPack } from "./pack.mjs";
+import { oldWaiting, runPart, startPart } from "./run.mjs";
 
 const CHECKS = "the deprecation audit and the browser tests";
 own.kind = {
-  name: "PDS", uses: "labels and spend", label: "Start update",
+  name: "PDS", label: "Start update", peer: ["Impeccable", "/updates/impeccable"],
   pinned: null, runs: "/maintenance/pds/runs", update: "/pds/update",
   intro: `An update takes the newest release from npm, runs ${CHECKS} on the pages, has an updater session fix what `
     + "they find and a challenger check the change, all with model requests. Only if every check passes, or if you "
@@ -20,7 +20,7 @@ own.kind = {
     title: "Update the Porsche Design System?", yes: "Start update", no: "Keep the current release",
     now: "Delivery takes the newest release from npm with its skills and checks it against the one the pages "
       + `load; ${CHECKS} run on the pages, an updater session fixes what they find, and a challenger checks the `
-      + "change. The challenger's findings go back to the updater. It runs on this project's labels and AI credits.",
+      + `change. The challenger's findings go back to the updater. ${SETTINGS}`,
     then: `Only if ${CHECKS} pass and the challenger passes the change, it commits the release, its skills and the `
       + "pages the updater changed, opens a pull request to main and merges it once CI passes; should the pages "
       + `change on the way, ${CHECKS} and the challenger run again first. It asks you here about the audit's manual `
@@ -43,13 +43,13 @@ own.kind = {
 function show() {
   const r = own.runs;
   render(html`${frame("pds", { running: "Pages load" })}
-    <section id="pack" class="panel" aria-labelledby="pack-title">
+    ${machineState() ? html`<section id="pack" class="panel" aria-labelledby="pack-title">
       <p-heading size="lg"><h2 id="pack-title">The update</h2></p-heading>
       ${startPart()}
-      ${r ? html`<div class="part">${runPart(r.run)}${others(r)}</div>` : own.unread.runs ? nothing
-        : html`<p-text size="sm">Reading the PDS runs…</p-text>`}
+      ${r ? html`<div class="part">${runPart(r.run)}${oldWaiting(r)}</div>` : own.unread.runs ? nothing
+        : html`<p-text size="sm">Reading the last PDS update…</p-text>`}
     </section>
-    ${auditPart()}`, document.getElementById("page"));
+    ${auditPart()}` : nothing}`, document.getElementById("page"));
 }
 
 await defined(["p-heading", "p-text", "p-button", "p-tag", "p-inline-notification", "p-textarea", "p-radio-group"]);

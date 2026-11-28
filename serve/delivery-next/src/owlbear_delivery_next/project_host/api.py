@@ -29,7 +29,6 @@ from owlbear_delivery_next.change_contracts.models import Change, ErrorKind, Exi
 from owlbear_delivery_next.change_flow import loop, moves, rebuilds, round_flow, round_marks, versions
 from owlbear_delivery_next.change_flow.status import for_chat
 from owlbear_delivery_next.git.command_failure import failure
-from owlbear_delivery_next.impeccable_runs import pack_job
 from owlbear_delivery_next.project_host import (
     amendment_routes,
     answers,
@@ -214,14 +213,13 @@ def new_chat(
     return ending | ({"warning": warning} if warning else {})
 
 
-def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams the tests replace
+def create_app(  # noqa: C901, PLR0915 - one closure per route; seams the tests replace
     store: Store,
     token: str,
-    host: Host,
+    host: Host | None,
     *,
     launch: Callable[[Path, Effective, str], dict[str, str]] = new_chat,
     which: Callable[[str], str | None] = shutil.which,
-    pack: pack_job.Job | None = None,
 ) -> FastAPI:
     """Return the host's app: its pages without data, and a guarded API under ``/api/next``."""
     app = FastAPI(title="OwlBear Delivery", docs_url=None, redoc_url=None, openapi_url=None)
@@ -483,7 +481,8 @@ def create_app(  # noqa: C901, PLR0913, PLR0915 - one closure per route; seams t
     router.include_router(backlog_routes.router(store, start_chat, lambda: host.record.project))
     router.include_router(memory_routes.router(store))
     router.include_router(decision_routes.project(store, lambda: host.repo))
-    job = session_slots.packed(host, pack or pack_job.Job(store))  # its sessions count as the project's (TD-336)
-    app.state.busy = audit_routes.bind(router, store, host, job, lambda: launches.opening)
+    if host is not None and host.maintenance is not None:
+        session_slots.restore(host.maintenance, session_slots.project(host), store.root)
+    app.state.busy = audit_routes.bind(router, store, host, lambda: launches.opening)
     app.include_router(router)
     return app

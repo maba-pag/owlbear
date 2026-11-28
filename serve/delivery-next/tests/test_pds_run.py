@@ -695,9 +695,9 @@ def test_a_ci_repair_of_a_workflow_asks_the_owner_with_its_diff_before_it_is_pus
 
 
 def test_machine_update_lock_excludes_both_update_kinds(tmp_path, checkout):
-    held = machine_lock.take(local_home.root() / MACHINE_LOCK, "garage", lambda: None)  # an Impeccable update's holder
+    held = machine_lock.take(local_home.root() / MACHINE_LOCK, "Impeccable update", lambda: None)
     try:
-        with pytest.raises(pack_job.Busy, match="an update runs for garage; one update runs at a time"):
+        with pytest.raises(pack_job.Busy, match="Impeccable update holds the lock; one update runs at a time"):
             pds_job.Job(store(tmp_path), Fakes(checkout).live(checkout)).start()
     finally:
         os.close(held)
@@ -708,7 +708,7 @@ def test_machine_update_lock_excludes_both_update_kinds(tmp_path, checkout):
     job.start()
     try:
         assert fakes.holding.wait(30)
-        with pytest.raises(pack_job.Busy, match=r"an Impeccable update runs for .+ \(PDS update\)"):
+        with pytest.raises(pack_job.Busy, match="PDS update holds the lock"):
             pack_job.Job(Store(tmp_path / "other" / "store"), pack_job.Live()).start()
     finally:
         fakes.hold.set()

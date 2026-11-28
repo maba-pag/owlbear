@@ -590,7 +590,8 @@ def test_a_process_of_an_installed_version_holds_a_lease_until_it_ends():
     assert not list((folder / leases.LEASES).iterdir())
 
 
-def test_a_version_goes_once_two_newer_ones_were_active_and_no_lease_holds_it(monkeypatch):
+@pytest.mark.parametrize("open_update", [False, True])
+def test_a_version_goes_once_two_newer_ones_were_active_and_no_lease_holds_it(monkeypatch, open_update):
     removed: list[str] = []
     monkeypatch.setattr(versions, "remove", lambda p: removed.append(p.name))
     for tag in ("v0.1", "v0.2", "v0.3", "v0.4"):
@@ -600,6 +601,20 @@ def test_a_version_goes_once_two_newer_ones_were_active_and_no_lease_holds_it(mo
     held.mkdir()
     (held / f"{os.getpid()}-{processes.started(os.getpid())!r}").touch()
 
+    if open_update:
+        root = local_home.root() / "updates"
+        root.mkdir()
+        old = local_home.root() / local_home.VERSIONS / "v0.1"
+        record = {
+            "state": "waiting",
+            "stages": [],
+            "log": [],
+            "context": {"checkout": {"root": str(old)}, "publication": {"root": str(old)}},
+        }
+        (root / "pds-update.json").write_text(json.dumps(record))
+        assert versions.prune() == []
+        assert old.is_dir()
+        (root / "pds-update.json").write_text(json.dumps(record | {"state": "discarded", "context": None}))
     assert versions.prune() == ["v0.1"]  # v0.2 is held; v0.3 has one newer; v0.4 runs
     assert removed == [".v0.1-removing"]  # renamed first: a process starting from it now finds nothing
     assert not (local_home.root() / local_home.VERSIONS / "v0.1").exists()

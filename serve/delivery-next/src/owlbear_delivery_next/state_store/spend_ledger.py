@@ -97,9 +97,9 @@ def _now() -> str:
 
 
 def _placed(place: Where | None, job: str = "") -> dict[str, str]:
-    """The place's fields; the session's own *job* wins over the work's."""
+    """The place's fields; a named machine job groups its sessions under one job name."""
     found = asdict(place or where())
-    return found | {"job": job or found["job"]}
+    return found | {"job": (found["job"] if not found["project"] else "") or job or found["job"]}
 
 
 STOPS = ("", "reached", "unknown")  # a run's stop at its credit limit: none, reached, or not known (``credit_meter``)

@@ -51,18 +51,22 @@ def test_a_runner_spends_for_its_project_change_and_step(change_repo, monkeypatc
     assert seen == [Where(project=clone, name=change_repo.name, clone=clone, change="c1", step="build")]
 
 
-def test_impeccable_work_spends_for_the_project_that_started_it(tmp_path, monkeypatch) -> None:
-    store, seen = Store(tmp_path / "abc", None, "shop"), []
-    store.shared = SimpleNamespace()  # replay needs one; its work is replaced here
-    monkeypatch.setattr(pack_replay, "_replay", lambda *_a: seen.append(spend_ledger.where()))
+def test_impeccable_work_spends_under_its_machine_job_name(tmp_path, monkeypatch) -> None:
+    store = SimpleNamespace(root=tmp_path / "updates", name="owlbear", shared=SimpleNamespace())
+    written = recorded(monkeypatch)
+
+    def session(*_args):
+        run = spend_ledger.where().job
+        spend_ledger.started(run, run, agent="design-review", job="sdk-job-id", model="m1", before={})
+        spend_ledger.ended(run, run, usage=used(0.3), ending="finished")
+
+    monkeypatch.setattr(pack_replay, "_replay", session)
     pack_replay.replay(store)
     job = pack_job.Job(store)
-    monkeypatch.setattr(job, "_steps", lambda _work: seen.append(spend_ledger.where()))
-    monkeypatch.setattr(job, "_release", lambda: None)
+    monkeypatch.setattr(job, "_steps", session)
     job._run(lambda: None)  # noqa: SLF001 - the job thread's own entry
-    assert [(w.project, w.clone, w.job) for w in seen] == [
-        ("shop", "abc", "Impeccable replay"), ("shop", "abc", "Impeccable update")
-    ]  # fmt: skip
+    spent = {(p["project"], p["job"], p["credits"]) for p in spend_shares.derive(written)}
+    assert spent == {("", "Impeccable replay", 0.3), ("", "Impeccable update", 0.3)}
 
 
 @pytest.fixture

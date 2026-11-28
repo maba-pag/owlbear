@@ -112,7 +112,7 @@ def interrupted(record: dict[str, Any], version: str) -> dict[str, str]:
 
 
 def running_for() -> str | None:
-    """The project whose Impeccable update runs on this machine now, by its name; None while none runs (TD-290)."""
+    """Name the update or audit holding the machine's lock, if any."""
     path = local_home.root() / MACHINE_LOCK
     try:
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
@@ -121,7 +121,7 @@ def running_for() -> str | None:
     try:
         fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)  # a running update holds it exclusively
     except BlockingIOError:
-        return path.read_text(encoding="utf-8").strip() or "another project"
+        return path.read_text(encoding="utf-8").strip() or "another update"
     finally:
         os.close(fd)  # closing releases a shared lock taken here
     return None

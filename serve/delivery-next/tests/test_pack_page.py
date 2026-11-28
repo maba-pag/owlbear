@@ -11,7 +11,6 @@ import subprocess
 import threading
 import time
 from datetime import UTC, datetime
-from pathlib import Path
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -33,9 +32,10 @@ from owlbear_delivery_next.impeccable_runs import (
 )
 from owlbear_delivery_next.local_system import git_run, local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
-from owlbear_delivery_next.project_host import api
+from owlbear_delivery_next.machine_host import app, update_jobs
+from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.project_host.host import HostRecord
-from owlbear_delivery_next.state_store import pack_run_record, registry
+from owlbear_delivery_next.state_store import pack_run_record, registry, update_home
 from owlbear_delivery_next.state_store.store import Store
 
 if TYPE_CHECKING:
@@ -44,18 +44,7 @@ if TYPE_CHECKING:
 NOW = datetime(2026, 10, 17, 2, tzinfo=UTC)
 
 
-class Host:
-    maintenance = None
-    wake = type("W", (), {"set": staticmethod(lambda: None)})()
-    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=NOW, code=CURRENT)  # noqa: S106
-    paused = staticmethod(lambda: False)
-    draining = staticmethod(lambda: False)
-    closed = staticmethod(lambda: False)
-    updating = staticmethod(lambda: "")
-    launching = threading.Lock()
-
-
-def waiting(store: Store, lp: RoundLoop | None = None) -> pack_job.Job:
+def waiting(store: update_jobs.Source, lp: RoundLoop | None = None) -> pack_job.Job:
     """A run waiting for the owner; by default on two findings the challenger upheld against the updater."""
     found = [
         RoundFinding(id=f"F{i}", text=f"owlbear-design-review: glow {i} - fix: say so", raised=1, state="escalated",
@@ -78,17 +67,19 @@ def waiting(store: Store, lp: RoundLoop | None = None) -> pack_job.Job:
 
 
 @pytest.fixture
-def served(tmp_path: Path) -> Iterator[Callable[..., tuple[pack_job.Job, str]]]:
+def served(monkeypatch) -> Iterator[Callable[..., tuple[pack_job.Job, str]]]:
     servers = []
 
     def serve(lp: RoundLoop | None = None, job: pack_job.Job | None = None) -> tuple[pack_job.Job, str]:
-        job = job or waiting(Store(tmp_path), lp)
+        job = job or waiting(update_jobs.Source(), lp)
         sock = socket.socket()
         try:
             sock.bind(("127.0.0.1", 0))
-            server = uvicorn.Server(
-                uvicorn.Config(api.create_app(job.store, "tok", Host(), pack=job), log_level="warning")
-            )
+            base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+            monkeypatch.setattr(update_home, "root", lambda: job.store.root)
+            machine = Machine(HostRecord(url=base + "/", token="tok", pid=1, started_at=NOW, code=CURRENT))  # noqa: S106
+            machine.updates.pack = job
+            server = uvicorn.Server(uvicorn.Config(app.create(machine), log_level="warning"))
             thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
             thread.start()
         except BaseException:
@@ -333,7 +324,7 @@ def test_progress_and_ended_run_polling_show_current_evidence(served, pds) -> No
             expect(page.locator("#pack-todo")).to_contain_text("Nothing for now")
             expect(page.locator("#pack-ask")).to_be_hidden()  # no Discard while it runs
         page.clock.run_for(2000)
-        expect(page.locator("#pack-state")).to_contain_text("Its host stopped while it ran")
+        expect(page.locator("#pack-state")).to_contain_text("The machine host stopped during the update.")
         job.state |= {
             "state": "passed",
             "questions": [],
@@ -446,10 +437,8 @@ def test_failed_stage_reaches_record_page_and_log_whole(served, pds, tmp_path, m
 
 
 @pytest.mark.browser
-def test_an_unreadable_registry_shows_whole_in_the_runs_and_in_a_refused_start(
-    served, pds, monkeypatch, whole_error
-) -> None:
-    """#971: the machine's registry error reaches the runs list and the start's refusal whole."""
+def test_an_unreadable_registry_shows_whole_but_does_not_disable_start(served, pds, monkeypatch, whole_error) -> None:
+    """The old-runs advisory reports registry errors without blocking the machine's update."""
     job, base = served()
     job.state |= {"state": "passed", "questions": [], "ended_at": NOW.isoformat()}
     job._save()  # noqa: SLF001
@@ -462,55 +451,30 @@ def test_an_unreadable_registry_shows_whole_in_the_runs_and_in_a_refused_start(
     monkeypatch.setattr(registry, "load", unreadable)
     whole = f"RegistryError: {whole_error}\na note added on the way up"
     with opened(base, pds) as page:
-        said: list[str] = []
-        page.on("console", lambda m: said.append(f"{m.text} {m.location['url']}") if m.type == "error" else None)
-        page.on("pageerror", lambda e: said.append(str(e)))
         page.reload()
-        line = page.locator("#pack-runs > p-text")
-        expect(line).to_have_count(1)
-        assert (
-            line.text_content()
-            == f"The machine's registry cannot be read, so other projects' runs are not shown: {whole}."
-        )
-        expect(page.locator("#pack-published")).to_contain_text("Not known across all projects.")
-        page.get_by_role("button", name="Update Impeccable").click()
-        pds.answer(page, "Update")
-        refused = page.locator("#pack-error")
-        expect(refused).to_be_visible()
-        assert refused.text_content() == (
-            f"The machine's registry cannot be read, so other projects' updates cannot be ruled out: {whole}"
-        )
-        answered = "Failed to load resource: the server responded with a status of"
-        assert set(said) == {  # a project host alone lists no projects; the refused start
-            f"{answered} 404 (Not Found) {base}/api/next/projects",
-            f"{answered} 409 (Conflict) {base}/api/next/impeccable/update",
-        }
+        expect(page.get_by_text("the machine's registry cannot be read", exact=False)).to_contain_text(whole)
+        expect(page.locator("#pack-published")).to_contain_text("Nothing yet")
+        expect(page.get_by_role("button", name="Update Impeccable")).to_be_enabled()
 
 
 @pytest.mark.browser
-def test_a_sole_unreadable_run_record_shows_whole_in_the_runs(served, pds, tmp_path, monkeypatch, whole_error) -> None:
-    """#971: a readable registry and one project whose run record cannot be read still list that project's error."""
-    _job, base = served()
+def test_an_unreadable_machine_run_record_shows_whole_and_disables_start(served, pds, monkeypatch, whole_error) -> None:
+    job, base = served()
     error = OSError(whole_error)
     error.add_note("a note added on the way up")
     real = pack_run_record.observed
 
     def unreadable(root, *rest):
-        if os.path.realpath(root) != os.path.realpath(tmp_path):
+        if root != job.store.root:
             return real(root, *rest)
         raise error
 
     monkeypatch.setattr(pack_run_record, "observed", unreadable)
     with opened(base, pds) as page:
         page.reload()
-        page.get_by_text("Each project's last Impeccable run").click()
-        listed = page.locator("#pack-runs li")
-        expect(listed).to_have_count(1)
-        expect(listed).to_be_visible()
-        expect(page.locator("#pack-state")).not_to_contain_text("No project has run")
-        assert listed.text_content() == (
-            f"{tmp_path.name}: Its run record cannot be read (OSError: {whole_error}\na note added on the way up)"
-        )
+        shown = page.locator("#pack-runs-error")
+        expect(shown).to_contain_text(f"OSError: {whole_error}\na note added on the way up")
+        expect(page.get_by_role("button", name="Update Impeccable")).to_be_disabled()
 
 
 @pytest.mark.browser
@@ -521,7 +485,7 @@ def test_an_unreadable_section_says_what_could_not_be_read(served, pds) -> None:
         page.route("**/maintenance/pack/runs", lambda r: r.fulfill(status=500, json={"detail": "the disk said no"}))
         page.route("**/maintenance/pack", lambda r: r.fulfill(status=500, json={"detail": "no pin today"}))
         page.reload()
-        said = "Could not read the Impeccable runs: the disk said no"
+        said = "Could not read the Impeccable update: the disk said no"
         expect(page.locator("#pack-runs-error")).to_contain_text(said)
         expect(page.locator("#pack-read-error")).to_contain_text("Could not read Impeccable: no pin today")
         expect(page.locator("#pack-run")).to_have_count(0)  # nothing made up in its place

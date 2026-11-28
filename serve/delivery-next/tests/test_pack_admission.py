@@ -3,6 +3,7 @@
 import functools
 import json
 import subprocess
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,10 +20,9 @@ from owlbear_delivery_next.impeccable_runs.scratch import scratch
 from owlbear_delivery_next.local_system import maintenance, processes
 from owlbear_delivery_next.local_system.slots import Slots
 from owlbear_delivery_next.project_host import session_slots
-from owlbear_delivery_next.project_host.host import Host
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.session_result import Run
-from owlbear_delivery_next.state_store import pack_run_record, project_home, registry
+from owlbear_delivery_next.state_store import pack_run_record, project_home, registry, update_home
 from owlbear_delivery_next.state_store.store import Store
 from owlbear_delivery_next.workflow_steps import sessions
 
@@ -32,9 +32,8 @@ AT = datetime(2026, 10, 25, tzinfo=UTC)
 def host_with(tmp_path, slots):
     store = Store(tmp_path / "store")
     store.root.mkdir()
-    host = Host(store, tmp_path / "host", spawn=lambda _s: None, members=lambda _ids: {})
-    host.slots = slots
-    host.maintenance = maintenance.Maintenance(slots, boot=lambda: 10.0, observe=lambda *_args: False)
+    held = maintenance.Maintenance(slots, boot=lambda: 10.0, observe=lambda *_args: False)
+    host = session_slots.SlotOwner(update_home.KEY, slots, held, lambda: 1, nullcontext, lambda: False)
     return host, store
 
 
@@ -68,7 +67,7 @@ def test_unproven_session_retains_capacity_and_workspace(tmp_path):
     job._finish("failed", "the update ended")  # noqa: SLF001 - the update's own end
     assert job.workspace.is_dir()
 
-    project = session_slots.project(host)
+    project = host.key
     assert slots.take(project, "successor", 1, 1) == 0
     assert host.maintenance.pending(kind="pack")
     with pytest.raises(pack_job.Busy):
@@ -88,7 +87,7 @@ def test_proven_session_releases_capacity_and_workspace(tmp_path):
     job._finish("failed", "the update ended")  # noqa: SLF001 - the update's own end, as the run calls it
     assert not job.workspace.exists()
     assert not host.maintenance.pending("pack")
-    assert slots.take(session_slots.project(host), "successor", 1, 1) == 1
+    assert slots.take(host.key, "successor", 1, 1) == 1
 
 
 def test_a_legacy_running_updater_root_is_adopted_before_it_can_be_deleted(tmp_path):
@@ -107,14 +106,14 @@ def test_an_unproven_challenger_scratch_outlives_its_call_and_a_proven_one_is_re
     host, store = host_with(tmp_path, Slots(lambda: 2))
     unknown = Run("synthetic", termination=processes.Termination(confirmed=False, problems=("request task pending",)))
     proven = Run("synthetic", termination=processes.Termination(confirmed=True))
-    results = iter([unknown, proven])
+    results = iter([proven, unknown])
     job = pack_job.Job(store, pack_job.Live(challenge=lambda _store, _cfg: next(results)))
     session_slots.packed(host, job)
 
-    with scratch("owlbear-pack-", job.keeps) as unproven:
-        assert job.live.challenge(store, session(unproven)) is unknown
-    with scratch("owlbear-pack-", job.keeps) as done:
+    with scratch(store.root, "owlbear-pack-", job.keeps) as done:
         assert job.live.challenge(store, session(done)) is proven
+    with scratch(store.root, "owlbear-pack-", job.keeps) as unproven:
+        assert job.live.challenge(store, session(unproven)) is unknown
 
     assert unproven.is_dir()
     assert not done.exists()
@@ -147,7 +146,7 @@ def test_a_usage_unread_session_confirmed_gone_releases_its_slot_and_still_raise
         getattr(job.live, live)(store, session(root))
     assert caught.value is raised
     [lease] = host.maintenance.read()["sessions"]
-    project = session_slots.project(host)
+    project = host.key
     assert (lease["state"], host.maintenance.pending("pack"), slots.counts(project)[2]) == ("released", False, 0)
     assert slots.take(project, "successor", 1, 1) == 1
 
@@ -174,7 +173,7 @@ def test_a_session_error_without_confirmed_termination_still_holds_its_slot(tmp_
     assert caught.value is raised
     [lease] = host.maintenance.read()["sessions"]
     assert (lease["state"], host.maintenance.pending("pack")) == ("held", True)
-    assert slots.take(session_slots.project(host), "successor", 1, 1) == 0
+    assert slots.take(host.key, "successor", 1, 1) == 0
 
 
 def registered(tmp_path, records: dict[str, str]) -> None:
@@ -201,45 +200,39 @@ def pull(number: int, head: str) -> PullRequest:
 
 
 @pytest.mark.parametrize(
-    ("records", "said"),
-    [({"gamma": "{"}, "the Impeccable run record of gamma cannot be read"),
-     ({"alpha": waiting("a"), "gamma": waiting("g")}, "Impeccable updates wait in alpha, gamma")],
+    "records",
+    [{"gamma": "{"}, {"alpha": waiting("a"), "gamma": waiting("g")}],
     ids=["unreadable", "two-waiting"],
 )  # fmt: skip
-def test_an_unreadable_or_second_waiting_record_elsewhere_refuses_a_fresh_start_by_name(tmp_path, records, said):
+def test_an_unreadable_or_waiting_legacy_record_does_not_refuse_a_fresh_start(tmp_path, records):
     registered(tmp_path, {"beta": "", **records})
     github = SimpleNamespace(open_pull_requests=lambda *_a: ())
-    job = pack_job.Job(Store(project_home.home("beta"), None, "beta"), pack_job.Live(github=lambda _root: github))
-    with pytest.raises(pack_job.Busy, match=said):
-        job.start()
-    assert not (job.store.root / pack_job.FILE).exists()
+    pack_admission.fresh(update_home.root(), github)
 
 
 @pytest.mark.parametrize(
     ("where", "said"),
     [
-        ("registry", "the machine's registry cannot be read, so other projects' updates cannot be ruled out: {}"),
-        ("record", "the Impeccable run record of gamma cannot be read ({}); unreadable is never idle, repair it first"),
+        (
+            "record",
+            "the machine's Impeccable run record cannot be read ({}); unreadable is never idle, repair it first",
+        ),
         ("pulls", "OwlBear's open Impeccable pull requests could not be read ({}); try again"),
     ],
 )
-def test_a_start_refused_by_an_unreadable_registry_record_or_pull_request_list_says_why_whole(
-    tmp_path, monkeypatch, whole_error, where, said
+def test_a_start_refused_by_an_unreadable_machine_record_or_pull_request_list_says_why_whole(
+    monkeypatch, whole_error, where, said
 ):
-    registered(tmp_path, {"beta": "", "gamma": ""})
-    error = {"registry": registry.RegistryError, "record": OSError, "pulls": RuntimeError}[where](whole_error)
+    error = {"record": OSError, "pulls": RuntimeError}[where](whole_error)
     error.add_note("a note added on the way up")
-    real = pack_run_record.observed
 
-    def raising(*args):
-        if where == "record" and args[0] != project_home.home("gamma"):
-            return real(*args)
+    def raising(*_args):
         raise error
 
     if where != "pulls":
-        monkeypatch.setattr(*((registry, "load") if where == "registry" else (pack_run_record, "observed")), raising)
+        monkeypatch.setattr(pack_run_record, "observed", raising)
     github = SimpleNamespace(open_pull_requests=raising if where == "pulls" else lambda *_a: ())
-    job = pack_job.Job(Store(project_home.home("beta"), None, "beta"), pack_job.Live(github=lambda _root: github))
+    job = pack_job.Job(Store(update_home.root()), pack_job.Live(github=lambda _root: github))
     with pytest.raises(pack_job.Busy) as refused:
         job.start()
     whole = f"{type(error).__name__}: {whole_error}\na note added on the way up"
@@ -248,11 +241,13 @@ def test_a_start_refused_by_an_unreadable_registry_record_or_pull_request_list_s
 
 
 def test_a_waiting_run_goes_on_only_as_itself_alone_and_with_no_pack_pull_request_but_its_own(tmp_path):
-    registered(tmp_path, {"alpha": waiting("r-alpha"), "gamma": ""})
-    root = project_home.home("alpha")
+    registered(tmp_path, {"gamma": waiting("r-gamma")})
+    root = update_home.root()
+    root.mkdir()
+    (root / pack_job.FILE).write_text(waiting("r-alpha"))
     version = pack_run_record.observed(root)[1]
     own = SimpleNamespace(open_pull_requests=lambda *_a: (pull(1, "pack/r-alpha"),))
-    resumed = functools.partial(pack_admission.resumed, root, "alpha", version=version, github=own)
+    resumed = functools.partial(pack_admission.resumed, root, version=version, github=own)
 
     resumed(run="r-alpha", branch="pack/r-alpha")  # its own pull request: it goes on
     with pytest.raises(pack_admission.Refused, match="record changed"):
@@ -263,13 +258,9 @@ def test_a_waiting_run_goes_on_only_as_itself_alone_and_with_no_pack_pull_reques
     with pytest.raises(pack_admission.Refused, match="record changed"):
         resumed(run="r-alpha", branch="pack/r-alpha")
     (root / pack_job.FILE).write_text(waiting("r-alpha"))
-    resumed = functools.partial(
-        pack_admission.resumed, root, "alpha", version=pack_run_record.observed(root)[1], github=own
+    pack_admission.resumed(
+        root, run="r-alpha", branch="pack/r-alpha", version=pack_run_record.observed(root)[1], github=own
     )
-    project_home.home("gamma").mkdir(parents=True)
-    (project_home.home("gamma") / pack_job.FILE).write_text(waiting("r-gamma"))
-    with pytest.raises(pack_admission.Refused, match="also open in gamma"):
-        resumed(run="r-alpha", branch="pack/r-alpha")
 
 
 def page(nodes: list[dict], total: int, cursor: str = "") -> dict:

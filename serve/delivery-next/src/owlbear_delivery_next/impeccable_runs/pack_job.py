@@ -1,4 +1,4 @@
-"""The Updates page's Impeccable update (TD-101, TD-220, TD-256): one host job at a time, its stages, its last run.
+"""The machine's Impeccable update: one job at a time, its stages and its last run.
 
 Stages run in order: notice, candidate, diff, golden pages, then the updater's and the challenger's rounds with
 the calibration replay (``pack_run``), then the way into ``main`` (``pack_publish``): commit, push, pull request, CI
@@ -34,7 +34,7 @@ from owlbear_delivery_next.impeccable_runs import (
     pack_rounds,
     pack_run,
 )
-from owlbear_delivery_next.impeccable_runs.machine_lock import HeldError, take
+from owlbear_delivery_next.impeccable_runs.machine_lock import HeldError, take, unproven
 from owlbear_delivery_next.impeccable_runs.pack_live import Live
 from owlbear_delivery_next.impeccable_runs.pack_run import CANDIDATE, UPDATER, Stopped
 from owlbear_delivery_next.impeccable_runs.pack_state import (
@@ -69,13 +69,13 @@ from owlbear_delivery_next.impeccable_runs.pack_state import (
 from owlbear_delivery_next.impeccable_runs.pack_steps import Steps
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.storage_io import atomic_write
-from owlbear_delivery_next.state_store import spend_ledger
+from owlbear_delivery_next.state_store import spend_ledger, update_home
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
     from owlbear_delivery_next.local_system.maintenance import Maintenance
-    from owlbear_delivery_next.state_store.store import Store
+    from owlbear_delivery_next.state_store.update_source import UpdateSource
 
 __all__ = ["CANDIDATE", "FILE", "STAGES", "Busy", "Job", "Live", "Refused", "Stale", "Stopped", "last", "running_for"]
 
@@ -93,7 +93,7 @@ class Refused(Exception):  # noqa: N818 - the route's answer, not a fault
 
 
 class Job(Steps):
-    """The project's Impeccable update: start one, answer it, read its state.
+    """The machine's Impeccable update: start one, answer it, read its state.
 
     The class attributes are the kind's: a PDS update (``pds_runs.job``) overrides them and the stages; Impeccable's
     are the defaults.
@@ -104,10 +104,10 @@ class Job(Steps):
     ADMISSION = pack_admission.IMPECCABLE  # its title, records and pull requests
     REPAIR = pack_repair_content.IMPECCABLE  # what its CI repairs check again or never push
     ACTIONS = pack_progress.ACTIONS
-    HOLDER = ""  # after the project's name in the machine lock
-    BUSY = "an Impeccable update runs for {who}; one runs at a time on this machine"
+    HOLDER = "Impeccable update"
+    BUSY = "{who} holds the lock; one update runs at a time on this machine"
 
-    def __init__(self, store: Store, live: Live | None = None) -> None:
+    def __init__(self, store: UpdateSource, live: Live | None = None) -> None:
         """Read the last run; one the host stopped during reads as failed, one waiting for the owner still waits."""
         self.store, self.live, self.lock = store, live or Live(), threading.Lock()
         self.thread: threading.Thread | None = None
@@ -179,7 +179,7 @@ class Job(Steps):
         """Start a run on its own thread and return its first state.
 
         Raises:
-            Busy: A run is in progress or waits for the owner's answers, here or in another project on this machine,
+            Busy: A run is in progress or waits for the owner's answers,
                 or an Impeccable pull request is open or cannot be ruled out.
         """
         with self.lock:
@@ -367,27 +367,24 @@ class Job(Steps):
     def _claim(self, admits: Callable[[], None]) -> None:
         """Take the machine's one pack lock for the run's thread, if the caller's policy *admits* it under the lock.
 
-        The lock stays held from the policy's reading through the caller's saved claim, so no other project's claim
-        comes between them; the pack is shared by every project.
+        The lock stays held from the policy's reading through the saved claim, so no other update comes between them.
 
         Raises:
-            Busy: Another project's update runs now, an earlier pack session is still unproven, or *admits* refuses.
+            Busy: Another update runs now, an earlier session is still unproven, or *admits* refuses.
         """
         self._unproven()
         try:
             # Verified again while the lock is held: an earlier updater may have released it unconfirmed before this.
-            holder = f"{self._name}{self.HOLDER}"
-            self.held = take(local_home.root() / MACHINE_LOCK, holder, lambda: self._admitted(admits))
+            self.held = take(local_home.root() / MACHINE_LOCK, self.HOLDER, lambda: self._admitted(admits))
         except HeldError as exc:
             msg = self.BUSY.format(who=exc.who)
             raise Busy(msg) from None
 
-    @property
-    def _name(self) -> str:
-        return self.store.name or self.store.root.parent.parent.name
-
     def _admitted(self, admits: Callable[[], None]) -> None:
         self._unproven()
+        if self.maintenance is not None and (earlier := unproven(self.maintenance, update_home.KEY)):
+            msg = f"an earlier {earlier} session is unproven; recover it on the Maintenance page first"
+            raise Busy(msg)
         try:
             admits()
         except pack_admission.Refused as exc:
@@ -395,13 +392,13 @@ class Job(Steps):
 
     def _fresh(self) -> None:
         """A new update's policy: no run open on this machine and no pack pull request open (``pack_admission``)."""
-        pack_admission.fresh(self.store.root, self._name, self.live.github(self.live.package), self.ADMISSION)
+        pack_admission.fresh(self.store.root, self.live.github(self.live.package), self.ADMISSION)
 
     def _resumed(self) -> None:
         """A waiting run's policy, for an answer and a publication retry: it goes on only as itself, with its own PR."""
         publication = (self.state.get("context") or {}).get("publication") or {}
         pack_admission.resumed(
-            self.store.root, self._name, run=self.state["run"], version=self.version,
+            self.store.root, run=self.state["run"], version=self.version,
             branch=str(publication.get("branch") or ""), github=self.live.github(self.live.package),
             kind=self.ADMISSION,
         )  # fmt: skip
@@ -416,7 +413,7 @@ class Job(Steps):
 
     def _run(self, work: Callable[[], str | None]) -> None:
         try:
-            where = spend_ledger.Where.of(self.store, job=f"{self.ADMISSION.title} update")  # its project's spend
+            where = spend_ledger.Where(job=f"{self.ADMISSION.title} update")
             with spend_ledger.at(where):
                 self._steps(work)
         finally:
@@ -433,7 +430,7 @@ class Job(Steps):
         """Hold the machine's pack claim while a manual replay runs, as an update does; uncertain pack work refuses it.
 
         Raises:
-            Busy: An update runs or waits, another project holds the machine's claim, or a pack session is unproven.
+            Busy: An Impeccable update runs or waits, another update holds the lock, or a pack session is unproven.
         """
         with self.lock:
             if self.busy() or self.state["state"] in ("running", "waiting"):

@@ -24,7 +24,6 @@ from fastapi.testclient import TestClient
 from owlbear_delivery_next.change_contracts.chat_contract import HostFound
 from owlbear_delivery_next.change_contracts.visual_records import DesignInput, JudgeVerdict, OwnerDecision, VisualRound
 from owlbear_delivery_next.commands import cli, replay_client
-from owlbear_delivery_next.commands.chat_client import NOT_RUNNING, NOT_SERVED
 from owlbear_delivery_next.git.git_executable import resolve_git_executable
 from owlbear_delivery_next.github.account import Writer
 from owlbear_delivery_next.impeccable import calibration, design_tools, detector, pack_files, pack_update
@@ -32,7 +31,8 @@ from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_job, pack
 from owlbear_delivery_next.impeccable_runs.pack_run import _verdict as stage_verdict
 from owlbear_delivery_next.local_system import local_home, preload
 from owlbear_delivery_next.local_system.processes import Termination
-from owlbear_delivery_next.project_host import config_routes, pack_routes
+from owlbear_delivery_next.machine_host import update_job_routes
+from owlbear_delivery_next.project_host import config_routes
 from owlbear_delivery_next.runtimes import readiness
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.state_store.store import Store
@@ -455,15 +455,17 @@ def test_uncertain_replay_judge_stops_before_next_and_route_preserves_whole_reas
         keeps=lambda _path: False,
         live=SimpleNamespace(replay=lambda s, _c, **_k: pack_replay.replay(s, run=run)),
         count_replay=lambda _n: None,
+        store=store,
     )
     app = FastAPI()
-    app.include_router(pack_routes.router(store, job))
+    updates = SimpleNamespace(pack=job, machine=SimpleNamespace(lock=threading.Lock()), refusal=lambda: "")
+    app.include_router(update_job_routes.replay_routes(updates))
     answer = TestClient(app, base_url="http://127.0.0.1").post("/impeccable/replay")
     why = f"termination unverified: processes 9 still present; disconnect failed: RuntimeError: {whole_error}"
     said = f"the replay judge {started[0]} may still be running; stop it before replaying again; {why}"
     assert (answer.status_code, answer.json()) == (409, {"detail": said})
     assert len(started) == 1
-    logged = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == pack_routes.__name__]
+    logged = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == update_job_routes.__name__]
     assert logged == [("WARNING", f"calibration replay refused: {said}")]
 
 
@@ -514,13 +516,10 @@ class _Answers(BaseHTTPRequestHandler):
     status = 200
     body: ClassVar[dict[str, object]] = {}
     seen: ClassVar[list[str]] = []
-    old = False  # a host from before the Impeccable rename: it serves only the design-pack route
 
     def do_POST(self) -> None:
         type(self).seen.append(f"{self.path} {self.headers.get('Authorization')} {self.headers.get('X-OwlBear-Use')}")
         status, body = type(self).status, type(self).body
-        if type(self).old and not self.path.endswith("/design-pack/replay"):
-            status, body = 404, {"detail": "Not Found"}
         raw = json.dumps(body).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -534,8 +533,8 @@ class _Answers(BaseHTTPRequestHandler):
 
 @pytest.fixture
 def running_host(monkeypatch):
-    """The CLI's project and a loopback host; *serve* sets what the host answers to the replay."""
-    _Answers.seen, _Answers.old = [], False
+    """A loopback machine host; *serve* sets what the host answers to the replay."""
+    _Answers.seen = []
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Answers)
     threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True).start()
     record = HostFound(
@@ -545,8 +544,7 @@ def running_host(monkeypatch):
         started_at=NOW,
         project="owlbear",
     )
-    monkeypatch.setattr(replay_client.project_home, "clone_id", lambda _dir: "owlbear")
-    monkeypatch.setattr(replay_client.host, "running_at", lambda _root, _model: record)
+    monkeypatch.setattr(replay_client.host, "running_at", lambda _root: record)
 
     def serve(status: int, body: dict[str, object]) -> None:
         _Answers.status, _Answers.body = status, body
@@ -556,36 +554,30 @@ def running_host(monkeypatch):
     server.server_close()
 
 
-def test_cli_replay_uses_host_and_legacy_fallback_only_for_missing_route(
-    repo, monkeypatch, capsys, running_host
-) -> None:
+def test_cli_replay_uses_machine_host_without_a_project(monkeypatch, capsys, running_host) -> None:
     def ran_here(*_args: object, **_kwargs: object) -> None:
         msg = "the CLI replayed in its own process"
         raise AssertionError(msg)
 
     monkeypatch.setattr(pack_replay, "replay", ran_here)
     running_host(200, {"ok": True, "report": "calibration replay: 3 decided rounds, 0 left out"})
-    assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 0
+    assert cli.main(["replay"]) == 0
     assert capsys.readouterr().out == "calibration replay: 3 decided rounds, 0 left out\n"
-    assert _Answers.seen == ["/p/owlbear/api/next/impeccable/replay Bearer tok cli"]
+    assert _Answers.seen == ["/api/next/impeccable/replay Bearer tok cli"]
     _Answers.seen.clear()
     running_host(200, {"ok": False, "report": "calibration replay: 9 decided rounds; below the margin"})
-    assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 1
+    assert cli.main(["replay"]) == 1
     assert capsys.readouterr().out == "calibration replay: 9 decided rounds; below the margin\n"
     running_host(409, {"detail": "an Impeccable update is running: wait for it to finish"})
-    assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 1
+    assert cli.main(["replay"]) == 1
     assert capsys.readouterr().out == "an Impeccable update is running: wait for it to finish\n"
     assert len(_Answers.seen) == 2
-    assert all(seen.split()[0] == "/p/owlbear/api/next/impeccable/replay" for seen in _Answers.seen)
+    assert all(seen.split()[0] == "/api/next/impeccable/replay" for seen in _Answers.seen)
     _Answers.seen.clear()
-    _Answers.old = True
-    running_host(200, {"ok": True, "report": "calibration replay: 1 decided round, 0 left out"})
-    assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 0
-    assert capsys.readouterr().out == "calibration replay: 1 decided round, 0 left out\n"
-    assert [seen.split()[0] for seen in _Answers.seen] == [
-        "/p/owlbear/api/next/impeccable/replay",
-        "/p/owlbear/api/next/design-pack/replay",
-    ]
+    running_host(404, {"detail": "Not Found"})
+    assert cli.main(["replay"]) == 1
+    assert capsys.readouterr().out == "Not Found\n"
+    assert _Answers.seen == ["/api/next/impeccable/replay Bearer tok cli"]
 
 
 def test_the_cli_runs_each_update_tool_and_reports_failures(repo, capsys, monkeypatch) -> None:
@@ -594,7 +586,7 @@ def test_the_cli_runs_each_update_tool_and_reports_failures(repo, capsys, monkey
     assert cli.main(["--repo", str(repo), "impeccable", "--golden"]) == 1
     assert "not installed" in capsys.readouterr().out
     assert cli.main(["--repo", str(repo), "impeccable", "--replay"]) == 1
-    assert capsys.readouterr().out.strip() in {NOT_RUNNING.format(repo=repo), NOT_SERVED.format(repo=repo)}
+    assert "the OwlBear machine host is not running" in capsys.readouterr().out
     assert cli.main(["--repo", str(repo), "impeccable", "--diff", str(repo), "--to", "skill-v9"]) == 1
     assert "PackError: the pinned commit" in capsys.readouterr().out
     pin(monkeypatch, git(repo, "rev-parse", "HEAD"))

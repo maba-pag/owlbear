@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
 import os
@@ -17,7 +16,6 @@ from types import SimpleNamespace
 import jsonschema
 import pytest
 import uvicorn
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from markdown_it import MarkdownIt
 from playwright.sync_api import Error, expect, sync_playwright
@@ -29,15 +27,15 @@ from owlbear_delivery_next.impeccable_runs.pack_state import MACHINE_LOCK
 from owlbear_delivery_next.local_system import local_home
 from owlbear_delivery_next.local_system.codebase import CURRENT
 from owlbear_delivery_next.local_system.processes import Termination
+from owlbear_delivery_next.machine_host import app as machine_app
+from owlbear_delivery_next.machine_host.machine import Machine
 from owlbear_delivery_next.pds_runs import audit, audit_markdown, hand_audit, pin, sessions
-from owlbear_delivery_next.project_host import api, pds_routes
 from owlbear_delivery_next.project_host.host import HostRecord
 from owlbear_delivery_next.runtimes import sdk_adapter
 from owlbear_delivery_next.runtimes.results import ACCEPTED, Gate
 from owlbear_delivery_next.runtimes.session_result import Run
 from owlbear_delivery_next.settings import carried, config, roles
 from owlbear_delivery_next.settings.config import Layer, SettingsUnset, resolve
-from owlbear_delivery_next.state_store.store import Store
 
 VERSION = pin.read().version
 SCHEMA = json.loads((pin.package() / pin.TREE / audit.SCHEMA).read_text(encoding="utf-8"))
@@ -488,28 +486,29 @@ def production(monkeypatch) -> config.Settings:
 
 
 class Ownership:
-    """The maintenance ownership the host binds: a throwaway workspace, and an optional unproven PDS session."""
+    """The audit's maintenance ledger, optionally holding an unproven PDS session."""
 
     def __init__(self, *, unproven: bool = False) -> None:
         self.unproven = unproven
-        self.used: list[Path] = []
 
     def pending(self, *, kind: str) -> bool:
         return self.unproven and kind == "pds"
 
-    @contextlib.contextmanager
-    def workspace(self, prefix: str):
-        root = Path(local_home.root() / prefix)
-        root.mkdir(parents=True)
-        self.used.append(root)
-        try:
-            yield root
-        finally:
-            shutil.rmtree(root)
+    def holding(self, _kind):
+        return []
+
+    def retained(self, _workspace):
+        return False
+
+
+def audit_machine(h, url):
+    machine = Machine(HostRecord(url=url, token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT))  # noqa: S106
+    machine.updates.hand = h
+    return machine_app.create(machine)
 
 
 def hand(tmp_path, body=None, *, settings=None, gate=None, unproven=False):
-    """A hand audit on a project store, its runner a fake auditor; *gate* holds the session until set."""
+    """A machine hand audit with a fake auditor; *gate* holds the session until set."""
     seen: list = []
 
     def run(cfg) -> Run:
@@ -522,13 +521,12 @@ def hand(tmp_path, body=None, *, settings=None, gate=None, unproven=False):
         payload = AuditResult(report=json.dumps(body or report()))
         return Run("pds-audit-1", ending="result", payload=payload, termination=Termination(confirmed=True))
 
-    store = SimpleNamespace(root=tmp_path / "store", name="shop", shared=None,
+    store = SimpleNamespace(root=tmp_path / "updates", name="owlbear", shared=None,
                             settings=lambda: settings or auditor_settings(model="claude-opus-5.5"))  # fmt: skip
     h = hand_audit.Hand(store, run)
     h.maintenance = Ownership(unproven=unproven)
-    app = FastAPI()
-    app.include_router(pds_routes.router(h))
-    return h, TestClient(app, base_url="http://127.0.0.1"), seen
+    app = audit_machine(h, "http://127.0.0.1/")
+    return h, TestClient(app, base_url="http://127.0.0.1/api/next/", headers={"Authorization": "Bearer tok"}), seen
 
 
 def settled(h) -> dict:
@@ -552,8 +550,8 @@ def test_installed_hand_audit_persists_result_stop_and_interrupted_restart(tmp_p
     assert http.get("/pds/audit").json() == kept
     [cfg] = seen
     assert (cfg.role, cfg.job, cfg.model) == ("auditor", "pds-audit", "claude-opus-5.5")
-    assert not h.maintenance.used[0].exists()
-    assert not (tmp_path / "store" / ".pds").exists()  # the hand audit keeps its reports in its state alone
+    assert not seen[0].worktree.exists()
+    assert not (h.store.root / ".pds").exists()  # the hand audit keeps its reports in its state alone
     body.clear()
     body.update(report(result="partial", limitations=["one package unread"]))
     http.post("/pds/audit")
@@ -569,7 +567,7 @@ def test_installed_hand_audit_persists_result_stop_and_interrupted_restart(tmp_p
     body.update(report())
     assert http.post("/pds/audit").json()["state"] == "running"
     assert settled(h)["state"] == "done"
-    assert all(not at.exists() for at in h.maintenance.used)
+    assert not list(h.store.root.glob("owlbear-pds-audit-*"))
 
 
 @pytest.mark.parametrize("why", ["running", "other-update", "unproven", "unbound", "unset"])
@@ -581,7 +579,7 @@ def test_hand_audit_exclusion_refuses_before_session_or_state_change(tmp_path, p
         try:
             assert http.post("/pds/audit").status_code == 409
             assert http.get("/pds/audit").json()["state"] == "running"
-            with pytest.raises(machine_lock.HeldError, match=r"shop \(PDS audit\)"):
+            with pytest.raises(machine_lock.HeldError, match="PDS audit"):
                 os.close(machine_lock.take(local_home.root() / MACHINE_LOCK, "other", lambda: None))
         finally:
             gate.set()
@@ -598,7 +596,7 @@ def test_hand_audit_exclusion_refuses_before_session_or_state_change(tmp_path, p
         finally:
             os.close(held)
         assert refused.status_code == 409
-        assert "an update runs for garage" in refused.json()["detail"]
+        assert "garage holds the lock" in refused.json()["detail"]
         assert (seen, h.read()) == ([], {"state": "none"})
         return
     if why == "unset":
@@ -617,17 +615,6 @@ def test_hand_audit_exclusion_refuses_before_session_or_state_change(tmp_path, p
     assert (seen, h.read()) == ([], {"state": "none"})
 
 
-class Host:
-    maintenance = None
-    wake = type("W", (), {"set": staticmethod(lambda: None)})()
-    record = HostRecord(url="http://127.0.0.1:9/", token="tok", pid=1, started_at=datetime.now(UTC), code=CURRENT)  # noqa: S106
-    paused = staticmethod(lambda: False)
-    draining = staticmethod(lambda: False)
-    closed = staticmethod(lambda: False)
-    updating = staticmethod(lambda: "")
-    launching = threading.Lock()
-
-
 @pytest.mark.browser
 def test_a_failed_hand_audit_shows_its_whole_reason(tmp_path, monkeypatch, caplog, pds, whole_error):
     def failing(_self):
@@ -638,20 +625,17 @@ def test_a_failed_hand_audit_shows_its_whole_reason(tmp_path, monkeypatch, caplo
     monkeypatch.setattr(hand_audit.Hand, "_audit", failing)
     h, _http, _seen = hand(tmp_path)
     caplog.set_level(logging.WARNING, logger=hand_audit.__name__)
-    h.start()
     reason = f"RuntimeError: {whole_error}\nthe session's teardown also failed: OSError: {whole_error}"
-    assert settled(h)["reason"] == reason
-    assert [r.getMessage() for r in caplog.records] == [f"PDS hand audit failed: {reason}"]  # with no page reading
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
-        server = uvicorn.Server(uvicorn.Config(api.create_app(Store(h.store.root), "tok", Host()), log_level="warning"))
+        base = f"http://127.0.0.1:{sock.getsockname()[1]}"
+        server = uvicorn.Server(uvicorn.Config(audit_machine(h, base + "/"), log_level="warning"))
         thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
         thread.start()
         try:
             while not server.started:
                 assert thread.is_alive(), "the owned page server stopped before startup"
                 time.sleep(0.05)
-            base = f"http://127.0.0.1:{sock.getsockname()[1]}"
             with sync_playwright() as pw:
                 try:
                     browser = pw.chromium.launch()
@@ -661,9 +645,14 @@ def test_a_failed_hand_audit_shows_its_whole_reason(tmp_path, monkeypatch, caplo
                 pds.only(page, base)
                 page.add_init_script("sessionStorage.setItem('token', 'tok');")
                 page.goto(f"{base}/updates/pds")
+                page.locator("#audit-start").click()
                 shown = page.locator("#audit-reason")
                 expect(shown).to_be_visible()
                 assert shown.text_content() == f"{reason[0].upper()}{reason[1:]}."
+                assert settled(h)["reason"] == reason
+                assert [r.getMessage() for r in caplog.records if r.name == hand_audit.__name__] == [
+                    f"PDS hand audit failed: {reason}"
+                ]
                 browser.close()
         finally:
             server.should_exit = True

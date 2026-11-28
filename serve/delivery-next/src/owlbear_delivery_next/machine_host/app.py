@@ -27,6 +27,7 @@ from owlbear_delivery_next.machine_host import (
     control,
     improvement_routes,
     onboarding_routes,
+    update_job_routes,
     update_routes,
     versions,
 )
@@ -291,6 +292,11 @@ def _routes(machine: Machine) -> APIRouter:
     _update_routes(routes, machine)
     routes.include_router(update_routes.router(machine))  # the update checks (D-01M63CCVRK8ZKFENY9F4A2K11A)
     _pack_routes(routes, machine)
+    routes.include_router(update_job_routes.router(machine.updates, machine.updates.pack, "/impeccable"))
+    routes.include_router(update_job_routes.router(machine.updates, machine.updates.pds, "/pds"))
+    routes.include_router(update_job_routes.audit_routes(machine.updates))
+    routes.include_router(update_job_routes.replay_routes(machine.updates))
+    routes.include_router(update_job_routes.read_routes())
     routes.include_router(onboarding_routes.router(machine))  # Add project (item 15)
     return routes
 
@@ -469,7 +475,7 @@ def _pack_routes(routes: APIRouter, machine: Machine) -> None:
     @routes.get("/impeccable")
     def pack_state() -> dict[str, Any]:
         """The pack's banners: the running pack missing or a pack that failed (Install), a newer one released."""
-        return machine.impeccable.read()
+        return machine.impeccable.read() | update_job_routes.pack(machine.updates)
 
     @routes.post("/impeccable/install")
     @routes.post(f"{pack_routes.OLD}/install", include_in_schema=False)

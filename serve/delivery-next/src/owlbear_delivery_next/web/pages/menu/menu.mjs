@@ -21,7 +21,7 @@ const MENU = [
 const LEVELS = MENU.filter((entry) => !Array.isArray(entry));
 
 const menu = { open: false, level: undefined, runs: {} };
-const RUNS = { impeccable: "/maintenance/pack/runs", pds: "/maintenance/pds/runs" };  // as pack.mjs reads each
+const RUNS = { impeccable: "/maintenance/pack/runs", pds: "/maintenance/pds/runs" };
 const root = document.getElementById("menu");
 const ENDED = ["idle", "current", "failed", "refused"];  // the OwlBear update's phases once it is not running
 const TONES = { Running: "secondary", "Waiting for you": "warning", "Host stopped": "warning", Failed: "error",
@@ -32,7 +32,7 @@ const TONES = { Running: "secondary", "Waiting for you": "warning", "Host stoppe
 function words(name) {
   const u = update(name), phase = machineState()?.update?.phase, run = menu.runs[name];
   if (name === "owlbear" && phase && !ENDED.includes(phase)) return ["Running"];
-  if (run?.interrupted) return ["Host stopped"];  // it cannot go on until that project's host starts again
+  if (run?.interrupted) return ["Host stopped"];
   if (run?.state === "running") return ["Running"];
   if (run?.state === "waiting") return ["Waiting for you"];
   const failed = (name === "owlbear" && phase === "failed") || run?.state === "failed" || Boolean(u?.reason);
@@ -59,6 +59,7 @@ function label(l) {
 
 // Whether the Impeccable and PDS updates run, wait or failed: read when the menu opens, so no page polls them for it.
 async function readRun() {
+  if (!machineState()) return;
   await Promise.all(Object.entries(RUNS).map(async ([name, path]) => {
     try {
       menu.runs[name] = (await call(path, { timeout: 15000, machine: true })).run;

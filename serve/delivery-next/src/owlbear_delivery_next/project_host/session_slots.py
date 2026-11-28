@@ -1,4 +1,4 @@
-"""A project host's share of the machine's session slots (TD-336, TD-105).
+"""Session slots for Delivery steps and for project or machine maintenance.
 
 A step's agent sessions are reserved before its runner launches and given back once its processes are confirmed
 gone. A step reserves none when it never starts an agent session (publish, follow, merge, cleanup) and one once its
@@ -11,6 +11,7 @@ their sessions while they run.
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import subprocess
 import threading
@@ -27,13 +28,14 @@ from owlbear_delivery_next.local_system.slots import PACK
 from owlbear_delivery_next.pds_runs import hand_audit
 from owlbear_delivery_next.pds_runs import job as pds_job
 from owlbear_delivery_next.runtimes import maintained
-from owlbear_delivery_next.state_store import project_home
+from owlbear_delivery_next.state_store import pds_run_record, project_home
 from owlbear_delivery_next.state_store.store import StoreError
 from owlbear_delivery_next.workflow_steps import check, pick
 from owlbear_delivery_next.workflow_steps import sessions as step_sessions
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
+    from contextlib import AbstractContextManager
     from datetime import datetime
     from pathlib import Path
 
@@ -42,10 +44,12 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.impeccable_runs.pack_candidate import Candidate
     from owlbear_delivery_next.impeccable_runs.pack_job import Job, Live
     from owlbear_delivery_next.local_system.maintenance import Kind, Maintenance
+    from owlbear_delivery_next.local_system.slots import Slots
     from owlbear_delivery_next.project_host.host import Host
     from owlbear_delivery_next.runtimes.sdk_adapter import Session
     from owlbear_delivery_next.runtimes.session_result import Run
     from owlbear_delivery_next.state_store.store import Store
+    from owlbear_delivery_next.state_store.update_source import UpdateSource
 
 NO_AGENT = frozenset({StepKind.PUBLISH, StepKind.FOLLOW, StepKind.MERGE, StepKind.CLEANUP})
 ALL = 1_000  # as many as the project's limit and the machine's free slots allow
@@ -126,8 +130,20 @@ def waiting(host: Host, slug: str) -> str:
     return f"this machine {used} of {total}, this project {mine} of {limit(host)}{said}"
 
 
-def admit(host: Host, note: Callable[[str], None]) -> str:
-    """Wait for one of the project's slots for a pack update's session and return its key.
+@dataclasses.dataclass(frozen=True)
+class SlotOwner:
+    """A maintenance lane's slot key, limit and admission barrier."""
+
+    key: str
+    slots: Slots
+    maintenance: Maintenance | None
+    limit: Callable[[], int]
+    admitted: Callable[[], AbstractContextManager[None]]
+    stopping: Callable[[], bool]
+
+
+def admit(host: SlotOwner, note: Callable[[str], None]) -> str:
+    """Wait for one of the owner's slots and return its reservation key.
 
     The slot is given back only by the maintenance ownership, which keeps it while the session's processes are unproven.
     """
@@ -135,26 +151,15 @@ def admit(host: Host, note: Callable[[str], None]) -> str:
     try:
         _queued(host, key, note)
     except BaseException:
-        host.slots.cancel(project(host), key)
+        host.slots.cancel(host.key, key)
         raise
     return key
 
 
-def _still_admitted(host: Host, kind: Kind = "pack") -> None:
-    """Refuse a session whose slot was granted while a stop began: nothing enters the SDK once the stop has begun.
-
-    Checked under the launch lock, so a stop either finds the session already counted or refuses it here.
-    """
-    with host.launching:
-        if host.closed() or host.draining():
-            msg = f"OwlBear stops; {WHO[kind]}'s session did not start"
-            raise pack_files.PackError(msg)
-
-
-def _queued(host: Host, key: str, note: Callable[[str], None]) -> None:
+def _queued(host: SlotOwner, key: str, note: Callable[[str], None]) -> None:
     said, turn = False, threading.Event()
-    while not host.slots.take(project(host), key, 1, limit(host), turn.set):
-        if host.closed() or host.stopped.is_set() or host.draining():
+    while not host.slots.take(host.key, key, 1, host.limit(), turn.set):
+        if host.stopping():
             msg = "OwlBear stops; the update did not get a session slot"
             raise pack_files.PackError(msg)
         if not said:
@@ -164,16 +169,15 @@ def _queued(host: Host, key: str, note: Callable[[str], None]) -> None:
         turn.clear()
 
 
-def packed(host: Host | None, job: Job) -> Job:
-    """*job* whose updater, challenger and replay sessions each hold one of the project's slots; its wait is logged.
+def packed(host: SlotOwner, job: Job) -> Job:
+    """Bind the updater, challenger and replay to the machine's slots.
 
     A run the last host left open, or a legacy updater repository no ledger lease covers, is adopted as unknown work
     so it is never removed. Without a running host there is no maintenance to own a session, so the sessions refuse.
     """
     job.live = pack_live(host, job.live, job.log)
-    job.maintenance = host.maintenance if host is not None else None
-    if host is not None and job.maintenance is not None:
-        interrupted(job, project(host))
+    job.maintenance = host.maintenance
+    interrupted(job, host.key)
     return job
 
 
@@ -262,6 +266,7 @@ def restore(maintenance: Maintenance, key: str, root: Path, seen: tuple[dict[str
     *seen* is a whole, stable read by ``pack_state.read_version``: "absent" when there was no file, "" when it could
     not be read. A record that cannot be read is held too: unreadable ownership is never taken for none (TD-242).
     """
+    _restore_pds(maintenance, key, root)
     legacy = root / pack_run.UPDATER
     kept, version = seen if seen is not None else pack_state.read_version(root / pack_state.FILE)
     if version == "":
@@ -281,46 +286,61 @@ def restore(maintenance: Maintenance, key: str, root: Path, seen: tuple[dict[str
 
 
 def owned(
-    host: Host | None, note: Callable[[str], None], work: Callable[[Session], Run], kind: Kind = "pack"
+    host: SlotOwner, note: Callable[[str], None], work: Callable[[Session], Run], kind: Kind = "pack"
 ) -> Callable[[Session], Run]:
-    """*work* entering the SDK only as maintenance of *kind* owning one of the project's slots."""
+    """Enter the SDK only as maintenance of *kind* owning a slot."""
 
     def run(cfg: Session) -> Run:
-        if host is None or host.maintenance is None:
+        if host.maintenance is None:
             msg = f"the machine's maintenance ownership is not bound; {WHO[kind]}'s sessions cannot start"
             raise pack_files.PackError(msg)
         slot = admit(host, note)
         try:
-            _still_admitted(host, kind)
+            with host.admitted():
+                pass  # the surrounding job is already counted before it can request a session
         except BaseException:
-            release(host, slot)  # refused after its grant: the slot goes back before any SDK entry
+            host.slots.give(host.key, slot)  # refused after its grant, before SDK entry
             raise
-        return maintained.run_owned(host.maintenance, cfg, work, project=project(host), slot=slot, kind=kind)
+        return maintained.run_owned(host.maintenance, cfg, work, project=host.key, slot=slot, kind=kind)
 
     return run
 
 
-def pds(host: Host | None, store: Store) -> tuple[hand_audit.Hand, pds_job.Job]:
-    """*store*'s PDS work: its hand audit and its update, their sessions holding the project's slots."""
+def pds(host: SlotOwner, store: UpdateSource) -> tuple[hand_audit.Hand, pds_job.Job]:
+    """Bind the machine's hand audit and PDS update to its slots."""
     hand = hand_audit.Hand(store)
-    hand.maintenance = host.maintenance if host is not None else None
-    hand.run = owned(host, lambda _said: None, lambda cfg: step_sessions.run(hand.store, cfg), "pds")
+    hand.maintenance = host.maintenance
+    hand.run = owned(host, lambda _said: None, lambda cfg: step_sessions.run(hand.store, cfg), "audit")
     return hand, pds_packed(host, pds_job.Job(store))
 
 
 def audits(host: Host | None, store: Store) -> audit_job.Audits:
     """Project audits whose read-only sessions hold a durable maintenance lease and a project slot."""
     job = audit_job.Audits(store)
-    job.maintenance = host.maintenance if host is not None else None
-    if host is not None and job.maintenance is not None:
-        job.project = host.record.project or str(store.root)
-        job.repo = host.repo
-    job.run = owned(host, lambda _said: None, lambda cfg: step_sessions.run(store, cfg), "audit")
+    if host is None or host.maintenance is None:
+        return job
+    job.maintenance = host.maintenance
+    job.project = host.record.project or str(store.root)
+    job.repo = host.repo
+
+    def stopping() -> bool:
+        return host.closed() or host.stopped.is_set() or host.draining()
+
+    @contextlib.contextmanager
+    def admitted() -> Iterator[None]:
+        with host.launching:
+            if stopping():
+                msg = "OwlBear stops; the audit session did not start"
+                raise pack_files.PackError(msg)
+            yield
+
+    owner = SlotOwner(project(host), host.slots, host.maintenance, lambda: limit(host), admitted, stopping)
+    job.run = owned(owner, lambda _said: None, lambda cfg: step_sessions.run(store, cfg), "audit")
     return job
 
 
-def pds_packed(host: Host | None, job: pds_job.Job) -> pds_job.Job:
-    """*job* whose sessions each hold one of the project's slots as PDS maintenance; a run left open is held.
+def pds_packed(host: SlotOwner, job: pds_job.Job) -> pds_job.Job:
+    """*job* whose sessions each hold a slot as PDS maintenance; a run left open is held.
 
     A run the last host left running is adopted as unknown work, so its workspace is never removed while a session of
     it may still work. Without a running host its sessions refuse.
@@ -329,36 +349,50 @@ def pds_packed(host: Host | None, job: pds_job.Job) -> pds_job.Job:
     job.live = dataclasses.replace(
         live, session=lambda store, cfg: owned(host, job.log, lambda bound: live.session(store, bound), "pds")(cfg)
     )
-    job.maintenance = host.maintenance if host is not None else None
-    run = job.interrupted
-    if job.maintenance is not None and run is not None and not job.maintenance.owns(run["workspace"]):
-        job.maintenance.adopt_uncertain(
-            f"{project(host)}:{run['workspace']}:{run['generation']}", project(host), "pds",
-            workspace=run["workspace"], generation=run["generation"],
-        )  # fmt: skip
+    job.maintenance = host.maintenance
+    if job.maintenance is not None and job.interrupted:
+        _hold_pds(job.maintenance, host.key, job.store.root, job.interrupted)
     return job
 
 
+def _restore_pds(maintenance: Maintenance, key: str, root: Path) -> None:
+    try:
+        seen = pds_run_record.observed(root)
+    except OSError, ValueError:
+        maintenance.adopt_uncertain(f"{key}:pds-unreadable", key, "pds", workspace=str(root / pds_run_record.RUNS))
+        return
+    if seen is not None and seen[0].get("state") == "running":
+        _hold_pds(maintenance, key, root, pack_state.interrupted(*seen))
+
+
+def _hold_pds(maintenance: Maintenance, key: str, root: Path, run: dict[str, str]) -> None:
+    workspace = run["workspace"] or str(root / pds_run_record.RUNS)
+    if not maintenance.owns(workspace):
+        maintenance.adopt_uncertain(
+            f"{key}:{workspace}:{run['generation']}", key, "pds", workspace=workspace, generation=run["generation"],
+        )  # fmt: skip
+
+
 def busy(job: Job, hand: hand_audit.Hand, pds: pds_job.Job) -> list[str]:
-    """Work admitted outside a request, which a project's stop waits for (TD-242)."""
+    """Update work the machine waits for before stopping."""
     return [
-        *(["an Impeccable update"] if job.busy() else []),
+        *(["an Impeccable replay"] if job.replays else ["an Impeccable update"] if job.busy() else []),
         *(["a PDS audit"] if hand.busy() else []),
         *(["a PDS update"] if pds.busy() else []),
     ]
 
 
-def pack_live(host: Host | None, live: Live, note: Callable[[str], None]) -> Live:
-    """*live* whose updater, challenger and replay sessions enter the SDK only as maintenance owning a project slot."""
+def pack_live(host: SlotOwner, live: Live, note: Callable[[str], None]) -> Live:
+    """Bind the updater, challenger and replay to maintenance and a session slot."""
 
-    def update(store: Store, cfg: Session) -> Run:
+    def update(store: UpdateSource, cfg: Session) -> Run:
         return owned(host, note, lambda bound: live.update(store, bound))(cfg)
 
-    def challenge(store: Store, cfg: Session) -> Run:
+    def challenge(store: UpdateSource, cfg: Session) -> Run:
         return owned(host, note, lambda bound: live.challenge(store, bound))(cfg)
 
     def replay(
-        store: Store,
+        store: UpdateSource,
         candidate: Candidate | None,
         run: Callable[[Session], Run] | None = None,
         *,

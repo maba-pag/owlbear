@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.github.provider import Provider
     from owlbear_delivery_next.runtimes.sdk_adapter import Session
     from owlbear_delivery_next.runtimes.session_result import Run
-    from owlbear_delivery_next.state_store.store import Store
+    from owlbear_delivery_next.state_store.update_source import UpdateSource
 
 STAGES = (
     ("notice", "Notice: newer release on npm"),
@@ -56,7 +56,7 @@ class Live:
     package: Path = field(default_factory=pin.package)
     fetch: Callable[[str, float], bytes] = pack_files.fetch
     browser: Callable[[Path, tuple[str, ...]], browser.Result] = browser.run
-    session: Callable[[Store, Session], Run] = sessions.run
+    session: Callable[[UpdateSource, Session], Run] = sessions.run
     git: pack_git.Git = pack_git.git
     github: Callable[[Path], Provider] = lambda path: GhProvider(
         path, writer=Writer.rule(path)
@@ -67,17 +67,17 @@ class Live:
 
 
 class Job(pack_job.Job):
-    """The project's PDS update: start one, answer it, read its state."""
+    """The machine's PDS update: start one, answer it, read its state."""
 
     FILE, RUNS, STAGES, KIND = pds_run_record.FILE, pds_run_record.RUNS, STAGES, "pds"
     CONTEXT = Context
     ADMISSION = PDS
     REPAIR = repair.PDS
     ACTIONS = pack_progress.PDS_ACTIONS
-    HOLDER = " (PDS update)"
-    BUSY = "an update runs for {who}; one update runs at a time on this machine"
+    HOLDER = "PDS update"
+    BUSY = "{who} holds the lock; one update runs at a time on this machine"
 
-    def __init__(self, store: Store, live: Live | None = None) -> None:
+    def __init__(self, store: UpdateSource, live: Live | None = None) -> None:
         """Read the last run, as an Impeccable update's job does, with PDS's own reach outside."""
         super().__init__(store, live or Live())
 

@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from owlbear_delivery_next.change_contracts.models import Change
     from owlbear_delivery_next.settings.config import Settings
     from owlbear_delivery_next.state_store.store import Lock, Store
+    from owlbear_delivery_next.state_store.update_source import UpdateSource
 
 type Result = loop.StepResult
 type Keep = Callable[[list[session_result.Run]], None]  # takes runs once their checks pass, before the cleanup
@@ -77,7 +78,7 @@ def out(text: str) -> None:
     sys.stdout.write(text + "\n")
 
 
-def memory(store: Store) -> Path | None:
+def memory(store: Store | UpdateSource) -> Path | None:
     """The project's memory folder in the shared repository (TD-72); none without one, so the clone stays clean."""
     if store.shared is None:
         return None
@@ -92,7 +93,7 @@ def previous(store: Store, slug: str, session: str | None) -> dict[int, float | 
     return {int(p): c for found in pids for p, c in found.items()}
 
 
-def run(_store: Store, cfg: sdk_adapter.Session, *, hold: bool = False) -> session_result.Run:
+def run(_store: Store | UpdateSource, cfg: sdk_adapter.Session, *, hold: bool = False) -> session_result.Run:
     """Run one agent session through the SDK, screenshots included (C7).
 
     The unknown model stops the Change for the owner (TD-94), unless the caller *holds* the run to decide it with

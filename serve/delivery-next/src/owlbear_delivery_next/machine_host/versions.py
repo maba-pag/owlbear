@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from owlbear_delivery_next.git.command_failure import failed, failure
 from owlbear_delivery_next.local_system import codebase, data_place, data_repo, leases, local_home
-from owlbear_delivery_next.state_store import machine_settings, registry
+from owlbear_delivery_next.state_store import machine_settings, registry, update_home
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -404,14 +404,19 @@ def remove(folder: Path) -> None:
 
 
 def prune() -> list[str]:
-    """Remove each version two newer ones were active after, unless a live lease holds it (§3); their tags."""
+    """Remove versions two newer ones were active after, unless leased or needed by an open update."""
     folder = local_home.root() / local_home.VERSIONS
     current = (local_home.root() / local_home.RUNTIME).resolve()
     installed = {p: n for p in folder.glob("v*") if p.is_dir() and (n := number(p.name)) is not None}
     active = [n for p, n in installed.items() if (p / ACTIVATED).exists()]
+    try:
+        checkouts = update_home.checkouts() | {current}
+    except ValueError as exc:
+        msg = f"cannot read the checkouts still needed by machine updates: {failure(exc)}"
+        raise VersionError(msg) from exc
     removed = []
     for path, found in sorted(installed.items(), key=lambda item: item[1]):
-        if path.resolve() == current or sum(n > found for n in active) < 2 or leases.held(path):  # noqa: PLR2004
+        if path.resolve() in checkouts or sum(n > found for n in active) < 2 or leases.held(path):  # noqa: PLR2004
             continue
         if kept := _holds_data(path):
             _log.warning("kept %s: it holds the shared data at %s; move it out with `owlbear data --move`", path, kept)

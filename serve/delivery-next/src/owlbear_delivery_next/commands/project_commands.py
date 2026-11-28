@@ -63,7 +63,7 @@ def _launch(
 
     Args:
         tokens: The command and its arguments.
-        repo: The clone the command acts on; the current folder by default.
+        repo: The clone for commands that use a project; the current folder by default.
     """
     parsed = app(tokens)
     if parsed is not None:
@@ -283,7 +283,7 @@ def impeccable(  # noqa: PLR0913 - one parameter per option
         diff: CLONE: rules and skill files changed, from an upstream clone.
         to: TAG: the candidate tag --diff compares with.
         golden: Run the engine and the in-page bundle on the golden pages.
-        replay: Rerun the design judge on decided rounds (costs requests).
+        replay: Replay OwlBear's decided rounds on the machine host without a project (costs requests).
     """
     if bool(diff) != bool(to):
         refuse("--diff and --to go together")
@@ -292,6 +292,12 @@ def impeccable(  # noqa: PLR0913 - one parameter per option
 
 # An older version updating into this one runs its pack install by the old name (D-01M63CB9WFXBV3TDXGG295QCST)
 app.command(impeccable, name="design-pack", show=False)
+
+
+@app.command
+def replay() -> Namespace:
+    """Replay OwlBear's decided rounds on the machine host without a project (costs requests)."""
+    return impeccable(replay=True)
 
 
 @backlog.command

@@ -1,11 +1,9 @@
 // An update's run as its Updates page shows it (Impeccable's or the Porsche Design System's, by own.kind): its state,
-// what the owner has to do, its questions with their answers, its progress by invocation, its findings and log, and
-// each project's last run (pack.mjs acts).
+// what the owner has to do, its questions with their answers, progress, findings and log (pack.mjs acts).
 import { html, nothing } from "/assets/lit-html/3.3.3/lit-html.js";
 import { live } from "/assets/lit-html/3.3.3/directives/live.js";
-import { machineState, project } from "/assets/ui.mjs";
 import { sentence, when } from "./frame.mjs";
-import { ADMIT, FOUND, answer, button, discard, discarding, emphasis, own, reach, start } from "./pack.mjs";
+import { ADMIT, FOUND, SETTINGS, answer, button, discard, discarding, emphasis, own, start } from "./pack.mjs";
 
 const RESULTS = { pending: "not run", running: "running", passed: "passed", failed: "failed", skipped: "skipped",
   returned: "findings back to the updater", waiting: "waiting for you", completed: "session completed",
@@ -32,7 +30,7 @@ const KINDS = { end: "The challenge rounds ended without a pass", evidence: "Cha
   "repair-approval": "The CI repair changed protected content" };
 
 function runLine(u) {
-  if (u.interrupted) return "Its host stopped while it ran; it is settled when that project's host starts again.";
+  if (u.interrupted) return "The machine host stopped during the update.";
   if (u.state === "running") return `Running since ${when(u.started_at)}.`;
   let line = ENDINGS[u.state] ?? sentence(u.state);
   if (u.started_at) line += ` Started ${when(u.started_at)}` + (u.ended_at ? `, ended ${when(u.ended_at)}.` : ".");
@@ -40,7 +38,7 @@ function runLine(u) {
 }
 
 export function historyUnread() {
-  return Boolean(own.unread.runs || own.runs?.registry || own.runs?.runs.some((r) => r.error));
+  return Boolean(own.unread.runs || own.runs?.error);
 }
 
 // What runs now, from the run's invocations, or from its stage list in a record from before them.
@@ -53,21 +51,20 @@ function nowOf(u) {
 }
 
 // What the owner has to do, in one sentence.
-function todo(u, questions, to) {
-  const elsewhere = to ? "" : `, from ${u.name}`;
-  if (u.interrupted) return `Start ${u.name}'s host: the run is settled there.`;
+function todo(u, questions) {
+  if (u.interrupted) return "Start the machine host to settle the run.";
   if (u.state === "running") return "Nothing for now: it runs by itself and asks here when it needs you.";
   if (u.state === "waiting") {
-    if (!questions.length) return `Nothing to answer; you can discard it${elsewhere}.`;
+    if (!questions.length) return "Nothing to answer; you can discard it.";
     const n = questions.length;
-    return `Answer ${n === 1 ? "the question" : `the ${n} questions`} below${elsewhere}.`;
+    return `Answer ${n === 1 ? "the question" : `the ${n} questions`} below.`;
   }
   if (u.state === "passed") return `Nothing. ${own.kind.merged}`;
   if (u.state === "failed") return "Read why below, fix the cause, then start a new update.";
   return "Nothing.";
 }
 
-function summary(u, questions, to) {
+function summary(u, questions) {
   const [word, tone] = u.interrupted ? ["host stopped", "warning"] : STATES[u.state] ?? [u.state, "secondary"];
   const open = ["running", "waiting"].includes(u.state), now = nowOf(u), next = u.progress?.legacy
     ? null : u.progress?.next;
@@ -77,14 +74,12 @@ function summary(u, questions, to) {
         : open ? "Current update" : "Last update"}</h3></p-heading>
       <p-tag id="pack-tag" variant=${tone} compact="true">${word}</p-tag>
     </div>
-    <p-text id="pack-project" size="sm">${open ? "Started" : "Run"} in <strong>${u.name}</strong>: it uses that
-      project's ${own.kind.uses}${to ? "" : unreachable()}.</p-text>
     <p-text id="pack-state" size="sm" role="status" aria-live="polite">${runLine(u)}</p-text>
     <dl class="pack-facts">
       ${now ? html`<div><dt>Now</dt><dd id="pack-now">${now}…</dd></div>` : nothing}
       ${next ? html`<div><dt>Next</dt><dd id="pack-next">${next.label}${next.options.length
         ? ` (${next.options.join("; ")})` : ""}</dd></div>` : nothing}
-      <div><dt>Your part</dt><dd id="pack-todo">${todo(u, questions, to)}</dd></div>
+      <div><dt>Your part</dt><dd id="pack-todo">${todo(u, questions)}</dd></div>
     </dl>
   </div>`;
 }
@@ -158,7 +153,7 @@ function choose(run, q, answers, lead) {
       busy: own.busy.startsWith(`${q.id}:`), disabled: Boolean(own.busy) })}</div>`;
 }
 
-function question(run, q, to, lead) {
+function question(run, q, lead) {
   let field = nothing;
   if (q.kind === "dispute") {
     const label = "Your note (guides the updater; needed to ask the challenger again)";
@@ -172,7 +167,7 @@ function question(run, q, to, lead) {
     };
     field = html`<p-textarea data-note=${q.id} label=${label} rows="2" max-length="2000" .value=${live(note)}
       state=${missing ? "error" : "none"} message=${missing ? "Asking the challenger to reconsider needs your note."
-        : ""} @input=${keep} @change=${keep} ?disabled=${!to}></p-textarea>`;
+        : ""} @input=${keep} @change=${keep}></p-textarea>`;
   }
   const answers = q.options.filter((o) => o.id !== "discard");  // the stop's one Discard stands apart
   const priority = answers.some((o) => emphasis(q, o) === "primary");
@@ -185,7 +180,7 @@ function question(run, q, to, lead) {
     ${asked(run, q)}
     ${q.diff ? diff(q.diff) : nothing}
     ${field}
-    ${!to || !answers.length ? nothing : !priority ? choose(run, q, answers, lead) : html`<div class="row"
+    ${!answers.length ? nothing : !priority ? choose(run, q, answers, lead) : html`<div class="row"
       role="group" aria-label="Your answer">${answers.map((o) => button(o.label, () => answer(run, q, o),
         { variant: lead ? emphasis(q, o) : "secondary", busy: own.busy === `${q.id}:${o.id}`,
           disabled: Boolean(own.busy) }))}</div>`}
@@ -234,30 +229,26 @@ function progress(u) {
   </div>`;
 }
 
-// Why the run's actions are not offered here, when they are not: its project is not loaded on the machine host, or
-// this is another project's own host.
-function unreachable() {
-  return machineState() ? "; its answers show here once that project is loaded" : "; open that project to act on it";
-}
-
 function article(name) {
   return `${/^[AEIOU]/.test(name) ? "an" : "a"} ${name}`;
 }
 
-// Starting the update, from a chosen project: its button, what became of a start and why the runs can't be read.
+// Starting a machine update, and the result of its admission.
 export function startPart() {
   const r = own.runs, run = r?.run, open = run && ["running", "waiting"].includes(run.state);
-  const canStart = Boolean(project || !machineState()), busy = Boolean(open || r?.holder);
+  const busy = Boolean(open || r?.holder);
+  const [peer, path] = own.kind.peer;
+  const other = r?.holder?.includes(`${peer} update`);
   return html`<div class="part">
     <p-heading size="md"><h3 id="pack-update-title">Update</h3></p-heading>
-    <p-text size="sm">${own.kind.intro} One runs at a time on this machine.</p-text>
+    <p-text>${own.kind.intro} ${SETTINGS}</p-text>
     <div class="row">
       ${button(own.kind.label, start, { id: "pack-update", icon: "refresh",
         variant: open ? "secondary" : "primary",
         busy: own.busy === "start" || Boolean(own.awaiting),
-        disabled: busy || !canStart || Boolean(own.busy) || Boolean(own.awaiting) })}
-      ${canStart ? nothing : html`<p-text id="pack-choose" size="sm">Choose a project above to start one: it runs on
-        that project's ${own.kind.uses}.</p-text>`}
+        disabled: busy || !r || historyUnread() || Boolean(own.busy) || Boolean(own.awaiting) })}
+      ${other ? html`<p-text id="pack-lock">The <a href=${path + location.search + location.hash}>${peer} update</a>
+        runs; one update runs at a time on this machine.</p-text>` : nothing}
     </div>
     ${own.awaiting ? html`<p-inline-notification id="pack-admitting" state="info" dismiss-button="false">
       Delivery has not answered the start yet; it may still be checking GitHub for an open ${own.kind.name} pull
@@ -270,8 +261,9 @@ export function startPart() {
       ${button("Reload", () => location.reload(), { id: "pack-reload" })}</p-inline-notification>` : nothing}
     ${own.error ? html`<p-inline-notification id="pack-error" state="error" dismiss-button="false">${
       sentence(own.error)}</p-inline-notification>` : nothing}
-    ${own.unread.runs ? html`<p-inline-notification id="pack-runs-error" state="error" dismiss-button="false">
-      Could not read the ${own.kind.name} runs: ${own.unread.runs}.</p-inline-notification>` : nothing}
+    ${historyUnread() ? html`<p-inline-notification id="pack-runs-error" state="error" dismiss-button="false">
+      Could not read the ${own.kind.name} update: ${own.unread.runs || own.runs.error}.</p-inline-notification>`
+      : nothing}
   </div>`;
 }
 
@@ -279,21 +271,21 @@ export function runPart(run) {
   if (!run) {
     return html`<p-text id="pack-state" size="sm">${historyUnread()
       ? `The last ${own.kind.name} update is not known because run history could not be read completely.`
-      : `No project has run ${article(own.kind.name)} update yet.`}</p-text>`;
+      : `This machine has not run ${article(own.kind.name)} update yet.`}</p-text>`;
   }
-  const to = reach(run), questions = run.state === "waiting" ? run.questions ?? [] : [];
+  const questions = run.state === "waiting" ? run.questions ?? [] : [];
   const p = run.published, found = run.loop?.findings ?? [], d = discarding(run, questions);
   const why = run.state !== "running" && !questions.some((q) => q.kind === "stopped") ? run.reason : "";
   return html`<div id="pack-run" class="pack-run">
-    ${summary(run, questions, to)}
+    ${summary(run, questions)}
     ${why ? html`<p-text id="pack-reason" size="sm">${why}</p-text>` : nothing}
     ${p?.commit ? html`<p-text id="pack-pushed" size="sm">Commit ${p.commit.slice(0, 12)} on ${p.branch}${p.url
       ? html`, <a href=${p.url} target="_blank" rel="noopener">pull request #${p.number}</a>` : nothing}${p.merged
       ? `, merged into main as ${p.merged.slice(0, 12)}` : p.url ? ", not merged yet" : ""}.</p-text>` : nothing}
     <div id="pack-ask" class="pack-ask" ?hidden=${!questions.length && !d}>
       <p-heading size="sm"><h4 id="pack-ask-title">Waiting for you</h4></p-heading>
-      <div id="pack-questions">${questions.map((q, i) => question(run, q, to, i === 0))}</div>
-      ${to && d ? html`<div id="pack-discard-area" class="pack-discard">
+      <div id="pack-questions">${questions.map((q, i) => question(run, q, i === 0))}</div>
+      ${d ? html`<div id="pack-discard-area" class="pack-discard">
         <p-text size="sm" color="contrast-medium">Or end this update without activating anything.</p-text>
         ${button(d.label, () => discard(run, d), { id: "pack-discard", icon: "close",
           busy: own.busy === "discard" || own.busy === `${d.q?.id}:discard`, disabled: Boolean(own.busy) })}
@@ -314,11 +306,12 @@ export function runPart(run) {
   </div>`;
 }
 
-export function others(r) {
-  const listed = r.runs.filter((x) => x.state !== "idle" || x.error);
-  if (listed.length < 2 && !r.registry && !listed.some((x) => x.error)) return nothing;
-  return html`<details id="pack-runs"><summary>Each project's last ${own.kind.name} run</summary>
-    ${r.registry ? html`<p-text size="sm">${sentence(r.registry)}.</p-text>` : nothing}
-    <ul>${listed.map((x) => html`<li>${x.name}: ${x.error ? sentence(x.error) : `${x.state}${x.started_at
-      ? `, started ${when(x.started_at)}` : ""}`}</li>`)}</ul></details>`;
+export function oldWaiting(r) {
+  return html`${r.errors?.map((error) => html`<p-inline-notification state="error" dismiss-button="false">
+    ${error}</p-inline-notification>`)}
+    ${r.old_waiting?.length ? html`<ul id="pack-old-waiting" aria-label="Old waiting updates">
+      ${r.old_waiting.map((x) => html`<li><strong>${x.name}:</strong> This update started before updates belonged to
+        the machine and cannot continue here.${x.url ? html` Close
+        <a href=${x.url} target="_blank" rel="noopener">pull request #${x.number}</a> on GitHub.` : nothing}</li>`)}
+    </ul>` : nothing}`;
 }

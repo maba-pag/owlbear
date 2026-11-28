@@ -1,12 +1,12 @@
-// Updates ▸ Impeccable (D-01M63C5VGFVT3DVCC888B78K2A), the same in every project and under All projects: the frame,
+// Updates ▸ Impeccable, the same in every project and under All projects: the frame,
 // where the pack stands (installed here, released with an OwlBear version, published by an update, the candidate an
 // update validates), and the one Impeccable update of this machine, answerable from wherever the page is opened.
 import { html, nothing, render } from "/assets/lit-html/3.3.3/lit-html.js";
 import { defined, machineState } from "/assets/ui.mjs";
 import { readChecks, update } from "./checks.mjs";
 import { frame, framed, sentence, when } from "./frame.mjs";
-import { follow, own, readPack } from "./pack.mjs";
-import { historyUnread, others, runPart, startPart } from "./run.mjs";
+import { button, follow, own, readPack, replay } from "./pack.mjs";
+import { historyUnread, oldWaiting, runPart, startPart } from "./run.mjs";
 
 function installed(i) {  // a missing pack is the running version's; one installing or failed names its version
   const whose = i.version ? `Impeccable of OwlBear ${i.version}` : "An Impeccable pack";
@@ -27,11 +27,8 @@ function released(bar) {
 function published(run) {
   const p = run?.published;
   const last = own.unread.runs && run ? "Last read: " : "";
-  if (!p?.commit && historyUnread()) return run
-    ? `Not known across all projects. The last readable update, run in ${run.name}, has no published commit.`
-    : "Not known: run history could not be read completely.";
-  if (!p?.commit) return run ? `${last}Nothing yet from the last update, run in ${run.name}.`
-    : "Nothing yet.";
+  if (!p?.commit && historyUnread()) return "Not known: the machine's last update could not be read.";
+  if (!p?.commit) return run ? `${last}Nothing yet from the last update.` : "Nothing yet.";
   const pr = p.url ? `pull request #${p.number}` : `commit ${p.commit.slice(0, 12)} on ${p.branch}`;
   return `${last}${sentence(pr)}${p.merged ? `, merged into main as ${p.merged.slice(0, 12)}`
     : p.url ? ", not merged yet" : ""}; a machine takes it with the OwlBear version that carries it.`;
@@ -42,7 +39,7 @@ function candidate(run) {
     ? "Not known: run history could not be read completely." : "None: no update runs now.";
   const made = (run.stages ?? []).find((s) => s.name === "candidate" && s.detail)?.detail;
   const last = own.unread.runs ? "Last read: " : "";
-  return `${last}${made ?? "Being prepared"}, in ${run.name}'s update; it is not active anywhere until it is `
+  return `${last}${made ?? "Being prepared"}; it is not active anywhere until it is `
     + "published and released.";
 }
 
@@ -76,13 +73,19 @@ function stands() {
 function view() {
   const r = own.runs;
   return html`${frame("impeccable", { running: "Pinned upstream" })}
-    <section id="pack" class="panel" aria-labelledby="pack-title">
+    ${machineState() ? html`<section id="pack" class="panel" aria-labelledby="pack-title">
       <p-heading size="lg"><h2 id="pack-title">The pack</h2></p-heading>
       ${stands()}
       ${startPart()}
-      ${r ? html`<div class="part">${runPart(r.run)}${others(r)}</div>` : own.unread.runs ? nothing
-        : html`<p-text size="sm">Reading the Impeccable runs…</p-text>`}
-    </section>`;
+      ${r ? html`<div class="part">${runPart(r.run)}${oldWaiting(r)}</div>` : own.unread.runs ? nothing
+        : html`<p-text size="sm">Reading the last Impeccable update…</p-text>`}
+      <div class="part row">
+        ${button("Replay OwlBear's decided rounds", replay, { id: "pack-replay", busy: own.busy === "replay",
+      disabled: !r || historyUnread() || Boolean(r.holder || own.busy || own.awaiting)
+        || ["running", "waiting"].includes(r.run?.state) })}
+        <p-text role="status">${own.replayed ?? ""}</p-text>
+      </div>
+    </section>` : nothing}`;
 }
 
 function show() {
