@@ -50,12 +50,11 @@ def client(replay, lock=None):
     )
     app = FastAPI()
     updates = SimpleNamespace(pack=job, machine=SimpleNamespace(lock=threading.Lock()), refusal=lambda: "")
-    app.include_router(update_job_routes.router(updates, job, "/impeccable"))
     app.include_router(update_job_routes.replay_routes(updates))
     return TestClient(app, base_url="http://127.0.0.1"), job
 
 
-def test_managed_replay_and_legacy_routes_count_once_and_redirect_reads():
+def test_managed_replay_counts_once():
     seen = []
 
     def replay(_store, candidate, **kwargs):
@@ -69,17 +68,6 @@ def test_managed_replay_and_legacy_routes_count_once_and_redirect_reads():
     assert seen == [("owlbear", None, job.keeps)]
     assert job.counts == [1, -1], "the replay must count in once and out once"
     assert not job.lock.locked()
-    seen.clear()
-    job.counts.clear()
-    assert http.post("/design-pack/replay").json()["ok"] is calibration.replayed([]).ok
-    assert (seen, job.counts) == ([("owlbear", None, job.keeps)], [1, -1])
-    assert not job.lock.locked()
-    for old, new in (
-        ("/design-pack/machine", "/impeccable/machine"),
-        ("/design-pack/update?x=1", "/impeccable/update?x=1"),
-    ):
-        moved = http.get(old, follow_redirects=False)
-        assert (moved.status_code, moved.headers["location"]) == (307, f"http://127.0.0.1{new}")
 
 
 @pytest.mark.parametrize("fails", ["busy", "replay", "pack", "noted", "command"])

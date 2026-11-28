@@ -16,11 +16,11 @@ from owlbear_delivery_next.impeccable.detector import DetectorError
 from owlbear_delivery_next.impeccable_runs import pack_candidate, pack_job, pack_progress, pack_replay
 from owlbear_delivery_next.local_system import data_repo
 from owlbear_delivery_next.pds_runs import hand_audit
-from owlbear_delivery_next.project_host import decision_routes, pack_overview, pack_routes
+from owlbear_delivery_next.project_host import decision_routes, pack_overview
 from owlbear_delivery_next.state_store import pds_run_record
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Iterator
 
     from owlbear_delivery_next.machine_host.update_jobs import Updates
 
@@ -119,18 +119,7 @@ def router(updates: Updates, job: pack_job.Job, prefix: str) -> APIRouter:
         except pack_job.Stale as exc:
             raise HTTPException(409, str(exc)) from exc
 
-    if prefix == "/impeccable":
-        _legacy(routes, {"": update, "/answer": answer, "/discard": discard})
     return routes
-
-
-def _legacy(routes: APIRouter, writes: dict[str, Callable[..., Any]]) -> None:
-    pack_routes.moved(routes, "/update", "/machine")
-    for suffix, handler in writes.items():
-        routes.add_api_route(
-            f"{pack_routes.OLD}/update{suffix}", handler, methods=["POST"],
-            dependencies=OWNER, include_in_schema=False,
-        )  # fmt: skip
 
 
 def pack(updates: Updates) -> dict[str, Any]:
@@ -144,16 +133,11 @@ def pack(updates: Updates) -> dict[str, Any]:
 
 
 def replay_routes(updates: Updates) -> APIRouter:
-    """Read the lock holder or replay OwlBear's decided rounds on the installed pack."""
+    """Replay OwlBear's decided rounds on the installed pack."""
     routes = APIRouter()
     job = updates.pack
 
-    @routes.get("/impeccable/machine")
-    def machine() -> dict[str, str | None]:
-        return {"machine": pack_job.running_for()}
-
     @routes.post("/impeccable/replay", dependencies=OWNER)
-    @routes.post(f"{pack_routes.OLD}/replay", dependencies=OWNER, include_in_schema=False)
     def replay() -> dict[str, Any]:
         try:
             with ExitStack() as held:

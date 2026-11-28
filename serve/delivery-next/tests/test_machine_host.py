@@ -495,13 +495,6 @@ def test_a_manual_replay_of_a_project_whose_legacy_pack_finished_is_not_refused_
     reached = http.post("/api/next/impeccable/replay")
     assert reached.status_code == 422  # pack_replay's own check: no shared repository, before any SDK session
     assert "shared repository" in reached.json()["detail"]
-    old = http.post("/api/next/design-pack/replay")  # its name before the Impeccable rename
-    assert (old.status_code, old.json()) == (reached.status_code, reached.json())
-    moved = http.get("/api/next/design-pack/update?x=1", follow_redirects=False)
-    assert (moved.status_code, moved.headers["location"]) == (
-        307,
-        "http://127.0.0.1/api/next/impeccable/update?x=1",
-    )
     machine.slots.total = lambda: 1
     assert machine.slots.take(good.id, "probe", 1, 1) == 1  # the finished pack leaves the one slot free
 
