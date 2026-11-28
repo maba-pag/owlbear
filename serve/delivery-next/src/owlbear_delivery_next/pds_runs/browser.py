@@ -29,6 +29,7 @@ REPORT = "browser-junit.xml"
 CDN = "PDS CDN fetch of"  # the tests' own words when the PDS CDN did not answer (tests/conftest.py)
 SECONDS = 1800  # the gate's one limit on the whole run: the suite's own session limit is switched off for it
 SUMMARY = re.compile(r"^(?:FAILED|ERROR) (\S+)", re.MULTILINE)
+PASSED = re.compile(r"^PASSED (.+)$", re.MULTILINE)
 TRUST = ("NODE_EXTRA_CA_CERTS", "SSL_CERT_FILE", "SSL_CERT_DIR")  # a proxy intercepting TLS needs its CA
 PROXY = tuple(n for v in ("HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY") for n in (v, v.lower()))
 # OWNER: the browser gate's process inherits only the variables in KEPT; tokens and every other inherited
@@ -54,6 +55,7 @@ class Result:
     output: str
     told: str = ""  # each failing case's message and traceback from the report, never the output's warnings
     flaked: tuple[str, ...] = ()  # tests that failed, then passed on a rerun on the candidate and on main
+    passed_ids: tuple[str, ...] = ()  # only requested for reruns
 
     @property
     def passed(self) -> bool:
@@ -103,7 +105,7 @@ def run(at: Path, ids: tuple[str, ...] = (), *, runner: Runner = subprocess.run)
         "HOME": str(Path.home()), "PYTHONPATH": str(at / SOURCE), "PLAYWRIGHT_BROWSERS_PATH": str(where),
     }  # fmt: skip
     args = [sys.executable, "-m", "pytest", *(ids or (TESTS,)), "-m", "browser", f"--junitxml={report}", "-q",
-            "-rfE", "--color=no", "-p", "no:cacheprovider", "-o", "session_timeout="]  # fmt: skip
+            "-rfEp" if ids else "-rfE", "--color=no", "-p", "no:cacheprovider", "-o", "session_timeout="]  # fmt: skip
     try:
         done = runner(args, cwd=at, env=env, capture_output=True, text=True, timeout=SECONDS, check=False)
     except subprocess.TimeoutExpired as exc:
@@ -125,7 +127,8 @@ def _read(report: Path, code: int, output: str) -> Result:
     suites = [root] if root.tag == "testsuite" else list(root.iter("testsuite"))
     count = {k: sum(int(s.get(k, "0")) for s in suites) for k in ("tests", "failures", "errors", "skipped")}
     failed = tuple(dict.fromkeys(SUMMARY.findall(output)))
-    return Result(**count, failed=failed, code=code, output=output.strip()[-4000:], told=_told(root))
+    return Result(**count, failed=failed, code=code, output=output.strip()[-4000:], told=_told(root),
+                  passed_ids=tuple(PASSED.findall(output)))  # fmt: skip
 
 
 def _told(root: ET.Element) -> str:

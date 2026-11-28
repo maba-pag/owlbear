@@ -401,10 +401,11 @@ def test_current_release_never_downloads_or_starts_work(tmp_path, checkout):
         ({"browsers": [browser.Unrunnable("the PDS CDN did not answer, so the browser tests prove nothing")]},
          "the PDS CDN did not answer", ["audit", "update", "audit", "browser"]),
         ({"browsers": [browser.Result(0, 0, 0, 0, (), 5, "no tests ran")]},
-         "browser tests did not finish: 0 browser test(s) ran, 0 failed, 0 errored, 0 skipped (exit 5)\nno tests ran",
+         "browser tests did not finish (first pass): 0 browser test(s) ran, 0 failed, 0 errored, 0 skipped "
+         "(exit 5)\nno tests ran",
          ["audit", "update", "audit", "browser"]),
         ({"browsers": [failing("tests/test_x.py::t"), failing("tests/test_x.py::t")]},
-         "browser tests fail on main as well: tests/test_x.py::t", ["audit", "update", "audit", "browser", "browser"]),
+         "Failed: tests/test_x.py::t.", ["audit", "update", "audit", "browser", "browser"]),
     ],
     ids=["npm-unreachable", "no-audit-result", "cdn-unrunnable", "zero-tests", "failing-on-main-too"],
 )  # fmt: skip
@@ -462,40 +463,57 @@ def test_candidate_release_failure_keeps_whole_reason(tmp_path, monkeypatch, who
     PACK.stage_failed(state, "candidate", f"PinError: {said}")
 
 
-@pytest.mark.parametrize("outcome", ["flake", "base-failure", "base-skip", "candidate-skip", "interrupted"])
+@pytest.mark.parametrize("outcome", ["flake", "base-failure", "base-skip", "candidate-skip"])
 def test_browser_reruns_discriminate_flake_base_failure_and_skips(tmp_path, checkout, outcome):
-    two = failing("tests/test_a.py::t", "tests/test_b.py::t")
-    if outcome == "interrupted":
-        stopped = browser.Result(1, 1, 0, 0, two.failed[:1], 2, "Interrupted")
-        fakes, job, ctx = browser_job(tmp_path, checkout, stopped, PASS, PASS)
-        with pytest.raises(pack_job.Stopped, match=r"browser tests did not finish: .* \(exit 2\)\nInterrupted"):
-            checks.browsed(job, ctx, job.workspace / context.CANDIDATE)
-        assert fakes.browsed == [("candidate", ())]
-        return
-    half = browser.Result(tests=2, failures=0, errors=0, skipped=1, failed=(), code=0, output="1 passed, 1 skipped")
+    a, b, c = ("tests/test_a.py::t", "tests/test_b.py::t", "tests/test_c.py::t")
+    three = failing(a, b, c)
+    mixed = browser.Result(3, 1, 0, 1, (a,), 1, "1 failed, 1 passed, 1 skipped", passed_ids=(b,))
+    partial = browser.Result(3, 0, 0, 1, (), 0, "2 passed, 1 skipped", passed_ids=(a, b))
     reruns = {
         "flake": [PASS, PASS],
-        "base-failure": [two],
-        "base-skip": [half],
-        "candidate-skip": [PASS, half],
+        "base-failure": [mixed],
+        "base-skip": [partial],
+        "candidate-skip": [PASS, partial],
     }[outcome]
-    fakes, job, ctx = browser_job(tmp_path, checkout, two, *reruns)
+    fakes, job, ctx = browser_job(tmp_path, checkout, three, *reruns)
     if outcome.startswith("base"):
-        with pytest.raises(pack_job.Stopped, match="browser tests fail on main as well: " + ", ".join(two.failed)):
+        with pytest.raises(pack_job.Stopped) as raised:
             checks.browsed(job, ctx, job.workspace / context.CANDIDATE)
+        failed, passed = (a, b) if outcome == "base-failure" else ("none named", f"{a}, {b}")
+        assert f"Failed: {failed}.\nPassed on main: {passed}. Did not run on main: {c}." in str(raised.value)
+        assert "Try again if the machine was busy; if main is broken" in str(raised.value)
     else:
         result = checks.browsed(job, ctx, job.workspace / context.CANDIDATE)
         assert result.passed is (outcome == "flake")
         if outcome == "flake":
-            assert result.said().endswith("passed on a rerun on the candidate and on main: " + ", ".join(two.failed))
+            assert result.said().endswith("passed on a rerun on the candidate and on main: " + ", ".join(three.failed))
         else:
-            assert result == two
+            assert result == three
     assert fakes.browsed == [
         ("candidate", ()),
-        ("base", two.failed),
-        *([] if outcome.startswith("base") else [("candidate", two.failed)]),
+        ("base", three.failed),
+        *([] if outcome.startswith("base") else [("candidate", three.failed)]),
     ]
     assert (fakes.sessions, fakes.github.calls) == ([], [])
+
+
+@pytest.mark.parametrize("attempt", ["first pass", "rerun on main", "rerun on the candidate"])
+def test_an_interrupted_browser_pass_names_the_pass_in_the_saved_stop_and_log(tmp_path, checkout, attempt):
+    failed = failing("tests/test_a.py::t")
+    stopped = browser.Result(1, 1, 0, 0, failed.failed, 2, "Interrupted")
+    before = {"first pass": [], "rerun on main": [failed], "rerun on the candidate": [failed, PASS]}[attempt]
+    fakes, job, ctx = browser_job(tmp_path, checkout, *before, stopped)
+    ctx.next = "browser"
+    job.keep(ctx, RoundLoop(subject=PDS, policy=RoundPolicy()))
+
+    state = job.failed(lambda: browser_stage(job, ctx))
+
+    reason = f"browser tests did not finish ({attempt}): {stopped.said()} (exit 2)\nInterrupted"
+    assert state["state"] == "waiting"
+    assert reason in state["reason"] and reason in state["questions"][0]["text"]
+    assert any(reason in line for line in state["log"])
+    assert len(fakes.browsed) == len(before) + 1
+    assert not fakes.sessions
 
 
 def test_spent_updater_budget_reports_remaining_browser_failure(tmp_path, checkout):
@@ -993,10 +1011,11 @@ def browsers(tmp_path, monkeypatch) -> Path:
 
 
 def test_browser_invocation_reads_real_reports_on_target_code(tmp_path, browsers):
-    at, runner = tmp_path / "candidate", Runner(suite(4))
+    at, runner = tmp_path / "candidate", Runner(suite(4), output="PASSED tests/test_a.py::t")
     at.mkdir()
     r = browser.run(at, ("tests/test_a.py::t",), runner=runner)
     assert (r.passed, r.said()) == (True, "4 browser test(s) ran, 0 failed, 0 errored, 0 skipped")
+    assert r.passed_ids == ("tests/test_a.py::t",)
     env = runner.given["env"]
     assert (runner.given["cwd"], env["PYTHONPATH"], env["PLAYWRIGHT_BROWSERS_PATH"]) == (
         at, str(at / browser.SOURCE), str(browsers)
@@ -1004,6 +1023,7 @@ def test_browser_invocation_reads_real_reports_on_target_code(tmp_path, browsers
     assert "OWLBEAR_SECRET_FOR_TEST" not in env
     assert (env["NODE_EXTRA_CA_CERTS"], env["https_proxy"]) == ("/ca/interception.pem", "http://proxy:3128")
     assert runner.given["args"][3:6] == ["tests/test_a.py::t", "-m", "browser"]
+    assert "-rfEp" in runner.given["args"]
     case = '<testcase classname="tests.test_v" name="t"><failure message="TimeoutError: 30000ms">trace</failure>'
     xml = f'<testsuites><testsuite tests="2" failures="1">{case}</testcase></testsuite></testsuites>'
     r = browser.run(at, runner=Runner(xml, 1, "FAILED tests/test_v.py::t\n" + "DeprecationWarning\n" * 400))
