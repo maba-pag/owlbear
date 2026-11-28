@@ -75,7 +75,6 @@ class Job(pack_job.Job):
     REPAIR = repair.PDS
     ACTIONS = pack_progress.PDS_ACTIONS
     HOLDER = "PDS update"
-    BUSY = "{who} holds the lock; one update runs at a time on this machine"
 
     def __init__(self, store: UpdateSource, live: Live | None = None) -> None:
         """Read the last run, as an Impeccable update's job does, with PDS's own reach outside."""
