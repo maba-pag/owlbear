@@ -1967,13 +1967,21 @@ def changed_expectations(checkout: Path) -> str:
 def test_changed_evidence_waits_for_the_owner_and_once_accepted_lands_with_the_pack(tmp_path, checkout, clone):
     """TD-177: a golden change is asked about with its diff before the replay; accepted, it is published."""
     fakes = Fakes(clone, wrong=WRONG)
+    fakes.wrong_after = WRONG
     new = changed_expectations(checkout)
     fakes.edits, fakes.evidence = [{EXPECTED: new, "golden/glow.html": "<div>glow</div>\n"}], "glow is a new rule"
     job = pack_job.Job(Store(tmp_path / "store"), fakes.live(checkout))
 
     state = run(job)
+    assert state["questions"][0]["kind"] == "stopped"
+    reason = state["reason"]
+    fakes.wrong_after = {}
+    state = answered(job, "retry")
 
     assert (state["state"], results(state)["golden"]) == ("waiting", "waiting")
+    assert state["reason"] == ""
+    assert any(reason in line for line in state["log"])
+    assert any(i["detail"] == reason for i in state["invocations"])
     (q,) = state["questions"]
     assert (q["kind"], [o["id"] for o in q["options"]]) == ("evidence", ["accept", "undo", "discard"])
     assert "Its reason: glow is a new rule." in q["text"]

@@ -225,6 +225,7 @@ class Job(Steps):
                 pack_progress.answered(self.state["invocations"], said, last=not left)
             if not left:
                 self.state["state"] = "running"
+                self.state["reason"] = ""
                 for s in self.state["stages"]:  # the stop he answered holds nothing any more
                     s["result"] = "answered" if s["result"] == "waiting" else s["result"]
                 self.thread = threading.Thread(target=self._run, args=(self._resume,), name=self._thread, daemon=True)
