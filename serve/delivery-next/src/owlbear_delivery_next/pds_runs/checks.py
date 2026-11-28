@@ -70,8 +70,8 @@ def browsed(job: Job, ctx: Context, at: Path) -> browser.Result:
         msg = f"browser tests: {r.said()} (exit {r.code})"
         raise Stopped(msg)
     if not job.live.browser(base(job, ctx), r.failed).cleared(r.failed):
-        msg = (f"browser tests fail on main as well: {', '.join(r.failed[:8])}. The candidate rests on that main, so "
-               "trying again cannot pass: fix main, discard this update and start a new one")  # fmt: skip
+        msg = (f"browser tests fail on main as well: {', '.join(r.failed[:8])}. Try again if the machine was busy; "
+               "if main is broken, fix it, discard this update and start a new one")  # fmt: skip
         raise Stopped(msg)
     return r.flake() if job.live.browser(at, r.failed).cleared(r.failed) else r  # D-01M6BFK5YF5GYYN7QCDDPBEZH2
 
