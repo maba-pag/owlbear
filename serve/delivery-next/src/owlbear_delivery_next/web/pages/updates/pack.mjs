@@ -97,6 +97,11 @@ async function act(name, work, target = null) {
   }
   own.busy = "";
   own.show();
+  if (own.error) {
+    const notice = document.getElementById("pack-error");
+    await notice?.componentOnReady?.();
+    notice?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
   await readPack();
 }
 
